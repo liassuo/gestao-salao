@@ -1,0 +1,230 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum UserRole {
+  ADMIN
+  PROFESSIONAL
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  ATTENDED
+  CANCELED
+  NO_SHOW
+}
+
+enum PaymentMethod {
+  CASH
+  PIX
+  CARD
+}
+
+// ============================================
+// MODELS
+// ============================================
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      UserRole
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relacionamentos
+  professional       Professional?  @relation("UserProfessional")
+  openedRegisters    CashRegister[] @relation("OpenedBy")
+  closedRegisters    CashRegister[] @relation("ClosedBy")
+  registeredPayments Payment[]      @relation("RegisteredBy")
+
+  @@map("users")
+}
+
+model Client {
+  id        String   @id @default(uuid())
+  name      String
+  email     String?  @unique // AJUSTE 1: Opcional - muitos clientes de barbearia não têm email
+  phone     String
+  password  String?  // Null se usar Google OAuth
+  googleId  String?  @unique
+  hasDebts  Boolean  @default(false) // AJUSTE 2: Campo derivável, mas mantido para performance - atualizar sempre que debts mudar
+  isActive  Boolean  @default(true)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relacionamentos
+  appointments Appointment[]
+  payments     Payment[]
+  debts        Debt[]
+
+  @@map("clients")
+}
+
+model Professional {
+  id             String   @id @default(uuid())
+  name           String
+  phone          String
+  email          String?
+  commissionRate Decimal? @db.Decimal(5, 2) // Ex: 50.00 para 50%
+  workingHours   Json?    // Array de { dayOfWeek: number, startTime: string, endTime: string }
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relacionamentos
+  userId       String?       @unique
+  user         User?         @relation("UserProfessional", fields: [userId], references: [id])
+  appointments Appointment[]
+  services     Service[]
+
+  @@map("professionals")
+}
+
+model Service {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  price       Int      // Preço em centavos (ex: 5000 = R$ 50,00)
+  duration    Int      // Duração em minutos
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relacionamentos
+  professionals       Professional[]
+  appointmentServices AppointmentService[]
+
+  @@map("services")
+}
+
+model Appointment {
+  id            String            @id @default(uuid())
+  scheduledAt   DateTime
+  status        AppointmentStatus @default(SCHEDULED)
+  totalPrice    Int               // Preço total em centavos
+  totalDuration Int               // Duração total em minutos
+  isPaid        Boolean           @default(false)
+  notes         String?
+  attendedAt    DateTime?
+  canceledAt    DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  // Relacionamentos
+  clientId       String
+  client         Client       @relation(fields: [clientId], references: [id])
+  professionalId String
+  professional   Professional @relation(fields: [professionalId], references: [id])
+
+  services AppointmentService[]
+  payment  Payment?
+  debts    Debt[]
+
+  @@map("appointments")
+}
+
+model AppointmentService {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  // Relacionamentos
+  appointmentId String
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  serviceId     String
+  service       Service     @relation(fields: [serviceId], references: [id])
+
+  @@unique([appointmentId, serviceId])
+  @@map("appointment_services")
+}
+
+model Payment {
+  id        String        @id @default(uuid())
+  amount    Int           // Valor em centavos
+  method    PaymentMethod
+  paidAt    DateTime
+  notes     String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  // Relacionamentos
+  appointmentId String?      @unique // AJUSTE 3: @unique mantido - 1 pagamento por agendamento (sem parcelamento no escopo atual)
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id])
+
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id])
+
+  registeredBy     String
+  registeredByUser User   @relation("RegisteredBy", fields: [registeredBy], references: [id])
+
+  cashRegisterId String?
+  cashRegister   CashRegister? @relation(fields: [cashRegisterId], references: [id])
+
+  @@map("payments")
+}
+
+model Debt {
+  id               String    @id @default(uuid())
+  amount           Int       // Valor total da dívida em centavos
+  amountPaid       Int       @default(0) // Valor já pago em centavos
+  remainingBalance Int       // Saldo restante em centavos
+  description      String?
+  dueDate          DateTime?
+  paidAt           DateTime?
+  isSettled        Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  // Relacionamentos
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id])
+
+  appointmentId String?
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id])
+
+  @@map("debts")
+}
+
+model CashRegister {
+  id             String    @id @default(uuid())
+  date           DateTime  @unique @db.Date // AJUSTE 4: Data do caixa - SEMPRE normalizar para 00:00:00 no código
+  openedAt       DateTime
+  openingBalance Int       // Saldo inicial em centavos
+  closedAt       DateTime?
+  closingBalance Int?      // Saldo final em centavos
+  totalCash      Int?      // Total em dinheiro
+  totalPix       Int?      // Total em Pix
+  totalCard      Int?      // Total em cartão
+  totalRevenue   Int?      // Receita total do dia
+  discrepancy    Int?      // Diferença entre esperado e real
+  notes          String?
+  isOpen         Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Relacionamentos
+  openedBy     String
+  openedByUser User   @relation("OpenedBy", fields: [openedBy], references: [id])
+
+  closedBy     String?
+  closedByUser User?   @relation("ClosedBy", fields: [closedBy], references: [id])
+
+  payments Payment[]
+
+  @@map("cash_registers")
+}
