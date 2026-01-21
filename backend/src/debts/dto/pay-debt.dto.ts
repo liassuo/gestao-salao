@@ -1,8 +1,15 @@
-/**
- * DTO for registering a payment towards a debt
- */
+import { IsInt, IsPositive, IsOptional, IsString, IsUUID } from 'class-validator';
+
 export class PayDebtDto {
-  amount: number; // Amount to pay in cents
-  registeredBy: string; // User ID who registered the payment
+  @IsInt({ message: 'Valor deve ser um número inteiro (centavos)' })
+  @IsPositive({ message: 'Valor deve ser positivo' })
+  amount: number;
+
+  @IsOptional()
+  @IsUUID()
+  registeredBy?: string;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
 }

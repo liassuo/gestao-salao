@@ -1,9 +1,11 @@
-/**
- * DTO for updating debt information
- * All fields are optional
- */
+import { IsOptional, IsString, IsDateString } from 'class-validator';
+
 export class UpdateDebtDto {
-  amount?: number;
+  @IsOptional()
+  @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsDateString()
   dueDate?: Date;
 }

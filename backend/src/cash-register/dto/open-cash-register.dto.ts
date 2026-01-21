@@ -1,9 +1,25 @@
-/**
- * DTO for opening the cash register
- */
+import {
+  IsUUID,
+  IsInt,
+  Min,
+  IsOptional,
+  IsString,
+  IsDateString,
+} from 'class-validator';
+
 export class OpenCashRegisterDto {
-  date: Date; // Date of this session
-  openingBalance: number; // Opening balance in cents
-  openedBy: string; // User ID
+  @IsOptional()
+  @IsDateString()
+  date?: Date; // Se não informado, usa data atual
+
+  @IsInt({ message: 'Saldo de abertura deve ser um número inteiro (centavos)' })
+  @Min(0, { message: 'Saldo de abertura não pode ser negativo' })
+  openingBalance: number;
+
+  @IsUUID()
+  openedBy: string;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
 }

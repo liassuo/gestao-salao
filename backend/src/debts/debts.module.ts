@@ -1,19 +1,10 @@
 import { Module } from '@nestjs/common';
+import { DebtsController } from './debts.controller';
 import { DebtsService } from './debts.service';
 
-/**
- * Debts module
- * Manages client debts ("fiado")
- * Tracks outstanding balances and payment history
- *
- * IMPORTANT: Debts are independent of payment method
- *
- * Will need to import:
- * - ClientsModule (to update hasDebts flag)
- * - PaymentsModule (to create payment records)
- */
 @Module({
+  controllers: [DebtsController],
   providers: [DebtsService],
-  exports: [DebtsService], // Export for use in other modules
+  exports: [DebtsService],
 })
 export class DebtsModule {}

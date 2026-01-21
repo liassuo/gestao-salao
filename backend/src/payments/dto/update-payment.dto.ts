@@ -1,13 +1,17 @@
-import { PaymentMethod } from '@common/enums';
+import { IsEnum, IsInt, IsOptional, IsPositive, IsString } from 'class-validator';
+import { PaymentMethod } from '@prisma/client';
 
-/**
- * DTO for updating payment information
- * Useful for corrections
- * All fields are optional
- */
 export class UpdatePaymentDto {
+  @IsOptional()
+  @IsInt()
+  @IsPositive()
   amount?: number;
+
+  @IsOptional()
+  @IsEnum(PaymentMethod)
   method?: PaymentMethod;
-  paidAt?: Date;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
 }

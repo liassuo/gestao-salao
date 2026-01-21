@@ -1,13 +1,11 @@
-import { AppointmentStatus } from '@common/enums';
+import { IsDateString, IsOptional, IsString } from 'class-validator';
 
-/**
- * DTO for updating appointment information
- * All fields are optional
- */
 export class UpdateAppointmentDto {
-  professionalId?: string;
-  serviceIds?: string[];
+  @IsOptional()
+  @IsDateString()
   scheduledAt?: Date;
-  status?: AppointmentStatus;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
 }

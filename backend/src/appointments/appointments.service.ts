@@ -1,130 +1,325 @@
-import { Injectable } from '@nestjs/common';
-import { Appointment } from './entities/appointment.entity';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateAppointmentDto, UpdateAppointmentDto } from './dto';
-import { AppointmentStatus } from '@common/enums';
+import { Appointment, AppointmentStatus } from '@prisma/client';
 
-/**
- * Appointments service
- * Handles business logic for appointment management
- * Responsible for scheduling, validation, and status tracking
- *
- * IMPORTANT: Does NOT handle payment processing
- * Payment is a separate concern managed by PaymentsService
- */
 @Injectable()
 export class AppointmentsService {
-  // TODO: Implement in-memory storage or database integration later
-  // Will need to inject ServicesService and ProfessionalsService
+  constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Create a new appointment
-   * Should validate:
-   * - Professional availability
-   * - Service validity
-   * - Time slot availability
-   */
-  async create(
-    createAppointmentDto: CreateAppointmentDto,
-  ): Promise<Appointment> {
-    // Implementation pending
-    // Should calculate totalPrice and totalDuration from services
-    throw new Error('Not implemented');
+  async create(dto: CreateAppointmentDto): Promise<Appointment> {
+    // 1. Verificar se o profissional existe e está ativo
+    const professional = await this.prisma.professional.findUnique({
+      where: { id: dto.professionalId },
+    });
+
+    if (!professional) {
+      throw new NotFoundException('Profissional não encontrado');
+    }
+
+    if (!professional.isActive) {
+      throw new BadRequestException('Profissional não está ativo');
+    }
+
+    // 2. Buscar os serviços e calcular duração total
+    const services = await this.prisma.service.findMany({
+      where: {
+        id: { in: dto.serviceIds },
+        isActive: true,
+      },
+    });
+
+    if (services.length !== dto.serviceIds.length) {
+      throw new BadRequestException('Um ou mais serviços não encontrados ou inativos');
+    }
+
+    const totalDuration = services.reduce((sum, s) => sum + s.duration, 0);
+    const totalPrice = services.reduce((sum, s) => sum + s.price, 0);
+
+    // 3. Calcular horário de término do novo agendamento
+    const scheduledAt = new Date(dto.scheduledAt);
+    const endTime = new Date(scheduledAt.getTime() + totalDuration * 60 * 1000);
+
+    // 4. Verificar conflito de horário com outros agendamentos do profissional
+    const conflictingAppointment = await this.prisma.appointment.findFirst({
+      where: {
+        professionalId: dto.professionalId,
+        status: { in: [AppointmentStatus.SCHEDULED, AppointmentStatus.ATTENDED] },
+        AND: [
+          {
+            scheduledAt: { lt: endTime },
+          },
+          {
+            // scheduledAt + totalDuration > dto.scheduledAt
+            scheduledAt: {
+              gte: new Date(scheduledAt.getTime() - 24 * 60 * 60 * 1000), // Otimização: limita busca
+            },
+          },
+        ],
+      },
+      include: { services: { include: { service: true } } },
+    });
+
+    if (conflictingAppointment) {
+      // Calcular fim do agendamento existente
+      const existingEnd = new Date(
+        conflictingAppointment.scheduledAt.getTime() +
+          conflictingAppointment.totalDuration * 60 * 1000,
+      );
+
+      // Verificar se realmente há sobreposição
+      const hasOverlap =
+        scheduledAt < existingEnd && endTime > conflictingAppointment.scheduledAt;
+
+      if (hasOverlap) {
+        throw new ConflictException(
+          'Profissional já possui agendamento neste horário',
+        );
+      }
+    }
+
+    // 5. Verificar se o cliente existe
+    const client = await this.prisma.client.findUnique({
+      where: { id: dto.clientId },
+    });
+
+    if (!client) {
+      throw new NotFoundException('Cliente não encontrado');
+    }
+
+    // 6. Criar o agendamento com os serviços vinculados
+    return this.prisma.appointment.create({
+      data: {
+        clientId: dto.clientId,
+        professionalId: dto.professionalId,
+        scheduledAt,
+        totalPrice,
+        totalDuration,
+        status: AppointmentStatus.SCHEDULED,
+        notes: dto.notes,
+        services: {
+          create: dto.serviceIds.map((serviceId) => ({
+            serviceId,
+          })),
+        },
+      },
+      include: {
+        client: true,
+        professional: true,
+        services: { include: { service: true } },
+      },
+    });
   }
 
-  /**
-   * Find all appointments
-   * May include filtering by date, professional, client, or status
-   */
+  async cancel(id: string): Promise<Appointment> {
+    const appointment = await this.prisma.appointment.findUnique({
+      where: { id },
+    });
+
+    if (!appointment) {
+      throw new NotFoundException('Agendamento não encontrado');
+    }
+
+    // Só permite cancelar se ainda não foi atendido
+    if (appointment.status === AppointmentStatus.ATTENDED) {
+      throw new BadRequestException(
+        'Não é possível cancelar um agendamento já atendido',
+      );
+    }
+
+    if (appointment.status === AppointmentStatus.CANCELED) {
+      throw new BadRequestException('Agendamento já está cancelado');
+    }
+
+    return this.prisma.appointment.update({
+      where: { id },
+      data: {
+        status: AppointmentStatus.CANCELED,
+        canceledAt: new Date(),
+      },
+      include: {
+        client: true,
+        professional: true,
+        services: { include: { service: true } },
+      },
+    });
+  }
+
+  async markAsAttended(id: string): Promise<Appointment> {
+    const appointment = await this.prisma.appointment.findUnique({
+      where: { id },
+    });
+
+    if (!appointment) {
+      throw new NotFoundException('Agendamento não encontrado');
+    }
+
+    if (appointment.status === AppointmentStatus.CANCELED) {
+      throw new BadRequestException(
+        'Não é possível marcar como atendido um agendamento cancelado',
+      );
+    }
+
+    if (appointment.status === AppointmentStatus.ATTENDED) {
+      throw new BadRequestException('Agendamento já foi marcado como atendido');
+    }
+
+    return this.prisma.appointment.update({
+      where: { id },
+      data: {
+        status: AppointmentStatus.ATTENDED,
+        attendedAt: new Date(),
+      },
+      include: {
+        client: true,
+        professional: true,
+        services: { include: { service: true } },
+      },
+    });
+  }
+
+  async findOne(id: string): Promise<Appointment> {
+    const appointment = await this.prisma.appointment.findUnique({
+      where: { id },
+      include: {
+        client: true,
+        professional: true,
+        services: { include: { service: true } },
+        payment: true,
+      },
+    });
+
+    if (!appointment) {
+      throw new NotFoundException('Agendamento não encontrado');
+    }
+
+    return appointment;
+  }
+
   async findAll(): Promise<Appointment[]> {
-    // Implementation pending
-    throw new Error('Not implemented');
+    return this.prisma.appointment.findMany({
+      include: {
+        client: true,
+        professional: true,
+        services: { include: { service: true } },
+      },
+      orderBy: { scheduledAt: 'desc' },
+    });
   }
 
-  /**
-   * Find appointments by professional and date range
-   * Used for displaying professional's schedule
-   */
   async findByProfessionalAndDate(
     professionalId: string,
     startDate: Date,
     endDate: Date,
   ): Promise<Appointment[]> {
-    // Implementation pending
-    throw new Error('Not implemented');
+    return this.prisma.appointment.findMany({
+      where: {
+        professionalId,
+        scheduledAt: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      include: {
+        client: true,
+        services: { include: { service: true } },
+      },
+      orderBy: { scheduledAt: 'asc' },
+    });
   }
 
-  /**
-   * Find appointments by client
-   * Used for client's appointment history
-   */
   async findByClient(clientId: string): Promise<Appointment[]> {
-    // Implementation pending
-    throw new Error('Not implemented');
+    return this.prisma.appointment.findMany({
+      where: { clientId },
+      include: {
+        professional: true,
+        services: { include: { service: true } },
+      },
+      orderBy: { scheduledAt: 'desc' },
+    });
   }
 
-  /**
-   * Find unpaid appointments
-   * Critical for tracking outstanding payments
-   */
   async findUnpaid(): Promise<Appointment[]> {
-    // Implementation pending
-    throw new Error('Not implemented');
+    return this.prisma.appointment.findMany({
+      where: {
+        isPaid: false,
+        status: AppointmentStatus.ATTENDED,
+      },
+      include: {
+        client: true,
+        professional: true,
+        services: { include: { service: true } },
+      },
+      orderBy: { scheduledAt: 'desc' },
+    });
   }
 
-  /**
-   * Find appointment by ID
-   */
-  async findOne(id: string): Promise<Appointment> {
-    // Implementation pending
-    throw new Error('Not implemented');
-  }
-
-  /**
-   * Update appointment information
-   * Should validate changes don't conflict with schedule
-   */
-  async update(
-    id: string,
-    updateAppointmentDto: UpdateAppointmentDto,
-  ): Promise<Appointment> {
-    // Implementation pending
-    throw new Error('Not implemented');
-  }
-
-  /**
-   * Cancel appointment
-   * Sets status to CANCELED and records canceledAt timestamp
-   */
-  async cancel(id: string): Promise<Appointment> {
-    // Implementation pending
-    throw new Error('Not implemented');
-  }
-
-  /**
-   * Mark appointment as attended
-   * Sets status to ATTENDED and records attendedAt timestamp
-   * NOTE: This does NOT mark it as paid
-   */
-  async markAsAttended(id: string): Promise<Appointment> {
-    // Implementation pending
-    throw new Error('Not implemented');
-  }
-
-  /**
-   * Mark appointment as no-show
-   */
   async markAsNoShow(id: string): Promise<Appointment> {
-    // Implementation pending
-    throw new Error('Not implemented');
+    const appointment = await this.prisma.appointment.findUnique({
+      where: { id },
+    });
+
+    if (!appointment) {
+      throw new NotFoundException('Agendamento não encontrado');
+    }
+
+    if (appointment.status !== AppointmentStatus.SCHEDULED) {
+      throw new BadRequestException(
+        'Só é possível marcar como no-show agendamentos com status SCHEDULED',
+      );
+    }
+
+    return this.prisma.appointment.update({
+      where: { id },
+      data: {
+        status: AppointmentStatus.NO_SHOW,
+      },
+      include: {
+        client: true,
+        professional: true,
+        services: { include: { service: true } },
+      },
+    });
   }
 
-  /**
-   * Link payment to appointment
-   * Called by PaymentsService when payment is registered
-   */
+  async update(id: string, dto: UpdateAppointmentDto): Promise<Appointment> {
+    const appointment = await this.prisma.appointment.findUnique({
+      where: { id },
+    });
+
+    if (!appointment) {
+      throw new NotFoundException('Agendamento não encontrado');
+    }
+
+    if (appointment.status !== AppointmentStatus.SCHEDULED) {
+      throw new BadRequestException(
+        'Só é possível editar agendamentos com status SCHEDULED',
+      );
+    }
+
+    return this.prisma.appointment.update({
+      where: { id },
+      data: {
+        scheduledAt: dto.scheduledAt,
+        notes: dto.notes,
+      },
+      include: {
+        client: true,
+        professional: true,
+        services: { include: { service: true } },
+      },
+    });
+  }
+
   async linkPayment(appointmentId: string, paymentId: string): Promise<void> {
-    // Implementation pending
-    // Should set isPaid = true and paymentId
-    throw new Error('Not implemented');
+    await this.prisma.appointment.update({
+      where: { id: appointmentId },
+      data: { isPaid: true },
+    });
   }
 }

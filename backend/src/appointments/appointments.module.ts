@@ -1,18 +1,10 @@
 import { Module } from '@nestjs/common';
+import { AppointmentsController } from './appointments.controller';
 import { AppointmentsService } from './appointments.service';
 
-/**
- * Appointments module
- * Manages appointment scheduling and tracking
- * Handles the complete appointment lifecycle
- *
- * Will need to import:
- * - ServicesModule (to calculate prices and durations)
- * - ProfessionalsModule (to validate availability)
- * - ClientsModule (to validate client)
- */
 @Module({
+  controllers: [AppointmentsController],
   providers: [AppointmentsService],
-  exports: [AppointmentsService], // Export for use in payments and debts modules
+  exports: [AppointmentsService],
 })
 export class AppointmentsModule {}
