@@ -5,7 +5,10 @@
       "Bash(git remote add:*)",
       "Bash(git add:*)",
       "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat: implement initial backend structure with NestJS and Prisma\n\nBackend implementation for barbershop management system:\n\n- NestJS modular architecture by domain\n- 8 domain modules: users, clients, professionals, services, appointments, payments, debts, cash-register\n- Prisma ORM with PostgreSQL schema\n- Complete entity models and DTOs\n- Service layer with documented business logic\n\nKey features:\n- User authentication \\(ADMIN, PROFESSIONAL roles\\)\n- Client management with optional email\n- Professional scheduling and availability\n- Service catalog with pricing\n- Appointment booking \\(status: SCHEDULED, ATTENDED, CANCELED, NO_SHOW\\)\n- Manual payment registration \\(no gateway integration\\)\n- Debt tracking \\(fiado\\) independent of payment method\n- Daily cash register management\n\nImportant business rules:\n- Appointment attendance ≠ payment \\(separate concepts\\)\n- Payments are manually registered only\n- Debts are independent of payment method\n- One cash register per day\n\nTechnical stack:\n- NestJS 10.x\n- Prisma 5.x\n- PostgreSQL\n- TypeScript 5.x\n\nCo-Authored-By: Claude Sonnet 4.5 \\(1M context\\) <noreply@anthropic.com>\nEOF\n\\)\")",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(npm create:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)"
     ]
   }
 }
