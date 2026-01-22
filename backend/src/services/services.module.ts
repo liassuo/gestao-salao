@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ServicesService } from './services.service';
+import { ServicesController } from './services.controller';
+import { PrismaModule } from '../prisma/prisma.module';
 
 /**
  * Services module
@@ -7,7 +9,9 @@ import { ServicesService } from './services.service';
  * Handles service catalog, pricing, and availability
  */
 @Module({
+  imports: [PrismaModule],
+  controllers: [ServicesController],
   providers: [ServicesService],
-  exports: [ServicesService], // Export for use in appointments and professionals modules
+  exports: [ServicesService],
 })
 export class ServicesModule {}

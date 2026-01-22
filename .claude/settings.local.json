@@ -8,7 +8,19 @@
       "Bash(git push:*)",
       "Bash(npm create:*)",
       "Bash(npm install:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(cat:*)",
+      "Bash(npm run start)",
+      "Bash(timeout 15 npm run start:dev:*)",
+      "Bash(node -e:*)",
+      "Bash(npx prisma migrate:*)",
+      "Bash(npx ts-node:*)",
+      "Bash(timeout 10 npm run start:dev:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill:*)",
+      "Bash(cmd //c \"taskkill /PID 10404 /F\")",
+      "Bash(curl:*)"
     ]
   }
 }

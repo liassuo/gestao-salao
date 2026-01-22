@@ -1,28 +1,14 @@
 import { NavLink } from 'react-router-dom';
-import {
-  LayoutDashboard,
-  Calendar,
-  Users,
-  Scissors,
-  CreditCard,
-  Receipt,
-  Wallet,
-  Settings,
-} from 'lucide-react';
-
-const menuItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
-  { icon: Calendar, label: 'Agendamentos', path: '/appointments' },
-  { icon: Users, label: 'Clientes', path: '/clients' },
-  { icon: Scissors, label: 'Serviços', path: '/services' },
-  { icon: Users, label: 'Profissionais', path: '/professionals' },
-  { icon: CreditCard, label: 'Pagamentos', path: '/payments' },
-  { icon: Receipt, label: 'Dívidas', path: '/debts' },
-  { icon: Wallet, label: 'Caixa', path: '/cash-register' },
-  { icon: Settings, label: 'Configurações', path: '/settings' },
-];
+import { useAuth } from '@/auth';
+import { hasRole } from '@/auth/roles';
+import { menuItems } from '@/config/permissions';
 
 export function Sidebar() {
+  const { user } = useAuth();
+
+  // Filtra itens de menu baseado na role do usuário
+  const visibleItems = menuItems.filter((item) => hasRole(user, item.roles));
+
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-gray-900">
       <div className="flex h-16 items-center justify-center border-b border-gray-800">
@@ -31,7 +17,7 @@ export function Sidebar() {
 
       <nav className="mt-4 px-3">
         <ul className="space-y-1">
-          {menuItems.map((item) => (
+          {visibleItems.map((item) => (
             <li key={item.path}>
               <NavLink
                 to={item.path}

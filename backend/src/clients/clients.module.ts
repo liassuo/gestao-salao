@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { ClientsController } from './clients.controller';
 import { ClientsService } from './clients.service';
+import { PrismaModule } from '../prisma/prisma.module';
 
 /**
  * Clients module
@@ -7,7 +9,9 @@ import { ClientsService } from './clients.service';
  * Handles client registration, authentication, and profile management
  */
 @Module({
+  imports: [PrismaModule],
+  controllers: [ClientsController],
   providers: [ClientsService],
-  exports: [ClientsService], // Export for use in appointments and debts modules
+  exports: [ClientsService],
 })
 export class ClientsModule {}

@@ -1,0 +1,264 @@
+import { useState, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { AlertCircle, Loader2 } from 'lucide-react';
+import { useClients, useAppointments } from '@/hooks';
+import { useAuth } from '@/auth';
+import type { PaymentMethod, CreatePaymentPayload } from '@/types';
+import { paymentMethodLabels } from '@/types';
+
+interface PaymentFormData {
+  clientId: string;
+  appointmentId: string;
+  amount: string; // input como string, converter para centavos
+  method: PaymentMethod;
+  notes: string;
+}
+
+interface PaymentFormProps {
+  onSubmit: (payload: CreatePaymentPayload) => Promise<void>;
+  isLoading: boolean;
+  error: string | null;
+}
+
+const paymentMethods: PaymentMethod[] = ['CASH', 'PIX', 'CARD'];
+
+// Converte valor em reais (string) para centavos
+function reaisToCentavos(value: string): number {
+  const cleaned = value.replace(/[^\d,]/g, '').replace(',', '.');
+  const parsed = parseFloat(cleaned);
+  return isNaN(parsed) ? 0 : Math.round(parsed * 100);
+}
+
+// Formata valor para exibição
+function formatCurrencyInput(value: string): string {
+  const numbers = value.replace(/\D/g, '');
+  if (!numbers) return '';
+  const cents = parseInt(numbers, 10);
+  return (cents / 100).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+export function PaymentForm({ onSubmit, isLoading, error }: PaymentFormProps) {
+  const { user } = useAuth();
+  const [selectedClientId, setSelectedClientId] = useState<string>('');
+
+  const { data: clients = [], isLoading: isLoadingClients } = useClients();
+  const { data: appointments = [], isLoading: isLoadingAppointments } = useAppointments(
+    selectedClientId ? { clientId: selectedClientId, status: 'ATTENDED' } : undefined
+  );
+
+  // Filtrar apenas agendamentos não pagos do cliente
+  const unpaidAppointments = appointments.filter((a) => !a.isPaid);
+
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors },
+  } = useForm<PaymentFormData>({
+    defaultValues: {
+      method: 'PIX',
+    },
+  });
+
+  const watchedClientId = watch('clientId');
+  const watchedAmount = watch('amount');
+
+  // Atualiza selectedClientId quando o cliente muda
+  useEffect(() => {
+    if (watchedClientId !== selectedClientId) {
+      setSelectedClientId(watchedClientId);
+      setValue('appointmentId', '');
+    }
+  }, [watchedClientId, selectedClientId, setValue]);
+
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatCurrencyInput(e.target.value);
+    setValue('amount', formatted);
+  };
+
+  const handleFormSubmit = async (data: PaymentFormData) => {
+    if (!user) return;
+
+    const amountInCents = reaisToCentavos(data.amount);
+
+    await onSubmit({
+      clientId: data.clientId,
+      appointmentId: data.appointmentId || undefined,
+      amount: amountInCents,
+      method: data.method,
+      registeredBy: user.id,
+      notes: data.notes || undefined,
+    });
+  };
+
+  const isDataLoading = isLoadingClients;
+
+  if (isDataLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-5">
+      {/* Erro da API */}
+      {error && (
+        <div className="flex items-start gap-3 rounded-lg bg-red-50 p-4">
+          <AlertCircle className="mt-0.5 h-5 w-5 text-red-600" />
+          <div>
+            <p className="font-medium text-red-800">Erro ao registrar pagamento</p>
+            <p className="text-sm text-red-600">{error}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Cliente */}
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+          Cliente *
+        </label>
+        <select
+          {...register('clientId', { required: 'Selecione um cliente' })}
+          className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+            errors.clientId ? 'border-red-500' : 'border-gray-300'
+          }`}
+        >
+          <option value="">Selecione um cliente</option>
+          {clients.map((client) => (
+            <option key={client.id} value={client.id}>
+              {client.name} - {client.phone}
+            </option>
+          ))}
+        </select>
+        {errors.clientId && (
+          <p className="mt-1 text-sm text-red-500">{errors.clientId.message}</p>
+        )}
+      </div>
+
+      {/* Agendamento (opcional) */}
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+          Agendamento <span className="text-gray-400">(opcional)</span>
+        </label>
+        <select
+          {...register('appointmentId')}
+          disabled={!selectedClientId || isLoadingAppointments}
+          className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+        >
+          <option value="">
+            {!selectedClientId
+              ? 'Selecione um cliente primeiro'
+              : unpaidAppointments.length === 0
+              ? 'Nenhum agendamento pendente'
+              : 'Selecione um agendamento'}
+          </option>
+          {unpaidAppointments.map((appointment) => (
+            <option key={appointment.id} value={appointment.id}>
+              {new Date(appointment.scheduledAt).toLocaleDateString('pt-BR')} -{' '}
+              {appointment.services.map((s) => s.service.name).join(', ')} - R${' '}
+              {(appointment.totalPrice / 100).toFixed(2)}
+            </option>
+          ))}
+        </select>
+        <p className="mt-1 text-xs text-gray-500">
+          Vincular a um agendamento atendido não pago
+        </p>
+      </div>
+
+      {/* Valor */}
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+          Valor *
+        </label>
+        <div className="relative">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+            R$
+          </span>
+          <input
+            type="text"
+            inputMode="numeric"
+            placeholder="0,00"
+            {...register('amount', {
+              required: 'Informe o valor',
+              validate: (value) =>
+                reaisToCentavos(value) > 0 || 'Valor deve ser maior que zero',
+            })}
+            onChange={handleAmountChange}
+            className={`w-full rounded-lg border py-2.5 pl-10 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              errors.amount ? 'border-red-500' : 'border-gray-300'
+            }`}
+          />
+        </div>
+        {errors.amount && (
+          <p className="mt-1 text-sm text-red-500">{errors.amount.message}</p>
+        )}
+        {watchedAmount && (
+          <p className="mt-1 text-xs text-gray-500">
+            {reaisToCentavos(watchedAmount)} centavos
+          </p>
+        )}
+      </div>
+
+      {/* Método de Pagamento */}
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+          Método de Pagamento *
+        </label>
+        <div className="grid grid-cols-3 gap-3">
+          {paymentMethods.map((method) => {
+            const isSelected = watch('method') === method;
+            return (
+              <label
+                key={method}
+                className={`flex cursor-pointer items-center justify-center rounded-lg border-2 px-4 py-3 text-sm font-medium transition-colors ${
+                  isSelected
+                    ? 'border-blue-600 bg-blue-50 text-blue-700'
+                    : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                }`}
+              >
+                <input
+                  type="radio"
+                  value={method}
+                  {...register('method', { required: true })}
+                  className="sr-only"
+                />
+                {paymentMethodLabels[method]}
+              </label>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Observações */}
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+          Observações
+        </label>
+        <textarea
+          {...register('notes')}
+          rows={2}
+          placeholder="Informações adicionais (opcional)"
+          className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+
+      {/* Botão de submit */}
+      <div className="flex justify-end gap-3 border-t border-gray-200 pt-4">
+        <button
+          type="submit"
+          disabled={isLoading}
+          className="flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+          {isLoading ? 'Registrando...' : 'Registrar Pagamento'}
+        </button>
+      </div>
+    </form>
+  );
+}

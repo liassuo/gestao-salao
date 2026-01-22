@@ -1,14 +1,18 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto, AuthResponseDto } from './dto';
 import { JwtPayload } from './strategies/jwt.strategy';
+import { UserRole } from '../common/enums/user-role.enum';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async login(dto: LoginDto): Promise<AuthResponseDto> {
@@ -38,7 +42,7 @@ export class AuthService {
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
-      role: user.role,
+      role: user.role as unknown as UserRole,
     };
 
     const accessToken = this.jwtService.sign(payload);
@@ -50,7 +54,7 @@ export class AuthService {
         id: user.id,
         email: user.email,
         name: user.name,
-        role: user.role,
+        role: user.role as unknown as UserRole,
       },
     };
   }
@@ -61,5 +65,53 @@ export class AuthService {
     } catch {
       return null;
     }
+  }
+
+  async clientLogin(dto: LoginDto): Promise<AuthResponseDto> {
+    // 1. Buscar cliente pelo email
+    const client = await this.prisma.client.findUnique({
+      where: { email: dto.email },
+    });
+
+    if (!client) {
+      throw new UnauthorizedException('Credenciais inválidas');
+    }
+
+    // 2. Verificar se cliente está ativo
+    if (!client.isActive) {
+      throw new UnauthorizedException('Conta desativada');
+    }
+
+    // 3. Verificar se cliente tem senha (não usa apenas OAuth)
+    if (!client.password) {
+      throw new UnauthorizedException('Use o login com Google');
+    }
+
+    // 4. Validar senha
+    const isPasswordValid = await bcrypt.compare(dto.password, client.password);
+
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Credenciais inválidas');
+    }
+
+    // 5. Gerar JWT com role CLIENT
+    const payload: JwtPayload = {
+      sub: client.id,
+      email: client.email,
+      role: UserRole.CLIENT,
+    };
+
+    const accessToken = this.jwtService.sign(payload);
+
+    // 6. Retornar resposta
+    return {
+      accessToken,
+      user: {
+        id: client.id,
+        email: client.email,
+        name: client.name,
+        role: UserRole.CLIENT,
+      },
+    };
   }
 }

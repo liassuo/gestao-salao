@@ -9,22 +9,89 @@ import {
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
+  UseGuards,
+  Req,
 } from '@nestjs/common';
 import { AppointmentsService } from './appointments.service';
 import {
   CreateAppointmentDto,
+  CreateClientAppointmentDto,
   UpdateAppointmentDto,
   QueryAppointmentDto,
 } from './dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
+
+interface RequestWithUser extends Request {
+  user: AuthenticatedUser;
+}
 
 @Controller('appointments')
 export class AppointmentsController {
   constructor(private readonly appointmentsService: AppointmentsService) {}
 
+  /**
+   * GET /appointments/me
+   * Retorna agendamentos do cliente autenticado (app mobile)
+   */
+  @UseGuards(JwtAuthGuard)
+  @Get('me')
+  async findMyAppointments(@Req() req: RequestWithUser) {
+    return this.appointmentsService.findByClient(req.user.id);
+  }
+
+  /**
+   * GET /appointments/available-slots
+   * Retorna horários disponíveis para um profissional em uma data
+   */
+  @Get('available-slots')
+  async getAvailableSlots(
+    @Query('professionalId') professionalId: string,
+    @Query('date') date: string,
+  ) {
+    return this.appointmentsService.getAvailableSlots(professionalId, date);
+  }
+
+  /**
+   * POST /appointments
+   * Cria agendamento (admin/painel)
+   */
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() createAppointmentDto: CreateAppointmentDto) {
     return this.appointmentsService.create(createAppointmentDto);
+  }
+
+  /**
+   * POST /appointments/client
+   * Cria agendamento pelo app mobile (cliente autenticado)
+   * clientId é extraído do token JWT
+   */
+  @UseGuards(JwtAuthGuard)
+  @Post('client')
+  @HttpCode(HttpStatus.CREATED)
+  async createAsClient(
+    @Req() req: RequestWithUser,
+    @Body() dto: CreateClientAppointmentDto,
+  ) {
+    console.log('=== CREATE APPOINTMENT CLIENT ===');
+    console.log('User from token:', req.user);
+    console.log('Body received:', dto);
+
+    // Combina data e hora para criar o scheduledAt
+    // startTime pode vir como "09:00" ou "09:00:00"
+    const timeWithSeconds = dto.startTime.length === 5 ? `${dto.startTime}:00` : dto.startTime;
+    const scheduledAt = new Date(`${dto.date}T${timeWithSeconds}`);
+
+    console.log('scheduledAt:', scheduledAt);
+
+    return this.appointmentsService.create({
+      clientId: req.user.id,
+      professionalId: dto.professionalId,
+      serviceIds: dto.serviceIds,
+      scheduledAt,
+      notes: dto.notes,
+    });
   }
 
   @Get()

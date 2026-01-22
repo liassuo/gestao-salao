@@ -1,7 +1,29 @@
 import { createBrowserRouter } from 'react-router-dom';
 import { Layout } from '@/components/layout';
-import { PrivateRoute } from '@/components/auth';
-import { Dashboard, Login } from '@/pages';
+import { PrivateRoute, RoleRoute } from '@/components/auth';
+import {
+  AccessDenied,
+  Appointments,
+  CashRegister,
+  Clients,
+  Dashboard,
+  Debts,
+  Login,
+  Payments,
+  Professionals,
+  Services,
+} from '@/pages';
+import { getRolesForPath } from '@/config/permissions';
+
+// Helper para criar rota protegida por role
+function withRoleProtection(path: string, element: React.ReactNode) {
+  const roles = getRolesForPath(path);
+  return (
+    <RoleRoute roles={roles}>
+      {element}
+    </RoleRoute>
+  );
+}
 
 export const router = createBrowserRouter([
   {
@@ -21,36 +43,40 @@ export const router = createBrowserRouter([
         element: <Dashboard />,
       },
       {
+        path: 'access-denied',
+        element: <AccessDenied />,
+      },
+      {
         path: 'appointments',
-        element: <PlaceholderPage title="Agendamentos" />,
+        element: withRoleProtection('/appointments', <Appointments />),
       },
       {
         path: 'clients',
-        element: <PlaceholderPage title="Clientes" />,
+        element: withRoleProtection('/clients', <Clients />),
       },
       {
         path: 'services',
-        element: <PlaceholderPage title="Serviços" />,
+        element: withRoleProtection('/services', <Services />),
       },
       {
         path: 'professionals',
-        element: <PlaceholderPage title="Profissionais" />,
+        element: withRoleProtection('/professionals', <Professionals />),
       },
       {
         path: 'payments',
-        element: <PlaceholderPage title="Pagamentos" />,
+        element: withRoleProtection('/payments', <Payments />),
       },
       {
         path: 'debts',
-        element: <PlaceholderPage title="Dívidas" />,
+        element: withRoleProtection('/debts', <Debts />),
       },
       {
         path: 'cash-register',
-        element: <PlaceholderPage title="Caixa" />,
+        element: withRoleProtection('/cash-register', <CashRegister />),
       },
       {
         path: 'settings',
-        element: <PlaceholderPage title="Configurações" />,
+        element: withRoleProtection('/settings', <PlaceholderPage title="Configurações" />),
       },
     ],
   },

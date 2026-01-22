@@ -322,4 +322,88 @@ export class AppointmentsService {
       data: { isPaid: true },
     });
   }
+
+  async getAvailableSlots(
+    professionalId: string,
+    date: string,
+  ): Promise<{ time: string; available: boolean }[]> {
+    // 1. Buscar profissional e seus horários de trabalho
+    const professional = await this.prisma.professional.findUnique({
+      where: { id: professionalId },
+    });
+
+    if (!professional) {
+      throw new NotFoundException('Profissional não encontrado');
+    }
+
+    // 2. Definir horários de trabalho padrão (8h às 18h) ou usar os do profissional
+    const workingHours = professional.workingHours as Array<{
+      dayOfWeek: number;
+      startTime: string;
+      endTime: string;
+    }> | null;
+
+    const targetDate = new Date(date);
+    const dayOfWeek = targetDate.getDay();
+
+    // Horário padrão se não definido
+    let startHour = 8;
+    let endHour = 18;
+
+    if (workingHours) {
+      const todaySchedule = workingHours.find((wh) => wh.dayOfWeek === dayOfWeek);
+      if (!todaySchedule) {
+        // Profissional não trabalha neste dia
+        return [];
+      }
+      startHour = parseInt(todaySchedule.startTime.split(':')[0], 10);
+      endHour = parseInt(todaySchedule.endTime.split(':')[0], 10);
+    }
+
+    // 3. Buscar agendamentos do profissional no dia
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const appointments = await this.prisma.appointment.findMany({
+      where: {
+        professionalId,
+        scheduledAt: {
+          gte: startOfDay,
+          lte: endOfDay,
+        },
+        status: { in: [AppointmentStatus.SCHEDULED, AppointmentStatus.ATTENDED] },
+      },
+    });
+
+    // 4. Gerar slots de 30 minutos e verificar disponibilidade
+    const slots: { time: string; available: boolean }[] = [];
+
+    for (let hour = startHour; hour < endHour; hour++) {
+      for (const minutes of [0, 30]) {
+        const slotTime = `${hour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+        const slotDate = new Date(date);
+        slotDate.setHours(hour, minutes, 0, 0);
+
+        // Verificar se o slot já passou (para hoje)
+        const now = new Date();
+        if (slotDate < now) {
+          slots.push({ time: slotTime, available: false });
+          continue;
+        }
+
+        // Verificar conflito com agendamentos existentes
+        const hasConflict = appointments.some((apt) => {
+          const aptStart = new Date(apt.scheduledAt);
+          const aptEnd = new Date(aptStart.getTime() + apt.totalDuration * 60 * 1000);
+          return slotDate >= aptStart && slotDate < aptEnd;
+        });
+
+        slots.push({ time: slotTime, available: !hasConflict });
+      }
+    }
+
+    return slots;
+  }
 }

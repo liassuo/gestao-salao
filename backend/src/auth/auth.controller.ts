@@ -11,4 +11,10 @@ export class AuthController {
   async login(@Body() loginDto: LoginDto): Promise<AuthResponseDto> {
     return this.authService.login(loginDto);
   }
+
+  @Post('client/login')
+  @HttpCode(HttpStatus.OK)
+  async clientLogin(@Body() loginDto: LoginDto): Promise<AuthResponseDto> {
+    return this.authService.clientLogin(loginDto);
+  }
 }

@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ProfessionalsService } from './professionals.service';
+import { ProfessionalsController } from './professionals.controller';
+import { PrismaModule } from '../prisma/prisma.module';
 
 /**
  * Professionals module
@@ -7,7 +9,9 @@ import { ProfessionalsService } from './professionals.service';
  * Handles schedule, availability, and service assignments
  */
 @Module({
+  imports: [PrismaModule],
+  controllers: [ProfessionalsController],
   providers: [ProfessionalsService],
-  exports: [ProfessionalsService], // Export for use in appointments module
+  exports: [ProfessionalsService],
 })
 export class ProfessionalsModule {}
