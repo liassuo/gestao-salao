@@ -16,18 +16,18 @@ interface ConfirmModalProps {
 
 const variantStyles = {
   danger: {
-    iconBg: 'bg-red-100',
-    iconColor: 'text-red-600',
+    iconBg: 'bg-red-500/20',
+    iconColor: 'text-red-500',
     buttonBg: 'bg-red-600 hover:bg-red-700',
   },
   warning: {
-    iconBg: 'bg-yellow-100',
-    iconColor: 'text-yellow-600',
-    buttonBg: 'bg-yellow-600 hover:bg-yellow-700',
+    iconBg: 'bg-red-500/20',
+    iconColor: 'text-red-500',
+    buttonBg: 'bg-red-600 hover:bg-red-700',
   },
   info: {
-    iconBg: 'bg-blue-100',
-    iconColor: 'text-blue-600',
+    iconBg: 'bg-blue-500/20',
+    iconColor: 'text-blue-500',
     buttonBg: 'bg-blue-600 hover:bg-blue-700',
   },
 };
@@ -51,27 +51,27 @@ export function ConfirmModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/50"
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={isLoading ? undefined : onClose}
         aria-hidden="true"
       />
 
       {/* Modal */}
       <div
-        className="relative w-full max-w-md rounded-xl bg-white shadow-xl"
+        className="relative w-full max-w-md rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] shadow-xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-          <h2 id="modal-title" className="text-lg font-semibold text-gray-800">
+        <div className="flex items-center justify-between border-b border-[var(--border-color)] px-6 py-4">
+          <h2 id="modal-title" className="text-lg font-semibold text-[var(--text-primary)]">
             {title}
           </h2>
           <button
             onClick={onClose}
             disabled={isLoading}
-            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
             aria-label="Fechar"
           >
             <X className="h-5 w-5" />
@@ -86,17 +86,17 @@ export function ConfirmModal({
             >
               <AlertTriangle className={`h-6 w-6 ${styles.iconColor}`} />
             </div>
-            <p className="text-sm text-gray-600">{message}</p>
+            <p className="text-sm text-[var(--text-secondary)]">{message}</p>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-3 border-t border-gray-200 px-6 py-4">
+        <div className="flex justify-end gap-3 border-t border-[var(--border-color)] px-6 py-4">
           <button
             type="button"
             onClick={onClose}
             disabled={isLoading}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-xl border border-[var(--border-color)] px-4 py-2 text-sm font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {cancelLabel}
           </button>
@@ -104,7 +104,7 @@ export function ConfirmModal({
             type="button"
             onClick={onConfirm}
             disabled={isLoading}
-            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${styles.buttonBg}`}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${styles.buttonBg}`}
           >
             {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
             {confirmLabel}

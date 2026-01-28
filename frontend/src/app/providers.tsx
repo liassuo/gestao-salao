@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from 'react-router-dom';
 import { AuthProvider } from '@/auth';
 import { ToastProvider } from '@/components/ui';
+import { ThemeProvider, SidebarProvider } from '@/contexts';
 import { router } from './routes';
 
 const queryClient = new QueryClient({
@@ -16,11 +17,15 @@ const queryClient = new QueryClient({
 export function Providers() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <ToastProvider>
-          <RouterProvider router={router} />
-        </ToastProvider>
-      </AuthProvider>
+      <ThemeProvider>
+        <SidebarProvider>
+          <AuthProvider>
+            <ToastProvider>
+              <RouterProvider router={router} />
+            </ToastProvider>
+          </AuthProvider>
+        </SidebarProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

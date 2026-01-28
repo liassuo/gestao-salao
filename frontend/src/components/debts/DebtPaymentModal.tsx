@@ -58,18 +58,18 @@ export function DebtPaymentModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative w-full max-w-md rounded-xl bg-white shadow-xl">
+      <div className="relative w-full max-w-md rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] shadow-xl">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-          <h2 className="text-lg font-semibold text-gray-800">
+        <div className="flex items-center justify-between border-b border-[var(--border-color)] px-6 py-4">
+          <h2 className="text-lg font-semibold text-[var(--text-primary)]">
             Registrar Pagamento
           </h2>
           <button
             onClick={onClose}
-            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
           >
             <X className="h-5 w-5" />
           </button>
@@ -78,30 +78,30 @@ export function DebtPaymentModal({
         {/* Content */}
         <form onSubmit={handleSubmit} className="p-6">
           {/* Info da Dívida */}
-          <div className="mb-6 rounded-lg bg-gray-50 p-4">
-            <p className="text-sm text-gray-600">
+          <div className="mb-6 rounded-xl bg-[var(--hover-bg)] p-4">
+            <p className="text-sm text-[var(--text-secondary)]">
               <span className="font-medium">Cliente:</span> {debt.client.name}
             </p>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-[var(--text-secondary)]">
               <span className="font-medium">Valor total:</span>{' '}
               {formatCurrency(debt.amount)}
             </p>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-[var(--text-secondary)]">
               <span className="font-medium">Já pago:</span>{' '}
-              <span className="text-green-600">
+              <span className="text-blue-500">
                 {formatCurrency(debt.amountPaid)}
               </span>
             </p>
-            <p className="mt-2 border-t border-gray-200 pt-2 text-sm font-medium text-gray-900">
+            <p className="mt-2 border-t border-[var(--border-color)] pt-2 text-sm font-medium text-[var(--text-primary)]">
               Saldo restante:{' '}
-              <span className="text-red-600">
+              <span className="text-red-500">
                 {formatCurrency(debt.remainingBalance)}
               </span>
             </p>
           </div>
 
           {error && (
-            <div className="mb-4 flex items-center gap-2 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div className="mb-4 flex items-center gap-2 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-500">
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
               {error}
             </div>
@@ -111,12 +111,12 @@ export function DebtPaymentModal({
           <div className="mb-4">
             <label
               htmlFor="paymentAmount"
-              className="mb-1.5 block text-sm font-medium text-gray-700"
+              className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]"
             >
               Valor a Pagar *
             </label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]">
                 R$
               </span>
               <input
@@ -128,13 +128,13 @@ export function DebtPaymentModal({
                   setAmountReais(value);
                 }}
                 placeholder="0,00"
-                className="w-full rounded-lg border border-gray-300 py-2.5 pl-10 pr-3 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] py-2.5 pl-10 pr-3 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 autoFocus
                 required
               />
             </div>
             {amountCents > debt.remainingBalance && (
-              <p className="mt-1 text-xs text-red-600">
+              <p className="mt-1 text-xs text-red-500">
                 O valor não pode exceder o saldo restante
               </p>
             )}
@@ -144,7 +144,7 @@ export function DebtPaymentModal({
           <div className="mb-6">
             <label
               htmlFor="paymentNotes"
-              className="mb-1.5 block text-sm font-medium text-gray-700"
+              className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]"
             >
               Observações
             </label>
@@ -154,7 +154,7 @@ export function DebtPaymentModal({
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Observações sobre o pagamento..."
               rows={2}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
 
@@ -163,14 +163,14 @@ export function DebtPaymentModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              className="rounded-xl border border-[var(--border-color)] px-4 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={isLoading || !isValidAmount}
-              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
               {isLoading ? 'Salvando...' : 'Confirmar Pagamento'}

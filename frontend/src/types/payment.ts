@@ -60,7 +60,7 @@ export const paymentMethodLabels: Record<PaymentMethod, string> = {
 };
 
 export const paymentMethodColors: Record<PaymentMethod, string> = {
-  CASH: 'bg-green-100 text-green-800',
-  PIX: 'bg-purple-100 text-purple-800',
-  CARD: 'bg-blue-100 text-blue-800',
+  CASH: 'bg-zinc-500/20 text-zinc-400',
+  PIX: 'bg-blue-500/20 text-blue-500',
+  CARD: 'bg-blue-600/20 text-blue-400',
 };

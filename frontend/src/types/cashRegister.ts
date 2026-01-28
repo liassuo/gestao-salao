@@ -47,6 +47,6 @@ export const cashRegisterStatusLabels = {
 } as const;
 
 export const cashRegisterStatusColors = {
-  open: 'bg-green-100 text-green-800',
-  closed: 'bg-gray-100 text-gray-800',
+  open: 'bg-blue-500/20 text-blue-500',
+  closed: 'bg-zinc-500/20 text-zinc-400',
 } as const;

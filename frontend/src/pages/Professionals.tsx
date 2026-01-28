@@ -82,12 +82,12 @@ export function Professionals() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-100">
-            <UserCog className="h-5 w-5 text-orange-600" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/20">
+            <UserCog className="h-5 w-5 text-blue-500" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">Profissionais</h1>
-            <p className="text-sm text-gray-500">
+            <h1 className="text-2xl font-bold text-[var(--text-primary)]">Profissionais</h1>
+            <p className="text-sm text-[var(--text-muted)]">
               Gerencie os profissionais da barbearia
             </p>
           </div>
@@ -95,7 +95,7 @@ export function Professionals() {
 
         <button
           onClick={handleOpenCreateModal}
-          className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2.5 font-medium text-white transition-colors hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+          className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[var(--bg-primary)]"
         >
           <Plus className="h-5 w-5" />
           Novo Profissional
@@ -106,12 +106,12 @@ export function Professionals() {
       {isLoading ? (
         <SkeletonTable rows={5} cols={5} />
       ) : isError ? (
-        <div className="rounded-xl bg-red-50 p-6 shadow-sm">
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-6">
           <div className="flex items-center gap-3">
-            <AlertCircle className="h-6 w-6 text-red-600" />
+            <AlertCircle className="h-6 w-6 text-red-500" />
             <div>
-              <h3 className="font-medium text-red-800">Erro ao carregar</h3>
-              <p className="text-sm text-red-600">
+              <h3 className="font-medium text-red-500">Erro ao carregar</h3>
+              <p className="text-sm text-red-400">
                 {error instanceof Error ? error.message : 'Ocorreu um erro inesperado.'}
               </p>
             </div>

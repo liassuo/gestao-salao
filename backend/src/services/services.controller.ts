@@ -6,97 +6,95 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { ApiTags } from '@nestjs/swagger';
+import { ServicesService } from './services.service';
 import { CreateServiceDto, UpdateServiceDto } from './dto';
 
+@ApiTags('Services')
 @Controller('services')
 export class ServicesController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly servicesService: ServicesService) {}
 
   /**
    * GET /services
-   * Retorna todos os serviços ativos (público - usado pelo app mobile)
+   * Returns all active services (public - used by mobile app)
    */
   @Get()
-  async findAll() {
-    return this.prisma.service.findMany({
-      where: { isActive: true },
-      orderBy: { name: 'asc' },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        price: true,
-        duration: true,
-      },
-    });
+  async findAll(@Query('all') all?: string) {
+    const activeOnly = all !== 'true';
+    return this.servicesService.findAll(activeOnly);
+  }
+
+  /**
+   * GET /services/active
+   * Returns only active services for client app
+   */
+  @Get('active')
+  async findActive() {
+    return this.servicesService.findActive();
+  }
+
+  /**
+   * POST /services/calculate
+   * Calculates total price and duration for selected services
+   */
+  @Post('calculate')
+  async calculateTotal(@Body() body: { serviceIds: string[] }) {
+    return this.servicesService.calculateTotal(body.serviceIds);
   }
 
   /**
    * GET /services/:id
-   * Retorna um serviço específico
+   * Returns a specific service
    */
   @Get(':id')
   async findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.prisma.service.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        price: true,
-        duration: true,
-        isActive: true,
-      },
-    });
+    return this.servicesService.findOne(id);
+  }
+
+  /**
+   * GET /services/:id/statistics
+   * Returns service statistics
+   */
+  @Get(':id/statistics')
+  async getStatistics(@Param('id', ParseUUIDPipe) id: string) {
+    return this.servicesService.getStatistics(id);
   }
 
   /**
    * POST /services
-   * Cria um novo serviço (admin)
+   * Creates a new service (admin)
    */
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() dto: CreateServiceDto) {
-    return this.prisma.service.create({
-      data: {
-        name: dto.name,
-        description: dto.description,
-        price: dto.price,
-        duration: dto.duration,
-      },
-    });
+    return this.servicesService.create(dto);
   }
 
   /**
    * PATCH /services/:id
-   * Atualiza um serviço (admin)
+   * Updates a service (admin)
    */
   @Patch(':id')
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateServiceDto,
   ) {
-    return this.prisma.service.update({
-      where: { id },
-      data: dto,
-    });
+    return this.servicesService.update(id, dto);
   }
 
   /**
    * DELETE /services/:id
-   * Desativa um serviço (soft delete)
+   * Soft deletes a service
    */
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param('id', ParseUUIDPipe) id: string) {
-    await this.prisma.service.update({
-      where: { id },
-      data: { isActive: false },
-    });
+    await this.servicesService.remove(id);
   }
 }

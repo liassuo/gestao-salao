@@ -25,32 +25,32 @@ const icons = {
 
 const styles = {
   success: {
-    bg: 'bg-green-50',
-    border: 'border-green-200',
-    icon: 'text-green-500',
-    title: 'text-green-800',
-    message: 'text-green-700',
+    bg: 'bg-blue-500/20',
+    border: 'border-blue-500/30',
+    icon: 'text-blue-500',
+    title: 'text-blue-500',
+    message: 'text-blue-400',
   },
   error: {
-    bg: 'bg-red-50',
-    border: 'border-red-200',
+    bg: 'bg-red-500/20',
+    border: 'border-red-500/30',
     icon: 'text-red-500',
-    title: 'text-red-800',
-    message: 'text-red-700',
+    title: 'text-red-500',
+    message: 'text-red-400',
   },
   warning: {
-    bg: 'bg-yellow-50',
-    border: 'border-yellow-200',
-    icon: 'text-yellow-500',
-    title: 'text-yellow-800',
-    message: 'text-yellow-700',
+    bg: 'bg-red-500/20',
+    border: 'border-red-500/30',
+    icon: 'text-red-500',
+    title: 'text-red-500',
+    message: 'text-red-400',
   },
   info: {
-    bg: 'bg-blue-50',
-    border: 'border-blue-200',
+    bg: 'bg-blue-500/20',
+    border: 'border-blue-500/30',
     icon: 'text-blue-500',
-    title: 'text-blue-800',
-    message: 'text-blue-700',
+    title: 'text-blue-500',
+    message: 'text-blue-400',
   },
 };
 
@@ -75,7 +75,7 @@ function Toast({ toast, onRemove }: ToastProps) {
 
   return (
     <div
-      className={`pointer-events-auto flex w-full max-w-sm overflow-hidden rounded-lg border shadow-lg transition-all duration-200 ${
+      className={`pointer-events-auto flex w-full max-w-sm overflow-hidden rounded-xl border shadow-lg transition-all duration-200 ${
         style.bg
       } ${style.border} ${
         isVisible ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'
@@ -92,7 +92,7 @@ function Toast({ toast, onRemove }: ToastProps) {
         </div>
         <button
           onClick={() => onRemove(toast.id)}
-          className="flex-shrink-0 rounded-lg p-1 text-gray-400 hover:bg-white/50 hover:text-gray-600"
+          className="flex-shrink-0 rounded-lg p-1 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
         >
           <X className="h-4 w-4" />
         </button>

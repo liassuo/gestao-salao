@@ -10,12 +10,12 @@ export function CashRegisterFilters({
   onChange,
 }: CashRegisterFiltersProps) {
   return (
-    <div className="flex flex-wrap items-end gap-4 rounded-xl bg-white p-4 shadow-sm">
+    <div className="flex flex-wrap items-end gap-4 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-4">
       {/* Data Inicial */}
       <div className="flex-1 min-w-[150px]">
         <label
           htmlFor="startDate"
-          className="mb-1 block text-xs font-medium text-gray-600"
+          className="mb-1 block text-xs font-medium text-[var(--text-muted)]"
         >
           Data Inicial
         </label>
@@ -26,7 +26,7 @@ export function CashRegisterFilters({
           onChange={(e) =>
             onChange({ ...filters, startDate: e.target.value || undefined })
           }
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         />
       </div>
 
@@ -34,7 +34,7 @@ export function CashRegisterFilters({
       <div className="flex-1 min-w-[150px]">
         <label
           htmlFor="endDate"
-          className="mb-1 block text-xs font-medium text-gray-600"
+          className="mb-1 block text-xs font-medium text-[var(--text-muted)]"
         >
           Data Final
         </label>
@@ -45,7 +45,7 @@ export function CashRegisterFilters({
           onChange={(e) =>
             onChange({ ...filters, endDate: e.target.value || undefined })
           }
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         />
       </div>
 
@@ -53,7 +53,7 @@ export function CashRegisterFilters({
       {(filters.startDate || filters.endDate) && (
         <button
           onClick={() => onChange({})}
-          className="rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100"
+          className="rounded-xl px-3 py-2 text-sm font-medium text-[var(--text-muted)] hover:bg-[var(--hover-bg)]"
         >
           Limpar filtros
         </button>

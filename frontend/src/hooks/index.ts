@@ -14,3 +14,18 @@ export { usePayments, usePaymentTotals, usePaymentActions } from './usePayments'
 export { useProfessionals, useProfessional, useCreateProfessional, useUpdateProfessional, useDeleteProfessional } from './useProfessionals';
 export { useServices, useService, useCreateService, useUpdateService, useDeleteService } from './useServices';
 export { useSettleDebt } from './useSettleDebt';
+export {
+  useSubscriptionPlans,
+  useSubscriptionPlan,
+  useCreatePlan,
+  useUpdatePlan,
+  useDeletePlan,
+  useClientSubscriptions,
+  useClientSubscription,
+  useSubscribeClient,
+  useCancelSubscription,
+  useUseCut,
+  useRemainingCuts,
+  SUBSCRIPTION_PLANS_KEY,
+  SUBSCRIPTIONS_KEY,
+} from './useSubscriptions';

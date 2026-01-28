@@ -30,37 +30,37 @@ export function ConfirmDeleteModal({
     <Modal isOpen={isOpen} onClose={onClose} title="Excluir Pagamento" size="sm">
       <div className="space-y-4">
         <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-red-100">
-            <AlertTriangle className="h-6 w-6 text-red-600" />
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-red-500/20">
+            <AlertTriangle className="h-6 w-6 text-red-500" />
           </div>
           <div>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-[var(--text-secondary)]">
               Tem certeza que deseja excluir este pagamento?
             </p>
-            <div className="mt-3 rounded-lg bg-gray-50 p-3">
-              <p className="font-medium text-gray-800">{payment.client.name}</p>
-              <p className="text-sm text-gray-500">
+            <div className="mt-3 rounded-xl bg-[var(--hover-bg)] p-3">
+              <p className="font-medium text-[var(--text-primary)]">{payment.client.name}</p>
+              <p className="text-sm text-[var(--text-muted)]">
                 {formatCurrency(payment.amount)}
               </p>
             </div>
-            <p className="mt-3 text-sm text-red-600">
+            <p className="mt-3 text-sm text-red-500">
               Esta ação não pode ser desfeita.
             </p>
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 border-t border-gray-200 pt-4">
+        <div className="flex justify-end gap-3 border-t border-[var(--border-color)] pt-4">
           <button
             onClick={onClose}
             disabled={isLoading}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+            className="rounded-xl border border-[var(--border-color)] px-4 py-2 text-sm font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] disabled:opacity-50"
           >
             Cancelar
           </button>
           <button
             onClick={onConfirm}
             disabled={isLoading}
-            className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
           >
             {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
             {isLoading ? 'Excluindo...' : 'Excluir'}

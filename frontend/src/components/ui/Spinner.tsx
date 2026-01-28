@@ -1,6 +1,6 @@
 interface SpinnerProps {
   size?: 'sm' | 'md' | 'lg';
-  color?: 'blue' | 'green' | 'yellow' | 'white';
+  color?: 'blue' | 'red' | 'white';
   className?: string;
 }
 
@@ -12,8 +12,7 @@ const sizes = {
 
 const colors = {
   blue: 'border-blue-600 border-t-transparent',
-  green: 'border-green-600 border-t-transparent',
-  yellow: 'border-yellow-600 border-t-transparent',
+  red: 'border-red-600 border-t-transparent',
   white: 'border-white border-t-transparent',
 };
 
@@ -35,9 +34,9 @@ interface LoadingOverlayProps {
 
 export function LoadingOverlay({ message = 'Carregando...' }: LoadingOverlayProps) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl bg-white p-12 shadow-sm">
+    <div className="flex flex-col items-center justify-center rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-12">
       <Spinner size="lg" />
-      <p className="mt-4 text-gray-500">{message}</p>
+      <p className="mt-4 text-[var(--text-muted)]">{message}</p>
     </div>
   );
 }

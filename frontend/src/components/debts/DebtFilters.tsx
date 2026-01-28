@@ -10,12 +10,12 @@ export function DebtFilters({ filters, onChange }: DebtFiltersProps) {
   const { data: clients, isLoading: isLoadingClients } = useClients();
 
   return (
-    <div className="flex flex-wrap items-center gap-4 rounded-xl bg-white p-4 shadow-sm">
+    <div className="flex flex-wrap items-center gap-4 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-4">
       {/* Cliente */}
       <div className="flex-1 min-w-[200px]">
         <label
           htmlFor="filterClient"
-          className="mb-1 block text-xs font-medium text-gray-600"
+          className="mb-1 block text-xs font-medium text-[var(--text-muted)]"
         >
           Cliente
         </label>
@@ -26,7 +26,7 @@ export function DebtFilters({ filters, onChange }: DebtFiltersProps) {
             onChange({ ...filters, clientId: e.target.value || undefined })
           }
           disabled={isLoadingClients}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-yellow-500 focus:outline-none focus:ring-1 focus:ring-yellow-500"
+          className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
         >
           <option value="">Todos os clientes</option>
           {clients?.map((client) => (
@@ -41,7 +41,7 @@ export function DebtFilters({ filters, onChange }: DebtFiltersProps) {
       <div className="flex-1 min-w-[150px]">
         <label
           htmlFor="filterStatus"
-          className="mb-1 block text-xs font-medium text-gray-600"
+          className="mb-1 block text-xs font-medium text-[var(--text-muted)]"
         >
           Status
         </label>
@@ -55,7 +55,7 @@ export function DebtFilters({ filters, onChange }: DebtFiltersProps) {
               isSettled: value === '' ? undefined : value === 'true',
             });
           }}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-yellow-500 focus:outline-none focus:ring-1 focus:ring-yellow-500"
+          className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
         >
           <option value="">Todos</option>
           <option value="false">Abertas</option>
@@ -68,7 +68,7 @@ export function DebtFilters({ filters, onChange }: DebtFiltersProps) {
         <div className="flex items-end">
           <button
             onClick={() => onChange({})}
-            className="rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100"
+            className="rounded-xl px-3 py-2 text-sm font-medium text-[var(--text-muted)] hover:bg-[var(--hover-bg)]"
           >
             Limpar filtros
           </button>

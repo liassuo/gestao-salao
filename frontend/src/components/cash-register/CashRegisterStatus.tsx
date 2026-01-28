@@ -61,14 +61,14 @@ export function CashRegisterStatus({ cashRegister, onClose }: CashRegisterStatus
       {/* Totais */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {/* Saldo Inicial */}
-        <div className="rounded-xl bg-white p-4 shadow-sm">
+        <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100">
-              <Banknote className="h-5 w-5 text-gray-600" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--hover-bg)]">
+              <Banknote className="h-5 w-5 text-[var(--text-muted)]" />
             </div>
             <div>
-              <p className="text-xs text-gray-500">Saldo Inicial</p>
-              <p className="text-lg font-semibold text-gray-900">
+              <p className="text-xs text-[var(--text-muted)]">Saldo Inicial</p>
+              <p className="text-lg font-semibold text-[var(--text-primary)]">
                 {formatCurrency(cashRegister.openingBalance)}
               </p>
             </div>
@@ -76,14 +76,14 @@ export function CashRegisterStatus({ cashRegister, onClose }: CashRegisterStatus
         </div>
 
         {/* Total em Dinheiro */}
-        <div className="rounded-xl bg-white p-4 shadow-sm">
+        <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100">
-              <Banknote className="h-5 w-5 text-green-600" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-500/20">
+              <Banknote className="h-5 w-5 text-green-500" />
             </div>
             <div>
-              <p className="text-xs text-gray-500">Dinheiro</p>
-              <p className="text-lg font-semibold text-green-600">
+              <p className="text-xs text-[var(--text-muted)]">Dinheiro</p>
+              <p className="text-lg font-semibold text-green-500">
                 {formatCurrency(cashRegister.totalCash)}
               </p>
             </div>
@@ -91,14 +91,14 @@ export function CashRegisterStatus({ cashRegister, onClose }: CashRegisterStatus
         </div>
 
         {/* Total PIX */}
-        <div className="rounded-xl bg-white p-4 shadow-sm">
+        <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-100">
-              <Smartphone className="h-5 w-5 text-purple-600" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/20">
+              <Smartphone className="h-5 w-5 text-blue-500" />
             </div>
             <div>
-              <p className="text-xs text-gray-500">PIX</p>
-              <p className="text-lg font-semibold text-purple-600">
+              <p className="text-xs text-[var(--text-muted)]">PIX</p>
+              <p className="text-lg font-semibold text-blue-500">
                 {formatCurrency(cashRegister.totalPix)}
               </p>
             </div>
@@ -106,14 +106,14 @@ export function CashRegisterStatus({ cashRegister, onClose }: CashRegisterStatus
         </div>
 
         {/* Total Cartão */}
-        <div className="rounded-xl bg-white p-4 shadow-sm">
+        <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100">
-              <CreditCard className="h-5 w-5 text-blue-600" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/20">
+              <CreditCard className="h-5 w-5 text-blue-500" />
             </div>
             <div>
-              <p className="text-xs text-gray-500">Cartão</p>
-              <p className="text-lg font-semibold text-blue-600">
+              <p className="text-xs text-[var(--text-muted)]">Cartão</p>
+              <p className="text-lg font-semibold text-blue-500">
                 {formatCurrency(cashRegister.totalCard)}
               </p>
             </div>
@@ -122,31 +122,31 @@ export function CashRegisterStatus({ cashRegister, onClose }: CashRegisterStatus
       </div>
 
       {/* Resumo */}
-      <div className="rounded-xl bg-white p-6 shadow-sm">
-        <h3 className="mb-4 text-lg font-semibold text-gray-800">Resumo do Dia</h3>
+      <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6">
+        <h3 className="mb-4 text-lg font-semibold text-[var(--text-primary)]">Resumo do Dia</h3>
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-gray-600">Receita Total</span>
-            <span className="font-semibold text-gray-900">
+            <span className="text-[var(--text-secondary)]">Receita Total</span>
+            <span className="font-semibold text-[var(--text-primary)]">
               {formatCurrency(cashRegister.totalRevenue)}
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-gray-600">Saldo Inicial</span>
-            <span className="text-gray-900">
+            <span className="text-[var(--text-secondary)]">Saldo Inicial</span>
+            <span className="text-[var(--text-primary)]">
               {formatCurrency(cashRegister.openingBalance)}
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-gray-600">+ Dinheiro Recebido</span>
-            <span className="text-green-600">
+            <span className="text-[var(--text-secondary)]">+ Dinheiro Recebido</span>
+            <span className="text-green-500">
               {formatCurrency(cashRegister.totalCash)}
             </span>
           </div>
-          <hr className="border-gray-200" />
+          <hr className="border-[var(--border-color)]" />
           <div className="flex items-center justify-between">
-            <span className="font-medium text-gray-800">Valor Esperado no Caixa</span>
-            <span className="text-lg font-bold text-gray-900">
+            <span className="font-medium text-[var(--text-primary)]">Valor Esperado no Caixa</span>
+            <span className="text-lg font-bold text-[var(--text-primary)]">
               {formatCurrency(expectedBalance)}
             </span>
           </div>

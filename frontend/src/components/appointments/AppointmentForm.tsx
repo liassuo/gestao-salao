@@ -81,24 +81,24 @@ export function AppointmentForm({ onSubmit, isLoading, error }: AppointmentFormP
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-5">
       {/* Erro da API */}
       {error && (
-        <div className="flex items-start gap-3 rounded-lg bg-red-50 p-4">
-          <AlertCircle className="mt-0.5 h-5 w-5 text-red-600" />
+        <div className="flex items-start gap-3 rounded-xl bg-red-500/10 p-4">
+          <AlertCircle className="mt-0.5 h-5 w-5 text-red-500" />
           <div>
-            <p className="font-medium text-red-800">Erro ao criar agendamento</p>
-            <p className="text-sm text-red-600">{error}</p>
+            <p className="font-medium text-red-500">Erro ao criar agendamento</p>
+            <p className="text-sm text-red-400">{error}</p>
           </div>
         </div>
       )}
 
       {/* Cliente */}
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+        <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
           Cliente *
         </label>
         <select
           {...register('clientId', { required: 'Selecione um cliente' })}
-          className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-            errors.clientId ? 'border-red-500' : 'border-gray-300'
+          className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+            errors.clientId ? 'border-red-500' : 'border-[var(--border-color)]'
           }`}
         >
           <option value="">Selecione um cliente</option>
@@ -115,13 +115,13 @@ export function AppointmentForm({ onSubmit, isLoading, error }: AppointmentFormP
 
       {/* Profissional */}
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+        <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
           Profissional *
         </label>
         <select
           {...register('professionalId', { required: 'Selecione um profissional' })}
-          className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-            errors.professionalId ? 'border-red-500' : 'border-gray-300'
+          className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+            errors.professionalId ? 'border-red-500' : 'border-[var(--border-color)]'
           }`}
         >
           <option value="">Selecione um profissional</option>
@@ -138,10 +138,10 @@ export function AppointmentForm({ onSubmit, isLoading, error }: AppointmentFormP
 
       {/* Serviços (multi-select) */}
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+        <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
           Serviços *
         </label>
-        <div className="max-h-48 space-y-2 overflow-y-auto rounded-lg border border-gray-300 p-3">
+        <div className="max-h-48 space-y-2 overflow-y-auto rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-3">
           {services.map((service) => (
             <ServiceCheckbox
               key={service.id}
@@ -152,7 +152,7 @@ export function AppointmentForm({ onSubmit, isLoading, error }: AppointmentFormP
           ))}
         </div>
         {selectedServiceIds.length === 0 && (
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
             Selecione pelo menos um serviço
           </p>
         )}
@@ -164,15 +164,15 @@ export function AppointmentForm({ onSubmit, isLoading, error }: AppointmentFormP
       {/* Data e Hora */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-gray-700">
+          <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
             Data *
           </label>
           <input
             type="date"
             {...register('date', { required: 'Selecione uma data' })}
             min={new Date().toISOString().split('T')[0]}
-            className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              errors.date ? 'border-red-500' : 'border-gray-300'
+            className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              errors.date ? 'border-red-500' : 'border-[var(--border-color)]'
             }`}
           />
           {errors.date && (
@@ -181,14 +181,14 @@ export function AppointmentForm({ onSubmit, isLoading, error }: AppointmentFormP
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-gray-700">
+          <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
             Hora *
           </label>
           <input
             type="time"
             {...register('time', { required: 'Selecione um horário' })}
-            className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              errors.time ? 'border-red-500' : 'border-gray-300'
+            className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              errors.time ? 'border-red-500' : 'border-[var(--border-color)]'
             }`}
           />
           {errors.time && (
@@ -199,23 +199,23 @@ export function AppointmentForm({ onSubmit, isLoading, error }: AppointmentFormP
 
       {/* Observações */}
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+        <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
           Observações
         </label>
         <textarea
           {...register('notes')}
           rows={3}
           placeholder="Informações adicionais (opcional)"
-          className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full resize-none rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
       {/* Botão de submit */}
-      <div className="flex justify-end gap-3 border-t border-gray-200 pt-4">
+      <div className="flex justify-end gap-3 border-t border-[var(--border-color)] pt-4">
         <button
           type="submit"
           disabled={isLoading || selectedServiceIds.length === 0}
-          className="flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
           {isLoading ? 'Criando...' : 'Criar Agendamento'}
@@ -237,16 +237,16 @@ function ServiceCheckbox({ service, isSelected, onToggle }: ServiceCheckboxProps
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100);
 
   return (
-    <label className="flex cursor-pointer items-center gap-3 rounded-lg p-2 hover:bg-gray-50">
+    <label className="flex cursor-pointer items-center gap-3 rounded-lg p-2 hover:bg-[var(--card-bg)]">
       <input
         type="checkbox"
         checked={isSelected}
         onChange={onToggle}
-        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+        className="h-4 w-4 rounded border-[var(--border-color)] text-blue-600 focus:ring-blue-500"
       />
       <div className="flex-1">
-        <p className="text-sm font-medium text-gray-800">{service.name}</p>
-        <p className="text-xs text-gray-500">
+        <p className="text-sm font-medium text-[var(--text-primary)]">{service.name}</p>
+        <p className="text-xs text-[var(--text-muted)]">
           {service.durationMinutes}min • {formatCurrency(service.price)}
         </p>
       </div>

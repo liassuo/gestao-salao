@@ -12,7 +12,7 @@ interface RoleRouteProps {
 export function RoleRoute({
   children,
   roles,
-  redirectTo = '/access-denied',
+  redirectTo = '/acesso-negado',
 }: RoleRouteProps) {
   const { user } = useAuth();
 

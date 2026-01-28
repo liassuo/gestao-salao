@@ -54,42 +54,42 @@ export function ProfessionalsTable({
   }
 
   return (
-    <div className="overflow-hidden rounded-xl bg-white shadow-sm">
+    <div className="overflow-hidden rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)]">
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">
+            <tr className="border-b border-[var(--border-color)] bg-[var(--hover-bg)]">
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Profissional
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Contato
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Serviços
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Dias de Trabalho
               </th>
-              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-600">
+              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Ações
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
+          <tbody className="divide-y divide-[var(--border-color)]">
             {professionals.map((professional) => (
-              <tr key={professional.id} className="hover:bg-gray-50">
+              <tr key={professional.id} className="hover:bg-[var(--hover-bg)]">
                 <td className="px-4 py-4">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-100 text-orange-600">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-500/20 text-blue-500">
                       <span className="text-sm font-medium">
                         {professional.name.charAt(0).toUpperCase()}
                       </span>
                     </div>
                     <div>
-                      <p className="font-medium text-gray-900">{professional.name}</p>
+                      <p className="font-medium text-[var(--text-primary)]">{professional.name}</p>
                       {professional.commissionRate && (
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-[var(--text-muted)]">
                           Comissão: {professional.commissionRate}%
                         </p>
                       )}
@@ -98,12 +98,12 @@ export function ProfessionalsTable({
                 </td>
                 <td className="px-4 py-4">
                   <div className="space-y-1">
-                    <div className="flex items-center gap-1.5 text-sm text-gray-600">
+                    <div className="flex items-center gap-1.5 text-sm text-[var(--text-secondary)]">
                       <Phone className="h-3.5 w-3.5" />
                       {formatPhone(professional.phone)}
                     </div>
                     {professional.email && (
-                      <div className="flex items-center gap-1.5 text-sm text-gray-500">
+                      <div className="flex items-center gap-1.5 text-sm text-[var(--text-muted)]">
                         <Mail className="h-3.5 w-3.5" />
                         <span className="truncate max-w-[180px]">{professional.email}</span>
                       </div>
@@ -116,22 +116,22 @@ export function ProfessionalsTable({
                       professional.services.slice(0, 3).map((service) => (
                         <span
                           key={service.id}
-                          className="inline-block rounded bg-purple-100 px-2 py-0.5 text-xs text-purple-700"
+                          className="inline-block rounded bg-blue-500/20 px-2 py-0.5 text-xs text-blue-400"
                         >
                           {service.name}
                         </span>
                       ))
                     ) : (
-                      <span className="text-sm text-gray-400">Nenhum serviço</span>
+                      <span className="text-sm text-[var(--text-muted)]">Nenhum serviço</span>
                     )}
                     {professional.services && professional.services.length > 3 && (
-                      <span className="inline-block rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                      <span className="inline-block rounded bg-zinc-500/20 px-2 py-0.5 text-xs text-zinc-400">
                         +{professional.services.length - 3}
                       </span>
                     )}
                   </div>
                 </td>
-                <td className="whitespace-nowrap px-4 py-4 text-sm text-gray-600">
+                <td className="whitespace-nowrap px-4 py-4 text-sm text-[var(--text-secondary)]">
                   {formatWorkingDays(professional.workingHours)}
                 </td>
                 <td className="whitespace-nowrap px-4 py-4 text-center">
@@ -139,7 +139,7 @@ export function ProfessionalsTable({
                     <button
                       onClick={() => setOpenMenuId(openMenuId === professional.id ? null : professional.id)}
                       disabled={isLoading}
-                      className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 disabled:opacity-50"
+                      className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] disabled:opacity-50"
                     >
                       <MoreVertical className="h-5 w-5" />
                     </button>
@@ -150,13 +150,13 @@ export function ProfessionalsTable({
                           className="fixed inset-0 z-10"
                           onClick={() => setOpenMenuId(null)}
                         />
-                        <div className="absolute right-0 z-20 mt-1 w-36 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                        <div className="absolute right-0 z-20 mt-1 w-36 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-1 shadow-lg">
                           <button
                             onClick={() => {
                               onEdit(professional);
                               setOpenMenuId(null);
                             }}
-                            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
                           >
                             <Edit2 className="h-4 w-4" />
                             Editar
@@ -166,7 +166,7 @@ export function ProfessionalsTable({
                               onDelete(professional);
                               setOpenMenuId(null);
                             }}
-                            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-500 hover:bg-red-500/10"
                           >
                             <Trash2 className="h-4 w-4" />
                             Excluir

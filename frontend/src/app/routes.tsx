@@ -11,7 +11,10 @@ import {
   Login,
   Payments,
   Professionals,
+  Reports,
   Services,
+  Settings,
+  Subscriptions,
 } from '@/pages';
 import { getRolesForPath } from '@/config/permissions';
 
@@ -43,52 +46,49 @@ export const router = createBrowserRouter([
         element: <Dashboard />,
       },
       {
-        path: 'access-denied',
+        path: 'acesso-negado',
         element: <AccessDenied />,
       },
       {
-        path: 'appointments',
-        element: withRoleProtection('/appointments', <Appointments />),
+        path: 'agendamentos',
+        element: withRoleProtection('/agendamentos', <Appointments />),
       },
       {
-        path: 'clients',
-        element: withRoleProtection('/clients', <Clients />),
+        path: 'clientes',
+        element: withRoleProtection('/clientes', <Clients />),
       },
       {
-        path: 'services',
-        element: withRoleProtection('/services', <Services />),
+        path: 'servicos',
+        element: withRoleProtection('/servicos', <Services />),
       },
       {
-        path: 'professionals',
-        element: withRoleProtection('/professionals', <Professionals />),
+        path: 'assinaturas',
+        element: withRoleProtection('/assinaturas', <Subscriptions />),
       },
       {
-        path: 'payments',
-        element: withRoleProtection('/payments', <Payments />),
+        path: 'profissionais',
+        element: withRoleProtection('/profissionais', <Professionals />),
       },
       {
-        path: 'debts',
-        element: withRoleProtection('/debts', <Debts />),
+        path: 'pagamentos',
+        element: withRoleProtection('/pagamentos', <Payments />),
       },
       {
-        path: 'cash-register',
-        element: withRoleProtection('/cash-register', <CashRegister />),
+        path: 'dividas',
+        element: withRoleProtection('/dividas', <Debts />),
       },
       {
-        path: 'settings',
-        element: withRoleProtection('/settings', <PlaceholderPage title="Configurações" />),
+        path: 'caixa',
+        element: withRoleProtection('/caixa', <CashRegister />),
+      },
+      {
+        path: 'relatorios',
+        element: withRoleProtection('/relatorios', <Reports />),
+      },
+      {
+        path: 'configuracoes',
+        element: withRoleProtection('/configuracoes', <Settings />),
       },
     ],
   },
 ]);
-
-function PlaceholderPage({ title }: { title: string }) {
-  return (
-    <div>
-      <h1 className="mb-6 text-2xl font-bold text-gray-800">{title}</h1>
-      <div className="rounded-xl bg-white p-6 shadow-sm">
-        <p className="text-gray-500">Página em construção...</p>
-      </div>
-    </div>
-  );
-}

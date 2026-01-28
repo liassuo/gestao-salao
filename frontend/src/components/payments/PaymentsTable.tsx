@@ -54,44 +54,44 @@ export function PaymentsTable({
   }
 
   return (
-    <div className="overflow-hidden rounded-xl bg-white shadow-sm">
+    <div className="overflow-hidden rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)]">
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">
+            <tr className="border-b border-[var(--border-color)] bg-[var(--hover-bg)]">
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Data
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Cliente
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Valor
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Método
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Agendamento
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Registrado por
               </th>
-              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-600">
+              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Ações
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
+          <tbody className="divide-y divide-[var(--border-color)]">
             {payments.map((payment) => (
-              <tr key={payment.id} className="hover:bg-gray-50">
-                <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">
+              <tr key={payment.id} className="hover:bg-[var(--hover-bg)]">
+                <td className="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-primary)]">
                   {formatDateTime(payment.paidAt)}
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
+                <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-[var(--text-primary)]">
                   {payment.client.name}
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold text-gray-900">
+                <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold text-[var(--text-primary)]">
                   {formatCurrency(payment.amount)}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3">
@@ -103,12 +103,12 @@ export function PaymentsTable({
                     {paymentMethodLabels[payment.method]}
                   </span>
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500">
+                <td className="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-muted)]">
                   {payment.appointment
                     ? formatDate(payment.appointment.scheduledAt)
                     : '-'}
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500">
+                <td className="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-muted)]">
                   {payment.registeredBy.name}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-center">
@@ -162,7 +162,7 @@ function PaymentActions({
       <button
         onClick={onToggle}
         disabled={disabled}
-        className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+        className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] disabled:cursor-not-allowed disabled:opacity-50"
       >
         <MoreVertical className="h-5 w-5" />
       </button>
@@ -170,17 +170,17 @@ function PaymentActions({
       {isOpen && (
         <>
           <div className="fixed inset-0 z-10" onClick={onClose} />
-          <div className="absolute right-0 z-20 mt-1 w-40 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+          <div className="absolute right-0 z-20 mt-1 w-40 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-1 shadow-lg">
             <button
               onClick={onEdit}
-              className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+              className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
             >
               <Pencil className="h-4 w-4" />
               Editar
             </button>
             <button
               onClick={onDelete}
-              className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+              className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-red-500 hover:bg-red-500/10"
             >
               <Trash2 className="h-4 w-4" />
               Excluir

@@ -82,25 +82,25 @@ export function ServiceForm({ service, onSubmit, isLoading, error }: ServiceForm
   return (
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-5">
       {error && (
-        <div className="flex items-start gap-3 rounded-lg bg-red-50 p-4">
-          <AlertCircle className="mt-0.5 h-5 w-5 text-red-600" />
+        <div className="flex items-start gap-3 rounded-xl bg-red-500/10 p-4">
+          <AlertCircle className="mt-0.5 h-5 w-5 text-red-500" />
           <div>
-            <p className="font-medium text-red-800">Erro ao salvar</p>
-            <p className="text-sm text-red-600">{error}</p>
+            <p className="font-medium text-red-500">Erro ao salvar</p>
+            <p className="text-sm text-red-400">{error}</p>
           </div>
         </div>
       )}
 
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+        <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
           Nome do Serviço *
         </label>
         <input
           type="text"
           {...register('name', { required: 'Nome é obrigatório' })}
           placeholder="Ex: Corte de Cabelo"
-          className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 ${
-            errors.name ? 'border-red-500' : 'border-gray-300'
+          className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+            errors.name ? 'border-red-500' : 'border-[var(--border-color)]'
           }`}
         />
         {errors.name && (
@@ -109,24 +109,24 @@ export function ServiceForm({ service, onSubmit, isLoading, error }: ServiceForm
       </div>
 
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+        <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
           Descrição
         </label>
         <textarea
           {...register('description')}
           rows={2}
           placeholder="Descrição do serviço (opcional)"
-          className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+          className="w-full resize-none rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-gray-700">
+          <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
             Preço *
           </label>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]">
               R$
             </span>
             <input
@@ -134,8 +134,8 @@ export function ServiceForm({ service, onSubmit, isLoading, error }: ServiceForm
               value={priceDisplay}
               onChange={handlePriceChange}
               placeholder="0,00"
-              className={`w-full rounded-lg border py-2.5 pl-10 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 ${
-                errors.price ? 'border-red-500' : 'border-gray-300'
+              className={`w-full rounded-xl border bg-[var(--hover-bg)] py-2.5 pl-10 pr-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                errors.price ? 'border-red-500' : 'border-[var(--border-color)]'
               }`}
             />
             <input type="hidden" {...register('price', { required: 'Preço é obrigatório' })} />
@@ -146,13 +146,13 @@ export function ServiceForm({ service, onSubmit, isLoading, error }: ServiceForm
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-gray-700">
+          <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
             Duração (minutos) *
           </label>
           <select
             {...register('duration', { required: 'Duração é obrigatória', valueAsNumber: true })}
-            className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 ${
-              errors.duration ? 'border-red-500' : 'border-gray-300'
+            className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              errors.duration ? 'border-red-500' : 'border-[var(--border-color)]'
             }`}
           >
             <option value={15}>15 minutos</option>
@@ -169,11 +169,11 @@ export function ServiceForm({ service, onSubmit, isLoading, error }: ServiceForm
         </div>
       </div>
 
-      <div className="flex justify-end gap-3 border-t border-gray-200 pt-4">
+      <div className="flex justify-end gap-3 border-t border-[var(--border-color)] pt-4">
         <button
           type="submit"
           disabled={isLoading}
-          className="flex items-center gap-2 rounded-lg bg-purple-600 px-6 py-2.5 font-medium text-white transition-colors hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
           {isLoading ? 'Salvando...' : isEditing ? 'Salvar' : 'Cadastrar'}

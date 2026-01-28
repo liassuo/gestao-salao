@@ -28,29 +28,29 @@ export function CashRegisterSummary({
       label: 'Total Faturado',
       value: formatCurrency(summary.totalRevenue),
       icon: TrendingUp,
-      iconBg: 'bg-blue-100',
-      iconColor: 'text-blue-600',
+      iconBg: 'bg-blue-500/20',
+      iconColor: 'text-blue-500',
     },
     {
       label: 'Dinheiro',
       value: formatCurrency(summary.totalCash),
       icon: Banknote,
-      iconBg: 'bg-green-100',
-      iconColor: 'text-green-600',
+      iconBg: 'bg-blue-500/20',
+      iconColor: 'text-blue-500',
     },
     {
       label: 'PIX',
       value: formatCurrency(summary.totalPix),
       icon: Smartphone,
-      iconBg: 'bg-purple-100',
-      iconColor: 'text-purple-600',
+      iconBg: 'bg-blue-500/20',
+      iconColor: 'text-blue-500',
     },
     {
       label: 'Cartão',
       value: formatCurrency(summary.totalCard),
       icon: CreditCard,
-      iconBg: 'bg-orange-100',
-      iconColor: 'text-orange-600',
+      iconBg: 'bg-blue-500/20',
+      iconColor: 'text-blue-500',
     },
     {
       label: 'Discrepâncias',
@@ -64,22 +64,22 @@ export function CashRegisterSummary({
       icon: AlertTriangle,
       iconBg:
         summary.totalDiscrepancy === 0
-          ? 'bg-gray-100'
+          ? 'bg-[var(--hover-bg)]'
           : summary.totalDiscrepancy > 0
-          ? 'bg-green-100'
-          : 'bg-red-100',
+          ? 'bg-blue-500/20'
+          : 'bg-red-500/20',
       iconColor:
         summary.totalDiscrepancy === 0
-          ? 'text-gray-600'
+          ? 'text-[var(--text-muted)]'
           : summary.totalDiscrepancy > 0
-          ? 'text-green-600'
-          : 'text-red-600',
+          ? 'text-blue-500'
+          : 'text-red-500',
       valueColor:
         summary.totalDiscrepancy === 0
-          ? 'text-gray-900'
+          ? 'text-[var(--text-primary)]'
           : summary.totalDiscrepancy > 0
-          ? 'text-green-600'
-          : 'text-red-600',
+          ? 'text-blue-500'
+          : 'text-red-500',
     },
   ];
 
@@ -87,9 +87,9 @@ export function CashRegisterSummary({
     return (
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {[...Array(5)].map((_, i) => (
-          <div key={i} className="animate-pulse rounded-xl bg-white p-4 shadow-sm">
-            <div className="h-4 w-24 rounded bg-gray-200" />
-            <div className="mt-2 h-8 w-32 rounded bg-gray-200" />
+          <div key={i} className="animate-pulse rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-4">
+            <div className="h-4 w-24 rounded bg-[var(--hover-bg)]" />
+            <div className="mt-2 h-8 w-32 rounded bg-[var(--hover-bg)]" />
           </div>
         ))}
       </div>
@@ -99,7 +99,7 @@ export function CashRegisterSummary({
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
       {cards.map((card) => (
-        <div key={card.label} className="rounded-xl bg-white p-4 shadow-sm">
+        <div key={card.label} className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-4">
           <div className="flex items-center gap-3">
             <div
               className={`flex h-10 w-10 items-center justify-center rounded-lg ${card.iconBg}`}
@@ -107,16 +107,16 @@ export function CashRegisterSummary({
               <card.icon className={`h-5 w-5 ${card.iconColor}`} />
             </div>
             <div>
-              <p className="text-xs text-gray-500">{card.label}</p>
+              <p className="text-xs text-[var(--text-muted)]">{card.label}</p>
               <p
                 className={`text-lg font-semibold ${
-                  card.valueColor || 'text-gray-900'
+                  card.valueColor || 'text-[var(--text-primary)]'
                 }`}
               >
                 {card.value}
               </p>
               {card.subValue && (
-                <p className="text-xs text-gray-400">{card.subValue}</p>
+                <p className="text-xs text-[var(--text-muted)]">{card.subValue}</p>
               )}
             </div>
           </div>

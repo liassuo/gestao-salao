@@ -1,9 +1,12 @@
 import { useNavigate } from 'react-router-dom';
-import { Bell, LogOut, User } from 'lucide-react';
+import { Bell, LogOut, User, Sun, Moon } from 'lucide-react';
 import { useAuth } from '@/auth';
+import { useTheme, useSidebar } from '@/contexts';
 
 export function Header() {
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
+  const { isCollapsed } = useSidebar();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -20,36 +23,54 @@ export function Header() {
   };
 
   return (
-    <header className="fixed left-64 right-0 top-0 z-30 h-16 border-b border-gray-200 bg-white">
+    <header
+      className={`fixed right-0 top-0 z-30 h-16 border-b border-[var(--border-color)] bg-[var(--bg-header)] backdrop-blur-xl transition-all duration-300 ${
+        isCollapsed ? 'left-20' : 'left-64'
+      }`}
+    >
       <div className="flex h-full items-center justify-between px-6">
         <div>
-          <h2 className="text-lg font-semibold text-gray-800">
+          <h2 className="text-lg font-semibold text-[var(--text-primary)]">
             Painel Administrativo
           </h2>
         </div>
 
-        <div className="flex items-center gap-4">
-          <button className="relative rounded-lg p-2 text-gray-500 hover:bg-gray-100">
-            <Bell className="h-5 w-5" />
-            <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500" />
+        <div className="flex items-center gap-2">
+          {/* Theme Toggle */}
+          <button
+            onClick={toggleTheme}
+            title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
+            className="relative rounded-xl p-2.5 text-[var(--text-muted)] transition-all hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
+          >
+            {theme === 'dark' ? (
+              <Sun className="h-5 w-5" />
+            ) : (
+              <Moon className="h-5 w-5" />
+            )}
           </button>
 
-          <div className="flex items-center gap-3 border-l border-gray-200 pl-4">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-white">
+          {/* Notifications */}
+          <button className="relative rounded-xl p-2.5 text-[var(--text-muted)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]">
+            <Bell className="h-5 w-5" />
+            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-[var(--bg-secondary)]" />
+          </button>
+
+          <div className="flex items-center gap-3 border-l border-[var(--border-color)] pl-4">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-red-600 to-red-500 text-white shadow-lg shadow-red-600/20">
               <User className="h-5 w-5" />
             </div>
             <div className="hidden md:block">
-              <p className="text-sm font-medium text-gray-800">
+              <p className="text-sm font-medium text-[var(--text-primary)]">
                 {user?.name || 'Usuário'}
               </p>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-[var(--text-muted)]">
                 {user?.role ? getRoleLabel(user.role) : ''}
               </p>
             </div>
             <button
               onClick={handleLogout}
               title="Sair"
-              className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-red-500"
+              className="rounded-xl p-2.5 text-[var(--text-muted)] transition-all hover:bg-red-500/10 hover:text-red-400"
             >
               <LogOut className="h-5 w-5" />
             </button>

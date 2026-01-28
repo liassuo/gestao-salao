@@ -7,8 +7,46 @@
   --color-sidebar-hover: #374151;
 }
 
+/* Light theme (default) */
+:root {
+  --bg-primary: #f4f4f5;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f4f4f5;
+  --bg-sidebar: #18181b;
+  --bg-header: rgba(255, 255, 255, 0.8);
+  --border-color: #e4e4e7;
+  --border-sidebar: #27272a;
+  --text-primary: #18181b;
+  --text-secondary: #3f3f46;
+  --text-muted: #71717a;
+  --text-sidebar: #a1a1aa;
+  --card-bg: #ffffff;
+  --card-border: #e4e4e7;
+  --hover-bg: #f4f4f5;
+}
+
+/* Dark theme */
+:root.dark {
+  --bg-primary: #09090b;
+  --bg-secondary: #18181b;
+  --bg-tertiary: rgba(24, 24, 27, 0.8);
+  --bg-sidebar: #18181b;
+  --bg-header: rgba(24, 24, 27, 0.8);
+  --border-color: #27272a;
+  --border-sidebar: #27272a;
+  --text-primary: #fafafa;
+  --text-secondary: #e4e4e7;
+  --text-muted: #a1a1aa;
+  --text-sidebar: #a1a1aa;
+  --card-bg: rgba(24, 24, 27, 0.8);
+  --card-border: #27272a;
+  --hover-bg: #27272a;
+}
+
 body {
-  @apply bg-gray-100 text-gray-900 antialiased;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  @apply antialiased transition-colors duration-200;
 }
 
 /* Acessibilidade: Foco visível para navegação por teclado */

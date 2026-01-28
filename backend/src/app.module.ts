@@ -10,6 +10,9 @@ import { AppointmentsModule } from './appointments/appointments.module';
 import { PaymentsModule } from './payments/payments.module';
 import { DebtsModule } from './debts/debts.module';
 import { CashRegisterModule } from './cash-register/cash-register.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+import { ReportsModule } from './reports/reports.module';
+import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 
 @Module({
   imports: [
@@ -26,6 +29,9 @@ import { CashRegisterModule } from './cash-register/cash-register.module';
     PaymentsModule,
     DebtsModule,
     CashRegisterModule,
+    DashboardModule,
+    ReportsModule,
+    SubscriptionsModule,
   ],
 })
 export class AppModule {}

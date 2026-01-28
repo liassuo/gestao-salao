@@ -109,24 +109,24 @@ export function PaymentForm({ onSubmit, isLoading, error }: PaymentFormProps) {
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-5">
       {/* Erro da API */}
       {error && (
-        <div className="flex items-start gap-3 rounded-lg bg-red-50 p-4">
-          <AlertCircle className="mt-0.5 h-5 w-5 text-red-600" />
+        <div className="flex items-start gap-3 rounded-xl bg-red-500/10 p-4">
+          <AlertCircle className="mt-0.5 h-5 w-5 text-red-500" />
           <div>
-            <p className="font-medium text-red-800">Erro ao registrar pagamento</p>
-            <p className="text-sm text-red-600">{error}</p>
+            <p className="font-medium text-red-500">Erro ao registrar pagamento</p>
+            <p className="text-sm text-red-400">{error}</p>
           </div>
         </div>
       )}
 
       {/* Cliente */}
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+        <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
           Cliente *
         </label>
         <select
           {...register('clientId', { required: 'Selecione um cliente' })}
-          className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-            errors.clientId ? 'border-red-500' : 'border-gray-300'
+          className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+            errors.clientId ? 'border-red-500' : 'border-[var(--border-color)]'
           }`}
         >
           <option value="">Selecione um cliente</option>
@@ -143,13 +143,13 @@ export function PaymentForm({ onSubmit, isLoading, error }: PaymentFormProps) {
 
       {/* Agendamento (opcional) */}
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-gray-700">
-          Agendamento <span className="text-gray-400">(opcional)</span>
+        <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
+          Agendamento <span className="text-[var(--text-muted)]">(opcional)</span>
         </label>
         <select
           {...register('appointmentId')}
           disabled={!selectedClientId || isLoadingAppointments}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+          className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
         >
           <option value="">
             {!selectedClientId
@@ -166,18 +166,18 @@ export function PaymentForm({ onSubmit, isLoading, error }: PaymentFormProps) {
             </option>
           ))}
         </select>
-        <p className="mt-1 text-xs text-gray-500">
+        <p className="mt-1 text-xs text-[var(--text-muted)]">
           Vincular a um agendamento atendido não pago
         </p>
       </div>
 
       {/* Valor */}
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+        <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
           Valor *
         </label>
         <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]">
             R$
           </span>
           <input
@@ -190,8 +190,8 @@ export function PaymentForm({ onSubmit, isLoading, error }: PaymentFormProps) {
                 reaisToCentavos(value) > 0 || 'Valor deve ser maior que zero',
             })}
             onChange={handleAmountChange}
-            className={`w-full rounded-lg border py-2.5 pl-10 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              errors.amount ? 'border-red-500' : 'border-gray-300'
+            className={`w-full rounded-xl border bg-[var(--hover-bg)] py-2.5 pl-10 pr-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              errors.amount ? 'border-red-500' : 'border-[var(--border-color)]'
             }`}
           />
         </div>
@@ -199,7 +199,7 @@ export function PaymentForm({ onSubmit, isLoading, error }: PaymentFormProps) {
           <p className="mt-1 text-sm text-red-500">{errors.amount.message}</p>
         )}
         {watchedAmount && (
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-1 text-xs text-[var(--text-muted)]">
             {reaisToCentavos(watchedAmount)} centavos
           </p>
         )}
@@ -207,7 +207,7 @@ export function PaymentForm({ onSubmit, isLoading, error }: PaymentFormProps) {
 
       {/* Método de Pagamento */}
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+        <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
           Método de Pagamento *
         </label>
         <div className="grid grid-cols-3 gap-3">
@@ -216,10 +216,10 @@ export function PaymentForm({ onSubmit, isLoading, error }: PaymentFormProps) {
             return (
               <label
                 key={method}
-                className={`flex cursor-pointer items-center justify-center rounded-lg border-2 px-4 py-3 text-sm font-medium transition-colors ${
+                className={`flex cursor-pointer items-center justify-center rounded-xl border-2 px-4 py-3 text-sm font-medium transition-colors ${
                   isSelected
-                    ? 'border-blue-600 bg-blue-50 text-blue-700'
-                    : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                    ? 'border-blue-600 bg-blue-500/20 text-blue-500'
+                    : 'border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--text-muted)]'
                 }`}
               >
                 <input
@@ -237,23 +237,23 @@ export function PaymentForm({ onSubmit, isLoading, error }: PaymentFormProps) {
 
       {/* Observações */}
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+        <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
           Observações
         </label>
         <textarea
           {...register('notes')}
           rows={2}
           placeholder="Informações adicionais (opcional)"
-          className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full resize-none rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
       {/* Botão de submit */}
-      <div className="flex justify-end gap-3 border-t border-gray-200 pt-4">
+      <div className="flex justify-end gap-3 border-t border-[var(--border-color)] pt-4">
         <button
           type="submit"
           disabled={isLoading}
-          className="flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
           {isLoading ? 'Registrando...' : 'Registrar Pagamento'}

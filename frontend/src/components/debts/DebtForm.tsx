@@ -38,7 +38,7 @@ export function DebtForm({ onSubmit, isLoading, error }: DebtFormProps) {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {error && (
-        <div className="flex items-center gap-2 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="flex items-center gap-2 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-500">
           <AlertCircle className="h-4 w-4 flex-shrink-0" />
           {error}
         </div>
@@ -48,7 +48,7 @@ export function DebtForm({ onSubmit, isLoading, error }: DebtFormProps) {
       <div>
         <label
           htmlFor="clientId"
-          className="mb-1.5 block text-sm font-medium text-gray-700"
+          className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]"
         >
           Cliente *
         </label>
@@ -57,7 +57,7 @@ export function DebtForm({ onSubmit, isLoading, error }: DebtFormProps) {
           value={clientId}
           onChange={(e) => setClientId(e.target.value)}
           disabled={isLoadingClients}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2.5 focus:border-yellow-500 focus:outline-none focus:ring-1 focus:ring-yellow-500 disabled:bg-gray-100"
+          className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 disabled:opacity-50"
           required
         >
           <option value="">Selecione um cliente</option>
@@ -73,12 +73,12 @@ export function DebtForm({ onSubmit, isLoading, error }: DebtFormProps) {
       <div>
         <label
           htmlFor="amount"
-          className="mb-1.5 block text-sm font-medium text-gray-700"
+          className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]"
         >
           Valor Total (R$) *
         </label>
         <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]">
             R$
           </span>
           <input
@@ -91,7 +91,7 @@ export function DebtForm({ onSubmit, isLoading, error }: DebtFormProps) {
               setAmountReais(value);
             }}
             placeholder="0,00"
-            className="w-full rounded-lg border border-gray-300 py-2.5 pl-10 pr-3 focus:border-yellow-500 focus:outline-none focus:ring-1 focus:ring-yellow-500"
+            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] py-2.5 pl-10 pr-3 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
             required
           />
         </div>
@@ -101,7 +101,7 @@ export function DebtForm({ onSubmit, isLoading, error }: DebtFormProps) {
       <div>
         <label
           htmlFor="description"
-          className="mb-1.5 block text-sm font-medium text-gray-700"
+          className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]"
         >
           Descrição
         </label>
@@ -111,7 +111,7 @@ export function DebtForm({ onSubmit, isLoading, error }: DebtFormProps) {
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Motivo ou detalhes da dívida..."
           rows={3}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2.5 focus:border-yellow-500 focus:outline-none focus:ring-1 focus:ring-yellow-500"
+          className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
         />
       </div>
 
@@ -119,7 +119,7 @@ export function DebtForm({ onSubmit, isLoading, error }: DebtFormProps) {
       <div>
         <label
           htmlFor="dueDate"
-          className="mb-1.5 block text-sm font-medium text-gray-700"
+          className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]"
         >
           Data de Vencimento
         </label>
@@ -128,7 +128,7 @@ export function DebtForm({ onSubmit, isLoading, error }: DebtFormProps) {
           id="dueDate"
           value={dueDate}
           onChange={(e) => setDueDate(e.target.value)}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2.5 focus:border-yellow-500 focus:outline-none focus:ring-1 focus:ring-yellow-500"
+          className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
         />
       </div>
 
@@ -137,7 +137,7 @@ export function DebtForm({ onSubmit, isLoading, error }: DebtFormProps) {
         <button
           type="submit"
           disabled={isLoading || !isValid}
-          className="flex items-center gap-2 rounded-lg bg-yellow-600 px-4 py-2.5 font-medium text-white transition-colors hover:bg-yellow-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
           {isLoading ? 'Salvando...' : 'Criar Dívida'}

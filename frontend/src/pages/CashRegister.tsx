@@ -93,19 +93,19 @@ export function CashRegister() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100">
-          <Wallet className="h-5 w-5 text-blue-600" />
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/20">
+          <Wallet className="h-5 w-5 text-blue-500" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Caixa</h1>
-          <p className="text-sm text-gray-500">
+          <h1 className="text-2xl font-bold text-[var(--text-primary)]">Caixa</h1>
+          <p className="text-sm text-[var(--text-muted)]">
             Controle de abertura e fechamento de caixa
           </p>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-[var(--border-color)]">
         <nav className="-mb-px flex gap-4" role="tablist">
           {tabs.map((tab) => (
             <button
@@ -115,8 +115,8 @@ export function CashRegister() {
               aria-selected={activeTab === tab.id}
               className={`flex items-center gap-2 border-b-2 px-1 py-3 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                 activeTab === tab.id
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                  ? 'border-blue-500 text-blue-500'
+                  : 'border-transparent text-[var(--text-muted)] hover:border-[var(--border-color)] hover:text-[var(--text-primary)]'
               }`}
             >
               <tab.icon className="h-4 w-4" />
@@ -134,12 +134,12 @@ export function CashRegister() {
               <SkeletonCard />
             </div>
           ) : isErrorToday ? (
-            <div className="rounded-xl bg-red-50 p-6 shadow-sm">
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-6">
               <div className="flex items-center gap-3">
-                <AlertCircle className="h-6 w-6 text-red-600" />
+                <AlertCircle className="h-6 w-6 text-red-500" />
                 <div>
-                  <h3 className="font-medium text-red-800">Erro ao carregar</h3>
-                  <p className="text-sm text-red-600">
+                  <h3 className="font-medium text-red-500">Erro ao carregar</h3>
+                  <p className="text-sm text-red-400">
                     {errorToday instanceof Error
                       ? errorToday.message
                       : 'Ocorreu um erro inesperado. Tente novamente.'}

@@ -43,6 +43,6 @@ export const debtStatusLabels = {
 } as const;
 
 export const debtStatusColors = {
-  open: 'bg-yellow-100 text-yellow-800',
-  settled: 'bg-green-100 text-green-800',
+  open: 'bg-red-500/20 text-red-500',
+  settled: 'bg-blue-500/20 text-blue-500',
 } as const;

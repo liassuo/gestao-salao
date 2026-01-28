@@ -27,43 +27,43 @@ export function AppointmentFiltersComponent({
   const hasFilters = Object.values(filters).some(Boolean);
 
   return (
-    <div className="rounded-xl bg-white p-4 shadow-sm">
+    <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-4">
       <div className="flex flex-wrap items-end gap-4">
         {/* Data Início */}
         <div className="min-w-[160px]">
-          <label className="mb-1.5 block text-sm font-medium text-gray-700">
+          <label className="mb-1.5 block text-sm font-medium text-[var(--text-muted)]">
             Data Início
           </label>
           <input
             type="date"
             value={filters.startDate || ''}
             onChange={(e) => handleChange('startDate', e.target.value)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
 
         {/* Data Fim */}
         <div className="min-w-[160px]">
-          <label className="mb-1.5 block text-sm font-medium text-gray-700">
+          <label className="mb-1.5 block text-sm font-medium text-[var(--text-muted)]">
             Data Fim
           </label>
           <input
             type="date"
             value={filters.endDate || ''}
             onChange={(e) => handleChange('endDate', e.target.value)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
 
         {/* Profissional */}
         <div className="min-w-[180px]">
-          <label className="mb-1.5 block text-sm font-medium text-gray-700">
+          <label className="mb-1.5 block text-sm font-medium text-[var(--text-muted)]">
             Profissional
           </label>
           <select
             value={filters.professionalId || ''}
             onChange={(e) => handleChange('professionalId', e.target.value)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           >
             <option value="">Todos</option>
             {professionals.map((p) => (
@@ -76,13 +76,13 @@ export function AppointmentFiltersComponent({
 
         {/* Status */}
         <div className="min-w-[160px]">
-          <label className="mb-1.5 block text-sm font-medium text-gray-700">
+          <label className="mb-1.5 block text-sm font-medium text-[var(--text-muted)]">
             Status
           </label>
           <select
             value={filters.status || ''}
             onChange={(e) => handleChange('status', e.target.value)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           >
             <option value="">Todos</option>
             {statusOptions.map((status) => (
@@ -97,7 +97,7 @@ export function AppointmentFiltersComponent({
         {hasFilters && (
           <button
             onClick={onClear}
-            className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50"
+            className="flex items-center gap-1.5 rounded-xl border border-[var(--border-color)] px-3 py-2 text-sm font-medium text-[var(--text-muted)] transition-colors hover:bg-[var(--hover-bg)]"
           >
             <X className="h-4 w-4" />
             Limpar

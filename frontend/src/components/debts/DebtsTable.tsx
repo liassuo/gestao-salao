@@ -43,62 +43,62 @@ export function DebtsTable({
   }
 
   return (
-    <div className="overflow-hidden rounded-xl bg-white shadow-sm">
+    <div className="overflow-hidden rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)]">
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+            <tr className="border-b border-[var(--border-color)] bg-[var(--hover-bg)]">
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
                 Cliente
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
                 Valor Total
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
                 Pago
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
                 Saldo Restante
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
                 Status
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
                 Vencimento
               </th>
-              <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+              <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
                 Ações
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
+          <tbody className="divide-y divide-[var(--border-color)]">
             {debts.map((debt) => (
-              <tr key={debt.id} className="hover:bg-gray-50">
+              <tr key={debt.id} className="hover:bg-[var(--hover-bg)]">
                 <td className="whitespace-nowrap px-6 py-4">
                   <div>
-                    <div className="font-medium text-gray-900">
+                    <div className="font-medium text-[var(--text-primary)]">
                       {debt.client.name}
                     </div>
                     {debt.description && (
-                      <div className="text-sm text-gray-500">
+                      <div className="text-sm text-[var(--text-muted)]">
                         {debt.description}
                       </div>
                     )}
                   </div>
                 </td>
-                <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
+                <td className="whitespace-nowrap px-6 py-4 text-sm text-[var(--text-primary)]">
                   {formatCurrency(debt.amount)}
                 </td>
-                <td className="whitespace-nowrap px-6 py-4 text-sm text-green-600">
+                <td className="whitespace-nowrap px-6 py-4 text-sm text-blue-500">
                   {formatCurrency(debt.amountPaid)}
                 </td>
-                <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-red-600">
+                <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-red-500">
                   {formatCurrency(debt.remainingBalance)}
                 </td>
                 <td className="whitespace-nowrap px-6 py-4">
                   <DebtStatusBadge isSettled={debt.isSettled} />
                 </td>
-                <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                <td className="whitespace-nowrap px-6 py-4 text-sm text-[var(--text-muted)]">
                   {debt.dueDate ? formatDate(debt.dueDate) : '-'}
                 </td>
                 <td className="whitespace-nowrap px-6 py-4 text-right">
@@ -108,7 +108,7 @@ export function DebtsTable({
                         <button
                           onClick={() => onPay(debt)}
                           disabled={isLoading}
-                          className="rounded-lg p-1.5 text-blue-600 hover:bg-blue-50 disabled:opacity-50"
+                          className="rounded-lg p-1.5 text-blue-500 hover:bg-blue-500/10 disabled:opacity-50"
                           title="Registrar pagamento"
                         >
                           <Banknote className="h-4 w-4" />
@@ -116,7 +116,7 @@ export function DebtsTable({
                         <button
                           onClick={() => onSettle(debt)}
                           disabled={isLoading}
-                          className="rounded-lg p-1.5 text-green-600 hover:bg-green-50 disabled:opacity-50"
+                          className="rounded-lg p-1.5 text-blue-500 hover:bg-blue-500/10 disabled:opacity-50"
                           title="Quitar dívida"
                         >
                           <CheckCircle className="h-4 w-4" />
@@ -126,7 +126,7 @@ export function DebtsTable({
                     <button
                       onClick={() => onDelete(debt)}
                       disabled={isLoading}
-                      className="rounded-lg p-1.5 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                      className="rounded-lg p-1.5 text-red-500 hover:bg-red-500/10 disabled:opacity-50"
                       title="Excluir"
                     >
                       <Trash2 className="h-4 w-4" />

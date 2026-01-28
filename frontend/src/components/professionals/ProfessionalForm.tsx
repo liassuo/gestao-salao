@@ -54,25 +54,25 @@ export function ProfessionalForm({ professional, onSubmit, isLoading, error }: P
   return (
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-5">
       {error && (
-        <div className="flex items-start gap-3 rounded-lg bg-red-50 p-4">
-          <AlertCircle className="mt-0.5 h-5 w-5 text-red-600" />
+        <div className="flex items-start gap-3 rounded-xl bg-red-500/10 p-4">
+          <AlertCircle className="mt-0.5 h-5 w-5 text-red-500" />
           <div>
-            <p className="font-medium text-red-800">Erro ao salvar</p>
-            <p className="text-sm text-red-600">{error}</p>
+            <p className="font-medium text-red-500">Erro ao salvar</p>
+            <p className="text-sm text-red-400">{error}</p>
           </div>
         </div>
       )}
 
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+        <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
           Nome *
         </label>
         <input
           type="text"
           {...register('name', { required: 'Nome é obrigatório' })}
           placeholder="Nome completo do profissional"
-          className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 ${
-            errors.name ? 'border-red-500' : 'border-gray-300'
+          className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+            errors.name ? 'border-red-500' : 'border-[var(--border-color)]'
           }`}
         />
         {errors.name && (
@@ -81,7 +81,7 @@ export function ProfessionalForm({ professional, onSubmit, isLoading, error }: P
       </div>
 
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+        <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
           Telefone *
         </label>
         <input
@@ -94,8 +94,8 @@ export function ProfessionalForm({ professional, onSubmit, isLoading, error }: P
             },
           })}
           placeholder="(11) 99999-9999"
-          className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 ${
-            errors.phone ? 'border-red-500' : 'border-gray-300'
+          className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+            errors.phone ? 'border-red-500' : 'border-[var(--border-color)]'
           }`}
         />
         {errors.phone && (
@@ -104,7 +104,7 @@ export function ProfessionalForm({ professional, onSubmit, isLoading, error }: P
       </div>
 
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+        <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
           E-mail
         </label>
         <input
@@ -116,8 +116,8 @@ export function ProfessionalForm({ professional, onSubmit, isLoading, error }: P
             },
           })}
           placeholder="email@exemplo.com (opcional)"
-          className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 ${
-            errors.email ? 'border-red-500' : 'border-gray-300'
+          className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+            errors.email ? 'border-red-500' : 'border-[var(--border-color)]'
           }`}
         />
         {errors.email && (
@@ -126,7 +126,7 @@ export function ProfessionalForm({ professional, onSubmit, isLoading, error }: P
       </div>
 
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+        <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
           Comissão (%)
         </label>
         <input
@@ -139,35 +139,35 @@ export function ProfessionalForm({ professional, onSubmit, isLoading, error }: P
             max: { value: 100, message: 'Máximo 100%' },
           })}
           placeholder="Ex: 50"
-          className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 ${
-            errors.commissionRate ? 'border-red-500' : 'border-gray-300'
+          className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+            errors.commissionRate ? 'border-red-500' : 'border-[var(--border-color)]'
           }`}
         />
         {errors.commissionRate && (
           <p className="mt-1 text-sm text-red-500">{errors.commissionRate.message}</p>
         )}
-        <p className="mt-1 text-xs text-gray-500">
+        <p className="mt-1 text-xs text-[var(--text-muted)]">
           Percentual de comissão sobre os serviços realizados
         </p>
       </div>
 
       {!isEditing && (
-        <div className="rounded-lg bg-gray-50 p-4">
-          <p className="text-sm font-medium text-gray-700">Horário de Trabalho Padrão</p>
-          <p className="mt-1 text-xs text-gray-500">
+        <div className="rounded-xl bg-[var(--hover-bg)] p-4">
+          <p className="text-sm font-medium text-[var(--text-secondary)]">Horário de Trabalho Padrão</p>
+          <p className="mt-1 text-xs text-[var(--text-muted)]">
             Seg-Sex: 09:00 às 18:00 | Sáb: 09:00 às 14:00
           </p>
-          <p className="mt-1 text-xs text-gray-400">
+          <p className="mt-1 text-xs text-[var(--text-muted)] opacity-70">
             Você pode ajustar os horários depois de criar o profissional.
           </p>
         </div>
       )}
 
-      <div className="flex justify-end gap-3 border-t border-gray-200 pt-4">
+      <div className="flex justify-end gap-3 border-t border-[var(--border-color)] pt-4">
         <button
           type="submit"
           disabled={isLoading}
-          className="flex items-center gap-2 rounded-lg bg-orange-600 px-6 py-2.5 font-medium text-white transition-colors hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
           {isLoading ? 'Salvando...' : isEditing ? 'Salvar' : 'Cadastrar'}

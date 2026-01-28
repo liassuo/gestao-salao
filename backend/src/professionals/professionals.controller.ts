@@ -11,115 +11,94 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { ApiTags } from '@nestjs/swagger';
+import { ProfessionalsService } from './professionals.service';
 import { CreateProfessionalDto, UpdateProfessionalDto } from './dto';
 
+@ApiTags('Professionals')
 @Controller('professionals')
 export class ProfessionalsController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly professionalsService: ProfessionalsService) {}
 
   /**
    * GET /professionals
-   * Retorna todos os profissionais ativos (público - usado pelo app mobile)
-   * Pode filtrar por serviceId
+   * Returns all active professionals (public - used by mobile app)
+   * Can filter by serviceId
    */
   @Get()
   async findAll(@Query('serviceId') serviceId?: string) {
-    const where: any = { isActive: true };
+    return this.professionalsService.findAll(serviceId);
+  }
 
-    // Se filtrar por serviço, busca profissionais que oferecem esse serviço
-    if (serviceId) {
-      where.services = {
-        some: { id: serviceId },
-      };
-    }
+  /**
+   * GET /professionals/active
+   * Returns only active professionals for booking
+   */
+  @Get('active')
+  async findActive() {
+    return this.professionalsService.findActive();
+  }
 
-    return this.prisma.professional.findMany({
-      where,
-      orderBy: { name: 'asc' },
-      select: {
-        id: true,
-        name: true,
-        phone: true,
-        email: true,
-        services: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
+  /**
+   * GET /professionals/by-service/:serviceId
+   * Returns professionals who can perform a specific service
+   */
+  @Get('by-service/:serviceId')
+  async findByService(@Param('serviceId', ParseUUIDPipe) serviceId: string) {
+    return this.professionalsService.findByService(serviceId);
   }
 
   /**
    * GET /professionals/:id
-   * Retorna um profissional específico
+   * Returns a specific professional
    */
   @Get(':id')
   async findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.prisma.professional.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        name: true,
-        phone: true,
-        email: true,
-        workingHours: true,
-        isActive: true,
-        services: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
+    return this.professionalsService.findOne(id);
+  }
+
+  /**
+   * GET /professionals/:id/appointments
+   * Returns professional's appointments for a specific date
+   */
+  @Get(':id/appointments')
+  async getAppointments(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('date') dateStr?: string,
+  ) {
+    const date = dateStr ? new Date(dateStr) : new Date();
+    return this.professionalsService.getAppointmentsByDate(id, date);
   }
 
   /**
    * POST /professionals
-   * Cria um novo profissional (admin)
+   * Creates a new professional (admin)
    */
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() dto: CreateProfessionalDto) {
-    return this.prisma.professional.create({
-      data: {
-        name: dto.name,
-        phone: dto.phone,
-        email: dto.email,
-        commissionRate: dto.commissionRate,
-        workingHours: dto.workingHours,
-      },
-    });
+    return this.professionalsService.create(dto);
   }
 
   /**
    * PATCH /professionals/:id
-   * Atualiza um profissional (admin)
+   * Updates a professional (admin)
    */
   @Patch(':id')
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateProfessionalDto,
   ) {
-    return this.prisma.professional.update({
-      where: { id },
-      data: dto,
-    });
+    return this.professionalsService.update(id, dto);
   }
 
   /**
    * DELETE /professionals/:id
-   * Desativa um profissional (soft delete)
+   * Soft deletes a professional
    */
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param('id', ParseUUIDPipe) id: string) {
-    await this.prisma.professional.update({
-      where: { id },
-      data: { isActive: false },
-    });
+    await this.professionalsService.remove(id);
   }
 }

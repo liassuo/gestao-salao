@@ -37,44 +37,44 @@ export function CashRegisterTable({ cashRegisters }: CashRegisterTableProps) {
   }
 
   return (
-    <div className="overflow-hidden rounded-xl bg-white shadow-sm">
+    <div className="overflow-hidden rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)]">
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+            <tr className="border-b border-[var(--border-color)] bg-[var(--hover-bg)]">
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
                 Data
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
                 Abertura
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
                 Fechamento
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
                 Receita Total
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
                 Discrepância
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
                 Status
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
+          <tbody className="divide-y divide-[var(--border-color)]">
             {cashRegisters.map((cr) => (
-              <tr key={cr.id} className="hover:bg-gray-50">
-                <td className="whitespace-nowrap px-6 py-4 font-medium text-gray-900">
+              <tr key={cr.id} className="hover:bg-[var(--hover-bg)]">
+                <td className="whitespace-nowrap px-6 py-4 font-medium text-[var(--text-primary)]">
                   {formatDate(cr.date)}
                 </td>
-                <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-600">
+                <td className="whitespace-nowrap px-6 py-4 text-sm text-[var(--text-secondary)]">
                   {formatTime(cr.openedAt)}
                 </td>
-                <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-600">
+                <td className="whitespace-nowrap px-6 py-4 text-sm text-[var(--text-secondary)]">
                   {cr.closedAt ? formatTime(cr.closedAt) : '-'}
                 </td>
-                <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">
+                <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-[var(--text-primary)]">
                   {formatCurrency(cr.totalRevenue)}
                 </td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm">
@@ -82,10 +82,10 @@ export function CashRegisterTable({ cashRegisters }: CashRegisterTableProps) {
                     <span
                       className={`font-medium ${
                         cr.discrepancy > 0
-                          ? 'text-green-600'
+                          ? 'text-blue-500'
                           : cr.discrepancy < 0
-                          ? 'text-red-600'
-                          : 'text-gray-600'
+                          ? 'text-red-500'
+                          : 'text-[var(--text-secondary)]'
                       }`}
                     >
                       {cr.discrepancy > 0 && '+'}

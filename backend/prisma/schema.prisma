@@ -32,6 +32,13 @@ enum PaymentMethod {
   CARD
 }
 
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  EXPIRED
+  SUSPENDED
+}
+
 // ============================================
 // MODELS
 // ============================================
@@ -72,6 +79,7 @@ model Client {
   appointments Appointment[]
   payments     Payment[]
   debts        Debt[]
+  subscription ClientSubscription?
 
   @@map("clients")
 }
@@ -227,4 +235,40 @@ model CashRegister {
   payments Payment[]
 
   @@map("cash_registers")
+}
+
+model SubscriptionPlan {
+  id           String   @id @default(uuid())
+  name         String   // "Plano Mensal", "Plano Trimestral"
+  description  String?
+  price        Int      // Preço em centavos (ex: 9900 = R$ 99,00)
+  cutsPerMonth Int      // Número de cortes permitidos por mês
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relacionamentos
+  subscriptions ClientSubscription[]
+
+  @@map("subscription_plans")
+}
+
+model ClientSubscription {
+  id                String             @id @default(uuid())
+  status            SubscriptionStatus @default(ACTIVE)
+  startDate         DateTime           @default(now())
+  endDate           DateTime?          // null = ativa indefinidamente
+  cutsUsedThisMonth Int                @default(0)
+  lastResetDate     DateTime           @default(now()) // Quando os cortes foram resetados
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  // Relacionamentos
+  clientId String @unique // Cliente só pode ter 1 assinatura ativa
+  client   Client @relation(fields: [clientId], references: [id])
+
+  planId String
+  plan   SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  @@map("client_subscriptions")
 }

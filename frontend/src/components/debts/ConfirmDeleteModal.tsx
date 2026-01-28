@@ -28,18 +28,18 @@ export function ConfirmDeleteModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative w-full max-w-md rounded-xl bg-white shadow-xl">
+      <div className="relative w-full max-w-md rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] shadow-xl">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-          <h2 className="text-lg font-semibold text-gray-800">
+        <div className="flex items-center justify-between border-b border-[var(--border-color)] px-6 py-4">
+          <h2 className="text-lg font-semibold text-[var(--text-primary)]">
             Excluir Dívida
           </h2>
           <button
             onClick={onClose}
-            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
           >
             <X className="h-5 w-5" />
           </button>
@@ -48,14 +48,14 @@ export function ConfirmDeleteModal({
         {/* Content */}
         <div className="p-6">
           <div className="mb-4 flex items-start gap-4">
-            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-100">
-              <AlertTriangle className="h-6 w-6 text-red-600" />
+            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-500/20">
+              <AlertTriangle className="h-6 w-6 text-red-500" />
             </div>
             <div>
-              <h3 className="font-medium text-gray-900">
+              <h3 className="font-medium text-[var(--text-primary)]">
                 Confirmar exclusão
               </h3>
-              <p className="mt-1 text-sm text-gray-600">
+              <p className="mt-1 text-sm text-[var(--text-secondary)]">
                 Tem certeza que deseja excluir esta dívida? Esta ação não pode
                 ser desfeita.
               </p>
@@ -63,16 +63,16 @@ export function ConfirmDeleteModal({
           </div>
 
           {/* Info da Dívida */}
-          <div className="mb-6 rounded-lg bg-gray-50 p-4">
-            <p className="text-sm text-gray-600">
+          <div className="mb-6 rounded-xl bg-[var(--hover-bg)] p-4">
+            <p className="text-sm text-[var(--text-secondary)]">
               <span className="font-medium">Cliente:</span> {debt.client.name}
             </p>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-[var(--text-secondary)]">
               <span className="font-medium">Valor total:</span>{' '}
               {formatCurrency(debt.amount)}
             </p>
             {debt.description && (
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-[var(--text-secondary)]">
                 <span className="font-medium">Descrição:</span>{' '}
                 {debt.description}
               </p>
@@ -85,7 +85,7 @@ export function ConfirmDeleteModal({
               type="button"
               onClick={onClose}
               disabled={isLoading}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              className="rounded-xl border border-[var(--border-color)] px-4 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] disabled:opacity-50"
             >
               Cancelar
             </button>
@@ -93,7 +93,7 @@ export function ConfirmDeleteModal({
               type="button"
               onClick={onConfirm}
               disabled={isLoading}
-              className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
               {isLoading ? 'Excluindo...' : 'Excluir'}

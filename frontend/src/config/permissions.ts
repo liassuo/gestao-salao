@@ -8,7 +8,9 @@ import {
   CreditCard,
   Receipt,
   Wallet,
+  BarChart3,
   Settings,
+  BadgeCheck,
 } from 'lucide-react';
 import type { Role } from '@/auth/roles';
 
@@ -30,49 +32,61 @@ export const menuItems: MenuItem[] = [
   {
     icon: Calendar,
     label: 'Agendamentos',
-    path: '/appointments',
+    path: '/agendamentos',
     roles: ['ADMIN', 'PROFESSIONAL'],
   },
   {
     icon: Users,
     label: 'Clientes',
-    path: '/clients',
+    path: '/clientes',
     roles: ['ADMIN', 'PROFESSIONAL'],
   },
   {
     icon: Scissors,
-    label: 'Serviços',
-    path: '/services',
+    label: 'Servicos',
+    path: '/servicos',
+    roles: ['ADMIN'],
+  },
+  {
+    icon: BadgeCheck,
+    label: 'Assinaturas',
+    path: '/assinaturas',
     roles: ['ADMIN'],
   },
   {
     icon: UserCog,
     label: 'Profissionais',
-    path: '/professionals',
+    path: '/profissionais',
     roles: ['ADMIN'],
   },
   {
     icon: CreditCard,
     label: 'Pagamentos',
-    path: '/payments',
+    path: '/pagamentos',
     roles: ['ADMIN'],
   },
   {
     icon: Receipt,
     label: 'Dívidas',
-    path: '/debts',
+    path: '/dividas',
     roles: ['ADMIN'],
   },
   {
     icon: Wallet,
     label: 'Caixa',
-    path: '/cash-register',
+    path: '/caixa',
+    roles: ['ADMIN'],
+  },
+  {
+    icon: BarChart3,
+    label: 'Relatórios',
+    path: '/relatorios',
     roles: ['ADMIN'],
   },
   {
     icon: Settings,
     label: 'Configurações',
-    path: '/settings',
+    path: '/configuracoes',
     roles: ['ADMIN'],
   },
 ];

@@ -5,7 +5,7 @@ interface SkeletonProps {
 export function Skeleton({ className = '' }: SkeletonProps) {
   return (
     <div
-      className={`animate-pulse rounded bg-gray-200 ${className}`}
+      className={`animate-pulse rounded bg-[var(--hover-bg)] ${className}`}
       aria-hidden="true"
     />
   );
@@ -26,7 +26,7 @@ export function SkeletonText({ lines = 1 }: { lines?: number }) {
 
 export function SkeletonCard() {
   return (
-    <div className="rounded-xl bg-white p-4 shadow-sm">
+    <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-4">
       <div className="flex items-center gap-3">
         <Skeleton className="h-10 w-10 rounded-lg" />
         <div className="flex-1 space-y-2">
@@ -40,15 +40,15 @@ export function SkeletonCard() {
 
 export function SkeletonTable({ rows = 5, cols = 5 }: { rows?: number; cols?: number }) {
   return (
-    <div className="overflow-hidden rounded-xl bg-white shadow-sm">
+    <div className="overflow-hidden rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)]">
       {/* Header */}
-      <div className="flex gap-4 border-b border-gray-200 bg-gray-50 px-6 py-3">
+      <div className="flex gap-4 border-b border-[var(--border-color)] bg-[var(--hover-bg)] px-6 py-3">
         {Array.from({ length: cols }).map((_, i) => (
           <Skeleton key={i} className="h-4 w-20" />
         ))}
       </div>
       {/* Body */}
-      <div className="divide-y divide-gray-200">
+      <div className="divide-y divide-[var(--border-color)]">
         {Array.from({ length: rows }).map((_, rowIdx) => (
           <div key={rowIdx} className="flex items-center gap-4 px-6 py-4">
             {Array.from({ length: cols }).map((_, colIdx) => (

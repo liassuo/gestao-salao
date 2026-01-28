@@ -7,4 +7,7 @@ export * from './Debts';
 export * from './Login';
 export * from './Payments';
 export * from './Professionals';
+export * from './Reports';
 export * from './Services';
+export * from './Settings';
+export * from './Subscriptions';

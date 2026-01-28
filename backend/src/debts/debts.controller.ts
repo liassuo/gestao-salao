@@ -11,9 +11,11 @@ import {
   HttpStatus,
   ParseUUIDPipe,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { DebtsService } from './debts.service';
 import { CreateDebtDto, UpdateDebtDto, PayDebtDto, QueryDebtDto } from './dto';
 
+@ApiTags('Debts')
 @Controller('debts')
 export class DebtsController {
   constructor(private readonly debtsService: DebtsService) {}

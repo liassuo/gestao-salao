@@ -20,7 +20,11 @@
       "Bash(findstr:*)",
       "Bash(taskkill:*)",
       "Bash(cmd //c \"taskkill /PID 10404 /F\")",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(xargs ls:*)",
+      "Bash(wc -l:*)",
+      "Bash(npm test:*)",
+      "Bash(npx prisma generate:*)"
     ]
   }
 }

@@ -10,6 +10,7 @@ import {
   HttpStatus,
   ParseUUIDPipe,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { CashRegisterService } from './cash-register.service';
 import {
   OpenCashRegisterDto,
@@ -17,6 +18,7 @@ import {
   QueryCashRegisterDto,
 } from './dto';
 
+@ApiTags('Cash Register')
 @Controller('cash-register')
 export class CashRegisterController {
   constructor(private readonly cashRegisterService: CashRegisterService) {}

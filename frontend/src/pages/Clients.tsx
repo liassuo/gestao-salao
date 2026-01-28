@@ -95,12 +95,12 @@ export function Clients() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100">
-            <Users className="h-5 w-5 text-blue-600" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/20">
+            <Users className="h-5 w-5 text-blue-500" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">Clientes</h1>
-            <p className="text-sm text-gray-500">
+            <h1 className="text-2xl font-bold text-[var(--text-primary)]">Clientes</h1>
+            <p className="text-sm text-[var(--text-muted)]">
               Gerencie os clientes da barbearia
             </p>
           </div>
@@ -108,7 +108,7 @@ export function Clients() {
 
         <button
           onClick={handleOpenCreateModal}
-          className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[var(--bg-primary)]"
         >
           <Plus className="h-5 w-5" />
           Novo Cliente
@@ -118,13 +118,13 @@ export function Clients() {
       {/* Filtros */}
       <div className="flex flex-wrap items-center gap-4">
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Buscar por nome, telefone ou email..."
-            className="w-full rounded-lg border border-gray-300 py-2 pl-10 pr-4 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-2 pl-10 pr-4 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors"
           />
         </div>
 
@@ -136,7 +136,7 @@ export function Clients() {
               hasDebts: e.target.value === '' ? undefined : e.target.value === 'true',
             }))
           }
-          className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors"
         >
           <option value="">Todos os status</option>
           <option value="true">Com dívida</option>
@@ -148,12 +148,12 @@ export function Clients() {
       {isLoading ? (
         <SkeletonTable rows={5} cols={6} />
       ) : isError ? (
-        <div className="rounded-xl bg-red-50 p-6 shadow-sm">
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-6">
           <div className="flex items-center gap-3">
-            <AlertCircle className="h-6 w-6 text-red-600" />
+            <AlertCircle className="h-6 w-6 text-red-500" />
             <div>
-              <h3 className="font-medium text-red-800">Erro ao carregar</h3>
-              <p className="text-sm text-red-600">
+              <h3 className="font-medium text-red-500">Erro ao carregar</h3>
+              <p className="text-sm text-red-400">
                 {error instanceof Error ? error.message : 'Ocorreu um erro inesperado.'}
               </p>
             </div>
