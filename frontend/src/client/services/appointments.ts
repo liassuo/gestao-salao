@@ -1,0 +1,29 @@
+import { clientApi } from './api';
+import type { Appointment, CreateAppointmentData, TimeSlot } from '../types';
+
+export const appointmentsApi = {
+  getMyAppointments: async (): Promise<Appointment[]> => {
+    const response = await clientApi.get<Appointment[]>('/appointments/me');
+    return response.data;
+  },
+
+  getAvailableSlots: async (
+    professionalId: string,
+    date: string
+  ): Promise<TimeSlot[]> => {
+    const response = await clientApi.get<TimeSlot[]>('/appointments/available-slots', {
+      params: { professionalId, date },
+    });
+    return response.data;
+  },
+
+  create: async (data: CreateAppointmentData): Promise<Appointment> => {
+    const response = await clientApi.post<Appointment>('/appointments/client', data);
+    return response.data;
+  },
+
+  cancel: async (id: string): Promise<Appointment> => {
+    const response = await clientApi.patch<Appointment>(`/appointments/${id}/cancel`);
+    return response.data;
+  },
+};

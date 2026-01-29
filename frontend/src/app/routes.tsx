@@ -17,6 +17,15 @@ import {
   Subscriptions,
 } from '@/pages';
 import { getRolesForPath } from '@/config/permissions';
+import {
+  ClientAuthProvider,
+  ClientLayout,
+  ClientPrivateRoute,
+  ClientLogin,
+  ClientHome,
+  ClientBooking,
+  ClientProfile,
+} from '@/client';
 
 // Helper para criar rota protegida por role
 function withRoleProtection(path: string, element: React.ReactNode) {
@@ -29,6 +38,7 @@ function withRoleProtection(path: string, element: React.ReactNode) {
 }
 
 export const router = createBrowserRouter([
+  // Rotas do painel administrativo
   {
     path: '/login',
     element: <Login />,
@@ -88,6 +98,46 @@ export const router = createBrowserRouter([
       {
         path: 'configuracoes',
         element: withRoleProtection('/configuracoes', <Settings />),
+      },
+    ],
+  },
+
+  // Rotas do portal do cliente
+  {
+    path: '/cliente',
+    element: (
+      <ClientAuthProvider>
+        <ClientLayout />
+      </ClientAuthProvider>
+    ),
+    children: [
+      {
+        path: 'login',
+        element: <ClientLogin />,
+      },
+      {
+        index: true,
+        element: (
+          <ClientPrivateRoute>
+            <ClientHome />
+          </ClientPrivateRoute>
+        ),
+      },
+      {
+        path: 'agendar',
+        element: (
+          <ClientPrivateRoute>
+            <ClientBooking />
+          </ClientPrivateRoute>
+        ),
+      },
+      {
+        path: 'perfil',
+        element: (
+          <ClientPrivateRoute>
+            <ClientProfile />
+          </ClientPrivateRoute>
+        ),
       },
     ],
   },
