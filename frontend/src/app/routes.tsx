@@ -3,13 +3,23 @@ import { Layout } from '@/components/layout';
 import { PrivateRoute, RoleRoute } from '@/components/auth';
 import {
   AccessDenied,
+  AccountsPayable,
+  AccountsReceivable,
   Appointments,
+  Balance,
+  BankAccounts,
+  Branches,
   CashRegister,
   Clients,
+  Commissions,
+  CreateExpense,
+  CreateRevenue,
   Dashboard,
   Debts,
+  FinancialCategories,
   Login,
   Payments,
+  PaymentMethods,
   Professionals,
   Reports,
   Services,
@@ -94,6 +104,46 @@ export const router = createBrowserRouter([
       {
         path: 'relatorios',
         element: withRoleProtection('/relatorios', <Reports />),
+      },
+      {
+        path: 'financeiro/comissoes',
+        element: withRoleProtection('/financeiro/comissoes', <Commissions />),
+      },
+      {
+        path: 'financeiro/balanco',
+        element: withRoleProtection('/financeiro/balanco', <Balance />),
+      },
+      {
+        path: 'financeiro/contas-pagar',
+        element: withRoleProtection('/financeiro/contas-pagar', <AccountsPayable />),
+      },
+      {
+        path: 'financeiro/contas-receber',
+        element: withRoleProtection('/financeiro/contas-receber', <AccountsReceivable />),
+      },
+      {
+        path: 'financeiro/despesa',
+        element: withRoleProtection('/financeiro/despesa', <CreateExpense />),
+      },
+      {
+        path: 'financeiro/receita',
+        element: withRoleProtection('/financeiro/receita', <CreateRevenue />),
+      },
+      {
+        path: 'financeiro/filiais',
+        element: withRoleProtection('/financeiro/filiais', <Branches />),
+      },
+      {
+        path: 'financeiro/contas-bancarias',
+        element: withRoleProtection('/financeiro/contas-bancarias', <BankAccounts />),
+      },
+      {
+        path: 'financeiro/categorias',
+        element: withRoleProtection('/financeiro/categorias', <FinancialCategories />),
+      },
+      {
+        path: 'financeiro/formas-pagamento',
+        element: withRoleProtection('/financeiro/formas-pagamento', <PaymentMethods />),
       },
       {
         path: 'configuracoes',

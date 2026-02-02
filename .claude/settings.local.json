@@ -24,7 +24,8 @@
       "Bash(xargs ls:*)",
       "Bash(wc -l:*)",
       "Bash(npm test:*)",
-      "Bash(npx prisma generate:*)"
+      "Bash(npx prisma generate:*)",
+      "WebFetch(domain:sistemacashbarber.com.br)"
     ]
   }
 }

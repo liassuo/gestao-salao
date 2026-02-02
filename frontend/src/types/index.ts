@@ -8,3 +8,4 @@ export * from './professional';
 export * from './reports';
 export * from './service';
 export * from './subscription';
+export * from './financial';

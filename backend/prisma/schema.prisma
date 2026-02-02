@@ -39,6 +39,34 @@ enum SubscriptionStatus {
   SUSPENDED
 }
 
+enum TransactionType {
+  EXPENSE
+  REVENUE
+}
+
+enum TransactionStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELED
+}
+
+enum PaymentCondition {
+  A_VISTA
+  A_PRAZO
+}
+
+enum PaymentMethodScope {
+  COMANDA
+  EXPENSE
+  BOTH
+}
+
+enum CommissionStatus {
+  PENDING
+  PAID
+}
+
 // ============================================
 // MODELS
 // ============================================
@@ -98,8 +126,11 @@ model Professional {
   // Relacionamentos
   userId       String?       @unique
   user         User?         @relation("UserProfessional", fields: [userId], references: [id])
+  branchId     String?
+  branch       Branch?       @relation(fields: [branchId], references: [id])
   appointments Appointment[]
   services     Service[]
+  commissions  Commission[]
 
   @@map("professionals")
 }
@@ -271,4 +302,132 @@ model ClientSubscription {
   plan   SubscriptionPlan @relation(fields: [planId], references: [id])
 
   @@map("client_subscriptions")
+}
+
+// ============================================
+// MÓDULO FINANCEIRO
+// ============================================
+
+model Branch {
+  id        String   @id @default(uuid())
+  name      String
+  address   String?
+  phone     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relacionamentos
+  professionals Professional[]
+  transactions  FinancialTransaction[]
+  commissions   Commission[]
+
+  @@map("branches")
+}
+
+model BankAccount {
+  id          String   @id @default(uuid())
+  name        String
+  bank        String?
+  accountType String?  // "Conta corrente", "Conta poupança", etc.
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relacionamentos
+  transactions FinancialTransaction[]
+
+  @@map("bank_accounts")
+}
+
+model FinancialCategory {
+  id        String          @id @default(uuid())
+  name      String
+  type      TransactionType // EXPENSE ou REVENUE
+  isActive  Boolean         @default(true)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  // Self-relation para subcategorias
+  parentId String?
+  parent   FinancialCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children FinancialCategory[] @relation("CategoryHierarchy")
+
+  // Relacionamentos
+  transactions    FinancialTransaction[] @relation("TransactionCategory")
+  subTransactions FinancialTransaction[] @relation("TransactionSubcategory")
+
+  @@map("financial_categories")
+}
+
+model PaymentMethodConfig {
+  id        String             @id @default(uuid())
+  name      String
+  type      PaymentCondition   // A_VISTA ou A_PRAZO
+  scope     PaymentMethodScope // COMANDA, EXPENSE ou BOTH
+  isActive  Boolean            @default(true)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  // Relacionamentos
+  transactions FinancialTransaction[]
+
+  @@map("payment_method_configs")
+}
+
+model FinancialTransaction {
+  id               String            @id @default(uuid())
+  type             TransactionType   // EXPENSE ou REVENUE
+  description      String
+  amount           Int               // Valor em centavos
+  discount         Decimal?          @db.Decimal(5, 2) // Percentual de desconto
+  interest         Decimal?          @db.Decimal(5, 2) // Percentual de juros
+  netAmount        Int               // Valor líquido em centavos (calculado: amount - desconto + juros)
+  paymentCondition PaymentCondition
+  status           TransactionStatus @default(PENDING)
+  isRecurring      Boolean           @default(false)
+  dueDate          DateTime
+  paidAt           DateTime?
+  notes            String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  // Relacionamentos
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id])
+
+  categoryId String
+  category   FinancialCategory @relation("TransactionCategory", fields: [categoryId], references: [id])
+
+  subcategoryId String?
+  subcategory   FinancialCategory? @relation("TransactionSubcategory", fields: [subcategoryId], references: [id])
+
+  bankAccountId String?
+  bankAccount   BankAccount? @relation(fields: [bankAccountId], references: [id])
+
+  paymentMethodConfigId String?
+  paymentMethodConfig   PaymentMethodConfig? @relation(fields: [paymentMethodConfigId], references: [id])
+
+  @@map("financial_transactions")
+}
+
+model Commission {
+  id          String           @id @default(uuid())
+  amount      Int              // Valor da comissão em centavos
+  periodStart DateTime
+  periodEnd   DateTime
+  status      CommissionStatus @default(PENDING)
+  paidAt      DateTime?
+  notes       String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  // Relacionamentos
+  professionalId String
+  professional   Professional @relation(fields: [professionalId], references: [id])
+
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id])
+
+  @@map("commissions")
 }

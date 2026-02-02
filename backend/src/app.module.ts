@@ -13,6 +13,12 @@ import { CashRegisterModule } from './cash-register/cash-register.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ReportsModule } from './reports/reports.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
+import { BankAccountsModule } from './bank-accounts/bank-accounts.module';
+import { BranchesModule } from './branches/branches.module';
+import { CommissionsModule } from './commissions/commissions.module';
+import { PaymentMethodConfigModule } from './payment-method-config/payment-method-config.module';
+import { FinancialTransactionsModule } from './financial-transactions/financial-transactions.module';
+import { FinancialCategoriesModule } from './financial-categories/financial-categories.module';
 
 @Module({
   imports: [
@@ -32,6 +38,12 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module';
     DashboardModule,
     ReportsModule,
     SubscriptionsModule,
+    BankAccountsModule,
+    BranchesModule,
+    CommissionsModule,
+    PaymentMethodConfigModule,
+    FinancialTransactionsModule,
+    FinancialCategoriesModule,
   ],
 })
 export class AppModule {}
