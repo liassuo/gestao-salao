@@ -8,6 +8,8 @@ import type {
   ProfessionalPerformance,
   DailyRevenue,
   ServicePopularity,
+  OperationalData,
+  StrategicData,
 } from '../types/dashboard';
 
 export type {
@@ -19,6 +21,8 @@ export type {
   ProfessionalPerformance,
   DailyRevenue,
   ServicePopularity,
+  OperationalData,
+  StrategicData,
 };
 
 export const dashboardService = {
@@ -65,6 +69,16 @@ export const dashboardService = {
 
   getServicesPopularity: async (limit = 10): Promise<ServicePopularity[]> => {
     const response = await api.get(`/dashboard/services-popularity?limit=${limit}`);
+    return response.data;
+  },
+
+  getOperationalData: async (): Promise<OperationalData> => {
+    const response = await api.get('/dashboard/operational');
+    return response.data;
+  },
+
+  getStrategicData: async (): Promise<StrategicData> => {
+    const response = await api.get('/dashboard/strategic');
     return response.data;
   },
 };

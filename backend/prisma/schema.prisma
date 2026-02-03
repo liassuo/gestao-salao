@@ -108,6 +108,7 @@ model Client {
   payments     Payment[]
   debts        Debt[]
   subscription ClientSubscription?
+  orders       Order[]
 
   @@map("clients")
 }
@@ -131,6 +132,8 @@ model Professional {
   appointments Appointment[]
   services     Service[]
   commissions  Commission[]
+  orders       Order[]
+  timeBlocks   TimeBlock[]
 
   @@map("professionals")
 }
@@ -148,6 +151,7 @@ model Service {
   // Relacionamentos
   professionals       Professional[]
   appointmentServices AppointmentService[]
+  orderItems          OrderItem[]
 
   @@map("services")
 }
@@ -213,6 +217,8 @@ model Payment {
 
   cashRegisterId String?
   cashRegister   CashRegister? @relation(fields: [cashRegisterId], references: [id])
+
+  order Order?
 
   @@map("payments")
 }
@@ -305,6 +311,124 @@ model ClientSubscription {
 }
 
 // ============================================
+// ESTOQUE / PRODUTOS
+// ============================================
+
+enum StockMovementType {
+  ENTRY
+  EXIT
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  costPrice   Int      // Preco de custo em centavos
+  salePrice   Int      // Preco de venda em centavos
+  minStock    Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relacionamentos
+  branchId       String?
+  branch         Branch?         @relation(fields: [branchId], references: [id])
+  stockMovements StockMovement[]
+  orderItems     OrderItem[]
+
+  @@map("products")
+}
+
+model StockMovement {
+  id        String            @id @default(uuid())
+  type      StockMovementType
+  quantity  Int
+  reason    String?
+  createdAt DateTime          @default(now())
+
+  // Relacionamentos
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  branchId  String?
+  branch    Branch? @relation(fields: [branchId], references: [id])
+  createdBy String?
+
+  @@map("stock_movements")
+}
+
+// ============================================
+// COMANDAS / ORDERS
+// ============================================
+
+enum OrderStatus {
+  PENDING
+  PAID
+  CANCELED
+}
+
+enum OrderItemType {
+  PRODUCT
+  SERVICE
+}
+
+model Order {
+  id          String      @id @default(uuid())
+  status      OrderStatus @default(PENDING)
+  totalAmount Int         @default(0) // centavos
+  notes       String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relacionamentos
+  clientId       String?
+  client         Client?       @relation(fields: [clientId], references: [id])
+  professionalId String?
+  professional   Professional? @relation(fields: [professionalId], references: [id])
+  branchId       String?
+  branch         Branch?       @relation(fields: [branchId], references: [id])
+  paymentId      String?       @unique
+  payment        Payment?      @relation(fields: [paymentId], references: [id])
+  items          OrderItem[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String        @id @default(uuid())
+  quantity  Int           @default(1)
+  unitPrice Int           // centavos
+  itemType  OrderItemType
+
+  // Relacionamentos
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id])
+  serviceId String?
+  service   Service? @relation(fields: [serviceId], references: [id])
+
+  @@map("order_items")
+}
+
+// ============================================
+// BLOQUEIO DE HORARIOS
+// ============================================
+
+model TimeBlock {
+  id        String   @id @default(uuid())
+  startTime DateTime
+  endTime   DateTime
+  reason    String?
+  createdAt DateTime @default(now())
+
+  // Relacionamentos
+  professionalId String
+  professional   Professional @relation(fields: [professionalId], references: [id])
+
+  @@map("time_blocks")
+}
+
+// ============================================
 // MÓDULO FINANCEIRO
 // ============================================
 
@@ -318,9 +442,12 @@ model Branch {
   updatedAt DateTime @updatedAt
 
   // Relacionamentos
-  professionals Professional[]
-  transactions  FinancialTransaction[]
-  commissions   Commission[]
+  professionals  Professional[]
+  transactions   FinancialTransaction[]
+  commissions    Commission[]
+  products       Product[]
+  stockMovements StockMovement[]
+  orders         Order[]
 
   @@map("branches")
 }

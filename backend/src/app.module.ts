@@ -19,6 +19,9 @@ import { CommissionsModule } from './commissions/commissions.module';
 import { PaymentMethodConfigModule } from './payment-method-config/payment-method-config.module';
 import { FinancialTransactionsModule } from './financial-transactions/financial-transactions.module';
 import { FinancialCategoriesModule } from './financial-categories/financial-categories.module';
+import { ProductsModule } from './products/products.module';
+import { StockModule } from './stock/stock.module';
+import { OrdersModule } from './orders/orders.module';
 
 @Module({
   imports: [
@@ -44,6 +47,9 @@ import { FinancialCategoriesModule } from './financial-categories/financial-cate
     PaymentMethodConfigModule,
     FinancialTransactionsModule,
     FinancialCategoriesModule,
+    ProductsModule,
+    StockModule,
+    OrdersModule,
   ],
 })
 export class AppModule {}

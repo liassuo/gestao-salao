@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   Query,
@@ -17,6 +18,7 @@ import { AppointmentsService } from './appointments.service';
 import {
   CreateAppointmentDto,
   CreateClientAppointmentDto,
+  CreateTimeBlockDto,
   UpdateAppointmentDto,
   QueryAppointmentDto,
 } from './dto';
@@ -52,6 +54,31 @@ export class AppointmentsController {
     @Query('date') date: string,
   ) {
     return this.appointmentsService.getAvailableSlots(professionalId, date);
+  }
+
+  /**
+   * GET /appointments/calendar?date=2026-02-03
+   */
+  @Get('calendar')
+  async getCalendarData(@Query('date') date: string) {
+    return this.appointmentsService.getCalendarData(date);
+  }
+
+  /**
+   * POST /appointments/block
+   */
+  @Post('block')
+  @HttpCode(HttpStatus.CREATED)
+  async createTimeBlock(@Body() dto: CreateTimeBlockDto) {
+    return this.appointmentsService.createTimeBlock(dto);
+  }
+
+  /**
+   * DELETE /appointments/block/:id
+   */
+  @Delete('block/:id')
+  async deleteTimeBlock(@Param('id', ParseUUIDPipe) id: string) {
+    return this.appointmentsService.deleteTimeBlock(id);
   }
 
   /**

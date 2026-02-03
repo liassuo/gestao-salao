@@ -8,6 +8,7 @@ import {
   Appointments,
   Balance,
   BankAccounts,
+  BarKitchen,
   Branches,
   CashRegister,
   Clients,
@@ -18,12 +19,16 @@ import {
   Debts,
   FinancialCategories,
   Login,
+  Orders,
   Payments,
   PaymentMethods,
+  Products,
   Professionals,
   Reports,
   Services,
   Settings,
+  StockCurrent,
+  StockMovements,
   Subscriptions,
 } from '@/pages';
 import { getRolesForPath } from '@/config/permissions';
@@ -102,8 +107,28 @@ export const router = createBrowserRouter([
         element: withRoleProtection('/caixa', <CashRegister />),
       },
       {
+        path: 'comandas',
+        element: withRoleProtection('/comandas', <Orders />),
+      },
+      {
+        path: 'bar-cozinha',
+        element: withRoleProtection('/bar-cozinha', <BarKitchen />),
+      },
+      {
         path: 'relatorios',
         element: withRoleProtection('/relatorios', <Reports />),
+      },
+      {
+        path: 'estoque/produtos',
+        element: withRoleProtection('/estoque/produtos', <Products />),
+      },
+      {
+        path: 'estoque/atual',
+        element: withRoleProtection('/estoque/atual', <StockCurrent />),
+      },
+      {
+        path: 'estoque/movimentacoes',
+        element: withRoleProtection('/estoque/movimentacoes', <StockMovements />),
       },
       {
         path: 'financeiro/comissoes',

@@ -20,6 +20,11 @@ import {
   Building2,
   Landmark,
   FolderTree,
+  Package,
+  Warehouse,
+  ArrowLeftRight,
+  ClipboardList,
+  UtensilsCrossed,
 } from 'lucide-react';
 import type { Role } from '@/auth/roles';
 
@@ -88,10 +93,44 @@ export const menuItems: MenuItem[] = [
     roles: ['ADMIN'],
   },
   {
+    icon: ClipboardList,
+    label: 'Comandas',
+    path: '/comandas',
+    roles: ['ADMIN'],
+  },
+  {
+    icon: UtensilsCrossed,
+    label: 'Bar / Cozinha',
+    path: '/bar-cozinha',
+    roles: ['ADMIN', 'PROFESSIONAL'],
+  },
+  {
     icon: BarChart3,
     label: 'Relatórios',
     path: '/relatorios',
     roles: ['ADMIN'],
+  },
+  // Estoque group
+  {
+    icon: Package,
+    label: 'Produtos',
+    path: '/estoque/produtos',
+    roles: ['ADMIN'],
+    group: 'Estoque',
+  },
+  {
+    icon: Warehouse,
+    label: 'Estoque Atual',
+    path: '/estoque/atual',
+    roles: ['ADMIN'],
+    group: 'Estoque',
+  },
+  {
+    icon: ArrowLeftRight,
+    label: 'Entrada e Saída',
+    path: '/estoque/movimentacoes',
+    roles: ['ADMIN'],
+    group: 'Estoque',
   },
   // Financeiro group
   {

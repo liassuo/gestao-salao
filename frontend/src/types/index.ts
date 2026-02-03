@@ -9,3 +9,6 @@ export * from './reports';
 export * from './service';
 export * from './subscription';
 export * from './financial';
+export * from './product';
+export * from './order';
+export * from './calendar';

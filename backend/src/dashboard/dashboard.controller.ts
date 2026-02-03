@@ -92,4 +92,22 @@ export class DashboardController {
     const limitNum = limit ? parseInt(limit, 10) : 10;
     return this.dashboardService.getServicesPopularity(limitNum);
   }
+
+  /**
+   * GET /dashboard/operational
+   * Returns operational dashboard data (professionals, orders, top clients, stock, unpaid)
+   */
+  @Get('operational')
+  async getOperationalData() {
+    return this.dashboardService.getOperationalData();
+  }
+
+  /**
+   * GET /dashboard/strategic
+   * Returns strategic dashboard data (subscriptions, revenue, history, occupancy)
+   */
+  @Get('strategic')
+  async getStrategicData() {
+    return this.dashboardService.getStrategicData();
+  }
 }

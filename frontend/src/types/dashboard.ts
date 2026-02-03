@@ -85,3 +85,63 @@ export interface ServicePopularity {
   price: number;
   count: number;
 }
+
+export interface OperationalData {
+  activeProfessionals: number;
+  openOrders: number;
+  totalClients: number;
+  topClients: TopClient[];
+  lowStockProducts: LowStockProduct[];
+  unpaidClients: UnpaidClient[];
+}
+
+export interface TopClient {
+  id: string;
+  name: string;
+  totalServices: number;
+  totalProducts: number;
+  totalSubscription: number;
+  total: number;
+}
+
+export interface LowStockProduct {
+  id: string;
+  name: string;
+  currentStock: number;
+  minStock: number;
+}
+
+export interface UnpaidClient {
+  id: string;
+  name: string;
+  phone: string;
+  unpaidAmount: number;
+  unpaidCount: number;
+}
+
+export interface StrategicData {
+  plans: {
+    activePlans: number;
+    soldThisMonth: number;
+    canceledThisMonth: number;
+  };
+  revenue: {
+    monthlyRevenue: number;
+    yearlyRevenue: number;
+  };
+  monthlyRevenueHistory: MonthlyRevenue[];
+  professionalOccupancy: ProfessionalOccupancy[];
+}
+
+export interface MonthlyRevenue {
+  month: string;
+  amount: number;
+}
+
+export interface ProfessionalOccupancy {
+  id: string;
+  name: string;
+  totalAppointments: number;
+  attendedAppointments: number;
+  occupancyRate: number;
+}

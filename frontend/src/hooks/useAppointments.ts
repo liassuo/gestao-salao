@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { appointmentsService } from '@/services';
-import type { AppointmentFilters } from '@/types';
+import type { AppointmentFilters, CreateTimeBlockPayload } from '@/types';
 
 const QUERY_KEY = 'appointments';
 
@@ -42,4 +42,31 @@ export function useAppointmentActions() {
       attendMutation.isPending ||
       noShowMutation.isPending,
   };
+}
+
+export function useCalendarData(date: string) {
+  return useQuery({
+    queryKey: ['appointments-calendar', date],
+    queryFn: () => appointmentsService.getCalendar(date),
+  });
+}
+
+export function useCreateTimeBlock() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: CreateTimeBlockPayload) => appointmentsService.createTimeBlock(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['appointments-calendar'] });
+    },
+  });
+}
+
+export function useDeleteTimeBlock() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => appointmentsService.deleteTimeBlock(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['appointments-calendar'] });
+    },
+  });
 }

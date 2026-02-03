@@ -5,7 +5,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateAppointmentDto, UpdateAppointmentDto } from './dto';
+import { CreateAppointmentDto, CreateTimeBlockDto, UpdateAppointmentDto } from './dto';
 import { Appointment, AppointmentStatus } from '@prisma/client';
 
 @Injectable()
@@ -321,6 +321,87 @@ export class AppointmentsService {
       where: { id: appointmentId },
       data: { isPaid: true },
     });
+  }
+
+  /**
+   * Get calendar data for a specific date - returns appointments and time blocks grouped by professional
+   */
+  async getCalendarData(date: string) {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    // Get all active professionals
+    const professionals = await this.prisma.professional.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        workingHours: true,
+        appointments: {
+          where: {
+            scheduledAt: { gte: startOfDay, lte: endOfDay },
+            status: { in: ['SCHEDULED', 'ATTENDED'] },
+          },
+          include: {
+            client: { select: { id: true, name: true, phone: true } },
+            services: { include: { service: { select: { name: true } } } },
+          },
+          orderBy: { scheduledAt: 'asc' },
+        },
+        timeBlocks: {
+          where: {
+            OR: [
+              { startTime: { gte: startOfDay, lte: endOfDay } },
+              { endTime: { gte: startOfDay, lte: endOfDay } },
+              { AND: [{ startTime: { lte: startOfDay } }, { endTime: { gte: endOfDay } }] },
+            ],
+          },
+          orderBy: { startTime: 'asc' },
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    return professionals;
+  }
+
+  /**
+   * Create a time block for a professional
+   */
+  async createTimeBlock(dto: CreateTimeBlockDto) {
+    // Verify professional exists
+    const professional = await this.prisma.professional.findUnique({
+      where: { id: dto.professionalId },
+    });
+
+    if (!professional) {
+      throw new NotFoundException('Profissional não encontrado');
+    }
+
+    return this.prisma.timeBlock.create({
+      data: {
+        professionalId: dto.professionalId,
+        startTime: new Date(dto.startTime),
+        endTime: new Date(dto.endTime),
+        reason: dto.reason,
+      },
+    });
+  }
+
+  /**
+   * Delete a time block
+   */
+  async deleteTimeBlock(id: string) {
+    const block = await this.prisma.timeBlock.findUnique({ where: { id } });
+
+    if (!block) {
+      throw new NotFoundException('Bloqueio não encontrado');
+    }
+
+    return this.prisma.timeBlock.delete({ where: { id } });
   }
 
   async getAvailableSlots(

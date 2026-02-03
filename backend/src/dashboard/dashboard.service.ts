@@ -437,4 +437,357 @@ export class DashboardService {
       count: s._count.appointmentServices,
     }));
   }
+
+  /**
+   * Get operational dashboard data
+   */
+  async getOperationalData() {
+    const [
+      activeProfessionals,
+      openOrders,
+      totalClients,
+      topClients,
+      lowStockProducts,
+      unpaidClients,
+    ] = await Promise.all([
+      // Active professionals count
+      this.prisma.professional.count({
+        where: { isActive: true },
+      }),
+
+      // Open (PENDING) orders count
+      this.prisma.order.count({
+        where: { status: 'PENDING' },
+      }),
+
+      // Total clients count
+      this.prisma.client.count(),
+
+      // Top clients by spending (top 5)
+      this.getTopClients(),
+
+      // Low stock products
+      this.getLowStockProducts(),
+
+      // Clients with unpaid appointments
+      this.getUnpaidClients(),
+    ]);
+
+    return {
+      activeProfessionals,
+      openOrders,
+      totalClients,
+      topClients,
+      lowStockProducts,
+      unpaidClients,
+    };
+  }
+
+  /**
+   * Get top 5 clients by total spending
+   */
+  private async getTopClients() {
+    const clients = await this.prisma.client.findMany({
+      select: {
+        id: true,
+        name: true,
+        payments: {
+          select: {
+            id: true,
+            amount: true,
+            appointmentId: true,
+          },
+        },
+        orders: {
+          where: { paymentId: { not: null } },
+          select: {
+            payment: {
+              select: {
+                amount: true,
+              },
+            },
+          },
+        },
+        subscription: {
+          select: {
+            status: true,
+            plan: {
+              select: {
+                price: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const clientsWithTotals = clients.map((client) => {
+      // Sum payment amounts for services (payments with appointmentId)
+      const totalServices = client.payments
+        .filter((p) => p.appointmentId !== null)
+        .reduce((sum, p) => sum + p.amount, 0);
+
+      // Sum payment amounts for products (payments linked to orders via order.paymentId)
+      const totalProducts = client.orders.reduce(
+        (sum, o) => sum + (o.payment?.amount || 0),
+        0,
+      );
+
+      // Subscription plan price (if client has an active subscription)
+      const totalSubscription =
+        client.subscription && client.subscription.status === 'ACTIVE'
+          ? client.subscription.plan.price
+          : 0;
+
+      const total = totalServices + totalProducts + totalSubscription;
+
+      return {
+        id: client.id,
+        name: client.name,
+        totalServices,
+        totalProducts,
+        totalSubscription,
+        total,
+      };
+    });
+
+    // Sort by total descending, take top 5
+    return clientsWithTotals
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5);
+  }
+
+  /**
+   * Get products with stock below minimum
+   */
+  private async getLowStockProducts() {
+    const products = await this.prisma.product.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        name: true,
+        minStock: true,
+        stockMovements: {
+          select: {
+            type: true,
+            quantity: true,
+          },
+        },
+      },
+    });
+
+    return products
+      .map((product) => {
+        const entries = product.stockMovements
+          .filter((m) => m.type === 'ENTRY')
+          .reduce((sum, m) => sum + m.quantity, 0);
+
+        const exits = product.stockMovements
+          .filter((m) => m.type === 'EXIT')
+          .reduce((sum, m) => sum + m.quantity, 0);
+
+        const currentStock = entries - exits;
+
+        return {
+          id: product.id,
+          name: product.name,
+          currentStock,
+          minStock: product.minStock,
+        };
+      })
+      .filter((product) => product.currentStock < product.minStock);
+  }
+
+  /**
+   * Get clients with unpaid attended appointments
+   */
+  private async getUnpaidClients() {
+    const clients = await this.prisma.client.findMany({
+      where: {
+        appointments: {
+          some: {
+            status: 'ATTENDED',
+            isPaid: false,
+          },
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        appointments: {
+          where: {
+            status: 'ATTENDED',
+            isPaid: false,
+          },
+          select: {
+            totalPrice: true,
+          },
+        },
+      },
+    });
+
+    return clients.map((client) => ({
+      id: client.id,
+      name: client.name,
+      phone: client.phone,
+      unpaidAmount: client.appointments.reduce(
+        (sum, a) => sum + a.totalPrice,
+        0,
+      ),
+      unpaidCount: client.appointments.length,
+    }));
+  }
+
+  /**
+   * Get strategic dashboard data
+   */
+  async getStrategicData() {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+    const twelveMonthsAgo = new Date(
+      now.getFullYear(),
+      now.getMonth() - 11,
+      1,
+    );
+
+    const [
+      activePlans,
+      soldThisMonth,
+      canceledThisMonth,
+      monthlyRevenue,
+      yearlyRevenue,
+      paymentsLast12Months,
+      professionalOccupancy,
+    ] = await Promise.all([
+      // Active subscriptions
+      this.prisma.clientSubscription.count({
+        where: { status: 'ACTIVE' },
+      }),
+
+      // Subscriptions sold this month
+      this.prisma.clientSubscription.count({
+        where: {
+          createdAt: { gte: startOfMonth },
+        },
+      }),
+
+      // Subscriptions canceled this month
+      this.prisma.clientSubscription.count({
+        where: {
+          status: 'CANCELED',
+          updatedAt: { gte: startOfMonth },
+        },
+      }),
+
+      // Monthly revenue (this month)
+      this.prisma.payment.aggregate({
+        where: {
+          paidAt: { gte: startOfMonth },
+        },
+        _sum: { amount: true },
+      }),
+
+      // Yearly revenue
+      this.prisma.payment.aggregate({
+        where: {
+          paidAt: { gte: startOfYear },
+        },
+        _sum: { amount: true },
+      }),
+
+      // Payments from last 12 months (for monthly history)
+      this.prisma.payment.findMany({
+        where: {
+          paidAt: { gte: twelveMonthsAgo },
+        },
+        select: {
+          amount: true,
+          paidAt: true,
+        },
+      }),
+
+      // Professional occupancy this month
+      this.getProfessionalOccupancy(startOfMonth),
+    ]);
+
+    // Build monthly revenue history
+    const monthlyMap = new Map<string, number>();
+
+    // Initialize last 12 months with 0
+    for (let i = 11; i >= 0; i--) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      monthlyMap.set(monthKey, 0);
+    }
+
+    // Sum payments by month
+    paymentsLast12Months.forEach((p) => {
+      const date = new Date(p.paidAt);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      if (monthlyMap.has(monthKey)) {
+        monthlyMap.set(monthKey, (monthlyMap.get(monthKey) || 0) + p.amount);
+      }
+    });
+
+    const monthlyRevenueHistory = Array.from(monthlyMap.entries()).map(
+      ([month, amount]) => ({ month, amount }),
+    );
+
+    return {
+      plans: {
+        activePlans,
+        soldThisMonth,
+        canceledThisMonth,
+      },
+      revenue: {
+        monthlyRevenue: monthlyRevenue._sum.amount || 0,
+        yearlyRevenue: yearlyRevenue._sum.amount || 0,
+      },
+      monthlyRevenueHistory,
+      professionalOccupancy,
+    };
+  }
+
+  /**
+   * Get professional occupancy rates for the current month
+   */
+  private async getProfessionalOccupancy(startOfMonth: Date) {
+    const professionals = await this.prisma.professional.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        name: true,
+        appointments: {
+          where: {
+            scheduledAt: { gte: startOfMonth },
+            status: { in: ['SCHEDULED', 'ATTENDED'] },
+          },
+          select: {
+            status: true,
+          },
+        },
+      },
+    });
+
+    return professionals.map((p) => {
+      const totalAppointments = p.appointments.length;
+      const attendedAppointments = p.appointments.filter(
+        (a) => a.status === 'ATTENDED',
+      ).length;
+      const occupancyRate =
+        totalAppointments > 0
+          ? Math.round((attendedAppointments / totalAppointments) * 100 * 10) / 10
+          : 0;
+
+      return {
+        id: p.id,
+        name: p.name,
+        totalAppointments,
+        attendedAppointments,
+        occupancyRate,
+      };
+    });
+  }
 }

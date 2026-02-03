@@ -1,0 +1,591 @@
+import { useState, useMemo, useRef, useEffect } from 'react';
+import { ChevronLeft, ChevronRight, Clock, Lock, Trash2, AlertCircle, Loader2, User } from 'lucide-react';
+import { useCalendarData, useDeleteTimeBlock } from '@/hooks';
+import { BlockTimeModal } from './BlockTimeModal';
+import type { CalendarAppointment, CalendarTimeBlock, CalendarProfessional } from '@/types';
+
+const SLOT_HEIGHT = 20; // px per 10-min slot
+const HOUR_HEIGHT = SLOT_HEIGHT * 6; // 120px per hour
+const START_HOUR = 7;
+const END_HOUR = 21;
+const TOTAL_HOURS = END_HOUR - START_HOUR; // 14 hours
+const TIME_LABEL_WIDTH = 60; // px
+
+function formatDateBR(dateStr: string): string {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.toLocaleDateString('pt-BR', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
+function getTodayStr(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+function addDays(dateStr: string, days: number): string {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + days);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function timeToMinutes(time: string): number {
+  const [h, m] = time.split(':').map(Number);
+  return h * 60 + m;
+}
+
+function getTopPosition(time: string): number {
+  const minutes = timeToMinutes(time);
+  const startMinutes = START_HOUR * 60;
+  return ((minutes - startMinutes) / 10) * SLOT_HEIGHT;
+}
+
+function getBlockHeight(durationMinutes: number): number {
+  return (durationMinutes / 10) * SLOT_HEIGHT;
+}
+
+function extractTime(isoString: string): string {
+  const date = new Date(isoString);
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function formatCurrency(value: number): string {
+  return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+const statusColors: Record<string, { bg: string; border: string; text: string }> = {
+  SCHEDULED: { bg: 'bg-blue-500/20', border: 'border-blue-500/40', text: 'text-blue-400' },
+  ATTENDED: { bg: 'bg-emerald-500/20', border: 'border-emerald-500/40', text: 'text-emerald-400' },
+  CANCELLED: { bg: 'bg-red-500/15', border: 'border-red-500/30', text: 'text-red-400' },
+  NO_SHOW: { bg: 'bg-amber-500/15', border: 'border-amber-500/30', text: 'text-amber-400' },
+};
+
+function generateTimeSlots(): string[] {
+  const slots: string[] = [];
+  for (let h = START_HOUR; h < END_HOUR; h++) {
+    for (let m = 0; m < 60; m += 10) {
+      slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+    }
+  }
+  return slots;
+}
+
+interface AppointmentBlockProps {
+  appointment: CalendarAppointment;
+}
+
+function AppointmentBlock({ appointment }: AppointmentBlockProps) {
+  const time = extractTime(appointment.scheduledAt);
+  const top = getTopPosition(time);
+  const height = getBlockHeight(appointment.totalDuration);
+  const colors = statusColors[appointment.status] || statusColors.SCHEDULED;
+  const serviceNames = appointment.services.map((s) => s.service.name).join(', ');
+  const endMinutes = timeToMinutes(time) + appointment.totalDuration;
+  const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
+
+  return (
+    <div
+      className={`absolute left-1 right-1 overflow-hidden rounded-lg border ${colors.border} ${colors.bg} px-2 py-1 backdrop-blur-sm transition-all duration-150 hover:z-20 hover:shadow-lg`}
+      style={{ top: `${top}px`, height: `${Math.max(height, SLOT_HEIGHT)}px` }}
+      title={`${appointment.client.name} - ${serviceNames} (${time} - ${endTime})`}
+    >
+      <div className="flex h-full flex-col overflow-hidden">
+        <div className={`truncate text-xs font-semibold ${colors.text}`}>
+          {appointment.client.name}
+        </div>
+        {height >= 40 && (
+          <div className="truncate text-[10px] text-[var(--text-muted)]">
+            {serviceNames}
+          </div>
+        )}
+        {height >= 60 && (
+          <div className="mt-auto flex items-center gap-1 text-[10px] text-[var(--text-muted)]">
+            <Clock className="h-2.5 w-2.5" />
+            {time} - {endTime}
+          </div>
+        )}
+        {height >= 80 && (
+          <div className="flex items-center gap-1 text-[10px] text-[var(--text-muted)]">
+            {formatCurrency(appointment.totalPrice)}
+            {appointment.isPaid && (
+              <span className="rounded bg-emerald-500/20 px-1 text-emerald-400">Pago</span>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface TimeBlockItemProps {
+  block: CalendarTimeBlock;
+  onDelete: (id: string) => void;
+  isDeleting: boolean;
+}
+
+function TimeBlockItem({ block, onDelete, isDeleting }: TimeBlockItemProps) {
+  const startTime = extractTime(block.startTime);
+  const endTime = extractTime(block.endTime);
+  const top = getTopPosition(startTime);
+  const durationMinutes = timeToMinutes(endTime) - timeToMinutes(startTime);
+  const height = getBlockHeight(durationMinutes);
+
+  return (
+    <div
+      className="group absolute left-1 right-1 overflow-hidden rounded-lg border border-red-500/30 bg-red-500/10 px-2 py-1 backdrop-blur-sm"
+      style={{
+        top: `${top}px`,
+        height: `${Math.max(height, SLOT_HEIGHT)}px`,
+        backgroundImage:
+          'repeating-linear-gradient(135deg, transparent, transparent 4px, rgba(239, 68, 68, 0.08) 4px, rgba(239, 68, 68, 0.08) 8px)',
+      }}
+      title={block.reason || 'Horario bloqueado'}
+    >
+      <div className="flex h-full items-start justify-between">
+        <div className="flex min-w-0 flex-col overflow-hidden">
+          <div className="flex items-center gap-1 truncate text-xs font-medium text-red-400">
+            <Lock className="h-2.5 w-2.5 shrink-0" />
+            Bloqueado
+          </div>
+          {height >= 40 && block.reason && (
+            <div className="truncate text-[10px] text-red-400/70">{block.reason}</div>
+          )}
+          {height >= 60 && (
+            <div className="mt-auto text-[10px] text-red-400/60">
+              {startTime} - {endTime}
+            </div>
+          )}
+        </div>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(block.id);
+          }}
+          disabled={isDeleting}
+          className="shrink-0 rounded p-0.5 text-red-400/60 opacity-0 transition-opacity hover:bg-red-500/20 hover:text-red-400 group-hover:opacity-100"
+          title="Remover bloqueio"
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+interface CurrentTimeLineProps {
+  isToday: boolean;
+}
+
+function CurrentTimeLine({ isToday }: CurrentTimeLineProps) {
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    if (!isToday) return;
+    const interval = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(interval);
+  }, [isToday]);
+
+  if (!isToday) return null;
+
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const startMinutes = START_HOUR * 60;
+  const endMinutes = END_HOUR * 60;
+
+  if (currentMinutes < startMinutes || currentMinutes > endMinutes) return null;
+
+  const top = ((currentMinutes - startMinutes) / 10) * SLOT_HEIGHT;
+
+  return (
+    <div
+      className="pointer-events-none absolute left-0 right-0 z-30"
+      style={{ top: `${top}px` }}
+    >
+      <div className="flex items-center">
+        <div className="h-2.5 w-2.5 rounded-full bg-blue-500" />
+        <div className="h-[2px] flex-1 bg-blue-500" />
+      </div>
+    </div>
+  );
+}
+
+export function CalendarView() {
+  const [selectedDate, setSelectedDate] = useState(getTodayStr);
+  const [blockModalOpen, setBlockModalOpen] = useState(false);
+  const [blockModalProfessionalId, setBlockModalProfessionalId] = useState<string | null>(null);
+  const [blockModalDefaultTime, setBlockModalDefaultTime] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const { data: professionals, isLoading, isError, error } = useCalendarData(selectedDate);
+  const deleteTimeBlock = useDeleteTimeBlock();
+
+  const isToday = selectedDate === getTodayStr();
+  const timeSlots = useMemo(() => generateTimeSlots(), []);
+  const totalGridHeight = TOTAL_HOURS * HOUR_HEIGHT;
+
+  // Scroll to 8am on mount / date change
+  useEffect(() => {
+    if (scrollRef.current) {
+      const offset8am = (1) * HOUR_HEIGHT; // 8:00 is 1 hour from start (7:00)
+      scrollRef.current.scrollTop = offset8am;
+    }
+  }, [selectedDate]);
+
+  const handlePrevDay = () => setSelectedDate((d) => addDays(d, -1));
+  const handleNextDay = () => setSelectedDate((d) => addDays(d, 1));
+  const handleToday = () => setSelectedDate(getTodayStr());
+
+  const handleDeleteBlock = async (id: string) => {
+    try {
+      await deleteTimeBlock.mutateAsync(id);
+    } catch {
+      // Error handled by mutation
+    }
+  };
+
+  const handleSlotClick = (professionalId: string, time: string) => {
+    setBlockModalProfessionalId(professionalId);
+    setBlockModalDefaultTime(time);
+    setBlockModalOpen(true);
+  };
+
+  const handleOpenBlockModal = () => {
+    setBlockModalProfessionalId(null);
+    setBlockModalDefaultTime(null);
+    setBlockModalOpen(true);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex h-96 items-center justify-center rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] backdrop-blur-sm">
+        <div className="flex items-center gap-3 text-[var(--text-muted)]">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          Carregando calendario...
+        </div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-6">
+        <div className="flex items-center gap-3">
+          <AlertCircle className="h-6 w-6 text-red-500" />
+          <div>
+            <h3 className="font-medium text-red-500">Erro ao carregar calendario</h3>
+            <p className="text-sm text-red-400">
+              {error instanceof Error ? error.message : 'Ocorreu um erro inesperado. Tente novamente.'}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const professionalsData = professionals || [];
+
+  return (
+    <div className="space-y-4">
+      {/* Calendar header */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-4 backdrop-blur-sm transition-colors duration-200">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handlePrevDay}
+              className="rounded-lg p-2 text-[var(--text-muted)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
+              title="Dia anterior"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <button
+              onClick={handleNextDay}
+              className="rounded-lg p-2 text-[var(--text-muted)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
+              title="Proximo dia"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          </div>
+          <button
+            onClick={handleToday}
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              isToday
+                ? 'bg-blue-600 text-white'
+                : 'border border-[var(--card-border)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
+            }`}
+          >
+            Hoje
+          </button>
+          <h2 className="text-lg font-semibold capitalize text-[var(--text-primary)]">
+            {formatDateBR(selectedDate)}
+          </h2>
+        </div>
+
+        <button
+          onClick={handleOpenBlockModal}
+          className="flex items-center gap-2 rounded-lg border border-red-500/30 px-3 py-1.5 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/10"
+        >
+          <Lock className="h-4 w-4" />
+          Bloquear Horario
+        </button>
+      </div>
+
+      {/* Calendar grid */}
+      {professionalsData.length === 0 ? (
+        <div className="flex h-64 items-center justify-center rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] backdrop-blur-sm">
+          <div className="text-center">
+            <User className="mx-auto mb-2 h-10 w-10 text-[var(--text-muted)]" />
+            <p className="text-[var(--text-muted)]">Nenhum profissional encontrado</p>
+            <p className="text-sm text-[var(--text-muted)]">Cadastre profissionais para visualizar o calendario</p>
+          </div>
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] backdrop-blur-sm transition-colors duration-200">
+          {/* Professional headers */}
+          <div className="flex border-b border-[var(--card-border)]">
+            <div
+              className="shrink-0 border-r border-[var(--card-border)] bg-[var(--bg-primary)]"
+              style={{ width: `${TIME_LABEL_WIDTH}px` }}
+            />
+            {professionalsData.map((prof) => (
+              <div
+                key={prof.id}
+                className="flex min-w-[180px] flex-1 items-center justify-center gap-2 border-r border-[var(--card-border)] bg-[var(--bg-primary)] px-3 py-3 last:border-r-0"
+              >
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-500/20 text-xs font-bold text-blue-400">
+                  {prof.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold text-[var(--text-primary)]">
+                    {prof.name}
+                  </div>
+                  <div className="text-[10px] text-[var(--text-muted)]">
+                    {prof.appointments.length} agendamento{prof.appointments.length !== 1 ? 's' : ''}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Scrollable grid */}
+          <div ref={scrollRef} className="overflow-auto" style={{ maxHeight: 'calc(100vh - 320px)' }}>
+            <div className="relative flex" style={{ height: `${totalGridHeight}px` }}>
+              {/* Time labels */}
+              <div
+                className="sticky left-0 z-10 shrink-0 border-r border-[var(--card-border)] bg-[var(--card-bg)]"
+                style={{ width: `${TIME_LABEL_WIDTH}px` }}
+              >
+                {timeSlots.map((slot) => {
+                  const [, m] = slot.split(':');
+                  const isFullHour = m === '00';
+                  const isHalfHour = m === '30';
+                  if (!isFullHour && !isHalfHour) return null;
+
+                  const top = getTopPosition(slot);
+                  return (
+                    <div
+                      key={slot}
+                      className="absolute right-2 flex items-center"
+                      style={{ top: `${top - 8}px` }}
+                    >
+                      <span
+                        className={`text-xs ${
+                          isFullHour
+                            ? 'font-medium text-[var(--text-secondary)]'
+                            : 'text-[var(--text-muted)]'
+                        }`}
+                      >
+                        {slot}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Professional columns */}
+              {professionalsData.map((prof) => (
+                <ProfessionalColumn
+                  key={prof.id}
+                  professional={prof}
+                  timeSlots={timeSlots}
+                  totalGridHeight={totalGridHeight}
+                  isToday={isToday}
+                  selectedDate={selectedDate}
+                  onDeleteBlock={handleDeleteBlock}
+                  isDeletingBlock={deleteTimeBlock.isPending}
+                  onSlotClick={handleSlotClick}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Legend */}
+          <div className="flex flex-wrap items-center gap-4 border-t border-[var(--card-border)] bg-[var(--bg-primary)] px-4 py-2.5">
+            <span className="text-xs text-[var(--text-muted)]">Legenda:</span>
+            <div className="flex items-center gap-1.5">
+              <div className="h-3 w-3 rounded border border-blue-500/40 bg-blue-500/20" />
+              <span className="text-xs text-[var(--text-muted)]">Agendado</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="h-3 w-3 rounded border border-emerald-500/40 bg-emerald-500/20" />
+              <span className="text-xs text-[var(--text-muted)]">Atendido</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="h-3 w-3 rounded border border-amber-500/30 bg-amber-500/15" />
+              <span className="text-xs text-[var(--text-muted)]">Faltou</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="h-3 w-3 rounded border border-red-500/30 bg-red-500/15" />
+              <span className="text-xs text-[var(--text-muted)]">Cancelado</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div
+                className="h-3 w-3 rounded border border-red-500/30 bg-red-500/10"
+                style={{
+                  backgroundImage:
+                    'repeating-linear-gradient(135deg, transparent, transparent 2px, rgba(239, 68, 68, 0.15) 2px, rgba(239, 68, 68, 0.15) 4px)',
+                }}
+              />
+              <span className="text-xs text-[var(--text-muted)]">Bloqueado</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Block time modal */}
+      <BlockTimeModal
+        isOpen={blockModalOpen}
+        onClose={() => setBlockModalOpen(false)}
+        professionals={professionalsData}
+        defaultProfessionalId={blockModalProfessionalId}
+        defaultTime={blockModalDefaultTime}
+        selectedDate={selectedDate}
+      />
+    </div>
+  );
+}
+
+interface ProfessionalColumnProps {
+  professional: CalendarProfessional;
+  timeSlots: string[];
+  totalGridHeight: number;
+  isToday: boolean;
+  selectedDate: string;
+  onDeleteBlock: (id: string) => void;
+  isDeletingBlock: boolean;
+  onSlotClick: (professionalId: string, time: string) => void;
+}
+
+function ProfessionalColumn({
+  professional,
+  timeSlots,
+  totalGridHeight,
+  isToday,
+  selectedDate,
+  onDeleteBlock,
+  isDeletingBlock,
+  onSlotClick,
+}: ProfessionalColumnProps) {
+  return (
+    <div className="relative min-w-[180px] flex-1 border-r border-[var(--card-border)] last:border-r-0">
+      {/* Grid lines and clickable slots */}
+      {timeSlots.map((slot) => {
+        const [, m] = slot.split(':');
+        const isFullHour = m === '00';
+        const isHalfHour = m === '30';
+        const top = getTopPosition(slot);
+
+        return (
+          <div
+            key={slot}
+            className="absolute left-0 right-0 cursor-pointer transition-colors hover:bg-[var(--hover-bg)]"
+            style={{ top: `${top}px`, height: `${SLOT_HEIGHT}px` }}
+            onClick={() => onSlotClick(professional.id, slot)}
+          >
+            {isFullHour && (
+              <div className="absolute inset-x-0 top-0 border-t border-[var(--border-color)]" />
+            )}
+            {isHalfHour && (
+              <div className="absolute inset-x-0 top-0 border-t border-[var(--border-color)] opacity-30" />
+            )}
+          </div>
+        );
+      })}
+
+      {/* Working hours shading (outside hours) */}
+      {professional.workingHours && professional.workingHours.length > 0 && (
+        <WorkingHoursOverlay
+          workingHours={professional.workingHours}
+          selectedDate={selectedDate}
+          totalGridHeight={totalGridHeight}
+        />
+      )}
+
+      {/* Appointments */}
+      {professional.appointments.map((apt) => (
+        <AppointmentBlock key={apt.id} appointment={apt} />
+      ))}
+
+      {/* Time blocks */}
+      {professional.timeBlocks.map((block) => (
+        <TimeBlockItem
+          key={block.id}
+          block={block}
+          onDelete={onDeleteBlock}
+          isDeleting={isDeletingBlock}
+        />
+      ))}
+
+      {/* Current time line */}
+      <CurrentTimeLine isToday={isToday} />
+    </div>
+  );
+}
+
+interface WorkingHoursOverlayProps {
+  workingHours: { dayOfWeek: number; startTime: string; endTime: string }[];
+  selectedDate: string;
+  totalGridHeight: number;
+}
+
+function WorkingHoursOverlay({ workingHours, selectedDate, totalGridHeight }: WorkingHoursOverlayProps) {
+  // Get day of week for the selected date (0 = Sunday)
+  const [y, m, d] = selectedDate.split('-').map(Number);
+  const dayOfWeek = new Date(y, m - 1, d).getDay();
+
+  const todayHours = workingHours.find((wh) => wh.dayOfWeek === dayOfWeek);
+  if (!todayHours) {
+    // Professional doesn't work this day - shade the whole column
+    return (
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 bg-[var(--text-muted)] opacity-[0.04]"
+        style={{ height: `${totalGridHeight}px` }}
+      />
+    );
+  }
+
+  const workStart = getTopPosition(todayHours.startTime);
+  const workEnd = getTopPosition(todayHours.endTime);
+
+  return (
+    <>
+      {/* Before working hours */}
+      {workStart > 0 && (
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 bg-[var(--text-muted)] opacity-[0.04]"
+          style={{ height: `${workStart}px` }}
+        />
+      )}
+      {/* After working hours */}
+      {workEnd < totalGridHeight && (
+        <div
+          className="pointer-events-none absolute inset-x-0 bg-[var(--text-muted)] opacity-[0.04]"
+          style={{ top: `${workEnd}px`, height: `${totalGridHeight - workEnd}px` }}
+        />
+      )}
+    </>
+  );
+}

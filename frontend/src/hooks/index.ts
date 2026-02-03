@@ -1,4 +1,4 @@
-export { useAppointments, useAppointmentActions } from './useAppointments';
+export { useAppointments, useAppointmentActions, useCalendarData, useCreateTimeBlock, useDeleteTimeBlock } from './useAppointments';
 export { useCashRegisters } from './useCashRegisters';
 export { useCashRegisterSummary } from './useCashRegisterSummary';
 export { useCashRegisterToday, useCashRegisterOpen, CASH_REGISTER_QUERY_KEY } from './useCashRegisterToday';
@@ -35,3 +35,6 @@ export { useFinancialCategories, useFinancialCategory, useCreateFinancialCategor
 export { usePaymentMethodConfigs, usePaymentMethodConfig, useCreatePaymentMethodConfig, useUpdatePaymentMethodConfig, useDeletePaymentMethodConfig } from './usePaymentMethodConfig';
 export { useFinancialTransactions, useFinancialTransaction, usePayableTotals, useReceivableTotals, useBalanceSummary, useCreateFinancialTransaction, useUpdateFinancialTransaction, useMarkTransactionAsPaid, useDeleteFinancialTransaction } from './useFinancialTransactions';
 export { useCommissions, useCommission, useGenerateCommissions, useMarkCommissionAsPaid, useDeleteCommission } from './useCommissions';
+export { useProducts, useProduct, useProductStock, useLowStockProducts, useCreateProduct, useUpdateProduct, useDeleteProduct } from './useProducts';
+export { useStockMovements, useCreateStockMovement } from './useStock';
+export { useOrders, usePendingOrders, useOrder, useCreateOrder, useAddOrderItem, useRemoveOrderItem, usePayOrder, useCancelOrder, useDeleteOrder } from './useOrders';

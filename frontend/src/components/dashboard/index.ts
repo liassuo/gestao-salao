@@ -1,0 +1,9 @@
+export { DashboardTabs } from './DashboardTabs';
+export { OperationalDashboard } from './OperationalDashboard';
+export { StrategicDashboard } from './StrategicDashboard';
+export { TopClientsCard } from './TopClientsCard';
+export { LowStockCard } from './LowStockCard';
+export { UnpaidClientsCard } from './UnpaidClientsCard';
+export { RevenueChart } from './RevenueChart';
+export { OccupancyCard } from './OccupancyCard';
+export { PlansStatsCard } from './PlansStatsCard';
