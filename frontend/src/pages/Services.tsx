@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Scissors, AlertCircle, Plus } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Scissors, AlertCircle, Plus, Search } from 'lucide-react';
 import {
   useServices,
   useCreateService,
@@ -16,8 +16,18 @@ export function Services() {
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [deletingService, setDeletingService] = useState<Service | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const { data: services, isLoading, isError, error } = useServices();
+
+  const filteredServices = useMemo(() => {
+    if (!services || !searchTerm) return services || [];
+    const term = searchTerm.toLowerCase();
+    return services.filter((s) =>
+      s.name.toLowerCase().includes(term) ||
+      s.description?.toLowerCase().includes(term)
+    );
+  }, [services, searchTerm]);
   const createService = useCreateService();
   const updateService = useUpdateService();
   const deleteService = useDeleteService();
@@ -102,6 +112,20 @@ export function Services() {
         </button>
       </div>
 
+      {/* Busca */}
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Buscar por nome ou descrição..."
+            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-2 pl-10 pr-4 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors"
+          />
+        </div>
+      </div>
+
       {/* Conteúdo */}
       {isLoading ? (
         <SkeletonTable rows={5} cols={4} />
@@ -119,7 +143,7 @@ export function Services() {
         </div>
       ) : (
         <ServicesTable
-          services={services || []}
+          services={filteredServices}
           onEdit={handleOpenEditModal}
           onDelete={setDeletingService}
           isLoading={deleteService.isPending}

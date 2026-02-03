@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, DollarSign, Wrench } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, DollarSign, Wrench, Package } from 'lucide-react';
 import { useAuth } from '@/auth';
 import { hasRole } from '@/auth/roles';
 import { menuItems } from '@/config/permissions';
 import type { MenuItem } from '@/config/permissions';
 import { useSidebar } from '@/contexts';
+import { useLowStockProducts } from '@/hooks';
 
 const groupIcons: Record<string, React.ElementType> = {
+  Estoque: Package,
   Financeiro: DollarSign,
   Cadastros: Wrench,
 };
@@ -17,6 +19,8 @@ export function Sidebar() {
   const { isCollapsed, toggleSidebar } = useSidebar();
   const location = useLocation();
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const { data: lowStockProducts } = useLowStockProducts();
+  const lowStockCount = lowStockProducts?.length || 0;
 
   // Filtra itens de menu baseado na role do usuário
   const visibleItems = menuItems.filter((item) => hasRole(user, item.roles));
@@ -97,6 +101,11 @@ export function Sidebar() {
         >
           <GroupIcon className="h-5 w-5 flex-shrink-0" />
           <span className="flex-1 text-left">{groupName}</span>
+          {groupName === 'Estoque' && lowStockCount > 0 && (
+            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold text-white">
+              {lowStockCount > 99 ? '99+' : lowStockCount}
+            </span>
+          )}
           {isExpanded ? (
             <ChevronUp className="h-4 w-4" />
           ) : (

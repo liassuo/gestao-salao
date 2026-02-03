@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Package, Plus, AlertCircle } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Package, Plus, AlertCircle, Search } from 'lucide-react';
 import { useProducts, useCreateProduct, useUpdateProduct, useDeleteProduct, getApiErrorMessage } from '@/hooks';
 import { ProductForm, ProductsTable, ConfirmDeleteModal } from '@/components/products';
 import { Modal, useToast } from '@/components/ui';
@@ -10,8 +10,18 @@ export function Products() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const { data: products, isLoading, error } = useProducts({ all: 'true' });
+
+  const filteredProducts = useMemo(() => {
+    if (!products || !searchTerm) return products || [];
+    const term = searchTerm.toLowerCase();
+    return products.filter((p) =>
+      p.name.toLowerCase().includes(term) ||
+      p.description?.toLowerCase().includes(term)
+    );
+  }, [products, searchTerm]);
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
   const deleteProduct = useDeleteProduct();
@@ -66,13 +76,26 @@ export function Products() {
         </button>
       </div>
 
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Buscar por nome ou descrição..."
+            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-2 pl-10 pr-4 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors"
+          />
+        </div>
+      </div>
+
       <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6 backdrop-blur-sm">
         {isLoading ? (
           <div className="flex justify-center py-12"><div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" /></div>
         ) : error ? (
           <div className="flex items-center gap-2 text-red-400"><AlertCircle className="h-5 w-5" /><span>Erro ao carregar produtos</span></div>
         ) : (
-          <ProductsTable products={products || []} onEdit={(p) => { setFormError(null); setEditingProduct(p); }} onDelete={setDeletingProduct} />
+          <ProductsTable products={filteredProducts} onEdit={(p) => { setFormError(null); setEditingProduct(p); }} onDelete={setDeletingProduct} />
         )}
       </div>
 

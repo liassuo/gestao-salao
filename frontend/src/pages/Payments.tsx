@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { CreditCard, AlertCircle, Plus } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { CreditCard, AlertCircle, Plus, Search } from 'lucide-react';
 import {
   usePayments,
   usePaymentTotals,
@@ -20,8 +20,22 @@ export function Payments() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [deletePayment, setDeletePayment] = useState<Payment | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [methodFilter, setMethodFilter] = useState('');
 
   const { data: payments, isLoading, isError, error } = usePayments();
+
+  const filteredPayments = useMemo(() => {
+    if (!payments) return [];
+    return payments.filter((p) => {
+      if (methodFilter && p.method !== methodFilter) return false;
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        return p.client?.name?.toLowerCase().includes(term) || p.notes?.toLowerCase().includes(term);
+      }
+      return true;
+    });
+  }, [payments, searchTerm, methodFilter]);
   const { data: totals, isLoading: isLoadingTotals } = usePaymentTotals();
   const { remove, isLoading: isActionLoading } = usePaymentActions();
   const createPayment = useCreatePayment();
@@ -93,6 +107,30 @@ export function Payments() {
         </button>
       </div>
 
+      {/* Busca e filtros */}
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Buscar por cliente ou observação..."
+            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-2 pl-10 pr-4 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors"
+          />
+        </div>
+        <select
+          value={methodFilter}
+          onChange={(e) => setMethodFilter(e.target.value)}
+          className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors"
+        >
+          <option value="">Todos os métodos</option>
+          <option value="CASH">Dinheiro</option>
+          <option value="PIX">PIX</option>
+          <option value="CARD">Cartão</option>
+        </select>
+      </div>
+
       {/* Totais */}
       {isLoadingTotals ? (
         <SkeletonSummaryCards count={4} />
@@ -120,7 +158,7 @@ export function Payments() {
         </div>
       ) : (
         <PaymentsTable
-          payments={payments || []}
+          payments={filteredPayments}
           onEdit={handleEditPayment}
           onDelete={handleDeletePayment}
           isLoading={isActionLoading}

@@ -1,13 +1,16 @@
 import { useNavigate } from 'react-router-dom';
-import { Bell, LogOut, User, Sun, Moon } from 'lucide-react';
+import { Bell, LogOut, User, Sun, Moon, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/auth';
 import { useTheme, useSidebar } from '@/contexts';
+import { useLowStockProducts } from '@/hooks';
 
 export function Header() {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { isCollapsed } = useSidebar();
   const navigate = useNavigate();
+  const { data: lowStockProducts } = useLowStockProducts();
+  const lowStockCount = lowStockProducts?.length || 0;
 
   const handleLogout = () => {
     logout();
@@ -49,10 +52,22 @@ export function Header() {
             )}
           </button>
 
-          {/* Notifications */}
-          <button className="relative rounded-xl p-2.5 text-[var(--text-muted)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]">
-            <Bell className="h-5 w-5" />
-            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-[var(--bg-secondary)]" />
+          {/* Notifications / Low Stock Alert */}
+          <button
+            onClick={() => lowStockCount > 0 && navigate('/estoque/atual')}
+            title={lowStockCount > 0 ? `${lowStockCount} produto(s) com estoque baixo` : 'Sem alertas'}
+            className={`relative rounded-xl p-2.5 transition-colors hover:bg-[var(--hover-bg)] ${
+              lowStockCount > 0
+                ? 'text-amber-400 hover:text-amber-300'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            {lowStockCount > 0 ? <AlertTriangle className="h-5 w-5" /> : <Bell className="h-5 w-5" />}
+            {lowStockCount > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold text-white ring-2 ring-[var(--bg-header)]">
+                {lowStockCount > 99 ? '99+' : lowStockCount}
+              </span>
+            )}
           </button>
 
           <div className="flex items-center gap-3 border-l border-[var(--border-color)] pl-4">

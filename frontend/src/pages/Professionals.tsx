@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { UserCog, AlertCircle, Plus } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { UserCog, AlertCircle, Plus, Search } from 'lucide-react';
 import {
   useProfessionals,
   useCreateProfessional,
@@ -16,8 +16,19 @@ export function Professionals() {
   const [editingProfessional, setEditingProfessional] = useState<Professional | null>(null);
   const [deletingProfessional, setDeletingProfessional] = useState<Professional | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const { data: professionals, isLoading, isError, error } = useProfessionals();
+
+  const filteredProfessionals = useMemo(() => {
+    if (!professionals || !searchTerm) return professionals || [];
+    const term = searchTerm.toLowerCase();
+    return professionals.filter((p) =>
+      p.name.toLowerCase().includes(term) ||
+      p.email?.toLowerCase().includes(term) ||
+      p.phone?.includes(term)
+    );
+  }, [professionals, searchTerm]);
   const createProfessional = useCreateProfessional();
   const updateProfessional = useUpdateProfessional();
   const deleteProfessional = useDeleteProfessional();
@@ -102,6 +113,20 @@ export function Professionals() {
         </button>
       </div>
 
+      {/* Busca */}
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Buscar por nome, email ou telefone..."
+            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-2 pl-10 pr-4 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors"
+          />
+        </div>
+      </div>
+
       {/* Conteúdo */}
       {isLoading ? (
         <SkeletonTable rows={5} cols={5} />
@@ -119,7 +144,7 @@ export function Professionals() {
         </div>
       ) : (
         <ProfessionalsTable
-          professionals={professionals || []}
+          professionals={filteredProfessionals}
           onEdit={handleOpenEditModal}
           onDelete={setDeletingProfessional}
           isLoading={deleteProfessional.isPending}
