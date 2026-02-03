@@ -4,7 +4,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
-import { CreateOrderDto, UpdateOrderDto, AddOrderItemDto, QueryOrderDto } from './dto';
+import { CreateOrderDto, UpdateOrderDto, AddOrderItemDto, QueryOrderDto, PayOrderDto } from './dto';
 
 @ApiTags('Orders')
 @Controller('orders')
@@ -58,8 +58,8 @@ export class OrdersController {
   }
 
   @Patch(':id/pay')
-  async pay(@Param('id', ParseUUIDPipe) id: string) {
-    return this.ordersService.pay(id);
+  async pay(@Param('id', ParseUUIDPipe) id: string, @Body() dto?: PayOrderDto) {
+    return this.ordersService.pay(id, dto);
   }
 
   @Patch(':id/cancel')

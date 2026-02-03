@@ -39,8 +39,8 @@ export const ordersService = {
     await api.delete(`/orders/${orderId}/items/${itemId}`);
   },
 
-  async pay(id: string): Promise<Order> {
-    const response = await api.patch<Order>(`/orders/${id}/pay`);
+  async pay(id: string, paymentMethod?: string): Promise<Order> {
+    const response = await api.patch<Order>(`/orders/${id}/pay`, paymentMethod ? { paymentMethod } : {});
     return response.data;
   },
 

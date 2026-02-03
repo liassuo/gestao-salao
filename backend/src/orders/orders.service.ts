@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateOrderDto, UpdateOrderDto, AddOrderItemDto, QueryOrderDto } from './dto';
+import { CreateOrderDto, UpdateOrderDto, AddOrderItemDto, QueryOrderDto, PayOrderDto } from './dto';
 
 @Injectable()
 export class OrdersService {
@@ -144,16 +144,69 @@ export class OrdersService {
     });
   }
 
-  async pay(id: string) {
-    const order = await this.prisma.order.findUnique({ where: { id } });
+  async pay(id: string, dto?: PayOrderDto) {
+    const order = await this.prisma.order.findUnique({
+      where: { id },
+      include: { items: true },
+    });
     if (!order) throw new NotFoundException('Comanda não encontrada');
     if (order.status !== 'PENDING') {
       throw new BadRequestException('Comanda não está pendente');
     }
-    return this.prisma.order.update({
-      where: { id },
-      data: { status: 'PAID' },
-      select: this.orderSelect,
+
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Baixa automatica no estoque para cada produto
+      const productItems = order.items.filter((i) => i.itemType === 'PRODUCT' && i.productId);
+      for (const item of productItems) {
+        await tx.stockMovement.create({
+          data: {
+            productId: item.productId!,
+            type: 'EXIT',
+            quantity: item.quantity,
+            reason: `Venda via comanda #${order.id.slice(0, 8)}`,
+          },
+        });
+      }
+
+      // 2. Criar registro de pagamento se metodo informado e comanda tem cliente
+      let paymentId: string | undefined;
+      if (dto?.paymentMethod && order.clientId) {
+        const payment = await tx.payment.create({
+          data: {
+            clientId: order.clientId,
+            amount: order.totalAmount,
+            method: dto.paymentMethod,
+            paidAt: new Date(),
+            registeredBy: dto.registeredBy || order.clientId,
+            notes: `Pagamento comanda #${order.id.slice(0, 8)}`,
+          },
+        });
+        paymentId = payment.id;
+
+        // Vincular pagamento ao caixa aberto do dia
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const openRegister = await tx.cashRegister.findFirst({
+          where: { isOpen: true },
+        });
+        if (openRegister) {
+          await tx.payment.update({
+            where: { id: payment.id },
+            data: { cashRegisterId: openRegister.id },
+          });
+        }
+      }
+
+      // 3. Atualizar status da comanda
+      await tx.order.update({
+        where: { id },
+        data: {
+          status: 'PAID',
+          paymentId: paymentId,
+        },
+      });
+
+      return this.findOne(id);
     });
   }
 

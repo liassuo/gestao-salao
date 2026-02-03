@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { ClipboardList, Plus, AlertCircle, Eye, Trash2, CreditCard, XCircle, ShoppingCart, X, Package, Scissors } from 'lucide-react';
+import { ClipboardList, Plus, AlertCircle, Eye, Trash2, CreditCard, XCircle, ShoppingCart, X, Package, Scissors, Banknote, Smartphone, CircleDollarSign } from 'lucide-react';
 import { useOrders, useCreateOrder, usePayOrder, useCancelOrder, useDeleteOrder, useAddOrderItem, useRemoveOrderItem, useClients, useProducts, useServices, getApiErrorMessage } from '@/hooks';
 import { Modal, ConfirmModal, useToast } from '@/components/ui';
 import type { Order, OrderStatus, AddOrderItemPayload, OrderItemType } from '@/types';
 import { orderStatusLabels, orderStatusColors } from '@/types';
+
+type PaymentMethod = 'CASH' | 'PIX' | 'CARD';
 
 function formatCents(cents: number): string {
   return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -14,6 +16,8 @@ export function Orders() {
   const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
   const [deletingOrder, setDeletingOrder] = useState<Order | null>(null);
   const [isAddItemOpen, setIsAddItemOpen] = useState(false);
+  const [payingOrderId, setPayingOrderId] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
   const [statusFilter, setStatusFilter] = useState<OrderStatus | ''>('');
 
   // Create form state
@@ -53,10 +57,17 @@ export function Orders() {
     }
   };
 
-  const handlePay = async (id: string) => {
+  const openPayModal = (id: string) => {
+    setPaymentMethod('CASH');
+    setPayingOrderId(id);
+  };
+
+  const handleConfirmPay = async () => {
+    if (!payingOrderId) return;
     try {
-      await payOrder.mutateAsync(id);
+      await payOrder.mutateAsync({ id: payingOrderId, paymentMethod });
       toast.success('Comanda marcada como paga');
+      setPayingOrderId(null);
       setViewingOrder(null);
     } catch (err) { toast.error('Erro', getApiErrorMessage(err)); }
   };
@@ -188,7 +199,7 @@ export function Orders() {
                         <button onClick={() => setViewingOrder(order)} className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-blue-400"><Eye className="h-4 w-4" /></button>
                         {order.status === 'PENDING' && (
                           <>
-                            <button onClick={() => handlePay(order.id)} className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-green-400"><CreditCard className="h-4 w-4" /></button>
+                            <button onClick={() => openPayModal(order.id)} className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-green-400"><CreditCard className="h-4 w-4" /></button>
                             <button onClick={() => handleCancel(order.id)} className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-yellow-400"><XCircle className="h-4 w-4" /></button>
                           </>
                         )}
@@ -311,7 +322,7 @@ export function Orders() {
                   <XCircle className="h-4 w-4" /> Cancelar
                 </button>
                 <button
-                  onClick={() => handlePay(viewingOrder.id)}
+                  onClick={() => openPayModal(viewingOrder.id)}
                   className="flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
                 >
                   <CreditCard className="h-4 w-4" /> Pagar
@@ -406,6 +417,46 @@ export function Orders() {
               className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
             >
               {addOrderItem.isPending ? 'Adicionando...' : 'Adicionar'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Payment Method Modal */}
+      <Modal isOpen={!!payingOrderId} onClose={() => setPayingOrderId(null)} title="Forma de Pagamento" size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-[var(--text-muted)]">Selecione a forma de pagamento para registrar no caixa:</p>
+          <div className="grid grid-cols-3 gap-3">
+            <button
+              onClick={() => setPaymentMethod('CASH')}
+              className={`flex flex-col items-center gap-2 rounded-xl border p-4 transition-colors ${paymentMethod === 'CASH' ? 'border-green-500 bg-green-500/20 text-green-400' : 'border-[var(--card-border)] text-[var(--text-muted)] hover:bg-[var(--hover-bg)]'}`}
+            >
+              <Banknote className="h-6 w-6" />
+              <span className="text-xs font-medium">Dinheiro</span>
+            </button>
+            <button
+              onClick={() => setPaymentMethod('PIX')}
+              className={`flex flex-col items-center gap-2 rounded-xl border p-4 transition-colors ${paymentMethod === 'PIX' ? 'border-blue-500 bg-blue-500/20 text-blue-400' : 'border-[var(--card-border)] text-[var(--text-muted)] hover:bg-[var(--hover-bg)]'}`}
+            >
+              <Smartphone className="h-6 w-6" />
+              <span className="text-xs font-medium">PIX</span>
+            </button>
+            <button
+              onClick={() => setPaymentMethod('CARD')}
+              className={`flex flex-col items-center gap-2 rounded-xl border p-4 transition-colors ${paymentMethod === 'CARD' ? 'border-purple-500 bg-purple-500/20 text-purple-400' : 'border-[var(--card-border)] text-[var(--text-muted)] hover:bg-[var(--hover-bg)]'}`}
+            >
+              <CircleDollarSign className="h-6 w-6" />
+              <span className="text-xs font-medium">Cartao</span>
+            </button>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button onClick={() => setPayingOrderId(null)} className="rounded-xl border border-[var(--card-border)] px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]">Cancelar</button>
+            <button
+              onClick={handleConfirmPay}
+              disabled={payOrder.isPending}
+              className="flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+            >
+              <CreditCard className="h-4 w-4" /> {payOrder.isPending ? 'Processando...' : 'Confirmar Pagamento'}
             </button>
           </div>
         </div>

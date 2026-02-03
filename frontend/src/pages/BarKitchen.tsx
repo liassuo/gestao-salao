@@ -13,7 +13,7 @@ export function BarKitchen() {
 
   const handleDeliver = async (id: string) => {
     try {
-      await payOrder.mutateAsync(id);
+      await payOrder.mutateAsync({ id });
       toast.success('Pedido entregue!');
     } catch (err) {
       toast.error('Erro', getApiErrorMessage(err));

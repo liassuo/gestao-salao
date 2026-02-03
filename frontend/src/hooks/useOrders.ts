@@ -68,7 +68,7 @@ export function usePayOrder() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => ordersService.pay(id),
+    mutationFn: ({ id, paymentMethod }: { id: string; paymentMethod?: string }) => ordersService.pay(id, paymentMethod),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ORDERS_KEY });
     },
