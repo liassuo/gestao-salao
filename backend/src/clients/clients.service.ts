@@ -1,7 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { SupabaseService } from '../supabase/supabase.service';
 import { CreateClientDto, UpdateClientDto } from './dto';
-import { Prisma } from '@prisma/client';
 
 export interface ClientFilters {
   search?: string;
@@ -9,117 +8,96 @@ export interface ClientFilters {
   isActive?: boolean;
 }
 
+export interface Client {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string;
+  password: string | null;
+  googleId: string | null;
+  hasDebts: boolean;
+  isActive: boolean;
+  notes: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 @Injectable()
 export class ClientsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly supabase: SupabaseService) {}
 
   /**
    * Create a new client
    */
   async create(dto: CreateClientDto) {
-    return this.prisma.client.create({
-      data: {
+    const { data, error } = await this.supabase.client
+      .from('clients')
+      .insert({
         name: dto.name,
         phone: dto.phone,
         email: dto.email || null,
         password: dto.password,
         googleId: dto.googleId,
         notes: dto.notes,
-      },
-      select: {
-        id: true,
-        name: true,
-        phone: true,
-        email: true,
-        isActive: true,
-        createdAt: true,
-      },
-    });
+      })
+      .select('id, name, phone, email, isActive, createdAt')
+      .single();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return data;
   }
 
   /**
    * Find all clients with optional filters
    */
   async findAll(filters?: ClientFilters) {
-    const where: Prisma.ClientWhereInput = {};
+    let query = this.supabase.client
+      .from('clients')
+      .select('id, name, phone, email, hasDebts, isActive, notes, createdAt');
 
     if (filters?.isActive !== undefined) {
-      where.isActive = filters.isActive;
+      query = query.eq('isActive', filters.isActive);
     }
 
     if (filters?.hasDebts !== undefined) {
-      where.hasDebts = filters.hasDebts;
+      query = query.eq('hasDebts', filters.hasDebts);
     }
 
     if (filters?.search) {
-      where.OR = [
-        { name: { contains: filters.search, mode: 'insensitive' } },
-        { email: { contains: filters.search, mode: 'insensitive' } },
-        { phone: { contains: filters.search } },
-      ];
+      query = query.or(
+        `name.ilike.%${filters.search}%,email.ilike.%${filters.search}%,phone.ilike.%${filters.search}%`,
+      );
     }
 
-    return this.prisma.client.findMany({
-      where,
-      orderBy: { name: 'asc' },
-      select: {
-        id: true,
-        name: true,
-        phone: true,
-        email: true,
-        hasDebts: true,
-        isActive: true,
-        notes: true,
-        createdAt: true,
-        _count: {
-          select: {
-            appointments: true,
-            debts: { where: { isSettled: false } },
-          },
-        },
-      },
-    });
+    const { data, error } = await query.order('name', { ascending: true });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return data;
   }
 
   /**
    * Find client by ID with details
    */
   async findOne(id: string) {
-    const client = await this.prisma.client.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        name: true,
-        phone: true,
-        email: true,
-        hasDebts: true,
-        isActive: true,
-        notes: true,
-        createdAt: true,
-        updatedAt: true,
-        appointments: {
-          take: 5,
-          orderBy: { scheduledAt: 'desc' },
-          select: {
-            id: true,
-            scheduledAt: true,
-            status: true,
-            totalPrice: true,
-          },
-        },
-        debts: {
-          where: { isSettled: false },
-          select: {
-            id: true,
-            amount: true,
-            remainingBalance: true,
-            createdAt: true,
-          },
-        },
-      },
-    });
+    const { data: client, error } = await this.supabase.client
+      .from('clients')
+      .select(
+        `
+        id, name, phone, email, hasDebts, isActive, notes, createdAt, updatedAt,
+        appointments:appointments(id, scheduledAt, status, totalPrice),
+        debts:debts(id, amount, remainingBalance, createdAt)
+      `,
+      )
+      .eq('id', id)
+      .single();
 
-    if (!client) {
+    if (error || !client) {
       throw new NotFoundException('Cliente não encontrado');
     }
 
@@ -130,87 +108,88 @@ export class ClientsService {
    * Find client by email (for authentication)
    */
   async findByEmail(email: string) {
-    return this.prisma.client.findUnique({
-      where: { email },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-        password: true,
-        googleId: true,
-        isActive: true,
-      },
-    });
+    const { data } = await this.supabase.client
+      .from('clients')
+      .select('id, name, email, phone, password, googleId, isActive')
+      .eq('email', email)
+      .single();
+
+    return data;
   }
 
   /**
    * Find clients with active debts
    */
   async findClientsWithDebts() {
-    return this.prisma.client.findMany({
-      where: {
-        hasDebts: true,
-        isActive: true,
-      },
-      orderBy: { name: 'asc' },
-      select: {
-        id: true,
-        name: true,
-        phone: true,
-        email: true,
-        debts: {
-          where: { isSettled: false },
-          select: {
-            id: true,
-            amount: true,
-            remainingBalance: true,
-            dueDate: true,
-          },
-        },
-      },
-    });
+    const { data, error } = await this.supabase.client
+      .from('clients')
+      .select(
+        `
+        id, name, phone, email,
+        debts:debts(id, amount, remainingBalance, dueDate)
+      `,
+      )
+      .eq('hasDebts', true)
+      .eq('isActive', true)
+      .order('name', { ascending: true });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return data;
   }
 
   /**
    * Update client information
    */
   async update(id: string, dto: UpdateClientDto) {
-    const client = await this.prisma.client.findUnique({ where: { id } });
+    const { data: existingClient, error: findError } = await this.supabase.client
+      .from('clients')
+      .select('id')
+      .eq('id', id)
+      .single();
 
-    if (!client) {
+    if (findError || !existingClient) {
       throw new NotFoundException('Cliente não encontrado');
     }
 
-    return this.prisma.client.update({
-      where: { id },
-      data: dto,
-      select: {
-        id: true,
-        name: true,
-        phone: true,
-        email: true,
-        isActive: true,
-        notes: true,
-        updatedAt: true,
-      },
-    });
+    const { data, error } = await this.supabase.client
+      .from('clients')
+      .update({ ...dto, updatedAt: new Date().toISOString() })
+      .eq('id', id)
+      .select('id, name, phone, email, isActive, notes, updatedAt')
+      .single();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return data;
   }
 
   /**
    * Soft delete client
    */
   async remove(id: string) {
-    const client = await this.prisma.client.findUnique({ where: { id } });
+    const { data: client, error: findError } = await this.supabase.client
+      .from('clients')
+      .select('id')
+      .eq('id', id)
+      .single();
 
-    if (!client) {
+    if (findError || !client) {
       throw new NotFoundException('Cliente não encontrado');
     }
 
-    await this.prisma.client.update({
-      where: { id },
-      data: { isActive: false },
-    });
+    const { error } = await this.supabase.client
+      .from('clients')
+      .update({ isActive: false, updatedAt: new Date().toISOString() })
+      .eq('id', id);
+
+    if (error) {
+      throw new Error(error.message);
+    }
   }
 
   /**
@@ -218,16 +197,22 @@ export class ClientsService {
    * Should be called when debts are created, paid, or settled
    */
   async updateDebtStatus(clientId: string) {
-    const activeDebts = await this.prisma.debt.count({
-      where: {
-        clientId,
-        isSettled: false,
-      },
-    });
+    const { count } = await this.supabase.client
+      .from('debts')
+      .select('id', { count: 'exact', head: true })
+      .eq('clientId', clientId)
+      .eq('isSettled', false);
 
-    await this.prisma.client.update({
-      where: { id: clientId },
-      data: { hasDebts: activeDebts > 0 },
-    });
+    const { error } = await this.supabase.client
+      .from('clients')
+      .update({
+        hasDebts: (count ?? 0) > 0,
+        updatedAt: new Date().toISOString(),
+      })
+      .eq('id', clientId);
+
+    if (error) {
+      throw new Error(error.message);
+    }
   }
 }
