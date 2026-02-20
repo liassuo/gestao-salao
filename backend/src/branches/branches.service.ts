@@ -1,138 +1,99 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { SupabaseService } from '../supabase/supabase.service';
 import { CreateBranchDto, UpdateBranchDto } from './dto';
 
 @Injectable()
 export class BranchesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly supabase: SupabaseService) {}
 
-  /**
-   * Create a new branch
-   */
   async create(dto: CreateBranchDto) {
-    return this.prisma.branch.create({
-      data: {
+    const { data: branch, error } = await this.supabase
+      .from('branches')
+      .insert({
         name: dto.name,
         address: dto.address,
         phone: dto.phone,
-      },
-      select: {
-        id: true,
-        name: true,
-        address: true,
-        phone: true,
-        isActive: true,
-        createdAt: true,
-      },
-    });
+      })
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return branch;
   }
 
-  /**
-   * Find all branches
-   */
   async findAll() {
-    return this.prisma.branch.findMany({
-      orderBy: { name: 'asc' },
-      select: {
-        id: true,
-        name: true,
-        address: true,
-        phone: true,
-        isActive: true,
-        createdAt: true,
-        _count: {
-          select: {
-            professionals: true,
-          },
-        },
-      },
-    });
+    const { data: branches, error } = await this.supabase
+      .from('branches')
+      .select('*')
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+    return branches || [];
   }
 
-  /**
-   * Find active branches only
-   */
   async findActive() {
-    return this.prisma.branch.findMany({
-      where: { isActive: true },
-      orderBy: { name: 'asc' },
-      select: {
-        id: true,
-        name: true,
-        address: true,
-        phone: true,
-      },
-    });
+    const { data: branches, error } = await this.supabase
+      .from('branches')
+      .select('id, name, address, phone')
+      .eq('is_active', true)
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+    return branches || [];
   }
 
-  /**
-   * Find branch by ID
-   */
   async findOne(id: string) {
-    const branch = await this.prisma.branch.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        name: true,
-        address: true,
-        phone: true,
-        isActive: true,
-        createdAt: true,
-        updatedAt: true,
-        _count: {
-          select: {
-            professionals: true,
-            transactions: true,
-            commissions: true,
-          },
-        },
-      },
-    });
+    const { data: branch, error } = await this.supabase
+      .from('branches')
+      .select('*')
+      .eq('id', id)
+      .single();
 
-    if (!branch) {
+    if (error || !branch) {
       throw new NotFoundException('Filial não encontrada');
     }
 
     return branch;
   }
 
-  /**
-   * Update branch information
-   */
   async update(id: string, dto: UpdateBranchDto) {
-    const branch = await this.prisma.branch.findUnique({ where: { id } });
+    const { data: branch, error: findError } = await this.supabase
+      .from('branches')
+      .select('id')
+      .eq('id', id)
+      .single();
 
-    if (!branch) {
+    if (findError || !branch) {
       throw new NotFoundException('Filial não encontrada');
     }
 
-    return this.prisma.branch.update({
-      where: { id },
-      data: dto,
-      select: {
-        id: true,
-        name: true,
-        address: true,
-        phone: true,
-        isActive: true,
-        updatedAt: true,
-      },
-    });
+    const { data: updated, error } = await this.supabase
+      .from('branches')
+      .update(dto)
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return updated;
   }
 
-  /**
-   * Soft delete branch
-   */
   async remove(id: string) {
-    const branch = await this.prisma.branch.findUnique({ where: { id } });
+    const { data: branch, error: findError } = await this.supabase
+      .from('branches')
+      .select('id')
+      .eq('id', id)
+      .single();
 
-    if (!branch) {
+    if (findError || !branch) {
       throw new NotFoundException('Filial não encontrada');
     }
 
-    await this.prisma.branch.update({
-      where: { id },
-      data: { isActive: false },
-    });
+    const { error } = await this.supabase
+      .from('branches')
+      .update({ is_active: false })
+      .eq('id', id);
+
+    if (error) throw error;
   }
 }

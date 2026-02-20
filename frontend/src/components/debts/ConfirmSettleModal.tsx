@@ -51,7 +51,7 @@ export function ConfirmSettleModal({
         <div className="p-6">
           <div className="mb-4 flex items-start gap-4">
             <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-500/20">
-              <AlertTriangle className="h-6 w-6 text-red-500" />
+              <AlertTriangle className="h-6 w-6 text-[#A63030]" />
             </div>
             <div>
               <h3 className="font-medium text-[var(--text-primary)]">
@@ -74,12 +74,12 @@ export function ConfirmSettleModal({
             </p>
             <p className="text-sm text-[var(--text-secondary)]">
               <span className="font-medium">Já pago:</span>{' '}
-              <span className="text-blue-500">
+              <span className="text-[#C8923A]">
                 {formatCurrency(debt.amountPaid)}
               </span>
             </p>
             {hasRemainingBalance && (
-              <p className="mt-2 border-t border-[var(--border-color)] pt-2 text-sm text-red-500">
+              <p className="mt-2 border-t border-[var(--border-color)] pt-2 text-sm text-[#A63030]">
                 <span className="font-medium">Atenção:</span> Esta dívida ainda
                 possui saldo de{' '}
                 <span className="font-semibold">
@@ -104,7 +104,7 @@ export function ConfirmSettleModal({
               type="button"
               onClick={onConfirm}
               disabled={isLoading}
-              className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-4 py-2 text-sm font-medium text-white hover:bg-[#725510] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
               {isLoading ? 'Quitando...' : 'Confirmar Quitação'}

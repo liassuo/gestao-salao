@@ -1,5 +1,5 @@
 import { IsOptional, IsEnum, IsBooleanString } from 'class-validator';
-import { PaymentCondition, PaymentMethodScope } from '@prisma/client';
+import { PaymentCondition, PaymentMethodScope } from '../../common/enums';
 
 /**
  * DTO for querying payment method configurations

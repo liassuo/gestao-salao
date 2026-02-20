@@ -17,7 +17,7 @@ export function AccountsPayableTotals({ totals, isLoading }: AccountsPayableTota
       value: formatCurrency(totals.overdue),
       icon: AlertTriangle,
       iconBg: 'bg-red-500/20',
-      iconColor: 'text-red-500',
+      iconColor: 'text-[#A63030]',
     },
     {
       label: 'A Pagar',
@@ -37,8 +37,8 @@ export function AccountsPayableTotals({ totals, isLoading }: AccountsPayableTota
       label: 'Total a Pagar',
       value: formatCurrency(totals.totalToPay),
       icon: DollarSign,
-      iconBg: 'bg-blue-500/20',
-      iconColor: 'text-blue-500',
+      iconBg: 'bg-[#C8923A]/20',
+      iconColor: 'text-[#C8923A]',
     },
   ];
 

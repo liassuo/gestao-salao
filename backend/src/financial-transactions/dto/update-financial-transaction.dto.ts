@@ -13,7 +13,7 @@ import {
   TransactionType,
   PaymentCondition,
   TransactionStatus,
-} from '@prisma/client';
+} from '../../common/enums';
 
 export class UpdateFinancialTransactionDto {
   @IsOptional()

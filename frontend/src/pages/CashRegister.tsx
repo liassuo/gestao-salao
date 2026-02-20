@@ -93,8 +93,8 @@ export function CashRegister() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/20">
-          <Wallet className="h-5 w-5 text-blue-500" />
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#C8923A]/20">
+          <Wallet className="h-5 w-5 text-[#C8923A]" />
         </div>
         <div>
           <h1 className="text-2xl font-bold text-[var(--text-primary)]">Caixa</h1>
@@ -113,9 +113,9 @@ export function CashRegister() {
               onClick={() => setActiveTab(tab.id)}
               role="tab"
               aria-selected={activeTab === tab.id}
-              className={`flex items-center gap-2 border-b-2 px-1 py-3 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+              className={`flex items-center gap-2 border-b-2 px-1 py-3 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C8923A] ${
                 activeTab === tab.id
-                  ? 'border-blue-500 text-blue-500'
+                  ? 'border-[#C8923A] text-[#C8923A]'
                   : 'border-transparent text-[var(--text-muted)] hover:border-[var(--border-color)] hover:text-[var(--text-primary)]'
               }`}
             >
@@ -136,10 +136,10 @@ export function CashRegister() {
           ) : isErrorToday ? (
             <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-6">
               <div className="flex items-center gap-3">
-                <AlertCircle className="h-6 w-6 text-red-500" />
+                <AlertCircle className="h-6 w-6 text-[#A63030]" />
                 <div>
-                  <h3 className="font-medium text-red-500">Erro ao carregar</h3>
-                  <p className="text-sm text-red-400">
+                  <h3 className="font-medium text-[#A63030]">Erro ao carregar</h3>
+                  <p className="text-sm text-[#C45050]">
                     {errorToday instanceof Error
                       ? errorToday.message
                       : 'Ocorreu um erro inesperado. Tente novamente.'}

@@ -1,82 +1,93 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { SupabaseService } from '../supabase/supabase.service';
 import { CreateStockMovementDto, QueryStockMovementDto } from './dto';
 
 @Injectable()
 export class StockService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly supabase: SupabaseService) {}
 
   async create(dto: CreateStockMovementDto) {
-    // Validate product exists
-    const product = await this.prisma.product.findUnique({
-      where: { id: dto.productId },
-    });
-    if (!product) throw new NotFoundException('Produto não encontrado');
+    const { data: product, error: prodError } = await this.supabase
+      .from('products')
+      .select('id')
+      .eq('id', dto.productId)
+      .single();
 
-    // For EXIT, validate enough stock
+    if (prodError || !product) {
+      throw new NotFoundException('Produto não encontrado');
+    }
+
     if (dto.type === 'EXIT') {
-      const movements = await this.prisma.stockMovement.findMany({
-        where: { productId: dto.productId },
-        select: { type: true, quantity: true },
-      });
-      const currentStock = movements.reduce((acc, m) => {
+      const { data: movements } = await this.supabase
+        .from('stock_movements')
+        .select('type, quantity')
+        .eq('product_id', dto.productId);
+
+      const currentStock = (movements || []).reduce((acc, m) => {
         return m.type === 'ENTRY' ? acc + m.quantity : acc - m.quantity;
       }, 0);
+
       if (currentStock < dto.quantity) {
-        throw new BadRequestException(
-          `Estoque insuficiente. Estoque atual: ${currentStock}`,
-        );
+        throw new BadRequestException(`Estoque insuficiente. Estoque atual: ${currentStock}`);
       }
     }
 
-    return this.prisma.stockMovement.create({
-      data: {
-        productId: dto.productId,
+    const { data: movement, error } = await this.supabase
+      .from('stock_movements')
+      .insert({
+        product_id: dto.productId,
         type: dto.type,
         quantity: dto.quantity,
         reason: dto.reason,
-        branchId: dto.branchId,
-      },
-      select: {
-        id: true, type: true, quantity: true, reason: true, createdAt: true,
-        product: { select: { id: true, name: true } },
-        branch: { select: { id: true, name: true } },
-      },
-    });
+        branch_id: dto.branchId,
+      })
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return movement;
   }
 
   async findAll(query: QueryStockMovementDto) {
-    const where: any = {};
-    if (query.productId) where.productId = query.productId;
-    if (query.type) where.type = query.type;
-    if (query.branchId) where.branchId = query.branchId;
-    if (query.startDate || query.endDate) {
-      where.createdAt = {};
-      if (query.startDate) where.createdAt.gte = new Date(query.startDate);
-      if (query.endDate) where.createdAt.lte = new Date(query.endDate + 'T23:59:59.999Z');
+    let queryBuilder = this.supabase.from('stock_movements').select('*');
+
+    if (query.productId) {
+      queryBuilder = queryBuilder.eq('product_id', query.productId);
     }
 
-    return this.prisma.stockMovement.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true, type: true, quantity: true, reason: true, createdAt: true, createdBy: true,
-        product: { select: { id: true, name: true } },
-        branch: { select: { id: true, name: true } },
-      },
-    });
+    if (query.type) {
+      queryBuilder = queryBuilder.eq('type', query.type);
+    }
+
+    if (query.branchId) {
+      queryBuilder = queryBuilder.eq('branch_id', query.branchId);
+    }
+
+    if (query.startDate) {
+      queryBuilder = queryBuilder.gte('created_at', new Date(query.startDate).toISOString());
+    }
+
+    if (query.endDate) {
+      queryBuilder = queryBuilder.lte('created_at', new Date(query.endDate + 'T23:59:59.999Z').toISOString());
+    }
+
+    const { data: movements, error } = await queryBuilder.order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return movements || [];
   }
 
   async findOne(id: string) {
-    const movement = await this.prisma.stockMovement.findUnique({
-      where: { id },
-      select: {
-        id: true, type: true, quantity: true, reason: true, createdAt: true, createdBy: true,
-        product: { select: { id: true, name: true, salePrice: true, costPrice: true } },
-        branch: { select: { id: true, name: true } },
-      },
-    });
-    if (!movement) throw new NotFoundException('Movimentação não encontrada');
+    const { data: movement, error } = await this.supabase
+      .from('stock_movements')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error || !movement) {
+      throw new NotFoundException('Movimentação não encontrada');
+    }
+
     return movement;
   }
 }

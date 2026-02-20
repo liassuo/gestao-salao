@@ -17,18 +17,18 @@ interface ConfirmModalProps {
 const variantStyles = {
   danger: {
     iconBg: 'bg-red-500/20',
-    iconColor: 'text-red-500',
-    buttonBg: 'bg-red-600 hover:bg-red-700',
+    iconColor: 'text-[#A63030]',
+    buttonBg: 'bg-[#8B2020] hover:bg-[#6B1818]',
   },
   warning: {
     iconBg: 'bg-red-500/20',
-    iconColor: 'text-red-500',
-    buttonBg: 'bg-red-600 hover:bg-red-700',
+    iconColor: 'text-[#A63030]',
+    buttonBg: 'bg-[#8B2020] hover:bg-[#6B1818]',
   },
   info: {
-    iconBg: 'bg-blue-500/20',
-    iconColor: 'text-blue-500',
-    buttonBg: 'bg-blue-600 hover:bg-blue-700',
+    iconBg: 'bg-[#C8923A]/20',
+    iconColor: 'text-[#C8923A]',
+    buttonBg: 'bg-[#8B6914] hover:bg-[#725510]',
   },
 };
 

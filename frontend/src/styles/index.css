@@ -1,46 +1,55 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #2563eb;
-  --color-primary-dark: #1d4ed8;
-  --color-sidebar: #1f2937;
-  --color-sidebar-hover: #374151;
+  /* Dourado envelhecido - cor principal */
+  --color-primary: #C8923A;
+  --color-primary-dark: #A67520;
+  /* Sidebar madeira escura */
+  --color-sidebar: #1A1008;
+  --color-sidebar-hover: #2C1F12;
+  /* Vermelho rústico */
+  --color-accent: #8B2020;
+  --color-accent-light: #A63030;
+  /* Dourado para textos destaque */
+  --color-gold: #C8923A;
+  --color-gold-light: #D4A85C;
+  --color-gold-dark: #96700A;
 }
 
-/* Light theme (default) */
+/* Light theme (pergaminho envelhecido) */
 :root {
-  --bg-primary: #f4f4f5;
-  --bg-secondary: #ffffff;
-  --bg-tertiary: #f4f4f5;
-  --bg-sidebar: #18181b;
-  --bg-header: rgba(255, 255, 255, 0.8);
-  --border-color: #e4e4e7;
-  --border-sidebar: #27272a;
-  --text-primary: #18181b;
-  --text-secondary: #3f3f46;
-  --text-muted: #71717a;
-  --text-sidebar: #a1a1aa;
-  --card-bg: #ffffff;
-  --card-border: #e4e4e7;
-  --hover-bg: #f4f4f5;
+  --bg-primary: #F2E8D8;
+  --bg-secondary: #FAF5EB;
+  --bg-tertiary: #EDE3D3;
+  --bg-sidebar: #1A1008;
+  --bg-header: rgba(250, 245, 235, 0.88);
+  --border-color: #D4C4A0;
+  --border-sidebar: #2A1F13;
+  --text-primary: #2C1810;
+  --text-secondary: #4A3728;
+  --text-muted: #8B7355;
+  --text-sidebar: #9B8B73;
+  --card-bg: #FAF5EB;
+  --card-border: #D4C4A0;
+  --hover-bg: #EDE3D3;
 }
 
-/* Dark theme */
+/* Dark theme (madeira escura / couro) */
 :root.dark {
-  --bg-primary: #09090b;
-  --bg-secondary: #18181b;
-  --bg-tertiary: rgba(24, 24, 27, 0.8);
-  --bg-sidebar: #18181b;
-  --bg-header: rgba(24, 24, 27, 0.8);
-  --border-color: #27272a;
-  --border-sidebar: #27272a;
-  --text-primary: #fafafa;
-  --text-secondary: #e4e4e7;
-  --text-muted: #a1a1aa;
-  --text-sidebar: #a1a1aa;
-  --card-bg: rgba(24, 24, 27, 0.8);
-  --card-border: #27272a;
-  --hover-bg: #27272a;
+  --bg-primary: #110D07;
+  --bg-secondary: #1A150E;
+  --bg-tertiary: rgba(26, 21, 14, 0.85);
+  --bg-sidebar: #130E07;
+  --bg-header: rgba(26, 21, 14, 0.88);
+  --border-color: #2E2418;
+  --border-sidebar: #2A1F13;
+  --text-primary: #F2E8D5;
+  --text-secondary: #D4C4A0;
+  --text-muted: #8B7D6B;
+  --text-sidebar: #9B8B73;
+  --card-bg: rgba(26, 21, 14, 0.85);
+  --card-border: #2E2418;
+  --hover-bg: #241C12;
 }
 
 body {
@@ -49,9 +58,10 @@ body {
   @apply antialiased transition-colors duration-200;
 }
 
-/* Acessibilidade: Foco visível para navegação por teclado */
+/* Acessibilidade: Foco visível - dourado */
 *:focus-visible {
-  @apply outline-none ring-2 ring-blue-500 ring-offset-2;
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-gold), 0 0 0 4px rgba(200, 146, 58, 0.3);
 }
 
 /* Botões sempre com cursor pointer */
@@ -69,11 +79,13 @@ a {
   @apply cursor-pointer;
 }
 
-/* Inputs focados */
+/* Inputs focados - dourado */
 input:focus,
 select:focus,
 textarea:focus {
-  @apply outline-none ring-2 ring-blue-500 border-blue-500;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(200, 146, 58, 0.5);
+  border-color: #C8923A;
 }
 
 /* Screen reader only class */
@@ -96,4 +108,23 @@ select,
 textarea,
 a {
   @apply transition-colors duration-150;
+}
+
+/* Scrollbar rústica */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: #4A3728;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #5C4530;
 }

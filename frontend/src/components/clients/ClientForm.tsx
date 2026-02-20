@@ -45,10 +45,10 @@ export function ClientForm({ client, onSubmit, isLoading, error }: ClientFormPro
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-5">
       {error && (
         <div className="flex items-start gap-3 rounded-xl bg-red-500/10 p-4">
-          <AlertCircle className="mt-0.5 h-5 w-5 text-red-500" />
+          <AlertCircle className="mt-0.5 h-5 w-5 text-[#A63030]" />
           <div>
-            <p className="font-medium text-red-500">Erro ao salvar</p>
-            <p className="text-sm text-red-400">{error}</p>
+            <p className="font-medium text-[#A63030]">Erro ao salvar</p>
+            <p className="text-sm text-[#C45050]">{error}</p>
           </div>
         </div>
       )}
@@ -61,12 +61,12 @@ export function ClientForm({ client, onSubmit, isLoading, error }: ClientFormPro
           type="text"
           {...register('name', { required: 'Nome é obrigatório' })}
           placeholder="Nome completo do cliente"
-          className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-            errors.name ? 'border-red-500' : 'border-[var(--border-color)]'
+          className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] ${
+            errors.name ? 'border-[#A63030]' : 'border-[var(--border-color)]'
           }`}
         />
         {errors.name && (
-          <p className="mt-1 text-sm text-red-500">{errors.name.message}</p>
+          <p className="mt-1 text-sm text-[#A63030]">{errors.name.message}</p>
         )}
       </div>
 
@@ -84,12 +84,12 @@ export function ClientForm({ client, onSubmit, isLoading, error }: ClientFormPro
             },
           })}
           placeholder="(11) 99999-9999"
-          className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-            errors.phone ? 'border-red-500' : 'border-[var(--border-color)]'
+          className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] ${
+            errors.phone ? 'border-[#A63030]' : 'border-[var(--border-color)]'
           }`}
         />
         {errors.phone && (
-          <p className="mt-1 text-sm text-red-500">{errors.phone.message}</p>
+          <p className="mt-1 text-sm text-[#A63030]">{errors.phone.message}</p>
         )}
       </div>
 
@@ -106,12 +106,12 @@ export function ClientForm({ client, onSubmit, isLoading, error }: ClientFormPro
             },
           })}
           placeholder="email@exemplo.com (opcional)"
-          className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-            errors.email ? 'border-red-500' : 'border-[var(--border-color)]'
+          className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] ${
+            errors.email ? 'border-[#A63030]' : 'border-[var(--border-color)]'
           }`}
         />
         {errors.email && (
-          <p className="mt-1 text-sm text-red-500">{errors.email.message}</p>
+          <p className="mt-1 text-sm text-[#A63030]">{errors.email.message}</p>
         )}
       </div>
 
@@ -123,7 +123,7 @@ export function ClientForm({ client, onSubmit, isLoading, error }: ClientFormPro
           {...register('notes')}
           rows={3}
           placeholder="Informações adicionais sobre o cliente (opcional)"
-          className="w-full resize-none rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full resize-none rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A]"
         />
       </div>
 
@@ -131,7 +131,7 @@ export function ClientForm({ client, onSubmit, isLoading, error }: ClientFormPro
         <button
           type="submit"
           disabled={isLoading}
-          className="flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-6 py-2.5 font-medium text-white transition-colors hover:bg-[#725510] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
           {isLoading ? 'Salvando...' : isEditing ? 'Salvar' : 'Cadastrar'}

@@ -93,12 +93,12 @@ export function CashRegisterStatus({ cashRegister, onClose }: CashRegisterStatus
         {/* Total PIX */}
         <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/20">
-              <Smartphone className="h-5 w-5 text-blue-500" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#C8923A]/20">
+              <Smartphone className="h-5 w-5 text-[#C8923A]" />
             </div>
             <div>
               <p className="text-xs text-[var(--text-muted)]">PIX</p>
-              <p className="text-lg font-semibold text-blue-500">
+              <p className="text-lg font-semibold text-[#C8923A]">
                 {formatCurrency(cashRegister.totalPix)}
               </p>
             </div>
@@ -108,12 +108,12 @@ export function CashRegisterStatus({ cashRegister, onClose }: CashRegisterStatus
         {/* Total Cartão */}
         <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/20">
-              <CreditCard className="h-5 w-5 text-blue-500" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#C8923A]/20">
+              <CreditCard className="h-5 w-5 text-[#C8923A]" />
             </div>
             <div>
               <p className="text-xs text-[var(--text-muted)]">Cartão</p>
-              <p className="text-lg font-semibold text-blue-500">
+              <p className="text-lg font-semibold text-[#C8923A]">
                 {formatCurrency(cashRegister.totalCard)}
               </p>
             </div>

@@ -4,4 +4,5 @@
 export class SubscribeClientDto {
   clientId: string;
   planId: string;
+  startDate?: string;
 }

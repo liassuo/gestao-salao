@@ -1,5 +1,5 @@
 import { IsString, IsEnum, IsOptional, IsUUID, IsBoolean } from 'class-validator';
-import { TransactionType } from '@prisma/client';
+import { TransactionType } from '../../common/enums';
 
 export class UpdateFinancialCategoryDto {
   @IsOptional()

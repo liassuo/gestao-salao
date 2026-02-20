@@ -63,7 +63,7 @@ export function FinancialCategoriesTable({
               <tr key={category.id} className="hover:bg-[var(--hover-bg)]">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-500/20 text-blue-500">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#C8923A]/20 text-[#C8923A]">
                       <FolderTree className="h-5 w-5" />
                     </div>
                     <p className="font-medium text-[var(--text-primary)]">{category.name}</p>
@@ -82,7 +82,7 @@ export function FinancialCategoriesTable({
                 </td>
                 <td className="whitespace-nowrap px-4 py-3">
                   {category.isActive ? (
-                    <span className="inline-flex w-fit rounded-full bg-blue-500/20 px-2 py-0.5 text-xs font-medium text-blue-500">
+                    <span className="inline-flex w-fit rounded-full bg-[#C8923A]/20 px-2 py-0.5 text-xs font-medium text-[#C8923A]">
                       Ativo
                     </span>
                   ) : (
@@ -123,7 +123,7 @@ export function FinancialCategoriesTable({
                               onDelete(category);
                               setOpenMenuId(null);
                             }}
-                            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-500 hover:bg-red-500/10"
+                            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[#A63030] hover:bg-red-500/10"
                           >
                             <Trash2 className="h-4 w-4" />
                             Excluir

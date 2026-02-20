@@ -58,7 +58,7 @@ export function AccountsPayable() {
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-500/20">
-          <TrendingDown className="h-5 w-5 text-red-500" />
+          <TrendingDown className="h-5 w-5 text-[#A63030]" />
         </div>
         <div>
           <h1 className="text-2xl font-bold text-[var(--text-primary)]">Contas a Pagar</h1>
@@ -79,7 +79,7 @@ export function AccountsPayable() {
             id="startDate"
             value={filters.startDate || ''}
             onChange={(e) => setFilters((prev) => ({ ...prev, startDate: e.target.value || undefined }))}
-            className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 border-[var(--border-color)]"
+            className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] border-[var(--border-color)]"
           />
         </div>
         <div className="flex-1 min-w-[180px]">
@@ -91,7 +91,7 @@ export function AccountsPayable() {
             id="endDate"
             value={filters.endDate || ''}
             onChange={(e) => setFilters((prev) => ({ ...prev, endDate: e.target.value || undefined }))}
-            className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 border-[var(--border-color)]"
+            className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] border-[var(--border-color)]"
           />
         </div>
         <div className="flex-1 min-w-[200px]">
@@ -102,7 +102,7 @@ export function AccountsPayable() {
             id="branchFilter"
             value={filters.branchId || ''}
             onChange={(e) => setFilters((prev) => ({ ...prev, branchId: e.target.value || undefined }))}
-            className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 border-[var(--border-color)]"
+            className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] border-[var(--border-color)]"
           >
             <option value="">Todas as filiais</option>
             {branches?.map((branch) => (

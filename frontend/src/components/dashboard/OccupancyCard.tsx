@@ -6,22 +6,22 @@ interface OccupancyCardProps {
 }
 
 function getBarColor(rate: number) {
-  if (rate >= 70) return 'bg-blue-500';
+  if (rate >= 70) return 'bg-[#C8923A]';
   if (rate >= 40) return 'bg-yellow-500';
   return 'bg-red-500';
 }
 
 function getTextColor(rate: number) {
-  if (rate >= 70) return 'text-blue-400';
+  if (rate >= 70) return 'text-[#D4A85C]';
   if (rate >= 40) return 'text-yellow-400';
-  return 'text-red-400';
+  return 'text-[#C45050]';
 }
 
 export function OccupancyCard({ professionals }: OccupancyCardProps) {
   return (
     <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6 backdrop-blur-sm transition-colors duration-200">
       <div className="mb-4 flex items-center gap-2">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-blue-500 shadow-lg shadow-blue-500/20">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#8B6914] to-[#C8923A] shadow-lg shadow-[#C8923A]/20">
           <UserCheck className="h-4 w-4 text-white" />
         </div>
         <h3 className="text-lg font-semibold text-[var(--text-primary)]">Ocupação dos Profissionais</h3>

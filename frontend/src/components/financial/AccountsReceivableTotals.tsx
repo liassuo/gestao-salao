@@ -17,7 +17,7 @@ export function AccountsReceivableTotals({ totals, isLoading }: AccountsReceivab
       value: formatCurrency(totals.notReceived),
       icon: AlertTriangle,
       iconBg: 'bg-red-500/20',
-      iconColor: 'text-red-500',
+      iconColor: 'text-[#A63030]',
     },
     {
       label: 'A Receber',
@@ -37,8 +37,8 @@ export function AccountsReceivableTotals({ totals, isLoading }: AccountsReceivab
       label: 'Total a Receber',
       value: formatCurrency(totals.totalToReceive),
       icon: DollarSign,
-      iconBg: 'bg-blue-500/20',
-      iconColor: 'text-blue-500',
+      iconBg: 'bg-[#C8923A]/20',
+      iconColor: 'text-[#C8923A]',
     },
   ];
 

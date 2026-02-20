@@ -26,7 +26,7 @@ export function DebtFilters({ filters, onChange }: DebtFiltersProps) {
             onChange({ ...filters, clientId: e.target.value || undefined })
           }
           disabled={isLoadingClients}
-          className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+          className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[#A63030] focus:outline-none focus:ring-1 focus:ring-[#8B2020]"
         >
           <option value="">Todos os clientes</option>
           {clients?.map((client) => (
@@ -55,7 +55,7 @@ export function DebtFilters({ filters, onChange }: DebtFiltersProps) {
               isSettled: value === '' ? undefined : value === 'true',
             });
           }}
-          className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+          className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[#A63030] focus:outline-none focus:ring-1 focus:ring-[#8B2020]"
         >
           <option value="">Todos</option>
           <option value="false">Abertas</option>

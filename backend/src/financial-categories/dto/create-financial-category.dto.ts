@@ -1,5 +1,5 @@
 import { IsString, IsEnum, IsOptional, IsUUID } from 'class-validator';
-import { TransactionType } from '@prisma/client';
+import { TransactionType } from '../../common/enums';
 
 export class CreateFinancialCategoryDto {
   @IsString({ message: 'Nome deve ser uma string' })

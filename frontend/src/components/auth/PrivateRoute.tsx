@@ -14,7 +14,7 @@ export function PrivateRoute({ children }: PrivateRouteProps) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--bg-primary)]">
         <div className="text-center">
-          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-[#C8923A] border-t-transparent" />
           <p className="mt-4 text-[var(--text-muted)]">Carregando...</p>
         </div>
       </div>

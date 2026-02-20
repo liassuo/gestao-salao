@@ -141,20 +141,20 @@ export function Orders() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600"><ClipboardList className="h-5 w-5 text-white" /></div>
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#8B6914]"><ClipboardList className="h-5 w-5 text-white" /></div>
           <div>
             <h1 className="text-2xl font-bold text-[var(--text-primary)]">Comandas</h1>
             <p className="text-sm text-[var(--text-muted)]">Gerenciamento de comandas</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as OrderStatus | '')} className="rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-blue-500 focus:outline-none">
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as OrderStatus | '')} className="rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[#C8923A] focus:outline-none">
             <option value="">Todos os status</option>
             <option value="PENDING">Pendente</option>
             <option value="PAID">Pago</option>
             <option value="CANCELED">Cancelado</option>
           </select>
-          <button onClick={() => { setCreateClientId(''); setCreateNotes(''); setIsCreateModalOpen(true); }} className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 font-medium text-white transition-colors hover:bg-blue-700">
+          <button onClick={() => { setCreateClientId(''); setCreateNotes(''); setIsCreateModalOpen(true); }} className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-4 py-2.5 font-medium text-white transition-colors hover:bg-[#725510]">
             <Plus className="h-4 w-4" /> Nova Comanda
           </button>
         </div>
@@ -162,9 +162,9 @@ export function Orders() {
 
       <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6 backdrop-blur-sm">
         {isLoading ? (
-          <div className="flex justify-center py-12"><div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" /></div>
+          <div className="flex justify-center py-12"><div className="h-8 w-8 animate-spin rounded-full border-2 border-[#C8923A] border-t-transparent" /></div>
         ) : error ? (
-          <div className="flex items-center gap-2 text-red-400"><AlertCircle className="h-5 w-5" /><span>Erro ao carregar comandas</span></div>
+          <div className="flex items-center gap-2 text-[#C45050]"><AlertCircle className="h-5 w-5" /><span>Erro ao carregar comandas</span></div>
         ) : !orders?.length ? (
           <div className="flex flex-col items-center justify-center py-12 text-[var(--text-muted)]">
             <ClipboardList className="h-12 w-12 mb-3 opacity-50" /><p>Nenhuma comanda encontrada</p>
@@ -196,14 +196,14 @@ export function Orders() {
                     <td className="px-4 py-3 text-[var(--text-muted)]">{new Date(order.createdAt).toLocaleString('pt-BR')}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => setViewingOrder(order)} className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-blue-400"><Eye className="h-4 w-4" /></button>
+                        <button onClick={() => setViewingOrder(order)} className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-[#D4A85C]"><Eye className="h-4 w-4" /></button>
                         {order.status === 'PENDING' && (
                           <>
                             <button onClick={() => openPayModal(order.id)} className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-green-400"><CreditCard className="h-4 w-4" /></button>
                             <button onClick={() => handleCancel(order.id)} className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-yellow-400"><XCircle className="h-4 w-4" /></button>
                           </>
                         )}
-                        <button onClick={() => setDeletingOrder(order)} className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-red-400"><Trash2 className="h-4 w-4" /></button>
+                        <button onClick={() => setDeletingOrder(order)} className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-[#C45050]"><Trash2 className="h-4 w-4" /></button>
                       </div>
                     </td>
                   </tr>
@@ -222,7 +222,7 @@ export function Orders() {
             <select
               value={createClientId}
               onChange={(e) => setCreateClientId(e.target.value)}
-              className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[#C8923A] focus:outline-none"
             >
               <option value="">Sem cliente</option>
               {clients?.map((c) => (
@@ -237,12 +237,12 @@ export function Orders() {
               onChange={(e) => setCreateNotes(e.target.value)}
               rows={2}
               placeholder="Observacoes sobre a comanda..."
-              className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[#C8923A] focus:outline-none"
             />
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <button onClick={() => setIsCreateModalOpen(false)} className="rounded-xl border border-[var(--card-border)] px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]">Cancelar</button>
-            <button onClick={handleCreate} disabled={createOrder.isPending} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+            <button onClick={handleCreate} disabled={createOrder.isPending} className="rounded-xl bg-[#8B6914] px-4 py-2 text-sm font-medium text-white hover:bg-[#725510] disabled:opacity-50">
               {createOrder.isPending ? 'Criando...' : 'Criar Comanda'}
             </button>
           </div>
@@ -267,7 +267,7 @@ export function Orders() {
                 {viewingOrder.status === 'PENDING' && (
                   <button
                     onClick={() => { resetAddItemForm(); setIsAddItemOpen(true); }}
-                    className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+                    className="flex items-center gap-1.5 rounded-lg bg-[#8B6914] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#725510]"
                   >
                     <Plus className="h-3.5 w-3.5" /> Adicionar Item
                   </button>
@@ -287,7 +287,7 @@ export function Orders() {
                   {viewingOrder.items.map((item) => (
                     <div key={item.id} className="flex items-center justify-between rounded-xl border border-[var(--card-border)] p-3">
                       <div className="flex items-center gap-3">
-                        <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${item.itemType === 'PRODUCT' ? 'bg-purple-500/20 text-purple-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                        <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${item.itemType === 'PRODUCT' ? 'bg-purple-500/20 text-purple-400' : 'bg-[#C8923A]/20 text-[#D4A85C]'}`}>
                           {item.itemType === 'PRODUCT' ? <Package className="h-4 w-4" /> : <Scissors className="h-4 w-4" />}
                         </div>
                         <div>
@@ -300,7 +300,7 @@ export function Orders() {
                         {viewingOrder.status === 'PENDING' && (
                           <button
                             onClick={() => handleRemoveItem(item.id)}
-                            className="rounded-lg p-1 text-[var(--text-muted)] hover:bg-red-500/20 hover:text-red-400"
+                            className="rounded-lg p-1 text-[var(--text-muted)] hover:bg-red-500/20 hover:text-[#C45050]"
                           >
                             <X className="h-4 w-4" />
                           </button>
@@ -348,7 +348,7 @@ export function Orders() {
               </button>
               <button
                 onClick={() => { setItemType('SERVICE'); setSelectedProductId(''); }}
-                className={`flex-1 flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors ${itemType === 'SERVICE' ? 'border-blue-500 bg-blue-500/20 text-blue-400' : 'border-[var(--card-border)] text-[var(--text-muted)] hover:bg-[var(--hover-bg)]'}`}
+                className={`flex-1 flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors ${itemType === 'SERVICE' ? 'border-[#C8923A] bg-[#C8923A]/20 text-[#D4A85C]' : 'border-[var(--card-border)] text-[var(--text-muted)] hover:bg-[var(--hover-bg)]'}`}
               >
                 <Scissors className="h-4 w-4" /> Servico
               </button>
@@ -362,7 +362,7 @@ export function Orders() {
               <select
                 value={selectedProductId}
                 onChange={(e) => setSelectedProductId(e.target.value)}
-                className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[#C8923A] focus:outline-none"
               >
                 <option value="">Selecione um produto</option>
                 {products?.filter((p) => p.isActive !== false).map((p) => (
@@ -376,7 +376,7 @@ export function Orders() {
               <select
                 value={selectedServiceId}
                 onChange={(e) => setSelectedServiceId(e.target.value)}
-                className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[#C8923A] focus:outline-none"
               >
                 <option value="">Selecione um servico</option>
                 {services?.filter((s) => s.isActive !== false).map((s) => (
@@ -394,7 +394,7 @@ export function Orders() {
               min={1}
               value={itemQuantity}
               onChange={(e) => setItemQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-              className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[#C8923A] focus:outline-none"
             />
           </div>
 
@@ -414,7 +414,7 @@ export function Orders() {
             <button
               onClick={handleAddItem}
               disabled={addOrderItem.isPending || (itemType === 'PRODUCT' ? !selectedProductId : !selectedServiceId)}
-              className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              className="rounded-xl bg-[#8B6914] px-4 py-2 text-sm font-medium text-white hover:bg-[#725510] disabled:opacity-50"
             >
               {addOrderItem.isPending ? 'Adicionando...' : 'Adicionar'}
             </button>
@@ -436,7 +436,7 @@ export function Orders() {
             </button>
             <button
               onClick={() => setPaymentMethod('PIX')}
-              className={`flex flex-col items-center gap-2 rounded-xl border p-4 transition-colors ${paymentMethod === 'PIX' ? 'border-blue-500 bg-blue-500/20 text-blue-400' : 'border-[var(--card-border)] text-[var(--text-muted)] hover:bg-[var(--hover-bg)]'}`}
+              className={`flex flex-col items-center gap-2 rounded-xl border p-4 transition-colors ${paymentMethod === 'PIX' ? 'border-[#C8923A] bg-[#C8923A]/20 text-[#D4A85C]' : 'border-[var(--card-border)] text-[var(--text-muted)] hover:bg-[var(--hover-bg)]'}`}
             >
               <Smartphone className="h-6 w-6" />
               <span className="text-xs font-medium">PIX</span>

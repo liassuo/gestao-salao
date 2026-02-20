@@ -59,9 +59,9 @@ function formatCurrency(value: number): string {
 }
 
 const statusColors: Record<string, { bg: string; border: string; text: string }> = {
-  SCHEDULED: { bg: 'bg-blue-500/20', border: 'border-blue-500/40', text: 'text-blue-400' },
+  SCHEDULED: { bg: 'bg-[#C8923A]/20', border: 'border-[#C8923A]/40', text: 'text-[#D4A85C]' },
   ATTENDED: { bg: 'bg-emerald-500/20', border: 'border-emerald-500/40', text: 'text-emerald-400' },
-  CANCELLED: { bg: 'bg-red-500/15', border: 'border-red-500/30', text: 'text-red-400' },
+  CANCELLED: { bg: 'bg-red-500/15', border: 'border-[#A63030]/30', text: 'text-[#C45050]' },
   NO_SHOW: { bg: 'bg-amber-500/15', border: 'border-amber-500/30', text: 'text-amber-400' },
 };
 
@@ -137,7 +137,7 @@ function TimeBlockItem({ block, onDelete, isDeleting }: TimeBlockItemProps) {
 
   return (
     <div
-      className="group absolute left-1 right-1 overflow-hidden rounded-lg border border-red-500/30 bg-red-500/10 px-2 py-1 backdrop-blur-sm"
+      className="group absolute left-1 right-1 overflow-hidden rounded-lg border border-[#A63030]/30 bg-red-500/10 px-2 py-1 backdrop-blur-sm"
       style={{
         top: `${top}px`,
         height: `${Math.max(height, SLOT_HEIGHT)}px`,
@@ -148,15 +148,15 @@ function TimeBlockItem({ block, onDelete, isDeleting }: TimeBlockItemProps) {
     >
       <div className="flex h-full items-start justify-between">
         <div className="flex min-w-0 flex-col overflow-hidden">
-          <div className="flex items-center gap-1 truncate text-xs font-medium text-red-400">
+          <div className="flex items-center gap-1 truncate text-xs font-medium text-[#C45050]">
             <Lock className="h-2.5 w-2.5 shrink-0" />
             Bloqueado
           </div>
           {height >= 40 && block.reason && (
-            <div className="truncate text-[10px] text-red-400/70">{block.reason}</div>
+            <div className="truncate text-[10px] text-[#C45050]/70">{block.reason}</div>
           )}
           {height >= 60 && (
-            <div className="mt-auto text-[10px] text-red-400/60">
+            <div className="mt-auto text-[10px] text-[#C45050]/60">
               {startTime} - {endTime}
             </div>
           )}
@@ -167,7 +167,7 @@ function TimeBlockItem({ block, onDelete, isDeleting }: TimeBlockItemProps) {
             onDelete(block.id);
           }}
           disabled={isDeleting}
-          className="shrink-0 rounded p-0.5 text-red-400/60 opacity-0 transition-opacity hover:bg-red-500/20 hover:text-red-400 group-hover:opacity-100"
+          className="shrink-0 rounded p-0.5 text-[#C45050]/60 opacity-0 transition-opacity hover:bg-red-500/20 hover:text-[#C45050] group-hover:opacity-100"
           title="Remover bloqueio"
         >
           <Trash2 className="h-3 w-3" />
@@ -206,8 +206,8 @@ function CurrentTimeLine({ isToday }: CurrentTimeLineProps) {
       style={{ top: `${top}px` }}
     >
       <div className="flex items-center">
-        <div className="h-2.5 w-2.5 rounded-full bg-blue-500" />
-        <div className="h-[2px] flex-1 bg-blue-500" />
+        <div className="h-2.5 w-2.5 rounded-full bg-[#C8923A]" />
+        <div className="h-[2px] flex-1 bg-[#C8923A]" />
       </div>
     </div>
   );
@@ -272,12 +272,12 @@ export function CalendarView() {
 
   if (isError) {
     return (
-      <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-6">
+      <div className="rounded-xl border border-[#A63030]/30 bg-red-500/10 p-6">
         <div className="flex items-center gap-3">
-          <AlertCircle className="h-6 w-6 text-red-500" />
+          <AlertCircle className="h-6 w-6 text-[#A63030]" />
           <div>
-            <h3 className="font-medium text-red-500">Erro ao carregar calendario</h3>
-            <p className="text-sm text-red-400">
+            <h3 className="font-medium text-[#A63030]">Erro ao carregar calendario</h3>
+            <p className="text-sm text-[#C45050]">
               {error instanceof Error ? error.message : 'Ocorreu um erro inesperado. Tente novamente.'}
             </p>
           </div>
@@ -313,7 +313,7 @@ export function CalendarView() {
             onClick={handleToday}
             className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
               isToday
-                ? 'bg-blue-600 text-white'
+                ? 'bg-[#8B6914] text-white'
                 : 'border border-[var(--card-border)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
             }`}
           >
@@ -326,7 +326,7 @@ export function CalendarView() {
 
         <button
           onClick={handleOpenBlockModal}
-          className="flex items-center gap-2 rounded-lg border border-red-500/30 px-3 py-1.5 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/10"
+          className="flex items-center gap-2 rounded-lg border border-[#A63030]/30 px-3 py-1.5 text-sm font-medium text-[#C45050] transition-colors hover:bg-red-500/10"
         >
           <Lock className="h-4 w-4" />
           Bloquear Horario
@@ -355,7 +355,7 @@ export function CalendarView() {
                 key={prof.id}
                 className="flex min-w-[180px] flex-1 items-center justify-center gap-2 border-r border-[var(--card-border)] bg-[var(--bg-primary)] px-3 py-3 last:border-r-0"
               >
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-500/20 text-xs font-bold text-blue-400">
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#C8923A]/20 text-xs font-bold text-[#D4A85C]">
                   {prof.name.charAt(0).toUpperCase()}
                 </div>
                 <div className="min-w-0">
@@ -426,7 +426,7 @@ export function CalendarView() {
           <div className="flex flex-wrap items-center gap-4 border-t border-[var(--card-border)] bg-[var(--bg-primary)] px-4 py-2.5">
             <span className="text-xs text-[var(--text-muted)]">Legenda:</span>
             <div className="flex items-center gap-1.5">
-              <div className="h-3 w-3 rounded border border-blue-500/40 bg-blue-500/20" />
+              <div className="h-3 w-3 rounded border border-[#C8923A]/40 bg-[#C8923A]/20" />
               <span className="text-xs text-[var(--text-muted)]">Agendado</span>
             </div>
             <div className="flex items-center gap-1.5">
@@ -438,12 +438,12 @@ export function CalendarView() {
               <span className="text-xs text-[var(--text-muted)]">Faltou</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="h-3 w-3 rounded border border-red-500/30 bg-red-500/15" />
+              <div className="h-3 w-3 rounded border border-[#A63030]/30 bg-red-500/15" />
               <span className="text-xs text-[var(--text-muted)]">Cancelado</span>
             </div>
             <div className="flex items-center gap-1.5">
               <div
-                className="h-3 w-3 rounded border border-red-500/30 bg-red-500/10"
+                className="h-3 w-3 rounded border border-[#A63030]/30 bg-red-500/10"
                 style={{
                   backgroundImage:
                     'repeating-linear-gradient(135deg, transparent, transparent 2px, rgba(239, 68, 68, 0.15) 2px, rgba(239, 68, 68, 0.15) 4px)',

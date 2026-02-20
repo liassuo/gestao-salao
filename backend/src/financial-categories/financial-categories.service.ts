@@ -1,168 +1,130 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { SupabaseService } from '../supabase/supabase.service';
 import {
   CreateFinancialCategoryDto,
   UpdateFinancialCategoryDto,
   QueryFinancialCategoryDto,
 } from './dto';
-import { FinancialCategory } from '@prisma/client';
 
-/**
- * FinancialCategoriesService
- *
- * Gerencia categorias financeiras para classificar transacoes.
- *
- * Suporta hierarquia:
- * - Uma categoria pode ter uma categoria pai (parentId)
- * - Uma categoria pode ter multiplas subcategorias (children)
- *
- * Exemplos:
- * - EXPENSE > Salarios
- * - EXPENSE > Produtos > Shampoo
- * - REVENUE > Servicos > Corte
- */
 @Injectable()
 export class FinancialCategoriesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly supabase: SupabaseService) {}
 
-  /**
-   * Cria uma nova categoria financeira
-   *
-   * Se parentId fornecido, valida que a categoria pai existe
-   */
-  async create(dto: CreateFinancialCategoryDto): Promise<FinancialCategory> {
-    // Se tem parentId, verificar se a categoria pai existe
+  async create(dto: CreateFinancialCategoryDto) {
     if (dto.parentId) {
-      const parent = await this.prisma.financialCategory.findUnique({
-        where: { id: dto.parentId },
-      });
+      const { data: parent } = await this.supabase
+        .from('financial_categories')
+        .select('id')
+        .eq('id', dto.parentId)
+        .single();
 
       if (!parent) {
         throw new NotFoundException('Categoria pai não encontrada');
       }
     }
 
-    return this.prisma.financialCategory.create({
-      data: {
+    const { data: category, error } = await this.supabase
+      .from('financial_categories')
+      .insert({
         name: dto.name,
         type: dto.type,
-        parentId: dto.parentId,
-      },
-      include: {
-        parent: true,
-        children: true,
-      },
-    });
+        parent_id: dto.parentId,
+      })
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return category;
   }
 
-  /**
-   * Lista todas as categorias financeiras com filtros opcionais
-   *
-   * Filtros disponiveis:
-   * - type: EXPENSE ou REVENUE
-   * - parentId: UUID da categoria pai
-   * - isActive: 'true' ou 'false' (string do query param)
-   */
-  async findAll(query: QueryFinancialCategoryDto): Promise<FinancialCategory[]> {
-    const where: Record<string, unknown> = {};
+  async findAll(query: QueryFinancialCategoryDto) {
+    let queryBuilder = this.supabase.from('financial_categories').select('*');
 
     if (query.type) {
-      where.type = query.type;
+      queryBuilder = queryBuilder.eq('type', query.type);
     }
 
     if (query.parentId) {
-      where.parentId = query.parentId;
+      queryBuilder = queryBuilder.eq('parent_id', query.parentId);
     }
 
     if (query.isActive !== undefined) {
-      where.isActive = query.isActive === 'true';
+      queryBuilder = queryBuilder.eq('is_active', query.isActive === 'true');
     }
 
-    return this.prisma.financialCategory.findMany({
-      where,
-      include: {
-        parent: true,
-        children: true,
-      },
-      orderBy: { name: 'asc' },
-    });
+    const { data: categories, error } = await queryBuilder.order('name', { ascending: true });
+
+    if (error) throw error;
+    return categories || [];
   }
 
-  /**
-   * Busca uma categoria financeira pelo ID
-   * Inclui categoria pai e subcategorias
-   */
-  async findOne(id: string): Promise<FinancialCategory> {
-    const category = await this.prisma.financialCategory.findUnique({
-      where: { id },
-      include: {
-        parent: true,
-        children: true,
-      },
-    });
+  async findOne(id: string) {
+    const { data: category, error } = await this.supabase
+      .from('financial_categories')
+      .select('*')
+      .eq('id', id)
+      .single();
 
-    if (!category) {
+    if (error || !category) {
       throw new NotFoundException('Categoria financeira não encontrada');
     }
 
     return category;
   }
 
-  /**
-   * Atualiza uma categoria financeira
-   */
-  async update(
-    id: string,
-    dto: UpdateFinancialCategoryDto,
-  ): Promise<FinancialCategory> {
-    const category = await this.prisma.financialCategory.findUnique({
-      where: { id },
-    });
+  async update(id: string, dto: UpdateFinancialCategoryDto) {
+    const { data: category, error: findError } = await this.supabase
+      .from('financial_categories')
+      .select('id')
+      .eq('id', id)
+      .single();
 
-    if (!category) {
+    if (findError || !category) {
       throw new NotFoundException('Categoria financeira não encontrada');
     }
 
-    // Se esta atualizando o parentId, verificar se a categoria pai existe
     if (dto.parentId) {
-      const parent = await this.prisma.financialCategory.findUnique({
-        where: { id: dto.parentId },
-      });
+      const { data: parent } = await this.supabase
+        .from('financial_categories')
+        .select('id')
+        .eq('id', dto.parentId)
+        .single();
 
       if (!parent) {
         throw new NotFoundException('Categoria pai não encontrada');
       }
     }
 
-    return this.prisma.financialCategory.update({
-      where: { id },
-      data: {
-        name: dto.name,
-        type: dto.type,
-        isActive: dto.isActive,
-        parentId: dto.parentId,
-      },
-      include: {
-        parent: true,
-        children: true,
-      },
-    });
+    const updateData: any = {};
+    if (dto.name !== undefined) updateData.name = dto.name;
+    if (dto.type !== undefined) updateData.type = dto.type;
+    if (dto.isActive !== undefined) updateData.is_active = dto.isActive;
+    if (dto.parentId !== undefined) updateData.parent_id = dto.parentId;
+
+    const { data: updated, error } = await this.supabase
+      .from('financial_categories')
+      .update(updateData)
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return updated;
   }
 
-  /**
-   * Remove uma categoria financeira
-   */
-  async remove(id: string): Promise<void> {
-    const category = await this.prisma.financialCategory.findUnique({
-      where: { id },
-    });
+  async remove(id: string) {
+    const { data: category, error: findError } = await this.supabase
+      .from('financial_categories')
+      .select('id')
+      .eq('id', id)
+      .single();
 
-    if (!category) {
+    if (findError || !category) {
       throw new NotFoundException('Categoria financeira não encontrada');
     }
 
-    await this.prisma.financialCategory.delete({
-      where: { id },
-    });
+    const { error } = await this.supabase.from('financial_categories').delete().eq('id', id);
+
+    if (error) throw error;
   }
 }

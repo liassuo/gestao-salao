@@ -1,4 +1,4 @@
-import { CommissionStatus } from '@prisma/client';
+import { CommissionStatus } from '../../common/enums';
 
 /**
  * Commission domain entity

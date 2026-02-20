@@ -47,14 +47,14 @@ export function ProductsTable({ products, onEdit, onDelete }: ProductsTableProps
               <td className="px-4 py-3 text-[var(--text-secondary)]">{formatCents(product.salePrice)}</td>
               <td className="px-4 py-3 text-[var(--text-secondary)]">{product.minStock}</td>
               <td className="px-4 py-3">
-                <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${product.isActive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${product.isActive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-[#C45050]'}`}>
                   {product.isActive ? 'Ativo' : 'Inativo'}
                 </span>
               </td>
               <td className="px-4 py-3 text-right">
                 <div className="flex items-center justify-end gap-2">
-                  <button onClick={() => onEdit(product)} className="rounded-lg p-1.5 text-[var(--text-muted)] transition-colors hover:bg-[var(--hover-bg)] hover:text-blue-400"><Pencil className="h-4 w-4" /></button>
-                  <button onClick={() => onDelete(product)} className="rounded-lg p-1.5 text-[var(--text-muted)] transition-colors hover:bg-[var(--hover-bg)] hover:text-red-400"><Trash2 className="h-4 w-4" /></button>
+                  <button onClick={() => onEdit(product)} className="rounded-lg p-1.5 text-[var(--text-muted)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[#D4A85C]"><Pencil className="h-4 w-4" /></button>
+                  <button onClick={() => onDelete(product)} className="rounded-lg p-1.5 text-[var(--text-muted)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[#C45050]"><Trash2 className="h-4 w-4" /></button>
                 </div>
               </td>
             </tr>

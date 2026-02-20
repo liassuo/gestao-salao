@@ -48,12 +48,12 @@ export function StrategicDashboard({ data, loading }: StrategicDashboardProps) {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-blue-500 shadow-lg shadow-blue-500/20">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#8B6914] to-[#C8923A] shadow-lg shadow-[#C8923A]/20">
                 <Calendar className="h-5 w-5 text-white" />
               </div>
               <div>
                 <p className="text-xs text-[var(--text-muted)]">Faturamento Anual</p>
-                <p className="text-xl font-bold text-blue-400">{formatCurrency(data.revenue.yearlyRevenue)}</p>
+                <p className="text-xl font-bold text-[#D4A85C]">{formatCurrency(data.revenue.yearlyRevenue)}</p>
               </div>
             </div>
           </div>

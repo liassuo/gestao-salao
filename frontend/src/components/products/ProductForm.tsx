@@ -61,41 +61,41 @@ export function ProductForm({ product, onSubmit, isLoading, error }: ProductForm
   return (
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
       {error && (
-        <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">{error}</div>
+        <div className="rounded-xl bg-red-500/10 border border-[#A63030]/20 px-4 py-3 text-sm text-[#C45050]">{error}</div>
       )}
       <div>
         <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">Nome *</label>
-        <input {...register('name', { required: 'Nome é obrigatório' })} className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Nome do produto" />
-        {errors.name && <p className="mt-1 text-xs text-red-400">{errors.name.message}</p>}
+        <input {...register('name', { required: 'Nome é obrigatório' })} className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[#C8923A] focus:outline-none" placeholder="Nome do produto" />
+        {errors.name && <p className="mt-1 text-xs text-[#C45050]">{errors.name.message}</p>}
       </div>
       <div>
         <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">Descrição</label>
-        <input {...register('description')} className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Descrição" />
+        <input {...register('description')} className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[#C8923A] focus:outline-none" placeholder="Descrição" />
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">Preço de Custo (R$) *</label>
-          <input value={costDisplay} onChange={(e) => { const f = formatCurrency(e.target.value); setCostDisplay(f); setValue('costPrice', e.target.value); }} className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="0,00" />
+          <input value={costDisplay} onChange={(e) => { const f = formatCurrency(e.target.value); setCostDisplay(f); setValue('costPrice', e.target.value); }} className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[#C8923A] focus:outline-none" placeholder="0,00" />
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">Preço de Venda (R$) *</label>
-          <input value={saleDisplay} onChange={(e) => { const f = formatCurrency(e.target.value); setSaleDisplay(f); setValue('salePrice', e.target.value); }} className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="0,00" />
+          <input value={saleDisplay} onChange={(e) => { const f = formatCurrency(e.target.value); setSaleDisplay(f); setValue('salePrice', e.target.value); }} className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[#C8923A] focus:outline-none" placeholder="0,00" />
         </div>
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">Estoque Mínimo</label>
-          <input type="number" {...register('minStock', { valueAsNumber: true })} className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="0" />
+          <input type="number" {...register('minStock', { valueAsNumber: true })} className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[#C8923A] focus:outline-none" placeholder="0" />
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">Filial</label>
-          <select {...register('branchId')} className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-blue-500 focus:outline-none">
+          <select {...register('branchId')} className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[#C8923A] focus:outline-none">
             <option value="">Todas</option>
             {branches?.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
         </div>
       </div>
-      <button type="submit" disabled={isLoading} className="w-full rounded-xl bg-blue-600 px-4 py-2.5 font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50">
+      <button type="submit" disabled={isLoading} className="w-full rounded-xl bg-[#8B6914] px-4 py-2.5 font-medium text-white transition-colors hover:bg-[#725510] disabled:opacity-50">
         {isLoading ? 'Salvando...' : isEditing ? 'Atualizar' : 'Criar Produto'}
       </button>
     </form>

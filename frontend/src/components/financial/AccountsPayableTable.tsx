@@ -92,7 +92,7 @@ export function AccountsPayableTable({ transactions, onMarkAsPaid, onDelete, isL
                     <button
                       onClick={() => onDelete(transaction)}
                       disabled={isLoading}
-                      className="rounded-lg p-1.5 text-red-500 hover:bg-red-500/10 disabled:opacity-50"
+                      className="rounded-lg p-1.5 text-[#A63030] hover:bg-red-500/10 disabled:opacity-50"
                       title="Excluir"
                     >
                       <Trash2 className="h-4 w-4" />

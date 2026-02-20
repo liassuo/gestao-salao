@@ -33,8 +33,8 @@ export function OpenCashRegisterForm({
   return (
     <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6">
       <div className="mb-6 flex items-center gap-3">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-500/20">
-          <Wallet className="h-6 w-6 text-blue-500" />
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#C8923A]/20">
+          <Wallet className="h-6 w-6 text-[#C8923A]" />
         </div>
         <div>
           <h2 className="text-lg font-semibold text-[var(--text-primary)]">Abrir Caixa</h2>
@@ -46,7 +46,7 @@ export function OpenCashRegisterForm({
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <div className="flex items-center gap-2 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-500">
+          <div className="flex items-center gap-2 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-[#A63030]">
             <AlertCircle className="h-4 w-4 flex-shrink-0" />
             {error}
           </div>
@@ -73,7 +73,7 @@ export function OpenCashRegisterForm({
                 setOpeningBalanceReais(value);
               }}
               placeholder="0,00"
-              className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] py-2.5 pl-10 pr-3 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] py-2.5 pl-10 pr-3 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[#C8923A] focus:outline-none focus:ring-1 focus:ring-[#C8923A]"
               autoFocus
             />
           </div>
@@ -96,7 +96,7 @@ export function OpenCashRegisterForm({
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Observações sobre a abertura do caixa..."
             rows={3}
-            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[#C8923A] focus:outline-none focus:ring-1 focus:ring-[#C8923A]"
           />
         </div>
 
@@ -104,7 +104,7 @@ export function OpenCashRegisterForm({
         <button
           type="submit"
           disabled={isLoading}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#8B6914] px-4 py-3 font-medium text-white transition-colors hover:bg-[#725510] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
           {isLoading ? 'Abrindo Caixa...' : 'Abrir Caixa'}

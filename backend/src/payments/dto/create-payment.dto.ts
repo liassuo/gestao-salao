@@ -7,7 +7,7 @@ import {
   IsString,
   IsDateString,
 } from 'class-validator';
-import { PaymentMethod } from '@prisma/client';
+import { PaymentMethod } from '../../common/enums';
 
 export class CreatePaymentDto {
   @IsUUID()

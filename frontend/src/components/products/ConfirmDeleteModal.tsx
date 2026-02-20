@@ -23,7 +23,7 @@ export function ConfirmDeleteModal({ product, isOpen, isLoading, onConfirm, onCl
         </div>
         <div className="flex justify-end gap-3">
           <button onClick={onClose} className="rounded-xl border border-[var(--card-border)] px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]">Cancelar</button>
-          <button onClick={onConfirm} disabled={isLoading} className="rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50">{isLoading ? 'Desativando...' : 'Desativar'}</button>
+          <button onClick={onConfirm} disabled={isLoading} className="rounded-xl bg-[#8B2020] px-4 py-2 text-sm font-medium text-white hover:bg-[#6B1818] disabled:opacity-50">{isLoading ? 'Desativando...' : 'Desativar'}</button>
         </div>
       </div>
     </Modal>

@@ -25,7 +25,7 @@ export function CommissionFilters({ filters, onChange, onGenerate, isGenerating 
           id="commStartDate"
           value={filters.startDate || ''}
           onChange={(e) => onChange({ ...filters, startDate: e.target.value || undefined })}
-          className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 border-[var(--border-color)]"
+          className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] border-[var(--border-color)]"
         />
       </div>
 
@@ -39,7 +39,7 @@ export function CommissionFilters({ filters, onChange, onGenerate, isGenerating 
           id="commEndDate"
           value={filters.endDate || ''}
           onChange={(e) => onChange({ ...filters, endDate: e.target.value || undefined })}
-          className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 border-[var(--border-color)]"
+          className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] border-[var(--border-color)]"
         />
       </div>
 
@@ -52,7 +52,7 @@ export function CommissionFilters({ filters, onChange, onGenerate, isGenerating 
           id="commProfessional"
           value={filters.professionalId || ''}
           onChange={(e) => onChange({ ...filters, professionalId: e.target.value || undefined })}
-          className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 border-[var(--border-color)]"
+          className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] border-[var(--border-color)]"
         >
           <option value="">Todos os profissionais</option>
           {professionals?.map((prof) => (
@@ -72,7 +72,7 @@ export function CommissionFilters({ filters, onChange, onGenerate, isGenerating 
           id="commBranch"
           value={filters.branchId || ''}
           onChange={(e) => onChange({ ...filters, branchId: e.target.value || undefined })}
-          className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 border-[var(--border-color)]"
+          className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] border-[var(--border-color)]"
         >
           <option value="">Todas as filiais</option>
           {branches?.map((branch) => (

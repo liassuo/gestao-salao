@@ -101,7 +101,7 @@ export function BlockTimeModal({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[var(--border-color)] px-6 py-4">
           <div className="flex items-center gap-2">
-            <Lock className="h-5 w-5 text-red-400" />
+            <Lock className="h-5 w-5 text-[#C45050]" />
             <h2 className="text-lg font-semibold text-[var(--text-primary)]">
               Bloquear Horario
             </h2>
@@ -117,7 +117,7 @@ export function BlockTimeModal({
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4 px-6 py-4">
           {formError && (
-            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-400">
+            <div className="rounded-lg border border-[#A63030]/30 bg-red-500/10 px-3 py-2 text-sm text-[#C45050]">
               {formError}
             </div>
           )}
@@ -130,7 +130,7 @@ export function BlockTimeModal({
             <select
               value={professionalId}
               onChange={(e) => setProfessionalId(e.target.value)}
-              className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none transition-colors focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none transition-colors focus:border-[#C8923A] focus:ring-1 focus:ring-[#C8923A]"
             >
               <option value="">Selecione...</option>
               {professionals.map((prof) => (
@@ -164,7 +164,7 @@ export function BlockTimeModal({
                 type="time"
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
-                className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none transition-colors focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none transition-colors focus:border-[#C8923A] focus:ring-1 focus:ring-[#C8923A]"
               />
             </div>
             <div>
@@ -175,7 +175,7 @@ export function BlockTimeModal({
                 type="time"
                 value={endTime}
                 onChange={(e) => setEndTime(e.target.value)}
-                className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none transition-colors focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none transition-colors focus:border-[#C8923A] focus:ring-1 focus:ring-[#C8923A]"
               />
             </div>
           </div>
@@ -190,7 +190,7 @@ export function BlockTimeModal({
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Ex: Almoco, Reuniao, Folga..."
-              className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none transition-colors placeholder:text-[var(--text-muted)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none transition-colors placeholder:text-[var(--text-muted)] focus:border-[#C8923A] focus:ring-1 focus:ring-[#C8923A]"
             />
           </div>
 
@@ -206,7 +206,7 @@ export function BlockTimeModal({
             <button
               type="submit"
               disabled={createTimeBlock.isPending}
-              className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-[#8B2020] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#6B1818] disabled:opacity-50"
             >
               {createTimeBlock.isPending ? (
                 <>

@@ -12,9 +12,9 @@ export function PlansStatsCard({ activePlans, soldThisMonth, canceledThisMonth }
       label: 'Planos Ativos',
       value: activePlans,
       icon: CreditCard,
-      color: 'from-blue-600 to-blue-500',
-      shadowColor: 'shadow-blue-500/20',
-      textColor: 'text-blue-400',
+      color: 'from-[#8B6914] to-[#C8923A]',
+      shadowColor: 'shadow-[#C8923A]/20',
+      textColor: 'text-[#D4A85C]',
     },
     {
       label: 'Vendidos no Mês',
@@ -28,9 +28,9 @@ export function PlansStatsCard({ activePlans, soldThisMonth, canceledThisMonth }
       label: 'Cancelados no Mês',
       value: canceledThisMonth,
       icon: TrendingDown,
-      color: canceledThisMonth > 0 ? 'from-red-600 to-red-500' : 'from-zinc-600 to-zinc-500',
-      shadowColor: canceledThisMonth > 0 ? 'shadow-red-500/20' : 'shadow-zinc-500/20',
-      textColor: canceledThisMonth > 0 ? 'text-red-400' : 'text-[var(--text-muted)]',
+      color: canceledThisMonth > 0 ? 'from-[#8B2020] to-[#A63030]' : 'from-[#5C4530] to-[#6B5540]',
+      shadowColor: canceledThisMonth > 0 ? 'shadow-[#8B2020]/20' : 'shadow-zinc-500/20',
+      textColor: canceledThisMonth > 0 ? 'text-[#C45050]' : 'text-[var(--text-muted)]',
     },
   ];
 

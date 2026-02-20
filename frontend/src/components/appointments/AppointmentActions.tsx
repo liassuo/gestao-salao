@@ -59,7 +59,7 @@ export function AppointmentActions({
         <button
           onClick={() => setIsOpen(!isOpen)}
           disabled={disabled || isLoading}
-          className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Ações do agendamento"
         >
           <MoreVertical className="h-5 w-5" />
@@ -80,7 +80,7 @@ export function AppointmentActions({
                 disabled={isLoading}
                 className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] disabled:opacity-50"
               >
-                <Check className="h-4 w-4 text-blue-500" />
+                <Check className="h-4 w-4 text-[#C8923A]" />
                 Marcar Atendido
               </button>
 
@@ -89,14 +89,14 @@ export function AppointmentActions({
                 disabled={isLoading}
                 className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] disabled:opacity-50"
               >
-                <UserX className="h-4 w-4 text-red-500" />
+                <UserX className="h-4 w-4 text-[#A63030]" />
                 Não Compareceu
               </button>
 
               <button
                 onClick={handleCancelClick}
                 disabled={isLoading}
-                className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-red-500 hover:bg-red-500/10 disabled:opacity-50"
+                className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[#A63030] hover:bg-red-500/10 disabled:opacity-50"
               >
                 <X className="h-4 w-4" />
                 Cancelar

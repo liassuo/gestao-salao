@@ -33,8 +33,8 @@ export function OperationalDashboard({
       value: stats?.todayAppointments ?? '-',
       subValue: stats?.pendingAppointments ? `${stats.pendingAppointments} pendentes` : null,
       icon: Calendar,
-      color: 'from-blue-600 to-blue-500',
-      shadowColor: 'shadow-blue-500/20',
+      color: 'from-[#8B6914] to-[#C8923A]',
+      shadowColor: 'shadow-[#C8923A]/20',
     },
     {
       label: 'Receita do Dia',
@@ -49,16 +49,16 @@ export function OperationalDashboard({
       value: stats?.activeClients ?? '-',
       subValue: stats ? `Total: ${stats.totalClients}` : null,
       icon: Users,
-      color: 'from-blue-600 to-blue-500',
-      shadowColor: 'shadow-blue-500/20',
+      color: 'from-[#8B6914] to-[#C8923A]',
+      shadowColor: 'shadow-[#C8923A]/20',
     },
     {
       label: 'Dívidas Pendentes',
       value: stats ? formatCurrency(stats.totalDebts) : '-',
       subValue: stats?.clientsWithDebts ? `${stats.clientsWithDebts} clientes` : null,
       icon: AlertCircle,
-      color: stats && stats.totalDebts > 0 ? 'from-red-600 to-red-500' : 'from-zinc-600 to-zinc-500',
-      shadowColor: stats && stats.totalDebts > 0 ? 'shadow-red-500/20' : 'shadow-zinc-500/20',
+      color: stats && stats.totalDebts > 0 ? 'from-[#8B2020] to-[#A63030]' : 'from-[#5C4530] to-[#6B5540]',
+      shadowColor: stats && stats.totalDebts > 0 ? 'shadow-[#8B2020]/20' : 'shadow-zinc-500/20',
     },
   ];
 
@@ -78,11 +78,11 @@ export function OperationalDashboard({
   const getActivityColor = (type: string) => {
     switch (type) {
       case 'payment':
-        return 'bg-blue-500/20 text-blue-500';
+        return 'bg-[#C8923A]/20 text-[#C8923A]';
       case 'appointment':
-        return 'bg-blue-500/20 text-blue-500';
+        return 'bg-[#C8923A]/20 text-[#C8923A]';
       case 'debt':
-        return 'bg-red-500/20 text-red-500';
+        return 'bg-red-500/20 text-[#A63030]';
       default:
         return 'bg-zinc-500/20 text-[var(--text-muted)]';
     }
@@ -139,8 +139,8 @@ export function OperationalDashboard({
       {/* Revenue Change Indicator */}
       {stats && stats.revenueChange !== 0 && (
         <div className="mt-4 flex items-center gap-2 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] p-4 backdrop-blur-sm transition-colors duration-200">
-          <TrendingUp className={`h-5 w-5 ${stats.revenueChange >= 0 ? 'text-blue-500' : 'text-red-500 rotate-180'}`} />
-          <span className={`font-medium ${stats.revenueChange >= 0 ? 'text-blue-500' : 'text-red-500'}`}>
+          <TrendingUp className={`h-5 w-5 ${stats.revenueChange >= 0 ? 'text-[#C8923A]' : 'text-[#A63030] rotate-180'}`} />
+          <span className={`font-medium ${stats.revenueChange >= 0 ? 'text-[#C8923A]' : 'text-[#A63030]'}`}>
             {stats.revenueChange >= 0 ? '+' : ''}{stats.revenueChange}%
           </span>
           <span className="text-[var(--text-muted)]">comparado ao mês anterior</span>
@@ -168,7 +168,7 @@ export function OperationalDashboard({
                   className="flex items-center justify-between rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-3 transition-colors hover:bg-[var(--hover-bg)]"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/20 text-blue-500">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#C8923A]/20 text-[#C8923A]">
                       <Clock className="h-5 w-5" />
                     </div>
                     <div>

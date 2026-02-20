@@ -18,22 +18,22 @@ const cards = [
     key: 'cash' as const,
     label: 'Dinheiro',
     icon: Banknote,
-    bgColor: 'bg-blue-500/20',
-    iconColor: 'text-blue-500',
+    bgColor: 'bg-[#C8923A]/20',
+    iconColor: 'text-[#C8923A]',
   },
   {
     key: 'pix' as const,
     label: 'PIX',
     icon: QrCode,
-    bgColor: 'bg-blue-500/20',
-    iconColor: 'text-blue-500',
+    bgColor: 'bg-[#C8923A]/20',
+    iconColor: 'text-[#C8923A]',
   },
   {
     key: 'card' as const,
     label: 'Cartão',
     icon: CreditCard,
-    bgColor: 'bg-blue-500/20',
-    iconColor: 'text-blue-500',
+    bgColor: 'bg-[#C8923A]/20',
+    iconColor: 'text-[#C8923A]',
   },
   {
     key: 'total' as const,
@@ -78,31 +78,31 @@ export function PaymentTotals({ totals, isLoading }: PaymentTotalsProps) {
             key={card.key}
             className={`rounded-xl border p-5 ${
               isTotal
-                ? 'border-blue-500/30 bg-blue-500/10'
+                ? 'border-[#C8923A]/30 bg-[#C8923A]/10'
                 : 'border-[var(--border-color)] bg-[var(--card-bg)]'
             }`}
           >
             <div className="flex items-center gap-4">
               <div
                 className={`flex h-12 w-12 items-center justify-center rounded-lg ${
-                  isTotal ? 'bg-blue-500/20' : card.bgColor
+                  isTotal ? 'bg-[#C8923A]/20' : card.bgColor
                 }`}
               >
                 <Icon
-                  className={`h-6 w-6 ${isTotal ? 'text-blue-500' : card.iconColor}`}
+                  className={`h-6 w-6 ${isTotal ? 'text-[#C8923A]' : card.iconColor}`}
                 />
               </div>
               <div>
                 <p
                   className={`text-sm ${
-                    isTotal ? 'text-blue-400' : 'text-[var(--text-muted)]'
+                    isTotal ? 'text-[#D4A85C]' : 'text-[var(--text-muted)]'
                   }`}
                 >
                   {card.label}
                 </p>
                 <p
                   className={`text-xl font-bold ${
-                    isTotal ? 'text-blue-500' : 'text-[var(--text-primary)]'
+                    isTotal ? 'text-[#C8923A]' : 'text-[var(--text-primary)]'
                   }`}
                 >
                   {formatCurrency(value)}

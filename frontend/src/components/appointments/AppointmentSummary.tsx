@@ -30,24 +30,24 @@ export function AppointmentSummary({ selectedServices }: AppointmentSummaryProps
   }
 
   return (
-    <div className="rounded-lg bg-blue-50 p-4">
-      <h4 className="mb-3 text-sm font-medium text-blue-900">Resumo</h4>
+    <div className="rounded-lg bg-[#C8923A]/10 p-4">
+      <h4 className="mb-3 text-sm font-medium text-[#8B6914]">Resumo</h4>
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm text-blue-700">
+          <div className="flex items-center gap-2 text-sm text-[#C8923A]">
             <Clock className="h-4 w-4" />
             <span>Duração total</span>
           </div>
-          <span className="font-medium text-blue-900">
+          <span className="font-medium text-[#8B6914]">
             {formatDuration(totalDuration)}
           </span>
         </div>
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm text-blue-700">
+          <div className="flex items-center gap-2 text-sm text-[#C8923A]">
             <DollarSign className="h-4 w-4" />
             <span>Valor total</span>
           </div>
-          <span className="text-lg font-bold text-blue-900">
+          <span className="text-lg font-bold text-[#8B6914]">
             {formatCurrency(totalPrice)}
           </span>
         </div>

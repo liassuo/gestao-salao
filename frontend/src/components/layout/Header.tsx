@@ -71,7 +71,7 @@ export function Header() {
           </button>
 
           <div className="flex items-center gap-3 border-l border-[var(--border-color)] pl-4">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-red-600 to-red-500 text-white shadow-lg shadow-red-600/20">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#8B2020] to-[#A63030] text-[#F2E8D5] shadow-lg shadow-[#8B2020]/20">
               <User className="h-5 w-5" />
             </div>
             <div className="hidden md:block">
@@ -85,7 +85,7 @@ export function Header() {
             <button
               onClick={handleLogout}
               title="Sair"
-              className="rounded-xl p-2.5 text-[var(--text-muted)] transition-all hover:bg-red-500/10 hover:text-red-400"
+              className="rounded-xl p-2.5 text-[var(--text-muted)] transition-all hover:bg-[#8B2020]/10 hover:text-[#A63030]"
             >
               <LogOut className="h-5 w-5" />
             </button>

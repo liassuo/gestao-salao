@@ -19,7 +19,7 @@ export function DashboardTabs({ activeTab, onTabChange }: DashboardTabsProps) {
           onClick={() => onTabChange(tab.key)}
           className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
             activeTab === tab.key
-              ? 'bg-blue-600 text-white'
+              ? 'bg-[#8B6914] text-white'
               : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--hover-bg)]'
           }`}
         >

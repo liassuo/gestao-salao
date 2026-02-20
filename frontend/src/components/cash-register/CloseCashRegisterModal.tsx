@@ -59,14 +59,14 @@ export function CloseCashRegisterModal({
   };
 
   const getDiscrepancyIcon = () => {
-    if (discrepancy > 0) return <TrendingUp className="h-5 w-5 text-blue-500" />;
-    if (discrepancy < 0) return <TrendingDown className="h-5 w-5 text-red-500" />;
+    if (discrepancy > 0) return <TrendingUp className="h-5 w-5 text-[#C8923A]" />;
+    if (discrepancy < 0) return <TrendingDown className="h-5 w-5 text-[#A63030]" />;
     return <Minus className="h-5 w-5 text-[var(--text-muted)]" />;
   };
 
   const getDiscrepancyColor = () => {
-    if (discrepancy > 0) return 'text-blue-500 bg-blue-500/20';
-    if (discrepancy < 0) return 'text-red-500 bg-red-500/20';
+    if (discrepancy > 0) return 'text-[#C8923A] bg-[#C8923A]/20';
+    if (discrepancy < 0) return 'text-[#A63030] bg-red-500/20';
     return 'text-[var(--text-muted)] bg-[var(--hover-bg)]';
   };
 
@@ -97,7 +97,7 @@ export function CloseCashRegisterModal({
         {/* Content */}
         <form onSubmit={handleSubmit} className="p-6">
           {error && (
-            <div className="mb-4 flex items-center gap-2 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-500">
+            <div className="mb-4 flex items-center gap-2 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-[#A63030]">
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
               {error}
             </div>
@@ -115,7 +115,7 @@ export function CloseCashRegisterModal({
               </div>
               <div className="flex justify-between">
                 <span className="text-[var(--text-secondary)]">+ Dinheiro Recebido</span>
-                <span className="text-blue-500">
+                <span className="text-[#C8923A]">
                   {formatCurrency(cashRegister.totalCash)}
                 </span>
               </div>
@@ -149,7 +149,7 @@ export function CloseCashRegisterModal({
                   setClosingBalanceReais(value);
                 }}
                 placeholder="0,00"
-                className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] py-2.5 pl-10 pr-3 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] py-2.5 pl-10 pr-3 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[#C8923A] focus:outline-none focus:ring-1 focus:ring-[#C8923A]"
                 autoFocus
                 required
               />
@@ -185,7 +185,7 @@ export function CloseCashRegisterModal({
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Observações sobre o fechamento..."
               rows={2}
-              className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[#C8923A] focus:outline-none focus:ring-1 focus:ring-[#C8923A]"
             />
           </div>
 
@@ -201,7 +201,7 @@ export function CloseCashRegisterModal({
             <button
               type="submit"
               disabled={isLoading || !closingBalanceReais}
-              className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-4 py-2 text-sm font-medium text-white hover:bg-[#725510] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
               {isLoading ? 'Fechando...' : 'Confirmar Fechamento'}

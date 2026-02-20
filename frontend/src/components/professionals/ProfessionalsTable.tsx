@@ -81,7 +81,7 @@ export function ProfessionalsTable({
               <tr key={professional.id} className="hover:bg-[var(--hover-bg)]">
                 <td className="px-4 py-4">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-500/20 text-blue-500">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#C8923A]/20 text-[#C8923A]">
                       <span className="text-sm font-medium">
                         {professional.name.charAt(0).toUpperCase()}
                       </span>
@@ -116,7 +116,7 @@ export function ProfessionalsTable({
                       professional.services.slice(0, 3).map((service) => (
                         <span
                           key={service.id}
-                          className="inline-block rounded bg-blue-500/20 px-2 py-0.5 text-xs text-blue-400"
+                          className="inline-block rounded bg-[#C8923A]/20 px-2 py-0.5 text-xs text-[#D4A85C]"
                         >
                           {service.name}
                         </span>
@@ -166,7 +166,7 @@ export function ProfessionalsTable({
                               onDelete(professional);
                               setOpenMenuId(null);
                             }}
-                            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-500 hover:bg-red-500/10"
+                            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[#A63030] hover:bg-red-500/10"
                           >
                             <Trash2 className="h-4 w-4" />
                             Excluir

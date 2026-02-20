@@ -99,7 +99,7 @@ export function TransactionForm({ type, onSubmit, isLoading, error }: Transactio
   }, [selectedCategoryId]);
 
   const buttonColor = type === 'EXPENSE'
-    ? 'bg-red-600 hover:bg-red-700'
+    ? 'bg-[#8B2020] hover:bg-[#6B1818]'
     : 'bg-emerald-600 hover:bg-emerald-700';
 
   const buttonLabel = type === 'EXPENSE' ? 'Criar Despesa' : 'Criar Receita';
@@ -107,7 +107,7 @@ export function TransactionForm({ type, onSubmit, isLoading, error }: Transactio
   return (
     <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
       {error && (
-        <div className="flex items-center gap-2 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-500">
+        <div className="flex items-center gap-2 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-[#A63030]">
           <AlertCircle className="h-4 w-4 flex-shrink-0" />
           {error}
         </div>
@@ -123,10 +123,10 @@ export function TransactionForm({ type, onSubmit, isLoading, error }: Transactio
           id="description"
           {...register('description', { required: 'Descricao e obrigatoria' })}
           placeholder="Descricao do lancamento"
-          className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 border-[var(--border-color)]"
+          className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] border-[var(--border-color)]"
         />
         {errors.description && (
-          <p className="mt-1 text-xs text-red-500">{errors.description.message}</p>
+          <p className="mt-1 text-xs text-[#A63030]">{errors.description.message}</p>
         )}
       </div>
 
@@ -150,11 +150,11 @@ export function TransactionForm({ type, onSubmit, isLoading, error }: Transactio
               },
             })}
             placeholder="0,00"
-            className="w-full rounded-xl border bg-[var(--hover-bg)] py-2.5 pl-10 pr-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 border-[var(--border-color)]"
+            className="w-full rounded-xl border bg-[var(--hover-bg)] py-2.5 pl-10 pr-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] border-[var(--border-color)]"
           />
         </div>
         {errors.amount && (
-          <p className="mt-1 text-xs text-red-500">{errors.amount.message}</p>
+          <p className="mt-1 text-xs text-[#A63030]">{errors.amount.message}</p>
         )}
       </div>
 
@@ -166,7 +166,7 @@ export function TransactionForm({ type, onSubmit, isLoading, error }: Transactio
         <select
           id="categoryId"
           {...register('categoryId', { required: 'Categoria e obrigatoria' })}
-          className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 border-[var(--border-color)]"
+          className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] border-[var(--border-color)]"
         >
           <option value="">Selecione uma categoria</option>
           {parentCategories.map((cat) => (
@@ -176,7 +176,7 @@ export function TransactionForm({ type, onSubmit, isLoading, error }: Transactio
           ))}
         </select>
         {errors.categoryId && (
-          <p className="mt-1 text-xs text-red-500">{errors.categoryId.message}</p>
+          <p className="mt-1 text-xs text-[#A63030]">{errors.categoryId.message}</p>
         )}
       </div>
 
@@ -189,7 +189,7 @@ export function TransactionForm({ type, onSubmit, isLoading, error }: Transactio
           <select
             id="subcategoryId"
             {...register('subcategoryId')}
-            className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 border-[var(--border-color)]"
+            className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] border-[var(--border-color)]"
           >
             <option value="">Selecione uma subcategoria</option>
             {subcategories.map((sub) => (
@@ -209,7 +209,7 @@ export function TransactionForm({ type, onSubmit, isLoading, error }: Transactio
         <select
           id="branchId"
           {...register('branchId')}
-          className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 border-[var(--border-color)]"
+          className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] border-[var(--border-color)]"
         >
           <option value="">Selecione uma filial</option>
           {branches?.map((branch) => (
@@ -229,7 +229,7 @@ export function TransactionForm({ type, onSubmit, isLoading, error }: Transactio
           <select
             id="paymentCondition"
             {...register('paymentCondition')}
-            className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 border-[var(--border-color)]"
+            className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] border-[var(--border-color)]"
           >
             {(Object.keys(paymentConditionLabels) as PaymentCondition[]).map((key) => (
               <option key={key} value={key}>
@@ -245,7 +245,7 @@ export function TransactionForm({ type, onSubmit, isLoading, error }: Transactio
           <select
             id="paymentMethodConfigId"
             {...register('paymentMethodConfigId')}
-            className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 border-[var(--border-color)]"
+            className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] border-[var(--border-color)]"
           >
             <option value="">Selecione</option>
             {paymentMethods?.map((method) => (
@@ -265,7 +265,7 @@ export function TransactionForm({ type, onSubmit, isLoading, error }: Transactio
         <select
           id="bankAccountId"
           {...register('bankAccountId')}
-          className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 border-[var(--border-color)]"
+          className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] border-[var(--border-color)]"
         >
           <option value="">Selecione uma conta</option>
           {bankAccounts?.map((account) => (
@@ -285,10 +285,10 @@ export function TransactionForm({ type, onSubmit, isLoading, error }: Transactio
           type="date"
           id="dueDate"
           {...register('dueDate', { required: 'Data de vencimento e obrigatoria' })}
-          className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 border-[var(--border-color)]"
+          className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] border-[var(--border-color)]"
         />
         {errors.dueDate && (
-          <p className="mt-1 text-xs text-red-500">{errors.dueDate.message}</p>
+          <p className="mt-1 text-xs text-[#A63030]">{errors.dueDate.message}</p>
         )}
       </div>
 
@@ -303,7 +303,7 @@ export function TransactionForm({ type, onSubmit, isLoading, error }: Transactio
             id="discount"
             {...register('discount')}
             placeholder="0"
-            className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 border-[var(--border-color)]"
+            className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] border-[var(--border-color)]"
           />
         </div>
         <div>
@@ -315,7 +315,7 @@ export function TransactionForm({ type, onSubmit, isLoading, error }: Transactio
             id="interest"
             {...register('interest')}
             placeholder="0"
-            className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 border-[var(--border-color)]"
+            className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] border-[var(--border-color)]"
           />
         </div>
       </div>
@@ -326,7 +326,7 @@ export function TransactionForm({ type, onSubmit, isLoading, error }: Transactio
           type="checkbox"
           id="isRecurring"
           {...register('isRecurring')}
-          className="h-4 w-4 rounded border-[var(--border-color)] bg-[var(--hover-bg)] text-blue-600 focus:ring-blue-500"
+          className="h-4 w-4 rounded border-[var(--border-color)] bg-[var(--hover-bg)] text-[#C8923A] focus:ring-[#C8923A]"
         />
         <label htmlFor="isRecurring" className="text-sm font-medium text-[var(--text-secondary)]">
           Lancamento recorrente
@@ -343,7 +343,7 @@ export function TransactionForm({ type, onSubmit, isLoading, error }: Transactio
           {...register('notes')}
           placeholder="Observacoes adicionais..."
           rows={3}
-          className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 border-[var(--border-color)]"
+          className="w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] border-[var(--border-color)]"
         />
       </div>
 

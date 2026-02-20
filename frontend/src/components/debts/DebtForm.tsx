@@ -38,7 +38,7 @@ export function DebtForm({ onSubmit, isLoading, error }: DebtFormProps) {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {error && (
-        <div className="flex items-center gap-2 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-500">
+        <div className="flex items-center gap-2 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-[#A63030]">
           <AlertCircle className="h-4 w-4 flex-shrink-0" />
           {error}
         </div>
@@ -57,7 +57,7 @@ export function DebtForm({ onSubmit, isLoading, error }: DebtFormProps) {
           value={clientId}
           onChange={(e) => setClientId(e.target.value)}
           disabled={isLoadingClients}
-          className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 disabled:opacity-50"
+          className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:border-[#A63030] focus:outline-none focus:ring-1 focus:ring-[#8B2020] disabled:opacity-50"
           required
         >
           <option value="">Selecione um cliente</option>
@@ -91,7 +91,7 @@ export function DebtForm({ onSubmit, isLoading, error }: DebtFormProps) {
               setAmountReais(value);
             }}
             placeholder="0,00"
-            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] py-2.5 pl-10 pr-3 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] py-2.5 pl-10 pr-3 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[#A63030] focus:outline-none focus:ring-1 focus:ring-[#8B2020]"
             required
           />
         </div>
@@ -111,7 +111,7 @@ export function DebtForm({ onSubmit, isLoading, error }: DebtFormProps) {
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Motivo ou detalhes da dívida..."
           rows={3}
-          className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+          className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[#A63030] focus:outline-none focus:ring-1 focus:ring-[#8B2020]"
         />
       </div>
 
@@ -128,7 +128,7 @@ export function DebtForm({ onSubmit, isLoading, error }: DebtFormProps) {
           id="dueDate"
           value={dueDate}
           onChange={(e) => setDueDate(e.target.value)}
-          className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+          className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:border-[#A63030] focus:outline-none focus:ring-1 focus:ring-[#8B2020]"
         />
       </div>
 
@@ -137,7 +137,7 @@ export function DebtForm({ onSubmit, isLoading, error }: DebtFormProps) {
         <button
           type="submit"
           disabled={isLoading || !isValid}
-          className="flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex items-center gap-2 rounded-xl bg-[#8B2020] px-4 py-2.5 font-medium text-white transition-colors hover:bg-[#6B1818] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
           {isLoading ? 'Salvando...' : 'Criar Dívida'}

@@ -28,7 +28,7 @@ export function CreateExpense() {
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-500/20">
-          <TrendingDown className="h-5 w-5 text-red-500" />
+          <TrendingDown className="h-5 w-5 text-[#A63030]" />
         </div>
         <div>
           <h1 className="text-2xl font-bold text-[var(--text-primary)]">Criar Despesa</h1>

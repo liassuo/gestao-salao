@@ -32,7 +32,7 @@ export function TopClientsCard({ clients }: TopClientsCardProps) {
               className="grid grid-cols-4 gap-2 items-center rounded-lg border border-[var(--border-color)] bg-[var(--hover-bg)] p-3"
             >
               <div className="flex items-center gap-2 min-w-0">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-xs font-bold text-blue-500">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#C8923A]/20 text-xs font-bold text-[#C8923A]">
                   {index + 1}
                 </span>
                 <span className="truncate text-sm font-medium text-[var(--text-primary)]">{client.name}</span>

@@ -1,5 +1,5 @@
 import { IsOptional, IsUUID, IsDateString, IsEnum } from 'class-validator';
-import { CommissionStatus } from '@prisma/client';
+import { CommissionStatus } from '../../common/enums';
 
 export class QueryCommissionDto {
   @IsOptional()

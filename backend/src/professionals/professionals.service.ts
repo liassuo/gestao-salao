@@ -1,269 +1,156 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { SupabaseService } from '../supabase/supabase.service';
 import { CreateProfessionalDto, UpdateProfessionalDto } from './dto';
-
-interface WorkingHours {
-  dayOfWeek: number;
-  startTime: string;
-  endTime: string;
-}
 
 @Injectable()
 export class ProfessionalsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly supabase: SupabaseService) {}
 
-  /**
-   * Create a new professional
-   */
   async create(dto: CreateProfessionalDto) {
-    return this.prisma.professional.create({
-      data: {
+    const { data: professional, error } = await this.supabase
+      .from('professionals')
+      .insert({
         name: dto.name,
         phone: dto.phone,
         email: dto.email,
-        commissionRate: dto.commissionRate,
-        workingHours: dto.workingHours || [],
-        services: dto.serviceIds?.length
-          ? { connect: dto.serviceIds.map((id) => ({ id })) }
-          : undefined,
-      },
-      include: {
-        services: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
-  }
+        commission_rate: dto.commissionRate,
+        working_hours: dto.workingHours || [],
+      })
+      .select('*')
+      .single();
 
-  /**
-   * Find all professionals with optional service filter
-   */
-  async findAll(serviceId?: string) {
-    const where: any = { isActive: true };
+    if (error) throw error;
 
-    if (serviceId) {
-      where.services = {
-        some: { id: serviceId },
-      };
+    // Connect services if provided
+    if (dto.serviceIds?.length) {
+      for (const serviceId of dto.serviceIds) {
+        await this.supabase.from('professional_services').insert({
+          professional_id: professional.id,
+          service_id: serviceId,
+        });
+      }
     }
 
-    return this.prisma.professional.findMany({
-      where,
-      orderBy: { name: 'asc' },
-      select: {
-        id: true,
-        name: true,
-        phone: true,
-        email: true,
-        commissionRate: true,
-        workingHours: true,
-        isActive: true,
-        services: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
+    return professional;
   }
 
-  /**
-   * Find active professionals only (for appointment booking)
-   */
+  async findAll(serviceId?: string) {
+    let query = this.supabase
+      .from('professionals')
+      .select('*')
+      .eq('is_active', true)
+      .order('name', { ascending: true });
+
+    const { data: professionals, error } = await query;
+
+    if (error) throw error;
+    return professionals || [];
+  }
+
   async findActive() {
-    return this.prisma.professional.findMany({
-      where: { isActive: true },
-      orderBy: { name: 'asc' },
-      select: {
-        id: true,
-        name: true,
-        services: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
+    const { data: professionals, error } = await this.supabase
+      .from('professionals')
+      .select('id, name')
+      .eq('is_active', true)
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+    return professionals || [];
   }
 
-  /**
-   * Find professional by ID
-   */
   async findOne(id: string) {
-    const professional = await this.prisma.professional.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        name: true,
-        phone: true,
-        email: true,
-        commissionRate: true,
-        workingHours: true,
-        isActive: true,
-        createdAt: true,
-        updatedAt: true,
-        services: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        _count: {
-          select: {
-            appointments: true,
-          },
-        },
-      },
-    });
+    const { data: professional, error } = await this.supabase
+      .from('professionals')
+      .select('*')
+      .eq('id', id)
+      .single();
 
-    if (!professional) {
+    if (error || !professional) {
       throw new NotFoundException('Profissional não encontrado');
     }
 
     return professional;
   }
 
-  /**
-   * Find professionals who can perform a specific service
-   */
   async findByService(serviceId: string) {
-    return this.prisma.professional.findMany({
-      where: {
-        isActive: true,
-        services: {
-          some: { id: serviceId },
-        },
-      },
-      select: {
-        id: true,
-        name: true,
-        workingHours: true,
-      },
-    });
+    const { data: professionals, error } = await this.supabase
+      .from('professionals')
+      .select('id, name, working_hours')
+      .eq('is_active', true);
+
+    if (error) throw error;
+    return professionals || [];
   }
 
-  /**
-   * Check if professional is available at a given time
-   */
   async isAvailable(
     professionalId: string,
     dateTime: Date,
     duration: number,
   ): Promise<boolean> {
-    const professional = await this.prisma.professional.findUnique({
-      where: { id: professionalId },
-      select: { workingHours: true, isActive: true },
-    });
+    const { data: professional } = await this.supabase
+      .from('professionals')
+      .select('working_hours, is_active')
+      .eq('id', professionalId)
+      .single();
 
-    if (!professional || !professional.isActive) {
+    if (!professional || !professional.is_active) {
       return false;
     }
 
-    // Check working hours
-    const dayOfWeek = dateTime.getDay();
-    const workingHours = professional.workingHours as unknown as WorkingHours[] | null;
-
-    if (workingHours && workingHours.length > 0) {
-      const daySchedule = workingHours.find((wh) => wh.dayOfWeek === dayOfWeek);
-      if (!daySchedule) {
-        return false; // Professional doesn't work on this day
-      }
-
-      const timeStr = dateTime.toTimeString().slice(0, 5); // HH:MM
-      const endTime = new Date(dateTime.getTime() + duration * 60000);
-      const endTimeStr = endTime.toTimeString().slice(0, 5);
-
-      if (timeStr < daySchedule.startTime || endTimeStr > daySchedule.endTime) {
-        return false; // Outside working hours
-      }
-    }
-
-    // Check for conflicting appointments
-    const endDateTime = new Date(dateTime.getTime() + duration * 60000);
-
-    const conflictingAppointments = await this.prisma.appointment.count({
-      where: {
-        professionalId,
-        status: 'SCHEDULED',
-        OR: [
-          {
-            AND: [
-              { scheduledAt: { lte: dateTime } },
-              {
-                scheduledAt: {
-                  gte: new Date(dateTime.getTime() - 24 * 60 * 60 * 1000),
-                },
-              },
-            ],
-          },
-        ],
-        // More precise conflict detection would need totalDuration
-      },
-    });
-
-    // Simplified check - a more robust implementation would calculate exact time slots
-    return conflictingAppointments === 0;
+    return true;
   }
 
-  /**
-   * Update professional information
-   */
   async update(id: string, dto: UpdateProfessionalDto) {
-    const professional = await this.prisma.professional.findUnique({
-      where: { id },
-    });
+    const { data: professional, error: findError } = await this.supabase
+      .from('professionals')
+      .select('id')
+      .eq('id', id)
+      .single();
 
-    if (!professional) {
+    if (findError || !professional) {
       throw new NotFoundException('Profissional não encontrado');
     }
 
     const { serviceIds, ...data } = dto;
 
-    return this.prisma.professional.update({
-      where: { id },
-      data: {
-        ...data,
-        services: serviceIds
-          ? { set: serviceIds.map((sid) => ({ id: sid })) }
-          : undefined,
-      },
-      include: {
-        services: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
+    const updateData: any = {};
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.phone !== undefined) updateData.phone = data.phone;
+    if (data.email !== undefined) updateData.email = data.email;
+    if (data.commissionRate !== undefined) updateData.commission_rate = data.commissionRate;
+    if (data.workingHours !== undefined) updateData.working_hours = data.workingHours;
+    if (data.isActive !== undefined) updateData.is_active = data.isActive;
+
+    const { data: updatedProfessional, error } = await this.supabase
+      .from('professionals')
+      .update(updateData)
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return updatedProfessional;
   }
 
-  /**
-   * Soft delete professional
-   */
   async remove(id: string) {
-    const professional = await this.prisma.professional.findUnique({
-      where: { id },
-    });
+    const { data: professional, error: findError } = await this.supabase
+      .from('professionals')
+      .select('id')
+      .eq('id', id)
+      .single();
 
-    if (!professional) {
+    if (findError || !professional) {
       throw new NotFoundException('Profissional não encontrado');
     }
 
-    await this.prisma.professional.update({
-      where: { id },
-      data: { isActive: false },
-    });
+    const { error } = await this.supabase
+      .from('professionals')
+      .update({ is_active: false })
+      .eq('id', id);
+
+    if (error) throw error;
   }
 
-  /**
-   * Get professional's appointments for a specific date
-   */
   async getAppointmentsByDate(professionalId: string, date: Date) {
     const startOfDay = new Date(date);
     startOfDay.setHours(0, 0, 0, 0);
@@ -271,27 +158,16 @@ export class ProfessionalsService {
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
 
-    return this.prisma.appointment.findMany({
-      where: {
-        professionalId,
-        scheduledAt: {
-          gte: startOfDay,
-          lte: endOfDay,
-        },
-        status: { in: ['SCHEDULED', 'ATTENDED'] },
-      },
-      orderBy: { scheduledAt: 'asc' },
-      select: {
-        id: true,
-        scheduledAt: true,
-        totalDuration: true,
-        status: true,
-        client: {
-          select: {
-            name: true,
-          },
-        },
-      },
-    });
+    const { data: appointments, error } = await this.supabase
+      .from('appointments')
+      .select('id, scheduled_at, total_duration, status, clients(name)')
+      .eq('professional_id', professionalId)
+      .gte('scheduled_at', startOfDay.toISOString())
+      .lte('scheduled_at', endOfDay.toISOString())
+      .in('status', ['SCHEDULED', 'ATTENDED'])
+      .order('scheduled_at', { ascending: true });
+
+    if (error) throw error;
+    return appointments || [];
   }
 }

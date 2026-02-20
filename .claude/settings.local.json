@@ -30,7 +30,18 @@
       "Bash(timeout 10 node:*)",
       "Bash(npm run dev:*)",
       "Bash(dir \"C:\\\\Users\\\\liass\\\\OneDrive\\\\Imagens\\\\Screenshots\" /B /O-D)",
-      "Bash(git commit -m \"$\\(cat <<''EOF''\nadd modulos estoque, comandas, dashboard e calendario\n\nBackend:\n- Modulo Products: CRUD produtos com preco custo/venda, estoque minimo\n- Modulo Stock: movimentacoes entrada/saida, estoque atual, alertas baixo estoque\n- Modulo Orders \\(Comandas\\): CRUD comandas com itens \\(produto/servico\\), pagar/cancelar\n- Dashboard: endpoints operacional \\(top clientes, estoque baixo, inadimplentes\\) e estrategico \\(faturamento, ocupacao, planos\\)\n- Appointments: endpoint calendario por profissional, bloqueio de horarios \\(TimeBlock\\)\n- Prisma schema: modelos Product, StockMovement, Order, OrderItem, TimeBlock\n\nFrontend:\n- Paginas: Produtos, Estoque Atual, Entrada/Saida, Comandas, Bar/Cozinha\n- Dashboard com tabs Operacional/Estrategica, graficos recharts\n- Calendario visual de agendamentos por profissional com bloqueio de horarios\n- Componentes: ProductForm, StockTable, CalendarView, BlockTimeModal, dashboard cards\n- Hooks React Query para todos os novos modulos\n- Rotas e menu sidebar configurados\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nadd modulos estoque, comandas, dashboard e calendario\n\nBackend:\n- Modulo Products: CRUD produtos com preco custo/venda, estoque minimo\n- Modulo Stock: movimentacoes entrada/saida, estoque atual, alertas baixo estoque\n- Modulo Orders \\(Comandas\\): CRUD comandas com itens \\(produto/servico\\), pagar/cancelar\n- Dashboard: endpoints operacional \\(top clientes, estoque baixo, inadimplentes\\) e estrategico \\(faturamento, ocupacao, planos\\)\n- Appointments: endpoint calendario por profissional, bloqueio de horarios \\(TimeBlock\\)\n- Prisma schema: modelos Product, StockMovement, Order, OrderItem, TimeBlock\n\nFrontend:\n- Paginas: Produtos, Estoque Atual, Entrada/Saida, Comandas, Bar/Cozinha\n- Dashboard com tabs Operacional/Estrategica, graficos recharts\n- Calendario visual de agendamentos por profissional com bloqueio de horarios\n- Componentes: ProductForm, StockTable, CalendarView, BlockTimeModal, dashboard cards\n- Hooks React Query para todos os novos modulos\n- Rotas e menu sidebar configurados\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit:*)",
+      "Bash(powershell -Command \"tree /F /A\")",
+      "Bash(npm uninstall:*)",
+      "Bash(npx nest build:*)",
+      "Bash(magick:*)",
+      "Bash(convert:*)",
+      "Bash(npx --yes sharp-cli:*)",
+      "Bash(npx sharp-cli:*)",
+      "Bash(ls:*)",
+      "Bash(SRC=\"/c/Users/liass/Downloads/barbearia-america-removebg-preview.png\")",
+      "Bash(DIR=\"/c/Users/liass/Downloads/gestao-salao/frontend/public/favicon\")"
     ]
   }
 }

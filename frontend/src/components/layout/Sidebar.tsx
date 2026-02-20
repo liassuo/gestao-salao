@@ -68,8 +68,8 @@ export function Sidebar() {
             isCollapsed ? 'justify-center' : ''
           } ${
             isActive
-              ? 'bg-red-600 text-white shadow-lg shadow-red-600/20'
-              : 'text-[var(--text-sidebar)] hover:bg-zinc-800 hover:text-white'
+              ? 'bg-[#8B2020] text-[#F2E8D5] shadow-lg shadow-[#8B2020]/30'
+              : 'text-[var(--text-sidebar)] hover:bg-[#2C1F12] hover:text-[#F2E8D5]'
           }`
         }
       >
@@ -95,8 +95,8 @@ export function Sidebar() {
           onClick={() => toggleGroup(groupName)}
           className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium cursor-pointer transition-all duration-200 ${
             isActive
-              ? 'bg-red-600/20 text-red-400'
-              : 'text-[var(--text-sidebar)] hover:bg-zinc-800 hover:text-white'
+              ? 'bg-[#8B2020]/20 text-[#D4A85C]'
+              : 'text-[var(--text-sidebar)] hover:bg-[#2C1F12] hover:text-[#F2E8D5]'
           }`}
         >
           <GroupIcon className="h-5 w-5 flex-shrink-0" />
@@ -121,8 +121,8 @@ export function Sidebar() {
                   className={({ isActive: linkActive }) =>
                     `flex items-center gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${
                       linkActive
-                        ? 'bg-red-600 text-white shadow-lg shadow-red-600/20'
-                        : 'text-[var(--text-sidebar)] hover:bg-zinc-800 hover:text-white'
+                        ? 'bg-[#8B2020] text-[#F2E8D5] shadow-lg shadow-[#8B2020]/30'
+                        : 'text-[var(--text-sidebar)] hover:bg-[#2C1F12] hover:text-[#F2E8D5]'
                     }`
                   }
                 >
@@ -163,7 +163,7 @@ export function Sidebar() {
       {/* Botão de retrair */}
       <button
         onClick={toggleSidebar}
-        className="absolute -right-3 top-24 flex h-6 w-6 items-center justify-center rounded-full border border-[var(--border-sidebar)] bg-[var(--bg-sidebar)] text-zinc-400 shadow-md transition-colors hover:bg-zinc-800 hover:text-white"
+        className="absolute -right-3 top-24 flex h-6 w-6 items-center justify-center rounded-full border border-[var(--border-sidebar)] bg-[var(--bg-sidebar)] text-[#8B7D6B] shadow-md transition-colors hover:bg-[#2C1F12] hover:text-[#F2E8D5]"
         title={isCollapsed ? 'Expandir menu' : 'Retrair menu'}
       >
         {isCollapsed ? (
@@ -189,7 +189,7 @@ export function Sidebar() {
       {/* Footer da sidebar */}
       <div className="absolute bottom-0 left-0 right-0 border-t border-[var(--border-sidebar)] p-4">
         {!isCollapsed && (
-          <p className="text-center text-xs text-zinc-600">
+          <p className="text-center text-xs text-[#8B7D6B]">
             Barbearia America
           </p>
         )}

@@ -1,4 +1,4 @@
-import { PaymentCondition, PaymentMethodScope } from '@prisma/client';
+import { PaymentCondition, PaymentMethodScope } from '../../common/enums';
 
 /**
  * PaymentMethodConfig domain entity

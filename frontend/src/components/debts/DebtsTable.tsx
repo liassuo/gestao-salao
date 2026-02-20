@@ -89,10 +89,10 @@ export function DebtsTable({
                 <td className="whitespace-nowrap px-6 py-4 text-sm text-[var(--text-primary)]">
                   {formatCurrency(debt.amount)}
                 </td>
-                <td className="whitespace-nowrap px-6 py-4 text-sm text-blue-500">
+                <td className="whitespace-nowrap px-6 py-4 text-sm text-[#C8923A]">
                   {formatCurrency(debt.amountPaid)}
                 </td>
-                <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-red-500">
+                <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-[#A63030]">
                   {formatCurrency(debt.remainingBalance)}
                 </td>
                 <td className="whitespace-nowrap px-6 py-4">
@@ -108,7 +108,7 @@ export function DebtsTable({
                         <button
                           onClick={() => onPay(debt)}
                           disabled={isLoading}
-                          className="rounded-lg p-1.5 text-blue-500 hover:bg-blue-500/10 disabled:opacity-50"
+                          className="rounded-lg p-1.5 text-[#C8923A] hover:bg-[#C8923A]/10 disabled:opacity-50"
                           title="Registrar pagamento"
                         >
                           <Banknote className="h-4 w-4" />
@@ -116,7 +116,7 @@ export function DebtsTable({
                         <button
                           onClick={() => onSettle(debt)}
                           disabled={isLoading}
-                          className="rounded-lg p-1.5 text-blue-500 hover:bg-blue-500/10 disabled:opacity-50"
+                          className="rounded-lg p-1.5 text-[#C8923A] hover:bg-[#C8923A]/10 disabled:opacity-50"
                           title="Quitar dívida"
                         >
                           <CheckCircle className="h-4 w-4" />
@@ -126,7 +126,7 @@ export function DebtsTable({
                     <button
                       onClick={() => onDelete(debt)}
                       disabled={isLoading}
-                      className="rounded-lg p-1.5 text-red-500 hover:bg-red-500/10 disabled:opacity-50"
+                      className="rounded-lg p-1.5 text-[#A63030] hover:bg-red-500/10 disabled:opacity-50"
                       title="Excluir"
                     >
                       <Trash2 className="h-4 w-4" />

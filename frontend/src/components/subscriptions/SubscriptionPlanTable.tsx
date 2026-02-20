@@ -69,7 +69,7 @@ export function SubscriptionPlanTable({
               <tr key={plan.id} className="hover:bg-[var(--hover-bg)]">
                 <td className="px-4 py-4">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/20 text-blue-500">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#C8923A]/20 text-[#C8923A]">
                       <CreditCard className="h-5 w-5" />
                     </div>
                     <div>
@@ -104,7 +104,7 @@ export function SubscriptionPlanTable({
                   <span
                     className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
                       plan.isActive
-                        ? 'bg-blue-500/20 text-blue-500'
+                        ? 'bg-[#C8923A]/20 text-[#C8923A]'
                         : 'bg-zinc-500/20 text-zinc-500'
                     }`}
                   >
@@ -143,7 +143,7 @@ export function SubscriptionPlanTable({
                               onDelete(plan);
                               setOpenMenuId(null);
                             }}
-                            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-500 hover:bg-red-500/10"
+                            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[#A63030] hover:bg-red-500/10"
                           >
                             <Trash2 className="h-4 w-4" />
                             Desativar

@@ -88,20 +88,20 @@ export function DebtPaymentModal({
             </p>
             <p className="text-sm text-[var(--text-secondary)]">
               <span className="font-medium">Já pago:</span>{' '}
-              <span className="text-blue-500">
+              <span className="text-[#C8923A]">
                 {formatCurrency(debt.amountPaid)}
               </span>
             </p>
             <p className="mt-2 border-t border-[var(--border-color)] pt-2 text-sm font-medium text-[var(--text-primary)]">
               Saldo restante:{' '}
-              <span className="text-red-500">
+              <span className="text-[#A63030]">
                 {formatCurrency(debt.remainingBalance)}
               </span>
             </p>
           </div>
 
           {error && (
-            <div className="mb-4 flex items-center gap-2 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-500">
+            <div className="mb-4 flex items-center gap-2 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-[#A63030]">
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
               {error}
             </div>
@@ -128,13 +128,13 @@ export function DebtPaymentModal({
                   setAmountReais(value);
                 }}
                 placeholder="0,00"
-                className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] py-2.5 pl-10 pr-3 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] py-2.5 pl-10 pr-3 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[#C8923A] focus:outline-none focus:ring-1 focus:ring-[#C8923A]"
                 autoFocus
                 required
               />
             </div>
             {amountCents > debt.remainingBalance && (
-              <p className="mt-1 text-xs text-red-500">
+              <p className="mt-1 text-xs text-[#A63030]">
                 O valor não pode exceder o saldo restante
               </p>
             )}
@@ -154,7 +154,7 @@ export function DebtPaymentModal({
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Observações sobre o pagamento..."
               rows={2}
-              className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[#C8923A] focus:outline-none focus:ring-1 focus:ring-[#C8923A]"
             />
           </div>
 
@@ -170,7 +170,7 @@ export function DebtPaymentModal({
             <button
               type="submit"
               disabled={isLoading || !isValidAmount}
-              className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-4 py-2 text-sm font-medium text-white hover:bg-[#725510] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
               {isLoading ? 'Salvando...' : 'Confirmar Pagamento'}

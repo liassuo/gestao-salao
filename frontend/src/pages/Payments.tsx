@@ -87,8 +87,8 @@ export function Payments() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/20">
-            <CreditCard className="h-5 w-5 text-blue-500" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#C8923A]/20">
+            <CreditCard className="h-5 w-5 text-[#C8923A]" />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-[var(--text-primary)]">Pagamentos</h1>
@@ -100,7 +100,7 @@ export function Payments() {
 
         <button
           onClick={handleOpenCreateModal}
-          className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[var(--bg-primary)]"
+          className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-4 py-2.5 font-medium text-white transition-colors hover:bg-[#725510] focus:outline-none focus:ring-2 focus:ring-[#C8923A] focus:ring-offset-2 focus:ring-offset-[var(--bg-primary)]"
         >
           <Plus className="h-5 w-5" />
           Novo Pagamento
@@ -116,13 +116,13 @@ export function Payments() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Buscar por cliente ou observação..."
-            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-2 pl-10 pr-4 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors"
+            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-2 pl-10 pr-4 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[#C8923A] focus:outline-none focus:ring-1 focus:ring-[#C8923A] transition-colors"
           />
         </div>
         <select
           value={methodFilter}
           onChange={(e) => setMethodFilter(e.target.value)}
-          className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors"
+          className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none focus:ring-1 focus:ring-[#C8923A] transition-colors"
         >
           <option value="">Todos os métodos</option>
           <option value="CASH">Dinheiro</option>
@@ -147,10 +147,10 @@ export function Payments() {
       ) : isError ? (
         <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-6">
           <div className="flex items-center gap-3">
-            <AlertCircle className="h-6 w-6 text-red-500" />
+            <AlertCircle className="h-6 w-6 text-[#A63030]" />
             <div>
-              <h3 className="font-medium text-red-500">Erro ao carregar</h3>
-              <p className="text-sm text-red-400">
+              <h3 className="font-medium text-[#A63030]">Erro ao carregar</h3>
+              <p className="text-sm text-[#C45050]">
                 {error instanceof Error ? error.message : 'Ocorreu um erro inesperado. Tente novamente.'}
               </p>
             </div>

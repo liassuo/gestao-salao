@@ -12,7 +12,8 @@ import {
 import {
   TransactionType,
   PaymentCondition,
-} from '@prisma/client';
+  TransactionStatus,
+} from '../../common/enums';
 
 export class CreateFinancialTransactionDto {
   @IsEnum(TransactionType, { message: 'Tipo deve ser EXPENSE ou REVENUE' })
@@ -61,6 +62,10 @@ export class CreateFinancialTransactionDto {
   @IsOptional()
   @IsUUID('4', { message: 'paymentMethodConfigId deve ser um UUID valido' })
   paymentMethodConfigId?: string;
+
+  @IsOptional()
+  @IsEnum(TransactionStatus, { message: 'Status deve ser PENDING, PAID, OVERDUE ou CANCELED' })
+  status?: TransactionStatus;
 
   @IsOptional()
   @IsString()

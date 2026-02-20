@@ -35,40 +35,40 @@ export function StockMovementForm({ products, onSubmit, isLoading, error }: Stoc
 
   return (
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
-      {error && <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">{error}</div>}
+      {error && <div className="rounded-xl bg-red-500/10 border border-[#A63030]/20 px-4 py-3 text-sm text-[#C45050]">{error}</div>}
       <div>
         <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">Produto *</label>
-        <select {...register('productId', { required: 'Selecione um produto' })} className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-blue-500 focus:outline-none">
+        <select {...register('productId', { required: 'Selecione um produto' })} className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[#C8923A] focus:outline-none">
           <option value="">Selecione...</option>
           {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        {errors.productId && <p className="mt-1 text-xs text-red-400">{errors.productId.message}</p>}
+        {errors.productId && <p className="mt-1 text-xs text-[#C45050]">{errors.productId.message}</p>}
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">Tipo *</label>
-          <select {...register('type')} className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-blue-500 focus:outline-none">
+          <select {...register('type')} className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[#C8923A] focus:outline-none">
             <option value="ENTRY">Entrada</option>
             <option value="EXIT">Saída</option>
           </select>
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">Quantidade *</label>
-          <input type="number" min="1" {...register('quantity', { required: true, valueAsNumber: true, min: 1 })} className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          <input type="number" min="1" {...register('quantity', { required: true, valueAsNumber: true, min: 1 })} className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[#C8923A] focus:outline-none" />
         </div>
       </div>
       <div>
         <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">Motivo</label>
-        <input {...register('reason')} className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Motivo da movimentação" />
+        <input {...register('reason')} className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[#C8923A] focus:outline-none" placeholder="Motivo da movimentação" />
       </div>
       <div>
         <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">Filial</label>
-        <select {...register('branchId')} className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-blue-500 focus:outline-none">
+        <select {...register('branchId')} className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[#C8923A] focus:outline-none">
           <option value="">Todas</option>
           {branches?.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select>
       </div>
-      <button type="submit" disabled={isLoading} className="w-full rounded-xl bg-blue-600 px-4 py-2.5 font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50">
+      <button type="submit" disabled={isLoading} className="w-full rounded-xl bg-[#8B6914] px-4 py-2.5 font-medium text-white transition-colors hover:bg-[#725510] disabled:opacity-50">
         {isLoading ? 'Registrando...' : 'Registrar Movimentação'}
       </button>
     </form>

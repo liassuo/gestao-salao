@@ -1,573 +1,272 @@
 import {
   Injectable,
   NotFoundException,
-  BadRequestException,
 } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { SupabaseService } from '../supabase/supabase.service';
 import {
   CreateFinancialTransactionDto,
   UpdateFinancialTransactionDto,
   QueryFinancialTransactionDto,
 } from './dto';
-import { Prisma } from '@prisma/client';
 
-/**
- * FinancialTransactionsService
- *
- * Gerencia transacoes financeiras (despesas e receitas).
- *
- * Conceitos:
- * - EXPENSE: Contas a pagar (despesas)
- * - REVENUE: Contas a receber (receitas)
- * - amount: Valor bruto em centavos
- * - netAmount: Valor liquido calculado com desconto e juros
- * - netAmount = amount - (amount * discount/100) + (amount * interest/100)
- *
- * Regras:
- * - Todas as transacoes tem categoria obrigatoria
- * - Subcategoria, filial, conta bancaria e metodo de pagamento sao opcionais
- * - Ao marcar como pago, define paidAt e status = PAID
- * - Totais de contas a pagar/receber consideram data de vencimento e status
- */
 @Injectable()
 export class FinancialTransactionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly supabase: SupabaseService) {}
 
-  /**
-   * Calcula o valor liquido baseado em amount, discount e interest
-   * netAmount = amount - (amount * discount/100) + (amount * interest/100)
-   */
   private calculateNetAmount(
     amount: number,
     discount?: number,
     interest?: number,
   ): number {
-    const discountValue = discount
-      ? Math.round(amount * discount / 100)
-      : 0;
-    const interestValue = interest
-      ? Math.round(amount * interest / 100)
-      : 0;
-
+    const discountValue = discount ? Math.round((amount * discount) / 100) : 0;
+    const interestValue = interest ? Math.round((amount * interest) / 100) : 0;
     return amount - discountValue + interestValue;
   }
 
-  /**
-   * Includes padrao para retornar relacoes completas
-   */
-  private readonly defaultInclude = {
-    category: true,
-    subcategory: true,
-    branch: true,
-    bankAccount: true,
-    paymentMethodConfig: true,
-  };
-
-  /**
-   * Cria uma nova transacao financeira (despesa ou receita)
-   */
   async create(dto: CreateFinancialTransactionDto) {
-    // Validar categoria
-    const category = await this.prisma.financialCategory.findUnique({
-      where: { id: dto.categoryId },
-    });
+    const netAmount = this.calculateNetAmount(dto.amount, dto.discount, dto.interest);
 
-    if (!category) {
-      throw new NotFoundException('Categoria nao encontrada');
-    }
-
-    // Validar subcategoria se informada
-    if (dto.subcategoryId) {
-      const subcategory = await this.prisma.financialCategory.findUnique({
-        where: { id: dto.subcategoryId },
-      });
-
-      if (!subcategory) {
-        throw new NotFoundException('Subcategoria nao encontrada');
-      }
-    }
-
-    // Validar filial se informada
-    if (dto.branchId) {
-      const branch = await this.prisma.branch.findUnique({
-        where: { id: dto.branchId },
-      });
-
-      if (!branch) {
-        throw new NotFoundException('Filial nao encontrada');
-      }
-    }
-
-    // Validar conta bancaria se informada
-    if (dto.bankAccountId) {
-      const bankAccount = await this.prisma.bankAccount.findUnique({
-        where: { id: dto.bankAccountId },
-      });
-
-      if (!bankAccount) {
-        throw new NotFoundException('Conta bancaria nao encontrada');
-      }
-    }
-
-    // Validar metodo de pagamento se informado
-    if (dto.paymentMethodConfigId) {
-      const paymentMethodConfig = await this.prisma.paymentMethodConfig.findUnique({
-        where: { id: dto.paymentMethodConfigId },
-      });
-
-      if (!paymentMethodConfig) {
-        throw new NotFoundException('Configuracao de metodo de pagamento nao encontrada');
-      }
-    }
-
-    const netAmount = this.calculateNetAmount(
-      dto.amount,
-      dto.discount,
-      dto.interest,
-    );
-
-    return this.prisma.financialTransaction.create({
-      data: {
+    const { data: transaction, error } = await this.supabase
+      .from('financial_transactions')
+      .insert({
         type: dto.type,
         description: dto.description,
         amount: dto.amount,
-        discount: dto.discount != null ? new Prisma.Decimal(dto.discount) : null,
-        interest: dto.interest != null ? new Prisma.Decimal(dto.interest) : null,
-        netAmount,
-        paymentCondition: dto.paymentCondition,
-        isRecurring: dto.isRecurring ?? false,
-        dueDate: new Date(dto.dueDate),
-        branchId: dto.branchId,
-        categoryId: dto.categoryId,
-        subcategoryId: dto.subcategoryId,
-        bankAccountId: dto.bankAccountId,
-        paymentMethodConfigId: dto.paymentMethodConfigId,
+        discount: dto.discount || 0,
+        interest: dto.interest || 0,
+        net_amount: netAmount,
+        due_date: dto.dueDate,
+        status: dto.status || 'PENDING',
+        category_id: dto.categoryId,
+        subcategory_id: dto.subcategoryId,
+        branch_id: dto.branchId,
+        bank_account_id: dto.bankAccountId,
+        payment_method_config_id: dto.paymentMethodConfigId,
         notes: dto.notes,
-      },
-      include: this.defaultInclude,
-    });
+      })
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return transaction;
   }
 
-  /**
-   * Lista transacoes com filtros opcionais
-   */
   async findAll(query: QueryFinancialTransactionDto) {
-    const where: any = {};
+    let queryBuilder = this.supabase.from('financial_transactions').select('*');
 
     if (query.type) {
-      where.type = query.type;
+      queryBuilder = queryBuilder.eq('type', query.type);
     }
 
     if (query.status) {
-      where.status = query.status;
+      queryBuilder = queryBuilder.eq('status', query.status);
     }
 
     if (query.categoryId) {
-      where.categoryId = query.categoryId;
+      queryBuilder = queryBuilder.eq('category_id', query.categoryId);
     }
 
     if (query.branchId) {
-      where.branchId = query.branchId;
+      queryBuilder = queryBuilder.eq('branch_id', query.branchId);
     }
 
-    if (query.description) {
-      where.description = {
-        contains: query.description,
-        mode: 'insensitive',
-      };
+    if (query.startDate) {
+      queryBuilder = queryBuilder.gte('due_date', query.startDate);
     }
 
-    if (query.startDate || query.endDate) {
-      where.dueDate = {};
-      if (query.startDate) {
-        where.dueDate.gte = new Date(query.startDate);
-      }
-      if (query.endDate) {
-        where.dueDate.lte = new Date(query.endDate);
-      }
+    if (query.endDate) {
+      queryBuilder = queryBuilder.lte('due_date', query.endDate);
     }
 
-    return this.prisma.financialTransaction.findMany({
-      where,
-      include: this.defaultInclude,
-      orderBy: { dueDate: 'asc' },
-    });
+    const { data: transactions, error } = await queryBuilder.order('due_date', { ascending: false });
+
+    if (error) throw error;
+    return transactions || [];
   }
 
-  /**
-   * Contas a pagar (EXPENSE) com totais
-   *
-   * Retorna:
-   * - overdue: Vencido (dueDate < hoje E status PENDING)
-   * - toPay: A pagar (dueDate >= hoje E status PENDING)
-   * - paid: Pago (status PAID)
-   * - totalToPay: Total a pagar (overdue + toPay)
-   * - taxes: Taxas (soma dos valores de juros)
-   * - totalWithTaxes: Total com taxas
-   * - transactions: Lista de transacoes
-   */
-  async getPayableTotals(query: QueryFinancialTransactionDto) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const baseWhere: any = {
-      type: 'EXPENSE',
-    };
-
-    if (query.branchId) {
-      baseWhere.branchId = query.branchId;
-    }
-
-    if (query.categoryId) {
-      baseWhere.categoryId = query.categoryId;
-    }
-
-    if (query.startDate || query.endDate) {
-      baseWhere.dueDate = {};
-      if (query.startDate) {
-        baseWhere.dueDate.gte = new Date(query.startDate);
-      }
-      if (query.endDate) {
-        baseWhere.dueDate.lte = new Date(query.endDate);
-      }
-    }
-
-    // Buscar todas as transacoes EXPENSE com os filtros
-    const transactions = await this.prisma.financialTransaction.findMany({
-      where: baseWhere,
-      include: this.defaultInclude,
-      orderBy: { dueDate: 'asc' },
-    });
-
-    // Calcular totais
-    let overdue = 0;
-    let toPay = 0;
-    let paid = 0;
-    let taxes = 0;
-
-    for (const tx of transactions) {
-      const interestPercent = tx.interest ? Number(tx.interest) : 0;
-      const interestAmount = Math.round(tx.amount * interestPercent / 100);
-      taxes += interestAmount;
-
-      if (tx.status === 'PAID') {
-        paid += tx.netAmount;
-      } else if (tx.status === 'PENDING' && tx.dueDate < today) {
-        overdue += tx.netAmount;
-      } else if (tx.status === 'PENDING' && tx.dueDate >= today) {
-        toPay += tx.netAmount;
-      }
-    }
-
-    const totalToPay = overdue + toPay;
-    const totalWithTaxes = totalToPay + taxes;
-
-    return {
-      overdue,
-      toPay,
-      paid,
-      totalToPay,
-      taxes,
-      totalWithTaxes,
-      transactions,
-    };
-  }
-
-  /**
-   * Contas a receber (REVENUE) com totais
-   *
-   * Retorna:
-   * - notReceived: Nao recebidos (status PENDING E dueDate < hoje)
-   * - toReceive: A receber (status PENDING E dueDate >= hoje)
-   * - received: Recebido (status PAID)
-   * - totalToReceive: Total a receber (notReceived + toReceive)
-   * - transactions: Lista de transacoes
-   */
-  async getReceivableTotals(query: QueryFinancialTransactionDto) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const baseWhere: any = {
-      type: 'REVENUE',
-    };
-
-    if (query.branchId) {
-      baseWhere.branchId = query.branchId;
-    }
-
-    if (query.categoryId) {
-      baseWhere.categoryId = query.categoryId;
-    }
-
-    if (query.startDate || query.endDate) {
-      baseWhere.dueDate = {};
-      if (query.startDate) {
-        baseWhere.dueDate.gte = new Date(query.startDate);
-      }
-      if (query.endDate) {
-        baseWhere.dueDate.lte = new Date(query.endDate);
-      }
-    }
-
-    const transactions = await this.prisma.financialTransaction.findMany({
-      where: baseWhere,
-      include: this.defaultInclude,
-      orderBy: { dueDate: 'asc' },
-    });
-
-    let notReceived = 0;
-    let toReceive = 0;
-    let received = 0;
-
-    for (const tx of transactions) {
-      if (tx.status === 'PAID') {
-        received += tx.netAmount;
-      } else if (tx.status === 'PENDING' && tx.dueDate < today) {
-        notReceived += tx.netAmount;
-      } else if (tx.status === 'PENDING' && tx.dueDate >= today) {
-        toReceive += tx.netAmount;
-      }
-    }
-
-    const totalToReceive = notReceived + toReceive;
-
-    return {
-      notReceived,
-      toReceive,
-      received,
-      totalToReceive,
-      transactions,
-    };
-  }
-
-  /**
-   * Balanco/movimentacoes por periodo com filtro opcional de filial
-   *
-   * Retorna lista de transacoes no periodo e resumo de entradas/saidas
-   */
-  async getBalance(query: QueryFinancialTransactionDto) {
-    const where: any = {};
-
-    if (query.branchId) {
-      where.branchId = query.branchId;
-    }
-
-    if (query.startDate || query.endDate) {
-      where.dueDate = {};
-      if (query.startDate) {
-        where.dueDate.gte = new Date(query.startDate);
-      }
-      if (query.endDate) {
-        where.dueDate.lte = new Date(query.endDate);
-      }
-    }
-
-    const transactions = await this.prisma.financialTransaction.findMany({
-      where,
-      include: this.defaultInclude,
-      orderBy: { dueDate: 'asc' },
-    });
-
-    let totalRevenue = 0;
-    let totalExpense = 0;
-
-    for (const tx of transactions) {
-      if (tx.type === 'REVENUE' && tx.status === 'PAID') {
-        totalRevenue += tx.netAmount;
-      } else if (tx.type === 'EXPENSE' && tx.status === 'PAID') {
-        totalExpense += tx.netAmount;
-      }
-    }
-
-    const balance = totalRevenue - totalExpense;
-
-    return {
-      totalRevenue,
-      totalExpense,
-      balance,
-      transactions,
-    };
-  }
-
-  /**
-   * Busca uma transacao por ID com todas as relacoes
-   */
   async findOne(id: string) {
-    const transaction = await this.prisma.financialTransaction.findUnique({
-      where: { id },
-      include: this.defaultInclude,
-    });
+    const { data: transaction, error } = await this.supabase
+      .from('financial_transactions')
+      .select('*')
+      .eq('id', id)
+      .single();
 
-    if (!transaction) {
-      throw new NotFoundException('Transacao financeira nao encontrada');
+    if (error || !transaction) {
+      throw new NotFoundException('Transação financeira não encontrada');
     }
 
     return transaction;
   }
 
-  /**
-   * Marca uma transacao como paga
-   * Define paidAt = agora e status = PAID
-   */
-  async markAsPaid(id: string) {
-    const transaction = await this.prisma.financialTransaction.findUnique({
-      where: { id },
-    });
-
-    if (!transaction) {
-      throw new NotFoundException('Transacao financeira nao encontrada');
-    }
-
-    if (transaction.status === 'PAID') {
-      throw new BadRequestException('Esta transacao ja esta paga');
-    }
-
-    if (transaction.status === 'CANCELED') {
-      throw new BadRequestException('Nao e possivel pagar uma transacao cancelada');
-    }
-
-    return this.prisma.financialTransaction.update({
-      where: { id },
-      data: {
-        status: 'PAID',
-        paidAt: new Date(),
-      },
-      include: this.defaultInclude,
-    });
-  }
-
-  /**
-   * Atualiza uma transacao financeira
-   * Recalcula netAmount se amount, discount ou interest foram alterados
-   */
   async update(id: string, dto: UpdateFinancialTransactionDto) {
-    const transaction = await this.prisma.financialTransaction.findUnique({
-      where: { id },
-    });
+    const { data: transaction, error: findError } = await this.supabase
+      .from('financial_transactions')
+      .select('amount, discount, interest')
+      .eq('id', id)
+      .single();
 
-    if (!transaction) {
-      throw new NotFoundException('Transacao financeira nao encontrada');
+    if (findError || !transaction) {
+      throw new NotFoundException('Transação financeira não encontrada');
     }
 
-    // Validar categoria se informada
-    if (dto.categoryId) {
-      const category = await this.prisma.financialCategory.findUnique({
-        where: { id: dto.categoryId },
-      });
+    const newAmount = dto.amount !== undefined ? dto.amount : transaction.amount;
+    const newDiscount = dto.discount !== undefined ? dto.discount : transaction.discount;
+    const newInterest = dto.interest !== undefined ? dto.interest : transaction.interest;
+    const netAmount = this.calculateNetAmount(newAmount, newDiscount, newInterest);
 
-      if (!category) {
-        throw new NotFoundException('Categoria nao encontrada');
-      }
-    }
+    const updateData: any = { net_amount: netAmount };
+    if (dto.type !== undefined) updateData.type = dto.type;
+    if (dto.description !== undefined) updateData.description = dto.description;
+    if (dto.amount !== undefined) updateData.amount = dto.amount;
+    if (dto.discount !== undefined) updateData.discount = dto.discount;
+    if (dto.interest !== undefined) updateData.interest = dto.interest;
+    if (dto.dueDate !== undefined) updateData.due_date = dto.dueDate;
+    if (dto.status !== undefined) updateData.status = dto.status;
+    if (dto.categoryId !== undefined) updateData.category_id = dto.categoryId;
+    if (dto.subcategoryId !== undefined) updateData.subcategory_id = dto.subcategoryId;
+    if (dto.branchId !== undefined) updateData.branch_id = dto.branchId;
+    if (dto.bankAccountId !== undefined) updateData.bank_account_id = dto.bankAccountId;
+    if (dto.paymentMethodConfigId !== undefined) updateData.payment_method_config_id = dto.paymentMethodConfigId;
+    if (dto.notes !== undefined) updateData.notes = dto.notes;
 
-    // Validar subcategoria se informada
-    if (dto.subcategoryId) {
-      const subcategory = await this.prisma.financialCategory.findUnique({
-        where: { id: dto.subcategoryId },
-      });
+    const { data: updated, error } = await this.supabase
+      .from('financial_transactions')
+      .update(updateData)
+      .eq('id', id)
+      .select('*')
+      .single();
 
-      if (!subcategory) {
-        throw new NotFoundException('Subcategoria nao encontrada');
-      }
-    }
-
-    // Validar filial se informada
-    if (dto.branchId) {
-      const branch = await this.prisma.branch.findUnique({
-        where: { id: dto.branchId },
-      });
-
-      if (!branch) {
-        throw new NotFoundException('Filial nao encontrada');
-      }
-    }
-
-    // Validar conta bancaria se informada
-    if (dto.bankAccountId) {
-      const bankAccount = await this.prisma.bankAccount.findUnique({
-        where: { id: dto.bankAccountId },
-      });
-
-      if (!bankAccount) {
-        throw new NotFoundException('Conta bancaria nao encontrada');
-      }
-    }
-
-    // Validar metodo de pagamento se informado
-    if (dto.paymentMethodConfigId) {
-      const paymentMethodConfig = await this.prisma.paymentMethodConfig.findUnique({
-        where: { id: dto.paymentMethodConfigId },
-      });
-
-      if (!paymentMethodConfig) {
-        throw new NotFoundException('Configuracao de metodo de pagamento nao encontrada');
-      }
-    }
-
-    // Preparar dados para atualizacao
-    const data: any = {};
-
-    if (dto.type !== undefined) data.type = dto.type;
-    if (dto.description !== undefined) data.description = dto.description;
-    if (dto.paymentCondition !== undefined) data.paymentCondition = dto.paymentCondition;
-    if (dto.status !== undefined) data.status = dto.status;
-    if (dto.isRecurring !== undefined) data.isRecurring = dto.isRecurring;
-    if (dto.dueDate !== undefined) data.dueDate = new Date(dto.dueDate);
-    if (dto.branchId !== undefined) data.branchId = dto.branchId;
-    if (dto.categoryId !== undefined) data.categoryId = dto.categoryId;
-    if (dto.subcategoryId !== undefined) data.subcategoryId = dto.subcategoryId;
-    if (dto.bankAccountId !== undefined) data.bankAccountId = dto.bankAccountId;
-    if (dto.paymentMethodConfigId !== undefined) data.paymentMethodConfigId = dto.paymentMethodConfigId;
-    if (dto.notes !== undefined) data.notes = dto.notes;
-
-    // Recalcular netAmount se amount, discount ou interest mudaram
-    const needsRecalculation =
-      dto.amount !== undefined ||
-      dto.discount !== undefined ||
-      dto.interest !== undefined;
-
-    if (needsRecalculation) {
-      const newAmount = dto.amount ?? transaction.amount;
-      const newDiscount = dto.discount !== undefined
-        ? dto.discount
-        : transaction.discount
-          ? Number(transaction.discount)
-          : undefined;
-      const newInterest = dto.interest !== undefined
-        ? dto.interest
-        : transaction.interest
-          ? Number(transaction.interest)
-          : undefined;
-
-      data.amount = newAmount;
-      data.discount = newDiscount != null ? new Prisma.Decimal(newDiscount) : null;
-      data.interest = newInterest != null ? new Prisma.Decimal(newInterest) : null;
-      data.netAmount = this.calculateNetAmount(newAmount, newDiscount, newInterest);
-    } else {
-      if (dto.amount !== undefined) data.amount = dto.amount;
-    }
-
-    return this.prisma.financialTransaction.update({
-      where: { id },
-      data,
-      include: this.defaultInclude,
-    });
+    if (error) throw error;
+    return updated;
   }
 
-  /**
-   * Remove uma transacao financeira
-   */
-  async remove(id: string): Promise<void> {
-    const transaction = await this.prisma.financialTransaction.findUnique({
-      where: { id },
-    });
+  async markAsPaid(id: string) {
+    const { data: transaction, error: findError } = await this.supabase
+      .from('financial_transactions')
+      .select('id, status')
+      .eq('id', id)
+      .single();
 
-    if (!transaction) {
-      throw new NotFoundException('Transacao financeira nao encontrada');
+    if (findError || !transaction) {
+      throw new NotFoundException('Transação financeira não encontrada');
     }
 
-    await this.prisma.financialTransaction.delete({
-      where: { id },
-    });
+    const { data: updated, error } = await this.supabase
+      .from('financial_transactions')
+      .update({ status: 'PAID', paid_at: new Date().toISOString() })
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return updated;
+  }
+
+  async remove(id: string) {
+    const { data: transaction, error: findError } = await this.supabase
+      .from('financial_transactions')
+      .select('id')
+      .eq('id', id)
+      .single();
+
+    if (findError || !transaction) {
+      throw new NotFoundException('Transação financeira não encontrada');
+    }
+
+    const { error } = await this.supabase.from('financial_transactions').delete().eq('id', id);
+
+    if (error) throw error;
+  }
+
+  async getPayableTotals(query: QueryFinancialTransactionDto) {
+    let queryBuilder = this.supabase
+      .from('financial_transactions')
+      .select('status, net_amount')
+      .eq('type', 'EXPENSE');
+
+    if (query.startDate) queryBuilder = queryBuilder.gte('due_date', query.startDate);
+    if (query.endDate) queryBuilder = queryBuilder.lte('due_date', query.endDate);
+    if (query.branchId) queryBuilder = queryBuilder.eq('branch_id', query.branchId);
+
+    const { data, error } = await queryBuilder;
+    if (error) throw error;
+
+    let total = 0, pending = 0, paid = 0, overdue = 0;
+    for (const t of data || []) {
+      total += t.net_amount;
+      if (t.status === 'PENDING') pending += t.net_amount;
+      if (t.status === 'PAID') paid += t.net_amount;
+      if (t.status === 'OVERDUE') overdue += t.net_amount;
+    }
+    return { total, pending, paid, overdue };
+  }
+
+  async getReceivableTotals(query: QueryFinancialTransactionDto) {
+    let queryBuilder = this.supabase
+      .from('financial_transactions')
+      .select('status, net_amount')
+      .eq('type', 'REVENUE');
+
+    if (query.startDate) queryBuilder = queryBuilder.gte('due_date', query.startDate);
+    if (query.endDate) queryBuilder = queryBuilder.lte('due_date', query.endDate);
+    if (query.branchId) queryBuilder = queryBuilder.eq('branch_id', query.branchId);
+
+    const { data, error } = await queryBuilder;
+    if (error) throw error;
+
+    let total = 0, pending = 0, paid = 0, overdue = 0;
+    for (const t of data || []) {
+      total += t.net_amount;
+      if (t.status === 'PENDING') pending += t.net_amount;
+      if (t.status === 'PAID') paid += t.net_amount;
+      if (t.status === 'OVERDUE') overdue += t.net_amount;
+    }
+    return { total, pending, paid, overdue };
+  }
+
+  async getBalance(query: QueryFinancialTransactionDto) {
+    const payable = await this.getPayableTotals(query);
+    const receivable = await this.getReceivableTotals(query);
+    return {
+      payable,
+      receivable,
+      balance: receivable.total - payable.total,
+    };
+  }
+
+  async getSummary(type?: string, startDate?: string, endDate?: string) {
+    let queryBuilder = this.supabase.from('financial_transactions').select('type, status, net_amount');
+
+    if (type) {
+      queryBuilder = queryBuilder.eq('type', type);
+    }
+
+    if (startDate) {
+      queryBuilder = queryBuilder.gte('due_date', startDate);
+    }
+
+    if (endDate) {
+      queryBuilder = queryBuilder.lte('due_date', endDate);
+    }
+
+    const { data: transactions, error } = await queryBuilder;
+
+    if (error) throw error;
+
+    const summary = {
+      totalPending: 0,
+      totalPaid: 0,
+      totalOverdue: 0,
+      total: 0,
+    };
+
+    for (const t of transactions || []) {
+      summary.total += t.net_amount;
+      if (t.status === 'PENDING') summary.totalPending += t.net_amount;
+      if (t.status === 'PAID') summary.totalPaid += t.net_amount;
+      if (t.status === 'OVERDUE') summary.totalOverdue += t.net_amount;
+    }
+
+    return summary;
   }
 }

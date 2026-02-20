@@ -73,7 +73,7 @@ export function Reports() {
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-4">
           <p className="text-sm text-[var(--text-muted)]">Receita Total</p>
-          <p className="text-2xl font-bold text-blue-500">{formatCurrency(report.summary.totalRevenue)}</p>
+          <p className="text-2xl font-bold text-[#C8923A]">{formatCurrency(report.summary.totalRevenue)}</p>
         </div>
         <div className="rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-4">
           <p className="text-sm text-[var(--text-muted)]">Transações</p>
@@ -145,9 +145,9 @@ export function Reports() {
               <p className="text-sm text-[var(--text-muted)] mb-2">Atendimentos</p>
               <div className="grid grid-cols-2 gap-2 text-sm text-[var(--text-secondary)]">
                 <span>Total: {prof.stats.total}</span>
-                <span className="text-blue-500">Atendidos: {prof.stats.attended}</span>
-                <span className="text-red-500">Cancelados: {prof.stats.canceled}</span>
-                <span className="text-red-500">Não compareceu: {prof.stats.noShow}</span>
+                <span className="text-[#C8923A]">Atendidos: {prof.stats.attended}</span>
+                <span className="text-[#A63030]">Cancelados: {prof.stats.canceled}</span>
+                <span className="text-[#A63030]">Não compareceu: {prof.stats.noShow}</span>
               </div>
               <p className="mt-2 text-sm text-[var(--text-secondary)]">Taxa de comparecimento: <strong className="text-[var(--text-primary)]">{prof.stats.attendanceRate}%</strong></p>
             </div>
@@ -199,7 +199,7 @@ export function Reports() {
       <div className="grid gap-4 md:grid-cols-4">
         <div className="rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-4">
           <p className="text-sm text-[var(--text-muted)]">Novos Clientes</p>
-          <p className="text-2xl font-bold text-blue-500">{report.summary.newClients}</p>
+          <p className="text-2xl font-bold text-[#C8923A]">{report.summary.newClients}</p>
         </div>
         <div className="rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-4">
           <p className="text-sm text-[var(--text-muted)]">Clientes Ativos</p>
@@ -207,11 +207,11 @@ export function Reports() {
         </div>
         <div className="rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-4">
           <p className="text-sm text-[var(--text-muted)]">Com Dívidas</p>
-          <p className="text-2xl font-bold text-red-500">{report.summary.clientsWithDebts}</p>
+          <p className="text-2xl font-bold text-[#A63030]">{report.summary.clientsWithDebts}</p>
         </div>
         <div className="rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-4">
           <p className="text-sm text-[var(--text-muted)]">Total em Dívidas</p>
-          <p className="text-2xl font-bold text-red-500">{formatCurrency(report.summary.totalDebt)}</p>
+          <p className="text-2xl font-bold text-[#A63030]">{formatCurrency(report.summary.totalDebt)}</p>
         </div>
       </div>
 
@@ -243,10 +243,10 @@ export function Reports() {
       {/* Debtors */}
       {report.debtors.length > 0 && (
         <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
-          <h4 className="mb-4 font-semibold text-red-500">Clientes com Dívidas</h4>
+          <h4 className="mb-4 font-semibold text-[#A63030]">Clientes com Dívidas</h4>
           <table className="min-w-full text-sm">
             <thead className="border-b border-red-500/30">
-              <tr className="text-red-400">
+              <tr className="text-[#C45050]">
                 <th className="pb-2 text-left">Nome</th>
                 <th className="pb-2 text-left">Telefone</th>
                 <th className="pb-2 text-right">Dívidas</th>
@@ -259,7 +259,7 @@ export function Reports() {
                   <td className="py-2">{debtor.name}</td>
                   <td className="py-2">{debtor.phone}</td>
                   <td className="py-2 text-right">{debtor.debtsCount}</td>
-                  <td className="py-2 text-right font-medium text-red-500">{formatCurrency(debtor.totalDebt)}</td>
+                  <td className="py-2 text-right font-medium text-[#A63030]">{formatCurrency(debtor.totalDebt)}</td>
                 </tr>
               ))}
             </tbody>
@@ -280,13 +280,13 @@ export function Reports() {
         </div>
         <div className="rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-4">
           <p className="text-sm text-[var(--text-muted)]">Dívidas Pagas</p>
-          <p className="text-2xl font-bold text-blue-500">{report.summary.debtsPaidCount}</p>
+          <p className="text-2xl font-bold text-[#C8923A]">{report.summary.debtsPaidCount}</p>
           <p className="text-sm text-[var(--text-muted)]">{formatCurrency(report.summary.totalPaid)}</p>
         </div>
         <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
           <p className="text-sm text-[var(--text-muted)]">Em Aberto</p>
-          <p className="text-2xl font-bold text-red-500">{report.summary.currentDebtsCount}</p>
-          <p className="text-sm text-red-400">{formatCurrency(report.summary.totalOutstanding)}</p>
+          <p className="text-2xl font-bold text-[#A63030]">{report.summary.currentDebtsCount}</p>
+          <p className="text-sm text-[#C45050]">{formatCurrency(report.summary.totalOutstanding)}</p>
         </div>
       </div>
 
@@ -311,8 +311,8 @@ export function Reports() {
                   <td className="py-2">{debt.clientName}</td>
                   <td className="py-2">{debt.clientPhone}</td>
                   <td className="py-2 text-right">{formatCurrency(debt.amount)}</td>
-                  <td className="py-2 text-right text-blue-500">{formatCurrency(debt.amountPaid)}</td>
-                  <td className="py-2 text-right font-medium text-red-500">{formatCurrency(debt.remainingBalance)}</td>
+                  <td className="py-2 text-right text-[#C8923A]">{formatCurrency(debt.amountPaid)}</td>
+                  <td className="py-2 text-right font-medium text-[#A63030]">{formatCurrency(debt.remainingBalance)}</td>
                   <td className="py-2 text-right text-[var(--text-muted)]">{debt.daysPending}d</td>
                 </tr>
               ))}
@@ -329,7 +329,7 @@ export function Reports() {
       <div className="grid gap-4 md:grid-cols-4">
         <div className="rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-4">
           <p className="text-sm text-[var(--text-muted)]">Receita Total</p>
-          <p className="text-2xl font-bold text-blue-500">{formatCurrency(report.summary.totalRevenue)}</p>
+          <p className="text-2xl font-bold text-[#C8923A]">{formatCurrency(report.summary.totalRevenue)}</p>
         </div>
         <div className="rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-4">
           <p className="text-sm text-[var(--text-muted)]">Média Diária</p>
@@ -341,7 +341,7 @@ export function Reports() {
         </div>
         <div className="rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-4">
           <p className="text-sm text-[var(--text-muted)]">Diferença Total</p>
-          <p className={`text-2xl font-bold ${report.summary.totalDiscrepancy === 0 ? 'text-blue-500' : 'text-red-500'}`}>
+          <p className={`text-2xl font-bold ${report.summary.totalDiscrepancy === 0 ? 'text-[#C8923A]' : 'text-[#A63030]'}`}>
             {formatCurrency(report.summary.totalDiscrepancy)}
           </p>
         </div>
@@ -382,12 +382,12 @@ export function Reports() {
                 <td className="py-2">{formatDate(reg.date)}</td>
                 <td className="py-2">{reg.openedBy}</td>
                 <td className="py-2">
-                  <span className={`rounded-lg px-2 py-0.5 text-xs ${reg.isOpen ? 'bg-blue-500/20 text-blue-500' : 'bg-[var(--hover-bg)] text-[var(--text-muted)]'}`}>
+                  <span className={`rounded-lg px-2 py-0.5 text-xs ${reg.isOpen ? 'bg-[#C8923A]/20 text-[#C8923A]' : 'bg-[var(--hover-bg)] text-[var(--text-muted)]'}`}>
                     {reg.isOpen ? 'Aberto' : 'Fechado'}
                   </span>
                 </td>
                 <td className="py-2 text-right font-medium text-[var(--text-primary)]">{formatCurrency(reg.totalRevenue || 0)}</td>
-                <td className={`py-2 text-right ${(reg.discrepancy || 0) === 0 ? '' : 'text-red-500'}`}>
+                <td className={`py-2 text-right ${(reg.discrepancy || 0) === 0 ? '' : 'text-[#A63030]'}`}>
                   {formatCurrency(reg.discrepancy || 0)}
                 </td>
               </tr>
@@ -448,7 +448,7 @@ export function Reports() {
             }}
             className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
               selectedReport === option.id
-                ? 'bg-blue-600 text-white'
+                ? 'bg-[#8B6914] text-white'
                 : 'bg-[var(--card-bg)] text-[var(--text-secondary)] border border-[var(--border-color)] hover:bg-[var(--hover-bg)]'
             }`}
           >
@@ -471,7 +471,7 @@ export function Reports() {
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-2 pl-10 pr-4 text-sm text-[var(--text-primary)] focus:border-blue-500 focus:outline-none"
+                className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-2 pl-10 pr-4 text-sm text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none"
               />
             </div>
           </div>
@@ -485,14 +485,14 @@ export function Reports() {
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-2 pl-10 pr-4 text-sm text-[var(--text-primary)] focus:border-blue-500 focus:outline-none"
+                className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-2 pl-10 pr-4 text-sm text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none"
               />
             </div>
           </div>
           <button
             onClick={fetchReport}
             disabled={loading}
-            className="flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-6 py-2 text-sm font-medium text-white hover:bg-[#725510] disabled:opacity-50"
           >
             <BarChart3 className="h-4 w-4" />
             Gerar Relatório

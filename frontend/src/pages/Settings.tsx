@@ -41,12 +41,12 @@ function AppearanceTab() {
                 onClick={() => setTheme(t.id)}
                 className={`rounded-xl border-2 p-4 text-center transition-all ${
                   theme === t.id
-                    ? 'border-blue-500 bg-blue-500/10'
-                    : 'border-[var(--border-color)] hover:border-blue-500/50'
+                    ? 'border-[#C8923A] bg-[#C8923A]/10'
+                    : 'border-[var(--border-color)] hover:border-[#C8923A]/50'
                 }`}
               >
                 <div className={`mb-3 flex h-14 items-center justify-center rounded-lg ${t.preview}`}>
-                  <t.icon className={`h-6 w-6 ${t.id === 'light' ? 'text-yellow-500' : 'text-blue-400'}`} />
+                  <t.icon className={`h-6 w-6 ${t.id === 'light' ? 'text-yellow-500' : 'text-[#D4A85C]'}`} />
                 </div>
                 <p className="text-sm font-medium text-[var(--text-primary)]">{t.label}</p>
               </button>
@@ -67,8 +67,8 @@ function AppearanceTab() {
           <h3 className="mb-4 font-medium text-[var(--text-primary)]">Cor Principal</h3>
           <div className="flex gap-3">
             {[
-              { color: 'bg-blue-600', ring: 'ring-blue-600', active: true },
-              { color: 'bg-red-600', ring: 'ring-red-600', active: false },
+              { color: 'bg-[#8B6914]', ring: 'ring-[#8B6914]', active: true },
+              { color: 'bg-[#8B2020]', ring: 'ring-[#8B2020]', active: false },
               { color: 'bg-zinc-600', ring: 'ring-zinc-600', active: false },
               { color: 'bg-zinc-600', ring: 'ring-zinc-600', active: false },
               { color: 'bg-zinc-600', ring: 'ring-zinc-600', active: false },
@@ -139,7 +139,7 @@ export function Settings() {
             onClick={() => setActiveTab(tab.id)}
             className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
               activeTab === tab.id
-                ? 'border-blue-500 text-blue-500'
+                ? 'border-[#C8923A] text-[#C8923A]'
                 : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
             }`}
           >
@@ -163,7 +163,7 @@ export function Settings() {
                 type="text"
                 value={businessSettings.businessName}
                 onChange={(e) => setBusinessSettings({ ...businessSettings, businessName: e.target.value })}
-                className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-4 py-2 text-[var(--text-primary)] focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-4 py-2 text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none"
               />
             </div>
 
@@ -175,7 +175,7 @@ export function Settings() {
                 type="text"
                 value={businessSettings.phone}
                 onChange={(e) => setBusinessSettings({ ...businessSettings, phone: e.target.value })}
-                className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-4 py-2 text-[var(--text-primary)] focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-4 py-2 text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none"
               />
             </div>
 
@@ -187,7 +187,7 @@ export function Settings() {
                 type="text"
                 value={businessSettings.address}
                 onChange={(e) => setBusinessSettings({ ...businessSettings, address: e.target.value })}
-                className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-4 py-2 text-[var(--text-primary)] focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-4 py-2 text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none"
               />
             </div>
           </div>
@@ -206,7 +206,7 @@ export function Settings() {
                 type="time"
                 value={businessSettings.openingTime}
                 onChange={(e) => setBusinessSettings({ ...businessSettings, openingTime: e.target.value })}
-                className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-4 py-2 text-[var(--text-primary)] focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-4 py-2 text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none"
               />
             </div>
 
@@ -218,7 +218,7 @@ export function Settings() {
                 type="time"
                 value={businessSettings.closingTime}
                 onChange={(e) => setBusinessSettings({ ...businessSettings, closingTime: e.target.value })}
-                className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-4 py-2 text-[var(--text-primary)] focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-4 py-2 text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none"
               />
             </div>
 
@@ -229,7 +229,7 @@ export function Settings() {
               <select
                 value={businessSettings.slotDuration}
                 onChange={(e) => setBusinessSettings({ ...businessSettings, slotDuration: Number(e.target.value) })}
-                className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-4 py-2 text-[var(--text-primary)] focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-4 py-2 text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none"
               >
                 <option value={15}>15 minutos</option>
                 <option value={30}>30 minutos</option>
@@ -242,7 +242,7 @@ export function Settings() {
           <div className="mt-8 flex justify-end">
             <button
               onClick={handleSaveBusinessSettings}
-              className="flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-6 py-2 text-sm font-medium text-white hover:bg-[#725510]"
             >
               <Save className="h-4 w-4" />
               Salvar Alterações
@@ -269,7 +269,7 @@ export function Settings() {
                   onChange={(e) => setNotificationSettings({ ...notificationSettings, emailNotifications: e.target.checked })}
                   className="peer sr-only"
                 />
-                <div className="peer h-6 w-11 rounded-full bg-zinc-600 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-zinc-500 after:bg-zinc-300 after:transition-all after:content-[''] peer-checked:bg-blue-600 peer-checked:after:translate-x-full peer-checked:after:border-white peer-checked:after:bg-white"></div>
+                <div className="peer h-6 w-11 rounded-full bg-zinc-600 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-zinc-500 after:bg-zinc-300 after:transition-all after:content-[''] peer-checked:bg-[#8B6914] peer-checked:after:translate-x-full peer-checked:after:border-white peer-checked:after:bg-white"></div>
               </label>
             </div>
 
@@ -285,7 +285,7 @@ export function Settings() {
                   onChange={(e) => setNotificationSettings({ ...notificationSettings, smsNotifications: e.target.checked })}
                   className="peer sr-only"
                 />
-                <div className="peer h-6 w-11 rounded-full bg-zinc-600 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-zinc-500 after:bg-zinc-300 after:transition-all after:content-[''] peer-checked:bg-blue-600 peer-checked:after:translate-x-full peer-checked:after:border-white peer-checked:after:bg-white"></div>
+                <div className="peer h-6 w-11 rounded-full bg-zinc-600 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-zinc-500 after:bg-zinc-300 after:transition-all after:content-[''] peer-checked:bg-[#8B6914] peer-checked:after:translate-x-full peer-checked:after:border-white peer-checked:after:bg-white"></div>
               </label>
             </div>
 
@@ -301,19 +301,19 @@ export function Settings() {
                   onChange={(e) => setNotificationSettings({ ...notificationSettings, appointmentReminders: e.target.checked })}
                   className="peer sr-only"
                 />
-                <div className="peer h-6 w-11 rounded-full bg-zinc-600 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-zinc-500 after:bg-zinc-300 after:transition-all after:content-[''] peer-checked:bg-blue-600 peer-checked:after:translate-x-full peer-checked:after:border-white peer-checked:after:bg-white"></div>
+                <div className="peer h-6 w-11 rounded-full bg-zinc-600 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-zinc-500 after:bg-zinc-300 after:transition-all after:content-[''] peer-checked:bg-[#8B6914] peer-checked:after:translate-x-full peer-checked:after:border-white peer-checked:after:bg-white"></div>
               </label>
             </div>
 
             {notificationSettings.appointmentReminders && (
-              <div className="ml-4 rounded-xl border border-blue-500/30 bg-blue-500/10 p-4">
+              <div className="ml-4 rounded-xl border border-[#C8923A]/30 bg-[#C8923A]/10 p-4">
                 <label className="mb-2 block text-sm font-medium text-[var(--text-secondary)]">
                   Enviar lembrete com antecedência de
                 </label>
                 <select
                   value={notificationSettings.reminderHoursBefore}
                   onChange={(e) => setNotificationSettings({ ...notificationSettings, reminderHoursBefore: Number(e.target.value) })}
-                  className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-4 py-2 text-[var(--text-primary)] focus:border-blue-500 focus:outline-none"
+                  className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-4 py-2 text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none"
                 >
                   <option value={1}>1 hora</option>
                   <option value={2}>2 horas</option>
@@ -329,7 +329,7 @@ export function Settings() {
           <div className="mt-8 flex justify-end">
             <button
               onClick={handleSaveNotificationSettings}
-              className="flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-6 py-2 text-sm font-medium text-white hover:bg-[#725510]"
             >
               <Save className="h-4 w-4" />
               Salvar Alterações
@@ -353,7 +353,7 @@ export function Settings() {
                   </label>
                   <input
                     type="password"
-                    className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] px-4 py-2 text-[var(--text-primary)] focus:border-blue-500 focus:outline-none"
+                    className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] px-4 py-2 text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none"
                   />
                 </div>
                 <div></div>
@@ -363,7 +363,7 @@ export function Settings() {
                   </label>
                   <input
                     type="password"
-                    className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] px-4 py-2 text-[var(--text-primary)] focus:border-blue-500 focus:outline-none"
+                    className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] px-4 py-2 text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none"
                   />
                 </div>
                 <div>
@@ -372,12 +372,12 @@ export function Settings() {
                   </label>
                   <input
                     type="password"
-                    className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] px-4 py-2 text-[var(--text-primary)] focus:border-blue-500 focus:outline-none"
+                    className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] px-4 py-2 text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none"
                   />
                 </div>
               </div>
               <div className="mt-4 flex justify-end">
-                <button className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+                <button className="rounded-xl bg-[#8B6914] px-4 py-2 text-sm font-medium text-white hover:bg-[#725510]">
                   Atualizar Senha
                 </button>
               </div>
@@ -392,7 +392,7 @@ export function Settings() {
                     <p className="font-medium text-[var(--text-primary)]">Este dispositivo</p>
                     <p className="text-sm text-[var(--text-muted)]">Windows - Chrome</p>
                   </div>
-                  <span className="rounded-full bg-blue-500/20 px-3 py-1 text-xs font-medium text-blue-500">
+                  <span className="rounded-full bg-[#C8923A]/20 px-3 py-1 text-xs font-medium text-[#C8923A]">
                     Ativa
                   </span>
                 </div>

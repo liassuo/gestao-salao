@@ -1,156 +1,121 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { SupabaseService } from '../supabase/supabase.service';
 import {
   CreatePaymentMethodConfigDto,
   UpdatePaymentMethodConfigDto,
   QueryPaymentMethodConfigDto,
 } from './dto';
-import { PaymentMethodScope } from '@prisma/client';
 
 @Injectable()
 export class PaymentMethodConfigService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly supabase: SupabaseService) {}
 
-  /**
-   * Cria uma nova configuracao de forma de pagamento
-   */
   async create(dto: CreatePaymentMethodConfigDto) {
-    return this.prisma.paymentMethodConfig.create({
-      data: {
+    const { data: config, error } = await this.supabase
+      .from('payment_method_configs')
+      .insert({
         name: dto.name,
         type: dto.type,
         scope: dto.scope,
-      },
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        scope: true,
-        isActive: true,
-        createdAt: true,
-      },
-    });
+      })
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return config;
   }
 
-  /**
-   * Lista todas as formas de pagamento com filtros opcionais
-   */
   async findAll(query: QueryPaymentMethodConfigDto) {
-    const where: Record<string, unknown> = {};
+    let queryBuilder = this.supabase.from('payment_method_configs').select('*');
 
     if (query.scope) {
-      where.scope = query.scope;
+      queryBuilder = queryBuilder.eq('scope', query.scope);
     }
 
     if (query.type) {
-      where.type = query.type;
+      queryBuilder = queryBuilder.eq('type', query.type);
     }
 
     if (query.isActive !== undefined) {
-      where.isActive = query.isActive === 'true';
+      queryBuilder = queryBuilder.eq('is_active', query.isActive === 'true');
     }
 
-    return this.prisma.paymentMethodConfig.findMany({
-      where,
-      orderBy: { name: 'asc' },
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        scope: true,
-        isActive: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+    const { data: configs, error } = await queryBuilder.order('name', { ascending: true });
+
+    if (error) throw error;
+    return configs || [];
   }
 
-  /**
-   * Busca uma forma de pagamento por ID
-   */
   async findOne(id: string) {
-    const config = await this.prisma.paymentMethodConfig.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        scope: true,
-        isActive: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+    const { data: config, error } = await this.supabase
+      .from('payment_method_configs')
+      .select('*')
+      .eq('id', id)
+      .single();
 
-    if (!config) {
+    if (error || !config) {
       throw new NotFoundException('Forma de pagamento não encontrada');
     }
 
     return config;
   }
 
-  /**
-   * Busca formas de pagamento por escopo (COMANDA, EXPENSE ou BOTH)
-   * Retorna apenas as ativas e inclui tambem as com escopo BOTH
-   */
-  async findByScope(scope: PaymentMethodScope) {
-    return this.prisma.paymentMethodConfig.findMany({
-      where: {
-        isActive: true,
-        OR: [{ scope }, { scope: 'BOTH' }],
-      },
-      orderBy: { name: 'asc' },
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        scope: true,
-        isActive: true,
-      },
-    });
+  async findByScope(scope: string) {
+    const { data: configs, error } = await this.supabase
+      .from('payment_method_configs')
+      .select('*')
+      .eq('is_active', true)
+      .or(`scope.eq.${scope},scope.eq.BOTH`)
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+    return configs || [];
   }
 
-  /**
-   * Atualiza uma forma de pagamento
-   */
   async update(id: string, dto: UpdatePaymentMethodConfigDto) {
-    const config = await this.prisma.paymentMethodConfig.findUnique({
-      where: { id },
-    });
+    const { data: config, error: findError } = await this.supabase
+      .from('payment_method_configs')
+      .select('id')
+      .eq('id', id)
+      .single();
 
-    if (!config) {
+    if (findError || !config) {
       throw new NotFoundException('Forma de pagamento não encontrada');
     }
 
-    return this.prisma.paymentMethodConfig.update({
-      where: { id },
-      data: dto,
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        scope: true,
-        isActive: true,
-        updatedAt: true,
-      },
-    });
+    const updateData: any = {};
+    if (dto.name !== undefined) updateData.name = dto.name;
+    if (dto.type !== undefined) updateData.type = dto.type;
+    if (dto.scope !== undefined) updateData.scope = dto.scope;
+    if (dto.isActive !== undefined) updateData.is_active = dto.isActive;
+
+    const { data: updated, error } = await this.supabase
+      .from('payment_method_configs')
+      .update(updateData)
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return updated;
   }
 
-  /**
-   * Remove (soft delete) uma forma de pagamento
-   */
   async remove(id: string) {
-    const config = await this.prisma.paymentMethodConfig.findUnique({
-      where: { id },
-    });
+    const { data: config, error: findError } = await this.supabase
+      .from('payment_method_configs')
+      .select('id')
+      .eq('id', id)
+      .single();
 
-    if (!config) {
+    if (findError || !config) {
       throw new NotFoundException('Forma de pagamento não encontrada');
     }
 
-    await this.prisma.paymentMethodConfig.update({
-      where: { id },
-      data: { isActive: false },
-    });
+    const { error } = await this.supabase
+      .from('payment_method_configs')
+      .update({ is_active: false })
+      .eq('id', id);
+
+    if (error) throw error;
   }
 }

@@ -3,352 +3,239 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { SupabaseService } from '../supabase/supabase.service';
 import { CreatePlanDto, UpdatePlanDto, SubscribeClientDto } from './dto';
 
 @Injectable()
 export class SubscriptionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly supabase: SupabaseService) {}
 
-  // ============================================
   // SUBSCRIPTION PLANS
-  // ============================================
 
-  /**
-   * Create a new subscription plan
-   */
   async createPlan(dto: CreatePlanDto) {
-    return this.prisma.subscriptionPlan.create({
-      data: {
+    const { data: plan, error } = await this.supabase
+      .from('subscription_plans')
+      .insert({
         name: dto.name,
         description: dto.description,
         price: dto.price,
-        cutsPerMonth: dto.cutsPerMonth,
-      },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        price: true,
-        cutsPerMonth: true,
-        isActive: true,
-        createdAt: true,
-      },
-    });
+        cuts_per_month: dto.cutsPerMonth,
+      })
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return plan;
   }
 
-  /**
-   * Find all subscription plans
-   */
   async findAllPlans(activeOnly: boolean = true) {
-    const where = activeOnly ? { isActive: true } : {};
+    let queryBuilder = this.supabase
+      .from('subscription_plans')
+      .select('*')
+      .order('price', { ascending: true });
 
-    return this.prisma.subscriptionPlan.findMany({
-      where,
-      orderBy: { price: 'asc' },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        price: true,
-        cutsPerMonth: true,
-        isActive: true,
-        createdAt: true,
-        _count: {
-          select: {
-            subscriptions: {
-              where: { status: 'ACTIVE' },
-            },
-          },
-        },
-      },
-    });
+    if (activeOnly) {
+      queryBuilder = queryBuilder.eq('is_active', true);
+    }
+
+    const { data: plans, error } = await queryBuilder;
+
+    if (error) throw error;
+    return plans || [];
   }
 
-  /**
-   * Find a subscription plan by ID
-   */
-  async findPlan(id: string) {
-    const plan = await this.prisma.subscriptionPlan.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        price: true,
-        cutsPerMonth: true,
-        isActive: true,
-        createdAt: true,
-        updatedAt: true,
-        _count: {
-          select: {
-            subscriptions: true,
-          },
-        },
-      },
-    });
+  async findOnePlan(id: string) {
+    const { data: plan, error } = await this.supabase
+      .from('subscription_plans')
+      .select('*')
+      .eq('id', id)
+      .single();
 
-    if (!plan) {
+    if (error || !plan) {
       throw new NotFoundException('Plano não encontrado');
     }
 
     return plan;
   }
 
-  /**
-   * Update a subscription plan
-   */
   async updatePlan(id: string, dto: UpdatePlanDto) {
-    const plan = await this.prisma.subscriptionPlan.findUnique({
-      where: { id },
-    });
+    const { data: plan, error: findError } = await this.supabase
+      .from('subscription_plans')
+      .select('id')
+      .eq('id', id)
+      .single();
 
-    if (!plan) {
+    if (findError || !plan) {
       throw new NotFoundException('Plano não encontrado');
     }
 
-    return this.prisma.subscriptionPlan.update({
-      where: { id },
-      data: dto,
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        price: true,
-        cutsPerMonth: true,
-        isActive: true,
-        updatedAt: true,
-      },
-    });
+    const updateData: any = {};
+    if (dto.name !== undefined) updateData.name = dto.name;
+    if (dto.description !== undefined) updateData.description = dto.description;
+    if (dto.price !== undefined) updateData.price = dto.price;
+    if (dto.cutsPerMonth !== undefined) updateData.cuts_per_month = dto.cutsPerMonth;
+    if (dto.isActive !== undefined) updateData.is_active = dto.isActive;
+
+    const { data: updated, error } = await this.supabase
+      .from('subscription_plans')
+      .update(updateData)
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return updated;
   }
 
-  /**
-   * Soft delete a subscription plan
-   */
+  async findPlan(id: string) {
+    return this.findOnePlan(id);
+  }
+
   async removePlan(id: string) {
-    const plan = await this.prisma.subscriptionPlan.findUnique({
-      where: { id },
-    });
+    return this.deletePlan(id);
+  }
 
-    if (!plan) {
+  async deletePlan(id: string) {
+    const { data: plan, error: findError } = await this.supabase
+      .from('subscription_plans')
+      .select('id')
+      .eq('id', id)
+      .single();
+
+    if (findError || !plan) {
       throw new NotFoundException('Plano não encontrado');
     }
 
-    // Check if there are active subscriptions
-    const activeSubscriptions = await this.prisma.clientSubscription.count({
-      where: {
-        planId: id,
-        status: 'ACTIVE',
-      },
-    });
+    const { error } = await this.supabase
+      .from('subscription_plans')
+      .update({ is_active: false })
+      .eq('id', id);
 
-    if (activeSubscriptions > 0) {
-      throw new BadRequestException(
-        `Não é possível desativar este plano. Existem ${activeSubscriptions} assinatura(s) ativa(s).`,
-      );
-    }
-
-    await this.prisma.subscriptionPlan.update({
-      where: { id },
-      data: { isActive: false },
-    });
+    if (error) throw error;
   }
 
-  // ============================================
   // CLIENT SUBSCRIPTIONS
-  // ============================================
 
-  /**
-   * Subscribe a client to a plan
-   */
-  async subscribe(dto: SubscribeClientDto) {
-    // Verify client exists
-    const client = await this.prisma.client.findUnique({
-      where: { id: dto.clientId },
-    });
+  async subscribeClient(dto: SubscribeClientDto) {
+    // Verificar se cliente existe
+    const { data: client } = await this.supabase
+      .from('clients')
+      .select('id')
+      .eq('id', dto.clientId)
+      .single();
 
     if (!client) {
       throw new NotFoundException('Cliente não encontrado');
     }
 
-    // Verify plan exists and is active
-    const plan = await this.prisma.subscriptionPlan.findUnique({
-      where: { id: dto.planId },
-    });
+    // Verificar se plano existe
+    const { data: plan } = await this.supabase
+      .from('subscription_plans')
+      .select('id, cuts_per_month')
+      .eq('id', dto.planId)
+      .eq('is_active', true)
+      .single();
 
-    if (!plan || !plan.isActive) {
+    if (!plan) {
       throw new NotFoundException('Plano não encontrado ou inativo');
     }
 
-    // Check if client already has an active subscription
-    const existingSubscription = await this.prisma.clientSubscription.findUnique(
-      {
-        where: { clientId: dto.clientId },
-      },
-    );
+    // Verificar se já tem assinatura ativa
+    const { data: existingSubscription } = await this.supabase
+      .from('client_subscriptions')
+      .select('id')
+      .eq('client_id', dto.clientId)
+      .eq('status', 'ACTIVE')
+      .single();
 
     if (existingSubscription) {
-      if (existingSubscription.status === 'ACTIVE') {
-        throw new BadRequestException(
-          'Cliente já possui uma assinatura ativa. Cancele a atual antes de criar uma nova.',
-        );
-      }
-
-      // If subscription exists but is not active, delete it
-      await this.prisma.clientSubscription.delete({
-        where: { id: existingSubscription.id },
-      });
+      throw new BadRequestException('Cliente já possui uma assinatura ativa');
     }
 
-    // Create new subscription
-    return this.prisma.clientSubscription.create({
-      data: {
-        clientId: dto.clientId,
-        planId: dto.planId,
+    // Criar assinatura
+    const startDate = dto.startDate ? new Date(dto.startDate) : new Date();
+    const endDate = new Date(startDate);
+    endDate.setMonth(endDate.getMonth() + 1);
+
+    const { data: subscription, error } = await this.supabase
+      .from('client_subscriptions')
+      .insert({
+        client_id: dto.clientId,
+        plan_id: dto.planId,
+        start_date: startDate.toISOString(),
+        end_date: endDate.toISOString(),
+        cuts_remaining: plan.cuts_per_month,
         status: 'ACTIVE',
-        startDate: new Date(),
-        cutsUsedThisMonth: 0,
-        lastResetDate: new Date(),
-      },
-      select: {
-        id: true,
-        status: true,
-        startDate: true,
-        cutsUsedThisMonth: true,
-        lastResetDate: true,
-        client: {
-          select: {
-            id: true,
-            name: true,
-            phone: true,
-          },
-        },
-        plan: {
-          select: {
-            id: true,
-            name: true,
-            price: true,
-            cutsPerMonth: true,
-          },
-        },
-      },
-    });
+      })
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return subscription;
   }
 
-  /**
-   * Find all client subscriptions
-   */
-  async findAllSubscriptions(status?: string) {
-    const where = status ? { status: status as any } : {};
-
-    return this.prisma.clientSubscription.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        status: true,
-        startDate: true,
-        endDate: true,
-        cutsUsedThisMonth: true,
-        lastResetDate: true,
-        createdAt: true,
-        client: {
-          select: {
-            id: true,
-            name: true,
-            phone: true,
-          },
-        },
-        plan: {
-          select: {
-            id: true,
-            name: true,
-            price: true,
-            cutsPerMonth: true,
-          },
-        },
-      },
-    });
+  async subscribe(dto: SubscribeClientDto) {
+    return this.subscribeClient(dto);
   }
 
-  /**
-   * Find a subscription by ID
-   */
   async findSubscription(id: string) {
-    const subscription = await this.prisma.clientSubscription.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        status: true,
-        startDate: true,
-        endDate: true,
-        cutsUsedThisMonth: true,
-        lastResetDate: true,
-        createdAt: true,
-        updatedAt: true,
-        client: {
-          select: {
-            id: true,
-            name: true,
-            phone: true,
-            email: true,
-          },
-        },
-        plan: {
-          select: {
-            id: true,
-            name: true,
-            description: true,
-            price: true,
-            cutsPerMonth: true,
-          },
-        },
-      },
-    });
+    const { data: subscription, error } = await this.supabase
+      .from('client_subscriptions')
+      .select('*')
+      .eq('id', id)
+      .single();
 
-    if (!subscription) {
+    if (error || !subscription) {
       throw new NotFoundException('Assinatura não encontrada');
     }
-
     return subscription;
   }
 
-  /**
-   * Find subscription by client ID
-   */
   async findByClient(clientId: string) {
-    const subscription = await this.prisma.clientSubscription.findUnique({
-      where: { clientId },
-      select: {
-        id: true,
-        status: true,
-        startDate: true,
-        endDate: true,
-        cutsUsedThisMonth: true,
-        lastResetDate: true,
-        plan: {
-          select: {
-            id: true,
-            name: true,
-            price: true,
-            cutsPerMonth: true,
-          },
-        },
-      },
-    });
+    return this.findClientSubscription(clientId);
+  }
+
+  async getRemainingCuts(id: string) {
+    const subscription = await this.findSubscription(id);
+    return { remainingCuts: subscription.cuts_remaining ?? 0 };
+  }
+
+  async findAllSubscriptions(status?: string) {
+    let queryBuilder = this.supabase
+      .from('client_subscriptions')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (status) {
+      queryBuilder = queryBuilder.eq('status', status);
+    }
+
+    const { data: subscriptions, error } = await queryBuilder;
+
+    if (error) throw error;
+    return subscriptions || [];
+  }
+
+
+  async findClientSubscription(clientId: string) {
+    const { data: subscription } = await this.supabase
+      .from('client_subscriptions')
+      .select('*')
+      .eq('client_id', clientId)
+      .eq('status', 'ACTIVE')
+      .single();
 
     return subscription;
   }
 
-  /**
-   * Cancel a subscription
-   */
   async cancelSubscription(id: string) {
-    const subscription = await this.prisma.clientSubscription.findUnique({
-      where: { id },
-    });
+    const { data: subscription, error: findError } = await this.supabase
+      .from('client_subscriptions')
+      .select('id, status')
+      .eq('id', id)
+      .single();
 
-    if (!subscription) {
+    if (findError || !subscription) {
       throw new NotFoundException('Assinatura não encontrada');
     }
 
@@ -356,128 +243,36 @@ export class SubscriptionsService {
       throw new BadRequestException('Assinatura não está ativa');
     }
 
-    return this.prisma.clientSubscription.update({
-      where: { id },
-      data: {
-        status: 'CANCELED',
-        endDate: new Date(),
-      },
-      select: {
-        id: true,
-        status: true,
-        endDate: true,
-        client: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
+    const { data: updated, error } = await this.supabase
+      .from('client_subscriptions')
+      .update({ status: 'CANCELED' })
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return updated;
   }
 
-  /**
-   * Use a cut from subscription
-   */
-  async useCut(id: string) {
-    const subscription = await this.prisma.clientSubscription.findUnique({
-      where: { id },
-      include: { plan: true },
-    });
+  async useCut(clientId: string) {
+    const subscription = await this.findClientSubscription(clientId);
 
     if (!subscription) {
-      throw new NotFoundException('Assinatura não encontrada');
+      throw new BadRequestException('Cliente não possui assinatura ativa');
     }
 
-    if (subscription.status !== 'ACTIVE') {
-      throw new BadRequestException('Assinatura não está ativa');
+    if (subscription.cuts_remaining <= 0) {
+      throw new BadRequestException('Não há cortes disponíveis nesta assinatura');
     }
 
-    // Check if needs to reset monthly cuts
-    const now = new Date();
-    const lastReset = new Date(subscription.lastResetDate);
-    const needsReset =
-      now.getMonth() !== lastReset.getMonth() ||
-      now.getFullYear() !== lastReset.getFullYear();
+    const { data: updated, error } = await this.supabase
+      .from('client_subscriptions')
+      .update({ cuts_remaining: subscription.cuts_remaining - 1 })
+      .eq('id', subscription.id)
+      .select('*')
+      .single();
 
-    let cutsUsed = subscription.cutsUsedThisMonth;
-
-    if (needsReset) {
-      cutsUsed = 0;
-    }
-
-    // Check if has cuts available
-    if (cutsUsed >= subscription.plan.cutsPerMonth) {
-      throw new BadRequestException(
-        `Limite de cortes atingido (${subscription.plan.cutsPerMonth}/${subscription.plan.cutsPerMonth})`,
-      );
-    }
-
-    // Increment cuts used
-    return this.prisma.clientSubscription.update({
-      where: { id },
-      data: {
-        cutsUsedThisMonth: cutsUsed + 1,
-        lastResetDate: needsReset ? now : subscription.lastResetDate,
-      },
-      select: {
-        id: true,
-        cutsUsedThisMonth: true,
-        lastResetDate: true,
-        plan: {
-          select: {
-            cutsPerMonth: true,
-          },
-        },
-      },
-    });
-  }
-
-  /**
-   * Get remaining cuts for a subscription
-   */
-  async getRemainingCuts(id: string) {
-    const subscription = await this.prisma.clientSubscription.findUnique({
-      where: { id },
-      include: { plan: true },
-    });
-
-    if (!subscription) {
-      throw new NotFoundException('Assinatura não encontrada');
-    }
-
-    // Check if needs to reset monthly cuts
-    const now = new Date();
-    const lastReset = new Date(subscription.lastResetDate);
-    const needsReset =
-      now.getMonth() !== lastReset.getMonth() ||
-      now.getFullYear() !== lastReset.getFullYear();
-
-    const cutsUsed = needsReset ? 0 : subscription.cutsUsedThisMonth;
-    const remaining = subscription.plan.cutsPerMonth - cutsUsed;
-
-    return {
-      cutsUsed,
-      cutsPerMonth: subscription.plan.cutsPerMonth,
-      remaining,
-      needsReset,
-    };
-  }
-
-  /**
-   * Reset monthly cuts for all active subscriptions (for cron job)
-   */
-  async resetAllMonthlyCuts() {
-    const now = new Date();
-
-    return this.prisma.clientSubscription.updateMany({
-      where: {
-        status: 'ACTIVE',
-      },
-      data: {
-        cutsUsedThisMonth: 0,
-        lastResetDate: now,
-      },
-    });
+    if (error) throw error;
+    return updated;
   }
 }

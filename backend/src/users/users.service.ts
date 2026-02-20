@@ -3,20 +3,32 @@ import {
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { SupabaseService } from '../supabase/supabase.service';
 import { CreateUserDto, UpdateUserDto } from './dto';
-import { User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  password: string;
+  role: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly supabase: SupabaseService) {}
 
   async create(dto: CreateUserDto): Promise<Omit<User, 'password'>> {
     // Verificar se email já existe
-    const existingUser = await this.prisma.user.findUnique({
-      where: { email: dto.email },
-    });
+    const { data: existingUser } = await this.supabase
+      .from('users')
+      .select('id')
+      .eq('email', dto.email)
+      .single();
 
     if (existingUser) {
       throw new ConflictException('Email já cadastrado');
@@ -25,89 +37,114 @@ export class UsersService {
     // Hash da senha
     const hashedPassword = await bcrypt.hash(dto.password, 10);
 
-    const user = await this.prisma.user.create({
-      data: {
-        ...dto,
+    const { data: user, error } = await this.supabase
+      .from('users')
+      .insert({
+        email: dto.email,
+        name: dto.name,
         password: hashedPassword,
-      },
-    });
+        role: dto.role,
+      })
+      .select('id, email, name, role, is_active, created_at, updated_at')
+      .single();
 
-    // Nunca retornar a senha
-    const { password, ...result } = user;
-    return result;
+    if (error) throw error;
+
+    return user;
   }
 
   async findAll(): Promise<Omit<User, 'password'>[]> {
-    const users = await this.prisma.user.findMany({
-      orderBy: { createdAt: 'desc' },
-    });
+    const { data: users, error } = await this.supabase
+      .from('users')
+      .select('id, email, name, role, is_active, created_at, updated_at')
+      .order('created_at', { ascending: false });
 
-    return users.map(({ password, ...user }) => user);
+    if (error) throw error;
+
+    return users || [];
   }
 
   async findOne(id: string): Promise<Omit<User, 'password'>> {
-    const user = await this.prisma.user.findUnique({
-      where: { id },
-    });
+    const { data: user, error } = await this.supabase
+      .from('users')
+      .select('id, email, name, role, is_active, created_at, updated_at')
+      .eq('id', id)
+      .single();
 
-    if (!user) {
+    if (error || !user) {
       throw new NotFoundException('Usuário não encontrado');
     }
 
-    const { password, ...result } = user;
-    return result;
+    return user;
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    return this.prisma.user.findUnique({
-      where: { email },
-    });
+    const { data: user } = await this.supabase
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .single();
+
+    return user;
   }
 
   async findByEmailWithPassword(email: string): Promise<User | null> {
-    return this.prisma.user.findUnique({
-      where: { email },
-    });
+    const { data: user } = await this.supabase
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .single();
+
+    return user;
   }
 
   async update(id: string, dto: UpdateUserDto): Promise<Omit<User, 'password'>> {
-    const user = await this.prisma.user.findUnique({
-      where: { id },
-    });
+    const { data: user, error: findError } = await this.supabase
+      .from('users')
+      .select('id')
+      .eq('id', id)
+      .single();
 
-    if (!user) {
+    if (findError || !user) {
       throw new NotFoundException('Usuário não encontrado');
     }
 
     // Se está atualizando a senha, fazer hash
-    let updateData: any = { ...dto };
+    const updateData: any = { ...dto };
     if (dto.password) {
       updateData.password = await bcrypt.hash(dto.password, 10);
     }
 
-    const updatedUser = await this.prisma.user.update({
-      where: { id },
-      data: updateData,
-    });
+    const { data: updatedUser, error } = await this.supabase
+      .from('users')
+      .update(updateData)
+      .eq('id', id)
+      .select('id, email, name, role, is_active, created_at, updated_at')
+      .single();
 
-    const { password, ...result } = updatedUser;
-    return result;
+    if (error) throw error;
+
+    return updatedUser;
   }
 
   async remove(id: string): Promise<void> {
-    const user = await this.prisma.user.findUnique({
-      where: { id },
-    });
+    const { data: user, error: findError } = await this.supabase
+      .from('users')
+      .select('id')
+      .eq('id', id)
+      .single();
 
-    if (!user) {
+    if (findError || !user) {
       throw new NotFoundException('Usuário não encontrado');
     }
 
     // Soft delete
-    await this.prisma.user.update({
-      where: { id },
-      data: { isActive: false },
-    });
+    const { error } = await this.supabase
+      .from('users')
+      .update({ is_active: false })
+      .eq('id', id);
+
+    if (error) throw error;
   }
 
   async validatePassword(

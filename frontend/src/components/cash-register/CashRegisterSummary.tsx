@@ -28,29 +28,29 @@ export function CashRegisterSummary({
       label: 'Total Faturado',
       value: formatCurrency(summary.totalRevenue),
       icon: TrendingUp,
-      iconBg: 'bg-blue-500/20',
-      iconColor: 'text-blue-500',
+      iconBg: 'bg-[#C8923A]/20',
+      iconColor: 'text-[#C8923A]',
     },
     {
       label: 'Dinheiro',
       value: formatCurrency(summary.totalCash),
       icon: Banknote,
-      iconBg: 'bg-blue-500/20',
-      iconColor: 'text-blue-500',
+      iconBg: 'bg-[#C8923A]/20',
+      iconColor: 'text-[#C8923A]',
     },
     {
       label: 'PIX',
       value: formatCurrency(summary.totalPix),
       icon: Smartphone,
-      iconBg: 'bg-blue-500/20',
-      iconColor: 'text-blue-500',
+      iconBg: 'bg-[#C8923A]/20',
+      iconColor: 'text-[#C8923A]',
     },
     {
       label: 'Cartão',
       value: formatCurrency(summary.totalCard),
       icon: CreditCard,
-      iconBg: 'bg-blue-500/20',
-      iconColor: 'text-blue-500',
+      iconBg: 'bg-[#C8923A]/20',
+      iconColor: 'text-[#C8923A]',
     },
     {
       label: 'Discrepâncias',
@@ -66,20 +66,20 @@ export function CashRegisterSummary({
         summary.totalDiscrepancy === 0
           ? 'bg-[var(--hover-bg)]'
           : summary.totalDiscrepancy > 0
-          ? 'bg-blue-500/20'
+          ? 'bg-[#C8923A]/20'
           : 'bg-red-500/20',
       iconColor:
         summary.totalDiscrepancy === 0
           ? 'text-[var(--text-muted)]'
           : summary.totalDiscrepancy > 0
-          ? 'text-blue-500'
-          : 'text-red-500',
+          ? 'text-[#C8923A]'
+          : 'text-[#A63030]',
       valueColor:
         summary.totalDiscrepancy === 0
           ? 'text-[var(--text-primary)]'
           : summary.totalDiscrepancy > 0
-          ? 'text-blue-500'
-          : 'text-red-500',
+          ? 'text-[#C8923A]'
+          : 'text-[#A63030]',
     },
   ];
 

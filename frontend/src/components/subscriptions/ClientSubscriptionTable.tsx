@@ -77,7 +77,7 @@ export function ClientSubscriptionTable({
                 <tr key={subscription.id} className="hover:bg-[var(--hover-bg)]">
                   <td className="px-4 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/20 text-blue-500">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#C8923A]/20 text-[#C8923A]">
                         <Users className="h-5 w-5" />
                       </div>
                       <div>
@@ -112,7 +112,7 @@ export function ClientSubscriptionTable({
                           <div className="mt-1 h-1.5 w-20 overflow-hidden rounded-full bg-[var(--hover-bg)]">
                             <div
                               className={`h-full rounded-full transition-all ${
-                                cutsPercentage >= 100 ? 'bg-red-500' : 'bg-blue-500'
+                                cutsPercentage >= 100 ? 'bg-red-500' : 'bg-[#C8923A]'
                               }`}
                               style={{ width: `${Math.min(cutsPercentage, 100)}%` }}
                             />
@@ -158,7 +158,7 @@ export function ClientSubscriptionTable({
                                   onCancel(subscription);
                                   setOpenMenuId(null);
                                 }}
-                                className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-500 hover:bg-red-500/10"
+                                className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[#A63030] hover:bg-red-500/10"
                               >
                                 <XCircle className="h-4 w-4" />
                                 Cancelar

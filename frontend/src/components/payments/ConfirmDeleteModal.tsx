@@ -31,7 +31,7 @@ export function ConfirmDeleteModal({
       <div className="space-y-4">
         <div className="flex items-start gap-4">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-red-500/20">
-            <AlertTriangle className="h-6 w-6 text-red-500" />
+            <AlertTriangle className="h-6 w-6 text-[#A63030]" />
           </div>
           <div>
             <p className="text-sm text-[var(--text-secondary)]">
@@ -43,7 +43,7 @@ export function ConfirmDeleteModal({
                 {formatCurrency(payment.amount)}
               </p>
             </div>
-            <p className="mt-3 text-sm text-red-500">
+            <p className="mt-3 text-sm text-[#A63030]">
               Esta ação não pode ser desfeita.
             </p>
           </div>
@@ -60,7 +60,7 @@ export function ConfirmDeleteModal({
           <button
             onClick={onConfirm}
             disabled={isLoading}
-            className="flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-xl bg-[#8B2020] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#6B1818] disabled:opacity-50"
           >
             {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
             {isLoading ? 'Excluindo...' : 'Excluir'}

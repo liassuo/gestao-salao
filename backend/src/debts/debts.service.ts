@@ -3,118 +3,64 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { SupabaseService } from '../supabase/supabase.service';
 import { CreateDebtDto, UpdateDebtDto, PayDebtDto } from './dto';
-import { Debt } from '@prisma/client';
 
-/**
- * DebtsService
- *
- * Gerencia dívidas (fiado) dos clientes.
- *
- * IMPORTANTE - Conceitos separados:
- * - Debt (Dívida): Registro de valor que o cliente deve
- * - Payment (Pagamento): Registro de valor que o cliente pagou
- *
- * Uma dívida pode ser quitada SEM criar um Payment.
- * Exemplo: Cliente paga fiado em dinheiro → registra-se o pagamento
- * parcial da dívida, mas o Payment é opcional (pode ser registrado
- * separadamente pelo PaymentsService se necessário).
- *
- * Regras:
- * - Dívida é independente da forma de pagamento
- * - Dívida pode existir sem agendamento (ex: venda de produto)
- * - Pagamento de dívida NÃO cria Payment automaticamente
- * - NÃO mexe no Caixa (responsabilidade do CashRegisterService)
- */
 @Injectable()
 export class DebtsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly supabase: SupabaseService) {}
 
-  /**
-   * Cria uma nova dívida
-   *
-   * Regras:
-   * - amountPaid inicia em 0
-   * - remainingBalance = amount
-   * - Atualiza hasDebts do cliente para true
-   */
-  async createDebt(dto: CreateDebtDto): Promise<Debt> {
+  async createDebt(dto: CreateDebtDto) {
     // 1. Verificar se cliente existe
-    const client = await this.prisma.client.findUnique({
-      where: { id: dto.clientId },
-    });
+    const { data: client, error: clientError } = await this.supabase
+      .from('clients')
+      .select('id')
+      .eq('id', dto.clientId)
+      .single();
 
-    if (!client) {
+    if (clientError || !client) {
       throw new NotFoundException('Cliente não encontrado');
     }
 
-    // 2. Se tem appointmentId, verificar se existe
-    if (dto.appointmentId) {
-      const appointment = await this.prisma.appointment.findUnique({
-        where: { id: dto.appointmentId },
-      });
+    // 2. Criar dívida
+    const { data: debt, error } = await this.supabase
+      .from('debts')
+      .insert({
+        client_id: dto.clientId,
+        appointment_id: dto.appointmentId,
+        amount: dto.amount,
+        amount_paid: 0,
+        remaining_balance: dto.amount,
+        description: dto.description,
+        due_date: dto.dueDate,
+        is_settled: false,
+      })
+      .select('*')
+      .single();
 
-      if (!appointment) {
-        throw new NotFoundException('Agendamento não encontrado');
-      }
+    if (error) throw error;
 
-      if (appointment.clientId !== dto.clientId) {
-        throw new BadRequestException(
-          'O agendamento não pertence a este cliente',
-        );
-      }
-    }
+    // 3. Atualizar flag hasDebts do cliente
+    await this.supabase
+      .from('clients')
+      .update({ has_debts: true })
+      .eq('id', dto.clientId);
 
-    // 3. Criar dívida e atualizar flag do cliente em transação
-    return this.prisma.$transaction(async (tx) => {
-      const debt = await tx.debt.create({
-        data: {
-          clientId: dto.clientId,
-          appointmentId: dto.appointmentId,
-          amount: dto.amount,
-          amountPaid: 0,
-          remainingBalance: dto.amount, // Inicia devendo tudo
-          description: dto.description,
-          dueDate: dto.dueDate,
-          isSettled: false,
-        },
-        include: {
-          client: true,
-          appointment: true,
-        },
-      });
-
-      // Atualizar flag hasDebts do cliente
-      await tx.client.update({
-        where: { id: dto.clientId },
-        data: { hasDebts: true },
-      });
-
-      return debt;
-    });
+    return debt;
   }
 
-  /**
-   * Registra pagamento parcial ou total de uma dívida
-   *
-   * Regras:
-   * - Incrementa amountPaid
-   * - Decrementa remainingBalance
-   * - Se remainingBalance chegar a 0 → isSettled = true, paidAt = now
-   * - NÃO cria Payment (isso é separado)
-   * - Atualiza hasDebts do cliente se não tiver mais dívidas
-   */
-  async registerPartialPayment(debtId: string, dto: PayDebtDto): Promise<Debt> {
-    const debt = await this.prisma.debt.findUnique({
-      where: { id: debtId },
-    });
+  async registerPartialPayment(debtId: string, dto: PayDebtDto) {
+    const { data: debt, error } = await this.supabase
+      .from('debts')
+      .select('*')
+      .eq('id', debtId)
+      .single();
 
-    if (!debt) {
+    if (error || !debt) {
       throw new NotFoundException('Dívida não encontrada');
     }
 
-    if (debt.isSettled) {
+    if (debt.is_settled) {
       throw new BadRequestException('Esta dívida já está quitada');
     }
 
@@ -122,234 +68,197 @@ export class DebtsService {
       throw new BadRequestException('Valor deve ser maior que zero');
     }
 
-    if (dto.amount > debt.remainingBalance) {
+    if (dto.amount > debt.remaining_balance) {
       throw new BadRequestException(
-        `Valor excede o saldo devedor. Máximo: ${debt.remainingBalance} centavos`,
+        `Valor excede o saldo devedor. Máximo: ${debt.remaining_balance} centavos`,
       );
     }
 
-    const newAmountPaid = debt.amountPaid + dto.amount;
-    const newRemainingBalance = debt.remainingBalance - dto.amount;
+    const newAmountPaid = debt.amount_paid + dto.amount;
+    const newRemainingBalance = debt.remaining_balance - dto.amount;
     const isNowSettled = newRemainingBalance === 0;
 
-    return this.prisma.$transaction(async (tx) => {
-      const updatedDebt = await tx.debt.update({
-        where: { id: debtId },
-        data: {
-          amountPaid: newAmountPaid,
-          remainingBalance: newRemainingBalance,
-          isSettled: isNowSettled,
-          paidAt: isNowSettled ? new Date() : null,
-        },
-        include: {
-          client: true,
-          appointment: true,
-        },
-      });
+    const { data: updatedDebt, error: updateError } = await this.supabase
+      .from('debts')
+      .update({
+        amount_paid: newAmountPaid,
+        remaining_balance: newRemainingBalance,
+        is_settled: isNowSettled,
+        paid_at: isNowSettled ? new Date().toISOString() : null,
+      })
+      .eq('id', debtId)
+      .select('*')
+      .single();
 
-      // Se quitou, verificar se cliente ainda tem outras dívidas
-      if (isNowSettled) {
-        await this.updateClientHasDebtsFlag(tx, debt.clientId);
-      }
+    if (updateError) throw updateError;
 
-      return updatedDebt;
-    });
+    // Se quitou, verificar se cliente ainda tem outras dívidas
+    if (isNowSettled) {
+      await this.updateClientHasDebtsFlag(debt.client_id);
+    }
+
+    return updatedDebt;
   }
 
-  /**
-   * Quita a dívida manualmente (perdão ou ajuste)
-   *
-   * Útil para:
-   * - Perdoar dívida
-   * - Ajustes administrativos
-   * - Correções
-   */
-  async settleDebt(id: string): Promise<Debt> {
-    const debt = await this.prisma.debt.findUnique({
-      where: { id },
-    });
+  async settleDebt(id: string) {
+    const { data: debt, error } = await this.supabase
+      .from('debts')
+      .select('*')
+      .eq('id', id)
+      .single();
 
-    if (!debt) {
+    if (error || !debt) {
       throw new NotFoundException('Dívida não encontrada');
     }
 
-    if (debt.isSettled) {
+    if (debt.is_settled) {
       throw new BadRequestException('Esta dívida já está quitada');
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const updatedDebt = await tx.debt.update({
-        where: { id },
-        data: {
-          isSettled: true,
-          paidAt: new Date(),
-          // Mantém amountPaid e remainingBalance como estão
-          // para histórico (quanto foi pago vs quanto foi perdoado)
-        },
-        include: {
-          client: true,
-          appointment: true,
-        },
-      });
+    const { data: updatedDebt, error: updateError } = await this.supabase
+      .from('debts')
+      .update({
+        is_settled: true,
+        paid_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select('*')
+      .single();
 
-      // Verificar se cliente ainda tem outras dívidas
-      await this.updateClientHasDebtsFlag(tx, debt.clientId);
+    if (updateError) throw updateError;
 
-      return updatedDebt;
-    });
+    await this.updateClientHasDebtsFlag(debt.client_id);
+
+    return updatedDebt;
   }
 
-  async findOne(id: string): Promise<Debt> {
-    const debt = await this.prisma.debt.findUnique({
-      where: { id },
-      include: {
-        client: true,
-        appointment: {
-          include: {
-            professional: true,
-            services: { include: { service: true } },
-          },
-        },
-      },
-    });
+  async findOne(id: string) {
+    const { data: debt, error } = await this.supabase
+      .from('debts')
+      .select('*')
+      .eq('id', id)
+      .single();
 
-    if (!debt) {
+    if (error || !debt) {
       throw new NotFoundException('Dívida não encontrada');
     }
 
     return debt;
   }
 
-  async findAll(): Promise<Debt[]> {
-    return this.prisma.debt.findMany({
-      include: {
-        client: true,
-        appointment: true,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+  async findAll() {
+    const { data: debts, error } = await this.supabase
+      .from('debts')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return debts || [];
   }
 
-  async findOutstanding(): Promise<Debt[]> {
-    return this.prisma.debt.findMany({
-      where: { isSettled: false },
-      include: {
-        client: true,
-        appointment: true,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+  async findOutstanding() {
+    const { data: debts, error } = await this.supabase
+      .from('debts')
+      .select('*')
+      .eq('is_settled', false)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return debts || [];
   }
 
-  async findByClient(clientId: string): Promise<Debt[]> {
-    return this.prisma.debt.findMany({
-      where: { clientId },
-      include: {
-        appointment: {
-          include: {
-            professional: true,
-            services: { include: { service: true } },
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+  async findByClient(clientId: string) {
+    const { data: debts, error } = await this.supabase
+      .from('debts')
+      .select('*')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return debts || [];
   }
 
-  async findOutstandingByClient(clientId: string): Promise<Debt[]> {
-    return this.prisma.debt.findMany({
-      where: {
-        clientId,
-        isSettled: false,
-      },
-      include: {
-        appointment: true,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+  async findOutstandingByClient(clientId: string) {
+    const { data: debts, error } = await this.supabase
+      .from('debts')
+      .select('*')
+      .eq('client_id', clientId)
+      .eq('is_settled', false)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return debts || [];
   }
 
-  /**
-   * Calcula total de dívidas em aberto de um cliente
-   * Retorna valor em centavos
-   */
   async calculateClientTotalDebt(clientId: string): Promise<number> {
-    const result = await this.prisma.debt.aggregate({
-      where: {
-        clientId,
-        isSettled: false,
-      },
-      _sum: {
-        remainingBalance: true,
-      },
-    });
+    const { data: debts, error } = await this.supabase
+      .from('debts')
+      .select('remaining_balance')
+      .eq('client_id', clientId)
+      .eq('is_settled', false);
 
-    return result._sum.remainingBalance ?? 0;
+    if (error) throw error;
+
+    return (debts || []).reduce((sum, d) => sum + d.remaining_balance, 0);
   }
 
-  async update(id: string, dto: UpdateDebtDto): Promise<Debt> {
-    const debt = await this.prisma.debt.findUnique({
-      where: { id },
-    });
+  async update(id: string, dto: UpdateDebtDto) {
+    const { data: debt, error: findError } = await this.supabase
+      .from('debts')
+      .select('id, is_settled')
+      .eq('id', id)
+      .single();
 
-    if (!debt) {
+    if (findError || !debt) {
       throw new NotFoundException('Dívida não encontrada');
     }
 
-    if (debt.isSettled) {
+    if (debt.is_settled) {
       throw new BadRequestException('Não é possível editar uma dívida quitada');
     }
 
-    return this.prisma.debt.update({
-      where: { id },
-      data: {
+    const { data: updated, error } = await this.supabase
+      .from('debts')
+      .update({
         description: dto.description,
-        dueDate: dto.dueDate,
-      },
-      include: {
-        client: true,
-        appointment: true,
-      },
-    });
+        due_date: dto.dueDate,
+      })
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return updated;
   }
 
   async remove(id: string): Promise<void> {
-    const debt = await this.prisma.debt.findUnique({
-      where: { id },
-    });
+    const { data: debt, error: findError } = await this.supabase
+      .from('debts')
+      .select('id, client_id')
+      .eq('id', id)
+      .single();
 
-    if (!debt) {
+    if (findError || !debt) {
       throw new NotFoundException('Dívida não encontrada');
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.debt.delete({
-        where: { id },
-      });
+    const { error } = await this.supabase.from('debts').delete().eq('id', id);
 
-      // Atualizar flag do cliente
-      await this.updateClientHasDebtsFlag(tx, debt.clientId);
-    });
+    if (error) throw error;
+
+    await this.updateClientHasDebtsFlag(debt.client_id);
   }
 
-  /**
-   * Atualiza o flag hasDebts do cliente baseado se tem dívidas em aberto
-   * Método privado usado internamente após operações que afetam dívidas
-   */
-  private async updateClientHasDebtsFlag(
-    tx: Parameters<Parameters<typeof this.prisma.$transaction>[0]>[0],
-    clientId: string,
-  ): Promise<void> {
-    const outstandingCount = await tx.debt.count({
-      where: {
-        clientId,
-        isSettled: false,
-      },
-    });
+  private async updateClientHasDebtsFlag(clientId: string): Promise<void> {
+    const { count } = await this.supabase
+      .from('debts')
+      .select('id', { count: 'exact', head: true })
+      .eq('client_id', clientId)
+      .eq('is_settled', false);
 
-    await tx.client.update({
-      where: { id: clientId },
-      data: { hasDebts: outstandingCount > 0 },
-    });
+    await this.supabase
+      .from('clients')
+      .update({ has_debts: (count || 0) > 0 })
+      .eq('id', clientId);
   }
 }

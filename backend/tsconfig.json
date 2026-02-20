@@ -20,5 +20,6 @@
     "paths": {
       "@common/*": ["src/common/*"]
     }
-  }
+  },
+  "exclude": ["prisma", "dist", "node_modules"]
 }

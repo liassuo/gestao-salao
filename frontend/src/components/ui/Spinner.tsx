@@ -11,7 +11,7 @@ const sizes = {
 };
 
 const colors = {
-  blue: 'border-blue-600 border-t-transparent',
+  blue: 'border-[#C8923A] border-t-transparent',
   red: 'border-red-600 border-t-transparent',
   white: 'border-white border-t-transparent',
 };

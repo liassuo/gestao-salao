@@ -1,90 +1,103 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { SupabaseService } from '../supabase/supabase.service';
 import { CreateProductDto, UpdateProductDto, QueryProductDto } from './dto';
 
 @Injectable()
 export class ProductsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly supabase: SupabaseService) {}
 
   async create(dto: CreateProductDto) {
-    return this.prisma.product.create({
-      data: {
+    const { data: product, error } = await this.supabase
+      .from('products')
+      .insert({
         name: dto.name,
         description: dto.description,
-        costPrice: dto.costPrice,
-        salePrice: dto.salePrice,
-        minStock: dto.minStock ?? 0,
-        branchId: dto.branchId,
-      },
-      select: {
-        id: true, name: true, description: true, costPrice: true,
-        salePrice: true, minStock: true, isActive: true, branchId: true, createdAt: true,
-      },
-    });
+        cost_price: dto.costPrice,
+        sale_price: dto.salePrice,
+        min_stock: dto.minStock ?? 0,
+        branch_id: dto.branchId,
+      })
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return product;
   }
 
   async findAll(query: QueryProductDto) {
-    const where: any = {};
-    if (query.all !== 'true') where.isActive = true;
-    if (query.branchId) where.branchId = query.branchId;
-    if (query.search) where.name = { contains: query.search, mode: 'insensitive' };
+    let queryBuilder = this.supabase.from('products').select('*');
 
-    return this.prisma.product.findMany({
-      where,
-      orderBy: { name: 'asc' },
-      select: {
-        id: true, name: true, description: true, costPrice: true,
-        salePrice: true, minStock: true, isActive: true,
-        branch: { select: { id: true, name: true } },
-      },
-    });
+    if (query.all !== 'true') {
+      queryBuilder = queryBuilder.eq('is_active', true);
+    }
+
+    if (query.branchId) {
+      queryBuilder = queryBuilder.eq('branch_id', query.branchId);
+    }
+
+    if (query.search) {
+      queryBuilder = queryBuilder.ilike('name', `%${query.search}%`);
+    }
+
+    const { data: products, error } = await queryBuilder.order('name', { ascending: true });
+
+    if (error) throw error;
+    return products || [];
   }
 
   async findOne(id: string) {
-    const product = await this.prisma.product.findUnique({
-      where: { id },
-      select: {
-        id: true, name: true, description: true, costPrice: true,
-        salePrice: true, minStock: true, isActive: true, branchId: true,
-        createdAt: true, updatedAt: true,
-        branch: { select: { id: true, name: true } },
-      },
-    });
-    if (!product) throw new NotFoundException('Produto não encontrado');
+    const { data: product, error } = await this.supabase
+      .from('products')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error || !product) {
+      throw new NotFoundException('Produto não encontrado');
+    }
+
     return product;
   }
 
   async getStock(branchId?: string) {
-    const where: any = { isActive: true };
-    if (branchId) where.branchId = branchId;
+    let queryBuilder = this.supabase
+      .from('products')
+      .select('id, name, cost_price, sale_price, min_stock')
+      .eq('is_active', true);
 
-    const products = await this.prisma.product.findMany({
-      where,
-      select: {
-        id: true, name: true, costPrice: true, salePrice: true, minStock: true,
-        branch: { select: { id: true, name: true } },
-        stockMovements: { select: { type: true, quantity: true } },
-      },
-      orderBy: { name: 'asc' },
-    });
+    if (branchId) {
+      queryBuilder = queryBuilder.eq('branch_id', branchId);
+    }
 
-    return products.map((p) => {
-      const currentStock = p.stockMovements.reduce((acc, m) => {
+    const { data: products, error } = await queryBuilder.order('name', { ascending: true });
+
+    if (error) throw error;
+
+    const stockData = [];
+    for (const product of products || []) {
+      const { data: movements } = await this.supabase
+        .from('stock_movements')
+        .select('type, quantity')
+        .eq('product_id', product.id);
+
+      const currentStock = (movements || []).reduce((acc, m) => {
         return m.type === 'ENTRY' ? acc + m.quantity : acc - m.quantity;
       }, 0);
-      return {
-        id: p.id,
-        name: p.name,
-        costPrice: p.costPrice,
-        salePrice: p.salePrice,
-        minStock: p.minStock,
+
+      stockData.push({
+        id: product.id,
+        name: product.name,
+        costPrice: product.cost_price,
+        salePrice: product.sale_price,
+        minStock: product.min_stock,
         currentStock,
-        stockValue: currentStock * p.costPrice,
-        potentialSaleValue: currentStock * p.salePrice,
-        isLowStock: currentStock <= p.minStock,
-        branch: p.branch,
-      };
-    });
+        stockValue: currentStock * product.cost_price,
+        potentialSaleValue: currentStock * product.sale_price,
+        isLowStock: currentStock <= product.min_stock,
+      });
+    }
+
+    return stockData;
   }
 
   async getLowStock(branchId?: string) {
@@ -93,21 +106,51 @@ export class ProductsService {
   }
 
   async update(id: string, dto: UpdateProductDto) {
-    const product = await this.prisma.product.findUnique({ where: { id } });
-    if (!product) throw new NotFoundException('Produto não encontrado');
-    return this.prisma.product.update({
-      where: { id },
-      data: dto,
-      select: {
-        id: true, name: true, description: true, costPrice: true,
-        salePrice: true, minStock: true, isActive: true, updatedAt: true,
-      },
-    });
+    const { data: product, error: findError } = await this.supabase
+      .from('products')
+      .select('id')
+      .eq('id', id)
+      .single();
+
+    if (findError || !product) {
+      throw new NotFoundException('Produto não encontrado');
+    }
+
+    const updateData: any = {};
+    if (dto.name !== undefined) updateData.name = dto.name;
+    if (dto.description !== undefined) updateData.description = dto.description;
+    if (dto.costPrice !== undefined) updateData.cost_price = dto.costPrice;
+    if (dto.salePrice !== undefined) updateData.sale_price = dto.salePrice;
+    if (dto.minStock !== undefined) updateData.min_stock = dto.minStock;
+    if (dto.isActive !== undefined) updateData.is_active = dto.isActive;
+
+    const { data: updated, error } = await this.supabase
+      .from('products')
+      .update(updateData)
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return updated;
   }
 
   async remove(id: string) {
-    const product = await this.prisma.product.findUnique({ where: { id } });
-    if (!product) throw new NotFoundException('Produto não encontrado');
-    await this.prisma.product.update({ where: { id }, data: { isActive: false } });
+    const { data: product, error: findError } = await this.supabase
+      .from('products')
+      .select('id')
+      .eq('id', id)
+      .single();
+
+    if (findError || !product) {
+      throw new NotFoundException('Produto não encontrado');
+    }
+
+    const { error } = await this.supabase
+      .from('products')
+      .update({ is_active: false })
+      .eq('id', id);
+
+    if (error) throw error;
   }
 }

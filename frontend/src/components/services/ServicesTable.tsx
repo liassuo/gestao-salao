@@ -72,7 +72,7 @@ export function ServicesTable({
               <tr key={service.id} className="hover:bg-[var(--hover-bg)]">
                 <td className="px-4 py-4">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/20 text-blue-500">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#C8923A]/20 text-[#C8923A]">
                       <Scissors className="h-5 w-5" />
                     </div>
                     <div>
@@ -128,7 +128,7 @@ export function ServicesTable({
                               onDelete(service);
                               setOpenMenuId(null);
                             }}
-                            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-500 hover:bg-red-500/10"
+                            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[#A63030] hover:bg-red-500/10"
                           >
                             <Trash2 className="h-4 w-4" />
                             Excluir

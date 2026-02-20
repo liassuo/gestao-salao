@@ -127,11 +127,11 @@ export function AppointmentsTable({
                 </td>
                 <td className="whitespace-nowrap px-4 py-3">
                   {appointment.isPaid ? (
-                    <span className="inline-flex rounded-full bg-blue-500/20 px-2.5 py-0.5 text-xs font-medium text-blue-500">
+                    <span className="inline-flex rounded-full bg-[#C8923A]/20 px-2.5 py-0.5 text-xs font-medium text-[#C8923A]">
                       Sim
                     </span>
                   ) : (
-                    <span className="inline-flex rounded-full bg-red-500/20 px-2.5 py-0.5 text-xs font-medium text-red-500">
+                    <span className="inline-flex rounded-full bg-red-500/20 px-2.5 py-0.5 text-xs font-medium text-[#A63030]">
                       Não
                     </span>
                   )}

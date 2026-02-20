@@ -1,136 +1,105 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { SupabaseService } from '../supabase/supabase.service';
 import { CreateBankAccountDto, UpdateBankAccountDto } from './dto';
 
 @Injectable()
 export class BankAccountsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly supabase: SupabaseService) {}
 
-  /**
-   * Create a new bank account
-   */
   async create(dto: CreateBankAccountDto) {
-    return this.prisma.bankAccount.create({
-      data: {
+    const { data: bankAccount, error } = await this.supabase
+      .from('bank_accounts')
+      .insert({
         name: dto.name,
         bank: dto.bank || null,
-        accountType: dto.accountType || null,
-      },
-      select: {
-        id: true,
-        name: true,
-        bank: true,
-        accountType: true,
-        isActive: true,
-        createdAt: true,
-      },
-    });
+        account_type: dto.accountType || null,
+      })
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return bankAccount;
   }
 
-  /**
-   * Find all bank accounts
-   */
   async findAll() {
-    return this.prisma.bankAccount.findMany({
-      orderBy: { name: 'asc' },
-      select: {
-        id: true,
-        name: true,
-        bank: true,
-        accountType: true,
-        isActive: true,
-        createdAt: true,
-        _count: {
-          select: {
-            transactions: true,
-          },
-        },
-      },
-    });
+    const { data: bankAccounts, error } = await this.supabase
+      .from('bank_accounts')
+      .select('*')
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+    return bankAccounts || [];
   }
 
-  /**
-   * Find only active bank accounts
-   */
   async findActive() {
-    return this.prisma.bankAccount.findMany({
-      where: { isActive: true },
-      orderBy: { name: 'asc' },
-      select: {
-        id: true,
-        name: true,
-        bank: true,
-        accountType: true,
-      },
-    });
+    const { data: bankAccounts, error } = await this.supabase
+      .from('bank_accounts')
+      .select('id, name, bank, account_type')
+      .eq('is_active', true)
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+    return bankAccounts || [];
   }
 
-  /**
-   * Find bank account by ID
-   */
   async findOne(id: string) {
-    const bankAccount = await this.prisma.bankAccount.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        name: true,
-        bank: true,
-        accountType: true,
-        isActive: true,
-        createdAt: true,
-        updatedAt: true,
-        _count: {
-          select: {
-            transactions: true,
-          },
-        },
-      },
-    });
+    const { data: bankAccount, error } = await this.supabase
+      .from('bank_accounts')
+      .select('*')
+      .eq('id', id)
+      .single();
 
-    if (!bankAccount) {
+    if (error || !bankAccount) {
       throw new NotFoundException('Conta bancária não encontrada');
     }
 
     return bankAccount;
   }
 
-  /**
-   * Update bank account information
-   */
   async update(id: string, dto: UpdateBankAccountDto) {
-    const bankAccount = await this.prisma.bankAccount.findUnique({ where: { id } });
+    const { data: bankAccount, error: findError } = await this.supabase
+      .from('bank_accounts')
+      .select('id')
+      .eq('id', id)
+      .single();
 
-    if (!bankAccount) {
+    if (findError || !bankAccount) {
       throw new NotFoundException('Conta bancária não encontrada');
     }
 
-    return this.prisma.bankAccount.update({
-      where: { id },
-      data: dto,
-      select: {
-        id: true,
-        name: true,
-        bank: true,
-        accountType: true,
-        isActive: true,
-        updatedAt: true,
-      },
-    });
+    const updateData: any = {};
+    if (dto.name !== undefined) updateData.name = dto.name;
+    if (dto.bank !== undefined) updateData.bank = dto.bank;
+    if (dto.accountType !== undefined) updateData.account_type = dto.accountType;
+    if (dto.isActive !== undefined) updateData.is_active = dto.isActive;
+
+    const { data: updated, error } = await this.supabase
+      .from('bank_accounts')
+      .update(updateData)
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return updated;
   }
 
-  /**
-   * Soft delete bank account
-   */
   async remove(id: string) {
-    const bankAccount = await this.prisma.bankAccount.findUnique({ where: { id } });
+    const { data: bankAccount, error: findError } = await this.supabase
+      .from('bank_accounts')
+      .select('id')
+      .eq('id', id)
+      .single();
 
-    if (!bankAccount) {
+    if (findError || !bankAccount) {
       throw new NotFoundException('Conta bancária não encontrada');
     }
 
-    await this.prisma.bankAccount.update({
-      where: { id },
-      data: { isActive: false },
-    });
+    const { error } = await this.supabase
+      .from('bank_accounts')
+      .update({ is_active: false })
+      .eq('id', id);
+
+    if (error) throw error;
   }
 }

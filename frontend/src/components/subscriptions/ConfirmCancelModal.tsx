@@ -53,7 +53,7 @@ export function ConfirmCancelModal({
         <div className="p-6">
           <div className="mb-4 flex items-start gap-4">
             <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-500/20">
-              <AlertTriangle className="h-6 w-6 text-red-500" />
+              <AlertTriangle className="h-6 w-6 text-[#A63030]" />
             </div>
             <div>
               <h3 className="font-medium text-[var(--text-primary)]">
@@ -88,7 +88,7 @@ export function ConfirmCancelModal({
           </div>
 
           <div className="mb-6 rounded-xl bg-red-500/10 p-3">
-            <p className="text-sm text-red-500">
+            <p className="text-sm text-[#A63030]">
               <span className="font-medium">Atencao:</span> Esta acao nao pode ser desfeita.
               O cliente perdera acesso aos beneficios do plano imediatamente.
             </p>
@@ -108,7 +108,7 @@ export function ConfirmCancelModal({
               type="button"
               onClick={onConfirm}
               disabled={isLoading}
-              className="flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-2 rounded-xl bg-[#8B2020] px-4 py-2 text-sm font-medium text-white hover:bg-[#6B1818] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
               {isLoading ? 'Cancelando...' : 'Confirmar Cancelamento'}

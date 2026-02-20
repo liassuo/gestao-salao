@@ -3,282 +3,211 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { SupabaseService } from '../supabase/supabase.service';
 import { CreatePaymentDto, UpdatePaymentDto } from './dto';
-import { Payment, PaymentMethod } from '@prisma/client';
 
-/**
- * PaymentsService
- *
- * IMPORTANTE - Este service apenas REGISTRA pagamentos:
- * - NÃO processa transações financeiras
- * - NÃO integra com gateways (Stripe, PagSeguro, etc.)
- * - NÃO movimenta dinheiro real
- *
- * O fluxo é:
- * 1. Cliente paga presencialmente (dinheiro, PIX, cartão)
- * 2. Funcionário registra o pagamento manualmente aqui
- * 3. Sistema apenas rastreia para controle e relatórios
- */
 @Injectable()
 export class PaymentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly supabase: SupabaseService) {}
 
-  /**
-   * Registra um pagamento
-   *
-   * Regras:
-   * - Se appointmentId fornecido, vincula ao agendamento
-   * - Verifica se agendamento já não está pago
-   * - Atualiza Appointment.isPaid = true
-   * - NÃO cria Debt (isso é responsabilidade do DebtsService)
-   * - NÃO mexe no Caixa (isso é responsabilidade do CashRegisterService)
-   */
-  async registerPayment(dto: CreatePaymentDto): Promise<Payment> {
+  async registerPayment(dto: CreatePaymentDto) {
     // 1. Verificar se o cliente existe
-    const client = await this.prisma.client.findUnique({
-      where: { id: dto.clientId },
-    });
+    const { data: client, error: clientError } = await this.supabase
+      .from('clients')
+      .select('id')
+      .eq('id', dto.clientId)
+      .single();
 
-    if (!client) {
+    if (clientError || !client) {
       throw new NotFoundException('Cliente não encontrado');
     }
 
     // 2. Verificar se o usuário que registra existe
-    const registeredByUser = await this.prisma.user.findUnique({
-      where: { id: dto.registeredBy },
-    });
+    const { data: registeredByUser, error: userError } = await this.supabase
+      .from('users')
+      .select('id')
+      .eq('id', dto.registeredBy)
+      .single();
 
-    if (!registeredByUser) {
+    if (userError || !registeredByUser) {
       throw new NotFoundException('Usuário que registra não encontrado');
     }
 
     // 3. Se tem appointmentId, validar agendamento
     if (dto.appointmentId) {
-      const appointment = await this.prisma.appointment.findUnique({
-        where: { id: dto.appointmentId },
-      });
+      const { data: appointment, error: apptError } = await this.supabase
+        .from('appointments')
+        .select('id, is_paid, client_id')
+        .eq('id', dto.appointmentId)
+        .single();
 
-      if (!appointment) {
+      if (apptError || !appointment) {
         throw new NotFoundException('Agendamento não encontrado');
       }
 
-      // Não permite registrar pagamento se já está pago
-      if (appointment.isPaid) {
+      if (appointment.is_paid) {
         throw new BadRequestException('Este agendamento já está pago');
       }
 
-      // Verifica se o agendamento pertence ao cliente
-      if (appointment.clientId !== dto.clientId) {
-        throw new BadRequestException(
-          'O agendamento não pertence a este cliente',
-        );
+      if (appointment.client_id !== dto.clientId) {
+        throw new BadRequestException('O agendamento não pertence a este cliente');
       }
     }
 
-    // 4. Criar o pagamento e atualizar agendamento em transação
-    return this.prisma.$transaction(async (tx) => {
-      // Criar registro do pagamento
-      const payment = await tx.payment.create({
-        data: {
-          clientId: dto.clientId,
-          appointmentId: dto.appointmentId,
-          amount: dto.amount,
-          method: dto.method,
-          paidAt: dto.paidAt ?? new Date(),
-          registeredBy: dto.registeredBy,
-          notes: dto.notes,
-        },
-        include: {
-          client: true,
-          appointment: true,
-          registeredByUser: true,
-        },
-      });
+    // 4. Criar o pagamento
+    const { data: payment, error: payError } = await this.supabase
+      .from('payments')
+      .insert({
+        client_id: dto.clientId,
+        appointment_id: dto.appointmentId,
+        amount: dto.amount,
+        method: dto.method,
+        paid_at: dto.paidAt ?? new Date().toISOString(),
+        registered_by: dto.registeredBy,
+        notes: dto.notes,
+      })
+      .select('*')
+      .single();
 
-      // Se vinculado a agendamento, marcar como pago
-      if (dto.appointmentId) {
-        await tx.appointment.update({
-          where: { id: dto.appointmentId },
-          data: { isPaid: true },
-        });
-      }
+    if (payError) throw payError;
 
-      return payment;
-    });
+    // 5. Se vinculado a agendamento, marcar como pago
+    if (dto.appointmentId) {
+      await this.supabase
+        .from('appointments')
+        .update({ is_paid: true })
+        .eq('id', dto.appointmentId);
+    }
+
+    return payment;
   }
 
-  /**
-   * Remove um pagamento registrado incorretamente
-   *
-   * Regras:
-   * - Apenas para correções administrativas
-   * - Se estava vinculado a agendamento, volta isPaid = false
-   * - NÃO deve ser usado para estornos reais
-   */
   async unlinkPayment(id: string): Promise<void> {
-    const payment = await this.prisma.payment.findUnique({
-      where: { id },
-    });
+    const { data: payment, error } = await this.supabase
+      .from('payments')
+      .select('id, appointment_id')
+      .eq('id', id)
+      .single();
 
-    if (!payment) {
+    if (error || !payment) {
       throw new NotFoundException('Pagamento não encontrado');
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      // Se estava vinculado a agendamento, desmarcar como pago
-      if (payment.appointmentId) {
-        await tx.appointment.update({
-          where: { id: payment.appointmentId },
-          data: { isPaid: false },
-        });
-      }
+    // Se estava vinculado a agendamento, desmarcar como pago
+    if (payment.appointment_id) {
+      await this.supabase
+        .from('appointments')
+        .update({ is_paid: false })
+        .eq('id', payment.appointment_id);
+    }
 
-      // Remover o pagamento
-      await tx.payment.delete({
-        where: { id },
-      });
-    });
+    // Remover o pagamento
+    await this.supabase.from('payments').delete().eq('id', id);
   }
 
-  async findOne(id: string): Promise<Payment> {
-    const payment = await this.prisma.payment.findUnique({
-      where: { id },
-      include: {
-        client: true,
-        appointment: {
-          include: {
-            professional: true,
-            services: { include: { service: true } },
-          },
-        },
-        registeredByUser: true,
-      },
-    });
+  async findOne(id: string) {
+    const { data: payment, error } = await this.supabase
+      .from('payments')
+      .select('*')
+      .eq('id', id)
+      .single();
 
-    if (!payment) {
+    if (error || !payment) {
       throw new NotFoundException('Pagamento não encontrado');
     }
 
     return payment;
   }
 
-  async findAll(): Promise<Payment[]> {
-    return this.prisma.payment.findMany({
-      include: {
-        client: true,
-        appointment: true,
-        registeredByUser: true,
-      },
-      orderBy: { paidAt: 'desc' },
-    });
+  async findAll() {
+    const { data: payments, error } = await this.supabase
+      .from('payments')
+      .select('*')
+      .order('paid_at', { ascending: false });
+
+    if (error) throw error;
+    return payments || [];
   }
 
-  async findByClient(clientId: string): Promise<Payment[]> {
-    return this.prisma.payment.findMany({
-      where: { clientId },
-      include: {
-        appointment: {
-          include: {
-            professional: true,
-            services: { include: { service: true } },
-          },
-        },
-        registeredByUser: true,
-      },
-      orderBy: { paidAt: 'desc' },
-    });
+  async findByClient(clientId: string) {
+    const { data: payments, error } = await this.supabase
+      .from('payments')
+      .select('*')
+      .eq('client_id', clientId)
+      .order('paid_at', { ascending: false });
+
+    if (error) throw error;
+    return payments || [];
   }
 
-  async findByDateRange(startDate: Date, endDate: Date): Promise<Payment[]> {
-    return this.prisma.payment.findMany({
-      where: {
-        paidAt: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
-      include: {
-        client: true,
-        appointment: true,
-        registeredByUser: true,
-      },
-      orderBy: { paidAt: 'asc' },
-    });
+  async findByDateRange(startDate: Date, endDate: Date) {
+    const { data: payments, error } = await this.supabase
+      .from('payments')
+      .select('*')
+      .gte('paid_at', startDate.toISOString())
+      .lte('paid_at', endDate.toISOString())
+      .order('paid_at', { ascending: true });
+
+    if (error) throw error;
+    return payments || [];
   }
 
-  async findByMethod(method: PaymentMethod): Promise<Payment[]> {
-    return this.prisma.payment.findMany({
-      where: { method },
-      include: {
-        client: true,
-        appointment: true,
-      },
-      orderBy: { paidAt: 'desc' },
-    });
+  async findByMethod(method: string) {
+    const { data: payments, error } = await this.supabase
+      .from('payments')
+      .select('*')
+      .eq('method', method)
+      .order('paid_at', { ascending: false });
+
+    if (error) throw error;
+    return payments || [];
   }
 
-  /**
-   * Calcula totais por método de pagamento em um período
-   * Usado para fechamento de caixa
-   */
   async calculateTotalsByMethod(
     startDate: Date,
     endDate: Date,
   ): Promise<{ CASH: number; PIX: number; CARD: number; total: number }> {
-    const payments = await this.prisma.payment.findMany({
-      where: {
-        paidAt: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
-      select: {
-        amount: true,
-        method: true,
-      },
-    });
+    const { data: payments, error } = await this.supabase
+      .from('payments')
+      .select('amount, method')
+      .gte('paid_at', startDate.toISOString())
+      .lte('paid_at', endDate.toISOString());
 
-    const totals = {
-      CASH: 0,
-      PIX: 0,
-      CARD: 0,
-      total: 0,
-    };
+    if (error) throw error;
 
-    for (const payment of payments) {
-      totals[payment.method] += payment.amount;
+    const totals = { CASH: 0, PIX: 0, CARD: 0, total: 0 };
+
+    for (const payment of payments || []) {
+      totals[payment.method as keyof typeof totals] += payment.amount;
       totals.total += payment.amount;
     }
 
     return totals;
   }
 
-  /**
-   * Atualiza informações do pagamento
-   * Apenas para correções (ex: método errado, valor errado)
-   */
-  async update(id: string, dto: UpdatePaymentDto): Promise<Payment> {
-    const payment = await this.prisma.payment.findUnique({
-      where: { id },
-    });
+  async update(id: string, dto: UpdatePaymentDto) {
+    const { data: payment, error: findError } = await this.supabase
+      .from('payments')
+      .select('id')
+      .eq('id', id)
+      .single();
 
-    if (!payment) {
+    if (findError || !payment) {
       throw new NotFoundException('Pagamento não encontrado');
     }
 
-    return this.prisma.payment.update({
-      where: { id },
-      data: {
+    const { data: updated, error } = await this.supabase
+      .from('payments')
+      .update({
         amount: dto.amount,
         method: dto.method,
         notes: dto.notes,
-      },
-      include: {
-        client: true,
-        appointment: true,
-        registeredByUser: true,
-      },
-    });
+      })
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return updated;
   }
 }

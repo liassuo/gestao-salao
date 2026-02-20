@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
-import { PrismaService } from '../prisma/prisma.service';
+import { SupabaseService } from '../supabase/supabase.service';
 import { LoginDto, AuthResponseDto } from './dto';
 import { JwtPayload } from './strategies/jwt.strategy';
 import { UserRole } from '../common/enums/user-role.enum';
@@ -12,7 +12,7 @@ export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
-    private readonly prisma: PrismaService,
+    private readonly supabase: SupabaseService,
   ) {}
 
   async login(dto: LoginDto): Promise<AuthResponseDto> {
@@ -24,7 +24,7 @@ export class AuthService {
     }
 
     // 2. Verificar se usuário está ativo
-    if (!user.isActive) {
+    if (!user.is_active) {
       throw new UnauthorizedException('Usuário desativado');
     }
 
@@ -69,16 +69,18 @@ export class AuthService {
 
   async clientLogin(dto: LoginDto): Promise<AuthResponseDto> {
     // 1. Buscar cliente pelo email
-    const client = await this.prisma.client.findUnique({
-      where: { email: dto.email },
-    });
+    const { data: client } = await this.supabase
+      .from('clients')
+      .select('*')
+      .eq('email', dto.email)
+      .single();
 
     if (!client) {
       throw new UnauthorizedException('Credenciais inválidas');
     }
 
     // 2. Verificar se cliente está ativo
-    if (!client.isActive) {
+    if (!client.is_active) {
       throw new UnauthorizedException('Conta desativada');
     }
 

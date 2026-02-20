@@ -4,278 +4,192 @@ import {
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { SupabaseService } from '../supabase/supabase.service';
 import { OpenCashRegisterDto, CloseCashRegisterDto } from './dto';
-import { CashRegister } from '@prisma/client';
 
-/**
- * CashRegisterService
- *
- * Gerencia o caixa diário do estabelecimento.
- *
- * Regras:
- * - Só pode existir 1 caixa por dia (date é unique no banco)
- * - Pagamentos entram no caixa pelo campo paidAt
- * - Caixa não cria Payment nem Debt (apenas consulta)
- *
- * Fluxo típico:
- * 1. Abertura do caixa pela manhã (openRegister)
- * 2. Pagamentos são registrados ao longo do dia (PaymentsService)
- * 3. Fechamento do caixa à noite (closeRegister)
- */
 @Injectable()
 export class CashRegisterService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly supabase: SupabaseService) {}
 
-  /**
-   * Abre o caixa do dia
-   *
-   * Regras:
-   * - Só pode ter 1 caixa por dia
-   * - Verifica se já existe caixa aberto
-   * - data é normalizada para 00:00:00
-   */
-  async openRegister(dto: OpenCashRegisterDto): Promise<CashRegister> {
-    // 1. Verificar se usuário existe
-    const user = await this.prisma.user.findUnique({
-      where: { id: dto.openedBy },
-    });
+  private normalizeDate(date: Date): Date {
+    const normalized = new Date(date);
+    normalized.setHours(0, 0, 0, 0);
+    return normalized;
+  }
+
+  async openRegister(dto: OpenCashRegisterDto) {
+    const { data: user } = await this.supabase
+      .from('users')
+      .select('id')
+      .eq('id', dto.openedBy)
+      .single();
 
     if (!user) {
       throw new NotFoundException('Usuário não encontrado');
     }
 
-    // 2. Normalizar data para 00:00:00 (apenas a data, sem hora)
     const normalizedDate = this.normalizeDate(dto.date ?? new Date());
 
-    // 3. Verificar se já existe caixa para este dia
-    const existingRegister = await this.prisma.cashRegister.findUnique({
-      where: { date: normalizedDate },
-    });
+    const { data: existingRegister } = await this.supabase
+      .from('cash_registers')
+      .select('id')
+      .eq('date', normalizedDate.toISOString())
+      .single();
 
     if (existingRegister) {
       throw new ConflictException('Já existe um caixa para este dia');
     }
 
-    // 4. Verificar se existe algum caixa aberto (mesmo de outro dia)
-    const openRegister = await this.prisma.cashRegister.findFirst({
-      where: { isOpen: true },
-    });
+    const { data: openRegister } = await this.supabase
+      .from('cash_registers')
+      .select('id')
+      .eq('is_open', true)
+      .single();
 
     if (openRegister) {
-      throw new BadRequestException(
-        'Existe um caixa aberto que precisa ser fechado primeiro',
-      );
+      throw new BadRequestException('Existe um caixa aberto que precisa ser fechado primeiro');
     }
 
-    // 5. Criar o caixa
-    return this.prisma.cashRegister.create({
-      data: {
-        date: normalizedDate,
-        openedAt: new Date(),
-        openingBalance: dto.openingBalance,
-        openedBy: dto.openedBy,
-        isOpen: true,
+    const { data: register, error } = await this.supabase
+      .from('cash_registers')
+      .insert({
+        date: normalizedDate.toISOString(),
+        opened_at: new Date().toISOString(),
+        opening_balance: dto.openingBalance,
+        opened_by: dto.openedBy,
+        is_open: true,
         notes: dto.notes,
-      },
-      include: {
-        openedByUser: true,
-      },
-    });
+      })
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return register;
   }
 
-  /**
-   * Fecha o caixa do dia
-   *
-   * Fluxo:
-   * 1. Busca todos os Payments do dia (pelo paidAt)
-   * 2. Soma valores por método (CASH, PIX, CARD)
-   * 3. Calcula totalRevenue
-   * 4. Calcula discrepancy (diferença entre esperado e informado)
-   */
-  async closeRegister(
-    id: string,
-    dto: CloseCashRegisterDto,
-  ): Promise<CashRegister> {
-    // 1. Buscar o caixa
-    const register = await this.prisma.cashRegister.findUnique({
-      where: { id },
-    });
+  async closeRegister(id: string, dto: CloseCashRegisterDto) {
+    const { data: register, error } = await this.supabase
+      .from('cash_registers')
+      .select('*')
+      .eq('id', id)
+      .single();
 
-    if (!register) {
+    if (error || !register) {
       throw new NotFoundException('Caixa não encontrado');
     }
 
-    if (!register.isOpen) {
+    if (!register.is_open) {
       throw new BadRequestException('Este caixa já está fechado');
     }
 
-    // 2. Verificar se usuário existe
-    const user = await this.prisma.user.findUnique({
-      where: { id: dto.closedBy },
-    });
+    const { data: user } = await this.supabase
+      .from('users')
+      .select('id')
+      .eq('id', dto.closedBy)
+      .single();
 
     if (!user) {
       throw new NotFoundException('Usuário não encontrado');
     }
 
-    // 3. Calcular totais do dia
-    const totals = await this.calculateDailyTotals(register.date);
-
-    // 4. Calcular saldo esperado e discrepância
-    // Saldo esperado = abertura + dinheiro recebido (só conta CASH no caixa físico)
-    const expectedClosingBalance = register.openingBalance + totals.cash;
+    const totals = await this.calculateDailyTotals(new Date(register.date));
+    const expectedClosingBalance = register.opening_balance + totals.cash;
     const discrepancy = dto.closingBalance - expectedClosingBalance;
 
-    // 5. Fechar o caixa
-    return this.prisma.cashRegister.update({
-      where: { id },
-      data: {
-        closedAt: new Date(),
-        closedBy: dto.closedBy,
-        closingBalance: dto.closingBalance,
-        totalCash: totals.cash,
-        totalPix: totals.pix,
-        totalCard: totals.card,
-        totalRevenue: totals.total,
+    const { data: closedRegister, error: closeError } = await this.supabase
+      .from('cash_registers')
+      .update({
+        closed_at: new Date().toISOString(),
+        closed_by: dto.closedBy,
+        closing_balance: dto.closingBalance,
+        total_cash: totals.cash,
+        total_pix: totals.pix,
+        total_card: totals.card,
+        total_revenue: totals.total,
         discrepancy,
-        isOpen: false,
+        is_open: false,
         notes: dto.notes ? `${register.notes ?? ''}\n${dto.notes}`.trim() : register.notes,
-      },
-      include: {
-        openedByUser: true,
-        closedByUser: true,
-        payments: {
-          include: {
-            client: true,
-          },
-        },
-      },
-    });
+      })
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (closeError) throw closeError;
+    return closedRegister;
   }
 
-  /**
-   * Retorna o caixa do dia atual, se existir
-   */
-  async getTodayRegister(): Promise<CashRegister | null> {
+  async getTodayRegister() {
     const today = this.normalizeDate(new Date());
 
-    return this.prisma.cashRegister.findUnique({
-      where: { date: today },
-      include: {
-        openedByUser: true,
-        closedByUser: true,
-        payments: {
-          include: {
-            client: true,
-            appointment: true,
-          },
-        },
-      },
-    });
+    const { data: register } = await this.supabase
+      .from('cash_registers')
+      .select('*')
+      .eq('date', today.toISOString())
+      .single();
+
+    return register;
   }
 
-  /**
-   * Retorna o caixa aberto atualmente (se houver)
-   */
-  async findOpen(): Promise<CashRegister | null> {
-    return this.prisma.cashRegister.findFirst({
-      where: { isOpen: true },
-      include: {
-        openedByUser: true,
-        payments: {
-          include: {
-            client: true,
-          },
-        },
-      },
-    });
+  async findOpen() {
+    const { data: register } = await this.supabase
+      .from('cash_registers')
+      .select('*')
+      .eq('is_open', true)
+      .single();
+
+    return register;
   }
 
-  async findOne(id: string): Promise<CashRegister> {
-    const register = await this.prisma.cashRegister.findUnique({
-      where: { id },
-      include: {
-        openedByUser: true,
-        closedByUser: true,
-        payments: {
-          include: {
-            client: true,
-            appointment: true,
-          },
-        },
-      },
-    });
+  async findOne(id: string) {
+    const { data: register, error } = await this.supabase
+      .from('cash_registers')
+      .select('*')
+      .eq('id', id)
+      .single();
 
-    if (!register) {
+    if (error || !register) {
       throw new NotFoundException('Caixa não encontrado');
     }
 
     return register;
   }
 
-  async findByDate(date: Date): Promise<CashRegister | null> {
+  async findByDate(date: Date) {
     const normalizedDate = this.normalizeDate(date);
 
-    return this.prisma.cashRegister.findUnique({
-      where: { date: normalizedDate },
-      include: {
-        openedByUser: true,
-        closedByUser: true,
-        payments: {
-          include: {
-            client: true,
-            appointment: true,
-          },
-        },
-      },
-    });
+    const { data: register } = await this.supabase
+      .from('cash_registers')
+      .select('*')
+      .eq('date', normalizedDate.toISOString())
+      .single();
+
+    return register;
   }
 
-  async findAll(): Promise<CashRegister[]> {
-    return this.prisma.cashRegister.findMany({
-      include: {
-        openedByUser: true,
-        closedByUser: true,
-      },
-      orderBy: { date: 'desc' },
-    });
+  async findAll() {
+    const { data: registers, error } = await this.supabase
+      .from('cash_registers')
+      .select('*')
+      .order('date', { ascending: false });
+
+    if (error) throw error;
+    return registers || [];
   }
 
-  /**
-   * Calcula totais do dia por método de pagamento
-   *
-   * Busca todos os Payments onde paidAt está dentro do dia
-   * Retorna valores em centavos
-   */
-  async calculateDailyTotals(
-    date: Date,
-  ): Promise<{ cash: number; pix: number; card: number; total: number }> {
+  async calculateDailyTotals(date: Date) {
     const normalizedDate = this.normalizeDate(date);
     const nextDay = new Date(normalizedDate);
     nextDay.setDate(nextDay.getDate() + 1);
 
-    const payments = await this.prisma.payment.findMany({
-      where: {
-        paidAt: {
-          gte: normalizedDate,
-          lt: nextDay,
-        },
-      },
-      select: {
-        amount: true,
-        method: true,
-      },
-    });
+    const { data: payments } = await this.supabase
+      .from('payments')
+      .select('amount, method')
+      .gte('paid_at', normalizedDate.toISOString())
+      .lt('paid_at', nextDay.toISOString());
 
-    const totals = {
-      cash: 0,
-      pix: 0,
-      card: 0,
-      total: 0,
-    };
+    const totals = { cash: 0, pix: 0, card: 0, total: 0 };
 
-    for (const payment of payments) {
+    for (const payment of payments || []) {
       switch (payment.method) {
         case 'CASH':
           totals.cash += payment.amount;
@@ -293,29 +207,13 @@ export class CashRegisterService {
     return totals;
   }
 
-  /**
-   * Resumo de um período (para relatórios)
-   */
-  async getSummary(
-    startDate: Date,
-    endDate: Date,
-  ): Promise<{
-    totalRevenue: number;
-    totalCash: number;
-    totalPix: number;
-    totalCard: number;
-    totalDiscrepancy: number;
-    daysCount: number;
-  }> {
-    const registers = await this.prisma.cashRegister.findMany({
-      where: {
-        date: {
-          gte: this.normalizeDate(startDate),
-          lte: this.normalizeDate(endDate),
-        },
-        isOpen: false, // Só considera caixas fechados
-      },
-    });
+  async getSummary(startDate: Date, endDate: Date) {
+    const { data: registers } = await this.supabase
+      .from('cash_registers')
+      .select('*')
+      .gte('date', this.normalizeDate(startDate).toISOString())
+      .lte('date', this.normalizeDate(endDate).toISOString())
+      .eq('is_open', false);
 
     const summary = {
       totalRevenue: 0,
@@ -323,42 +221,28 @@ export class CashRegisterService {
       totalPix: 0,
       totalCard: 0,
       totalDiscrepancy: 0,
-      daysCount: registers.length,
+      daysCount: (registers || []).length,
     };
 
-    for (const register of registers) {
-      summary.totalRevenue += register.totalRevenue ?? 0;
-      summary.totalCash += register.totalCash ?? 0;
-      summary.totalPix += register.totalPix ?? 0;
-      summary.totalCard += register.totalCard ?? 0;
+    for (const register of registers || []) {
+      summary.totalRevenue += register.total_revenue ?? 0;
+      summary.totalCash += register.total_cash ?? 0;
+      summary.totalPix += register.total_pix ?? 0;
+      summary.totalCard += register.total_card ?? 0;
       summary.totalDiscrepancy += register.discrepancy ?? 0;
     }
 
     return summary;
   }
 
-  /**
-   * Vincula um pagamento ao caixa do dia
-   * Chamado pelo PaymentsService ao registrar pagamento
-   */
-  async linkPaymentToRegister(paymentId: string): Promise<void> {
+  async linkPaymentToRegister(paymentId: string) {
     const todayRegister = await this.getTodayRegister();
 
-    if (todayRegister && todayRegister.isOpen) {
-      await this.prisma.payment.update({
-        where: { id: paymentId },
-        data: { cashRegisterId: todayRegister.id },
-      });
+    if (todayRegister && todayRegister.is_open) {
+      await this.supabase
+        .from('payments')
+        .update({ cash_register_id: todayRegister.id })
+        .eq('id', paymentId);
     }
-  }
-
-  /**
-   * Normaliza uma data para 00:00:00 UTC
-   * Necessário porque o campo date no banco é do tipo DATE (sem hora)
-   */
-  private normalizeDate(date: Date): Date {
-    const normalized = new Date(date);
-    normalized.setHours(0, 0, 0, 0);
-    return normalized;
   }
 }

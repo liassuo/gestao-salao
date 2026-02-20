@@ -65,13 +65,13 @@ export function Products() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600"><Package className="h-5 w-5 text-white" /></div>
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#8B6914]"><Package className="h-5 w-5 text-white" /></div>
           <div>
             <h1 className="text-2xl font-bold text-[var(--text-primary)]">Produtos</h1>
             <p className="text-sm text-[var(--text-muted)]">Cadastro de produtos</p>
           </div>
         </div>
-        <button onClick={() => { setFormError(null); setIsCreateModalOpen(true); }} className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 font-medium text-white transition-colors hover:bg-blue-700">
+        <button onClick={() => { setFormError(null); setIsCreateModalOpen(true); }} className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-4 py-2.5 font-medium text-white transition-colors hover:bg-[#725510]">
           <Plus className="h-4 w-4" /> Novo Produto
         </button>
       </div>
@@ -84,16 +84,16 @@ export function Products() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Buscar por nome ou descrição..."
-            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-2 pl-10 pr-4 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors"
+            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-2 pl-10 pr-4 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[#C8923A] focus:outline-none focus:ring-1 focus:ring-[#C8923A] transition-colors"
           />
         </div>
       </div>
 
       <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6 backdrop-blur-sm">
         {isLoading ? (
-          <div className="flex justify-center py-12"><div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" /></div>
+          <div className="flex justify-center py-12"><div className="h-8 w-8 animate-spin rounded-full border-2 border-[#C8923A] border-t-transparent" /></div>
         ) : error ? (
-          <div className="flex items-center gap-2 text-red-400"><AlertCircle className="h-5 w-5" /><span>Erro ao carregar produtos</span></div>
+          <div className="flex items-center gap-2 text-[#C45050]"><AlertCircle className="h-5 w-5" /><span>Erro ao carregar produtos</span></div>
         ) : (
           <ProductsTable products={filteredProducts} onEdit={(p) => { setFormError(null); setEditingProduct(p); }} onDelete={setDeletingProduct} />
         )}

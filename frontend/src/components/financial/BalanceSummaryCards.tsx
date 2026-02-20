@@ -26,14 +26,14 @@ export function BalanceSummaryCards({ summary, isLoading }: BalanceSummaryCardsP
       value: formatCurrency(summary.totalExpense),
       icon: TrendingDown,
       iconBg: 'bg-red-500/20',
-      iconColor: 'text-red-500',
+      iconColor: 'text-[#A63030]',
     },
     {
       label: 'Saldo',
       value: formatCurrency(summary.balance),
       icon: Scale,
-      iconBg: isPositive ? 'bg-blue-500/20' : 'bg-red-500/20',
-      iconColor: isPositive ? 'text-blue-500' : 'text-red-500',
+      iconBg: isPositive ? 'bg-[#C8923A]/20' : 'bg-red-500/20',
+      iconColor: isPositive ? 'text-[#C8923A]' : 'text-[#A63030]',
     },
   ];
 

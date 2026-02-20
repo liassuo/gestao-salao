@@ -82,9 +82,9 @@ export function CashRegisterTable({ cashRegisters }: CashRegisterTableProps) {
                     <span
                       className={`font-medium ${
                         cr.discrepancy > 0
-                          ? 'text-blue-500'
+                          ? 'text-[#C8923A]'
                           : cr.discrepancy < 0
-                          ? 'text-red-500'
+                          ? 'text-[#A63030]'
                           : 'text-[var(--text-secondary)]'
                       }`}
                     >

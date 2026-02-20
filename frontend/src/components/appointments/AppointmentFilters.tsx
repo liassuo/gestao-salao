@@ -38,7 +38,7 @@ export function AppointmentFiltersComponent({
             type="date"
             value={filters.startDate || ''}
             onChange={(e) => handleChange('startDate', e.target.value)}
-            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none focus:ring-1 focus:ring-[#C8923A]"
           />
         </div>
 
@@ -51,7 +51,7 @@ export function AppointmentFiltersComponent({
             type="date"
             value={filters.endDate || ''}
             onChange={(e) => handleChange('endDate', e.target.value)}
-            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none focus:ring-1 focus:ring-[#C8923A]"
           />
         </div>
 
@@ -63,7 +63,7 @@ export function AppointmentFiltersComponent({
           <select
             value={filters.professionalId || ''}
             onChange={(e) => handleChange('professionalId', e.target.value)}
-            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none focus:ring-1 focus:ring-[#C8923A]"
           >
             <option value="">Todos</option>
             {professionals.map((p) => (
@@ -82,7 +82,7 @@ export function AppointmentFiltersComponent({
           <select
             value={filters.status || ''}
             onChange={(e) => handleChange('status', e.target.value)}
-            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none focus:ring-1 focus:ring-[#C8923A]"
           >
             <option value="">Todos</option>
             {statusOptions.map((status) => (

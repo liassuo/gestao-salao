@@ -3,128 +3,68 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { SupabaseService } from '../supabase/supabase.service';
 import { GenerateCommissionDto, QueryCommissionDto } from './dto';
-import { Commission, CommissionStatus } from '@prisma/client';
-import { Decimal } from '@prisma/client/runtime/library';
 
-/**
- * CommissionsService
- *
- * Gerencia comissões dos profissionais baseadas em atendimentos realizados.
- *
- * Regras:
- * - Comissões são geradas para um período (startDate a endDate)
- * - Apenas agendamentos com status ATTENDED são considerados
- * - Cálculo: soma de (appointment.totalPrice * professional.commissionRate / 100)
- * - Valores em centavos (inteiros)
- * - Cada registro de comissão é por profissional por período
- */
 @Injectable()
 export class CommissionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly supabase: SupabaseService) {}
 
-  /**
-   * Gera comissões para todos os profissionais em um período
-   *
-   * Fluxo:
-   * 1. Busca todos os agendamentos ATTENDED no período
-   * 2. Agrupa por professionalId
-   * 3. Para cada profissional, obtém a commissionRate
-   * 4. Calcula: soma de (appointment.totalPrice * commissionRate / 100)
-   * 5. Cria registros de Commission para cada profissional
-   */
-  async generate(dto: GenerateCommissionDto): Promise<Commission[]> {
+  async generate(dto: GenerateCommissionDto) {
     const startDate = new Date(dto.startDate);
     const endDate = new Date(dto.endDate);
 
     if (startDate >= endDate) {
-      throw new BadRequestException(
-        'A data de início deve ser anterior à data de fim',
-      );
+      throw new BadRequestException('A data de início deve ser anterior à data de fim');
     }
 
-    // 1. Buscar agendamentos ATTENDED no período
-    const appointments = await this.prisma.appointment.findMany({
-      where: {
-        status: 'ATTENDED',
-        scheduledAt: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
-      include: {
-        professional: true,
-      },
-    });
+    const { data: appointments } = await this.supabase
+      .from('appointments')
+      .select('professional_id, total_price')
+      .eq('status', 'ATTENDED')
+      .gte('scheduled_at', startDate.toISOString())
+      .lte('scheduled_at', endDate.toISOString());
 
-    if (appointments.length === 0) {
-      throw new BadRequestException(
-        'Nenhum atendimento encontrado no período informado',
-      );
+    if (!appointments || appointments.length === 0) {
+      throw new BadRequestException('Nenhum atendimento encontrado no período informado');
     }
 
-    // 2. Agrupar por professionalId
-    const groupedByProfessional = new Map<
-      string,
-      { totalPrice: number; branchId: string | null }
-    >();
+    const groupedByProfessional = new Map<string, number>();
 
     for (const appointment of appointments) {
-      const existing = groupedByProfessional.get(appointment.professionalId);
-      if (existing) {
-        existing.totalPrice += appointment.totalPrice;
-      } else {
-        groupedByProfessional.set(appointment.professionalId, {
-          totalPrice: appointment.totalPrice,
-          branchId: appointment.professional.branchId,
-        });
-      }
+      const existing = groupedByProfessional.get(appointment.professional_id) || 0;
+      groupedByProfessional.set(appointment.professional_id, existing + appointment.total_price);
     }
 
-    // 3. Para cada profissional, buscar commissionRate e calcular comissão
-    const createdCommissions: Commission[] = [];
+    const createdCommissions = [];
 
-    for (const [professionalId, data] of groupedByProfessional) {
-      const professional = await this.prisma.professional.findUnique({
-        where: { id: professionalId },
-      });
+    for (const [professionalId, totalPrice] of groupedByProfessional) {
+      const { data: professional } = await this.supabase
+        .from('professionals')
+        .select('id, commission_rate, branch_id')
+        .eq('id', professionalId)
+        .single();
 
-      if (!professional) {
-        continue; // Pula se profissional não existe mais
-      }
+      if (!professional || !professional.commission_rate) continue;
 
-      if (!professional.commissionRate) {
-        continue; // Pula profissionais sem taxa de comissão configurada
-      }
+      const commissionAmount = Math.round((totalPrice * professional.commission_rate) / 100);
 
-      // 4. Calcular: totalPrice * commissionRate / 100
-      const rate = new Decimal(professional.commissionRate.toString());
-      const commissionAmount = Math.round(
-        (data.totalPrice * rate.toNumber()) / 100,
-      );
+      if (commissionAmount <= 0) continue;
 
-      if (commissionAmount <= 0) {
-        continue; // Pula se comissão é zero
-      }
-
-      // 5. Criar registro de comissão
-      const commission = await this.prisma.commission.create({
-        data: {
+      const { data: commission, error } = await this.supabase
+        .from('commissions')
+        .insert({
           amount: commissionAmount,
-          periodStart: startDate,
-          periodEnd: endDate,
+          period_start: startDate.toISOString(),
+          period_end: endDate.toISOString(),
           status: 'PENDING',
-          professionalId,
-          branchId: data.branchId,
-        },
-        include: {
-          professional: true,
-          branch: true,
-        },
-      });
+          professional_id: professionalId,
+          branch_id: professional.branch_id,
+        })
+        .select('*')
+        .single();
 
-      createdCommissions.push(commission);
+      if (!error) createdCommissions.push(commission);
     }
 
     if (createdCommissions.length === 0) {
@@ -136,69 +76,53 @@ export class CommissionsService {
     return createdCommissions;
   }
 
-  /**
-   * Lista comissões com filtros opcionais
-   */
-  async findAll(query: QueryCommissionDto): Promise<Commission[]> {
-    const where: any = {};
+  async findAll(query: QueryCommissionDto) {
+    let queryBuilder = this.supabase.from('commissions').select('*');
 
     if (query.professionalId) {
-      where.professionalId = query.professionalId;
+      queryBuilder = queryBuilder.eq('professional_id', query.professionalId);
     }
 
     if (query.status) {
-      where.status = query.status as CommissionStatus;
+      queryBuilder = queryBuilder.eq('status', query.status);
     }
 
-    if (query.startDate || query.endDate) {
-      where.periodStart = {};
-      if (query.startDate) {
-        where.periodStart.gte = new Date(query.startDate);
-      }
-      if (query.endDate) {
-        where.periodStart.lte = new Date(query.endDate);
-      }
+    if (query.startDate) {
+      queryBuilder = queryBuilder.gte('period_start', new Date(query.startDate).toISOString());
     }
 
-    return this.prisma.commission.findMany({
-      where,
-      include: {
-        professional: true,
-        branch: true,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    if (query.endDate) {
+      queryBuilder = queryBuilder.lte('period_start', new Date(query.endDate).toISOString());
+    }
+
+    const { data: commissions, error } = await queryBuilder.order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return commissions || [];
   }
 
-  /**
-   * Busca uma comissão por ID com relacionamentos
-   */
-  async findOne(id: string): Promise<Commission> {
-    const commission = await this.prisma.commission.findUnique({
-      where: { id },
-      include: {
-        professional: true,
-        branch: true,
-      },
-    });
+  async findOne(id: string) {
+    const { data: commission, error } = await this.supabase
+      .from('commissions')
+      .select('*')
+      .eq('id', id)
+      .single();
 
-    if (!commission) {
+    if (error || !commission) {
       throw new NotFoundException('Comissão não encontrada');
     }
 
     return commission;
   }
 
-  /**
-   * Marca uma comissão como paga
-   * Define status = PAID e paidAt = agora
-   */
-  async markAsPaid(id: string): Promise<Commission> {
-    const commission = await this.prisma.commission.findUnique({
-      where: { id },
-    });
+  async markAsPaid(id: string) {
+    const { data: commission, error } = await this.supabase
+      .from('commissions')
+      .select('id, status')
+      .eq('id', id)
+      .single();
 
-    if (!commission) {
+    if (error || !commission) {
       throw new NotFoundException('Comissão não encontrada');
     }
 
@@ -206,33 +130,30 @@ export class CommissionsService {
       throw new BadRequestException('Esta comissão já foi paga');
     }
 
-    return this.prisma.commission.update({
-      where: { id },
-      data: {
-        status: 'PAID',
-        paidAt: new Date(),
-      },
-      include: {
-        professional: true,
-        branch: true,
-      },
-    });
+    const { data: updated, error: updateError } = await this.supabase
+      .from('commissions')
+      .update({ status: 'PAID', paid_at: new Date().toISOString() })
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (updateError) throw updateError;
+    return updated;
   }
 
-  /**
-   * Remove uma comissão
-   */
-  async remove(id: string): Promise<void> {
-    const commission = await this.prisma.commission.findUnique({
-      where: { id },
-    });
+  async remove(id: string) {
+    const { data: commission, error: findError } = await this.supabase
+      .from('commissions')
+      .select('id')
+      .eq('id', id)
+      .single();
 
-    if (!commission) {
+    if (findError || !commission) {
       throw new NotFoundException('Comissão não encontrada');
     }
 
-    await this.prisma.commission.delete({
-      where: { id },
-    });
+    const { error } = await this.supabase.from('commissions').delete().eq('id', id);
+
+    if (error) throw error;
   }
 }

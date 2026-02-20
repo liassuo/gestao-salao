@@ -100,7 +100,7 @@ export function PaymentForm({ onSubmit, isLoading, error }: PaymentFormProps) {
   if (isDataLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-[#C8923A]" />
       </div>
     );
   }
@@ -110,10 +110,10 @@ export function PaymentForm({ onSubmit, isLoading, error }: PaymentFormProps) {
       {/* Erro da API */}
       {error && (
         <div className="flex items-start gap-3 rounded-xl bg-red-500/10 p-4">
-          <AlertCircle className="mt-0.5 h-5 w-5 text-red-500" />
+          <AlertCircle className="mt-0.5 h-5 w-5 text-[#A63030]" />
           <div>
-            <p className="font-medium text-red-500">Erro ao registrar pagamento</p>
-            <p className="text-sm text-red-400">{error}</p>
+            <p className="font-medium text-[#A63030]">Erro ao registrar pagamento</p>
+            <p className="text-sm text-[#C45050]">{error}</p>
           </div>
         </div>
       )}
@@ -125,8 +125,8 @@ export function PaymentForm({ onSubmit, isLoading, error }: PaymentFormProps) {
         </label>
         <select
           {...register('clientId', { required: 'Selecione um cliente' })}
-          className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-            errors.clientId ? 'border-red-500' : 'border-[var(--border-color)]'
+          className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] ${
+            errors.clientId ? 'border-[#A63030]' : 'border-[var(--border-color)]'
           }`}
         >
           <option value="">Selecione um cliente</option>
@@ -137,7 +137,7 @@ export function PaymentForm({ onSubmit, isLoading, error }: PaymentFormProps) {
           ))}
         </select>
         {errors.clientId && (
-          <p className="mt-1 text-sm text-red-500">{errors.clientId.message}</p>
+          <p className="mt-1 text-sm text-[#A63030]">{errors.clientId.message}</p>
         )}
       </div>
 
@@ -149,7 +149,7 @@ export function PaymentForm({ onSubmit, isLoading, error }: PaymentFormProps) {
         <select
           {...register('appointmentId')}
           disabled={!selectedClientId || isLoadingAppointments}
-          className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+          className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] disabled:opacity-50"
         >
           <option value="">
             {!selectedClientId
@@ -190,13 +190,13 @@ export function PaymentForm({ onSubmit, isLoading, error }: PaymentFormProps) {
                 reaisToCentavos(value) > 0 || 'Valor deve ser maior que zero',
             })}
             onChange={handleAmountChange}
-            className={`w-full rounded-xl border bg-[var(--hover-bg)] py-2.5 pl-10 pr-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              errors.amount ? 'border-red-500' : 'border-[var(--border-color)]'
+            className={`w-full rounded-xl border bg-[var(--hover-bg)] py-2.5 pl-10 pr-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] ${
+              errors.amount ? 'border-[#A63030]' : 'border-[var(--border-color)]'
             }`}
           />
         </div>
         {errors.amount && (
-          <p className="mt-1 text-sm text-red-500">{errors.amount.message}</p>
+          <p className="mt-1 text-sm text-[#A63030]">{errors.amount.message}</p>
         )}
         {watchedAmount && (
           <p className="mt-1 text-xs text-[var(--text-muted)]">
@@ -218,7 +218,7 @@ export function PaymentForm({ onSubmit, isLoading, error }: PaymentFormProps) {
                 key={method}
                 className={`flex cursor-pointer items-center justify-center rounded-xl border-2 px-4 py-3 text-sm font-medium transition-colors ${
                   isSelected
-                    ? 'border-blue-600 bg-blue-500/20 text-blue-500'
+                    ? 'border-[#C8923A] bg-[#C8923A]/20 text-[#C8923A]'
                     : 'border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--text-muted)]'
                 }`}
               >
@@ -244,7 +244,7 @@ export function PaymentForm({ onSubmit, isLoading, error }: PaymentFormProps) {
           {...register('notes')}
           rows={2}
           placeholder="Informações adicionais (opcional)"
-          className="w-full resize-none rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full resize-none rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A]"
         />
       </div>
 
@@ -253,7 +253,7 @@ export function PaymentForm({ onSubmit, isLoading, error }: PaymentFormProps) {
         <button
           type="submit"
           disabled={isLoading}
-          className="flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-6 py-2.5 font-medium text-white transition-colors hover:bg-[#725510] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
           {isLoading ? 'Registrando...' : 'Registrar Pagamento'}

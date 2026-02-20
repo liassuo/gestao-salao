@@ -37,15 +37,15 @@ export function DebtSummary({ debts, isLoading }: DebtSummaryProps) {
       label: 'Valor Recebido',
       value: formatCurrency(totals.paid),
       icon: TrendingUp,
-      iconBg: 'bg-blue-500/20',
-      iconColor: 'text-blue-500',
+      iconBg: 'bg-[#C8923A]/20',
+      iconColor: 'text-[#C8923A]',
     },
     {
       label: 'Saldo a Receber',
       value: formatCurrency(totals.remaining),
       icon: TrendingDown,
       iconBg: 'bg-red-500/20',
-      iconColor: 'text-red-500',
+      iconColor: 'text-[#A63030]',
     },
     {
       label: 'Dívidas Abertas',
@@ -53,7 +53,7 @@ export function DebtSummary({ debts, isLoading }: DebtSummaryProps) {
       subValue: `${totals.settled} quitadas`,
       icon: CheckCircle,
       iconBg: 'bg-red-500/20',
-      iconColor: 'text-red-500',
+      iconColor: 'text-[#A63030]',
     },
   ];
 
