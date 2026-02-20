@@ -59,6 +59,12 @@ export const clientAuthApi = {
     });
     return response.data;
   },
+  googleLogin: async (credential: string): Promise<ClientLoginResponse> => {
+    const response = await clientApi.post<ClientLoginResponse>('/auth/client/google', {
+      credential,
+    });
+    return response.data;
+  },
 };
 
 export const storage = {

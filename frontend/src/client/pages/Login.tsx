@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { GoogleLogin, CredentialResponse } from '@react-oauth/google';
 import { useClientAuth } from '../auth';
 
 export function ClientLogin() {
@@ -8,7 +9,7 @@ export function ClientLogin() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { login } = useClientAuth();
+  const { login, loginWithGoogle } = useClientAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -35,6 +36,29 @@ export function ClientLogin() {
     }
   };
 
+  const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
+    if (!credentialResponse.credential) {
+      setError('Erro ao fazer login com Google. Tente novamente.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      await loginWithGoogle(credentialResponse.credential);
+      navigate(from, { replace: true });
+    } catch (err) {
+      setError('Erro ao fazer login com Google. Tente novamente.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleGoogleError = () => {
+    setError('Erro ao conectar com Google. Tente novamente.');
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
       <div className="w-full max-w-md">
@@ -45,13 +69,38 @@ export function ClientLogin() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {error && (
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-xl text-sm">
-              {error}
-            </div>
-          )}
+        {error && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-xl text-sm mb-5">
+            {error}
+          </div>
+        )}
 
+        {/* Google Login Button */}
+        <div className="mb-6">
+          <GoogleLogin
+            onSuccess={handleGoogleSuccess}
+            onError={handleGoogleError}
+            size="large"
+            width="100%"
+            text="continue_with"
+            shape="rectangular"
+            locale="pt_BR"
+          />
+        </div>
+
+        {/* Divider */}
+        <div className="relative mb-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-200 dark:border-gray-700"></div>
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-4 bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400">
+              ou continue com email
+            </span>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
               Email

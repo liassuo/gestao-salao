@@ -4,6 +4,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 @Injectable()
 export class SupabaseService implements OnModuleInit {
+<<<<<<< HEAD
   private supabase: SupabaseClient;
 
   constructor(private configService: ConfigService) {}
@@ -17,6 +18,25 @@ export class SupabaseService implements OnModuleInit {
     }
 
     this.supabase = createClient(supabaseUrl, supabaseKey, {
+=======
+  private supabaseClient: SupabaseClient;
+
+  constructor(private readonly configService: ConfigService) {}
+
+  async onModuleInit() {
+    const supabaseUrl = this.configService.get<string>('SUPABASE_URL');
+    const supabaseServiceKey = this.configService.get<string>(
+      'SUPABASE_SERVICE_ROLE_KEY',
+    );
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error(
+        'SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be defined in environment variables',
+      );
+    }
+
+    this.supabaseClient = createClient(supabaseUrl, supabaseServiceKey, {
+>>>>>>> f381e3e55327b86d6b7ce9aa46ca9065785ced95
       auth: {
         autoRefreshToken: false,
         persistSession: false,
@@ -25,6 +45,7 @@ export class SupabaseService implements OnModuleInit {
   }
 
   get client(): SupabaseClient {
+<<<<<<< HEAD
     return this.supabase;
   }
 
@@ -55,4 +76,8 @@ export class SupabaseService implements OnModuleInit {
   get order() { return this.from('orders'); }
   get orderItem() { return this.from('order_items'); }
   get timeBlock() { return this.from('time_blocks'); }
+=======
+    return this.supabaseClient;
+  }
+>>>>>>> f381e3e55327b86d6b7ce9aa46ca9065785ced95
 }
