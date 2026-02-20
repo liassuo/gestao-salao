@@ -57,7 +57,7 @@ export function CommissionsTable({ commissions, onMarkAsPaid, onDelete, isLoadin
               <tr key={commission.id} className="hover:bg-[var(--hover-bg)]">
                 <td className="whitespace-nowrap px-4 py-3">
                   <div className="font-medium text-[var(--text-primary)]">
-                    {commission.professional.name}
+                    {commission.professional?.name || 'Profissional'}
                   </div>
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-muted)]">

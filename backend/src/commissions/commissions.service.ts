@@ -20,10 +20,10 @@ export class CommissionsService {
 
     const { data: appointments } = await this.supabase
       .from('appointments')
-      .select('professional_id, total_price')
+      .select('professionalId, totalPrice')
       .eq('status', 'ATTENDED')
-      .gte('scheduled_at', startDate.toISOString())
-      .lte('scheduled_at', endDate.toISOString());
+      .gte('scheduledAt', startDate.toISOString())
+      .lte('scheduledAt', endDate.toISOString());
 
     if (!appointments || appointments.length === 0) {
       throw new BadRequestException('Nenhum atendimento encontrado no período informado');
@@ -32,8 +32,8 @@ export class CommissionsService {
     const groupedByProfessional = new Map<string, number>();
 
     for (const appointment of appointments) {
-      const existing = groupedByProfessional.get(appointment.professional_id) || 0;
-      groupedByProfessional.set(appointment.professional_id, existing + appointment.total_price);
+      const existing = groupedByProfessional.get(appointment.professionalId) || 0;
+      groupedByProfessional.set(appointment.professionalId, existing + appointment.totalPrice);
     }
 
     const createdCommissions = [];
@@ -41,13 +41,13 @@ export class CommissionsService {
     for (const [professionalId, totalPrice] of groupedByProfessional) {
       const { data: professional } = await this.supabase
         .from('professionals')
-        .select('id, commission_rate, branch_id')
+        .select('id, commissionRate, branchId')
         .eq('id', professionalId)
         .single();
 
-      if (!professional || !professional.commission_rate) continue;
+      if (!professional || !professional.commissionRate) continue;
 
-      const commissionAmount = Math.round((totalPrice * professional.commission_rate) / 100);
+      const commissionAmount = Math.round((totalPrice * professional.commissionRate) / 100);
 
       if (commissionAmount <= 0) continue;
 
@@ -55,11 +55,11 @@ export class CommissionsService {
         .from('commissions')
         .insert({
           amount: commissionAmount,
-          period_start: startDate.toISOString(),
-          period_end: endDate.toISOString(),
+          periodStart: startDate.toISOString(),
+          periodEnd: endDate.toISOString(),
           status: 'PENDING',
-          professional_id: professionalId,
-          branch_id: professional.branch_id,
+          professionalId: professionalId,
+          branchId: professional.branchId,
         })
         .select('*')
         .single();
@@ -80,7 +80,7 @@ export class CommissionsService {
     let queryBuilder = this.supabase.from('commissions').select('*');
 
     if (query.professionalId) {
-      queryBuilder = queryBuilder.eq('professional_id', query.professionalId);
+      queryBuilder = queryBuilder.eq('professionalId', query.professionalId);
     }
 
     if (query.status) {
@@ -88,14 +88,14 @@ export class CommissionsService {
     }
 
     if (query.startDate) {
-      queryBuilder = queryBuilder.gte('period_start', new Date(query.startDate).toISOString());
+      queryBuilder = queryBuilder.gte('periodStart', new Date(query.startDate).toISOString());
     }
 
     if (query.endDate) {
-      queryBuilder = queryBuilder.lte('period_start', new Date(query.endDate).toISOString());
+      queryBuilder = queryBuilder.lte('periodStart', new Date(query.endDate).toISOString());
     }
 
-    const { data: commissions, error } = await queryBuilder.order('created_at', { ascending: false });
+    const { data: commissions, error } = await queryBuilder.order('createdAt', { ascending: false });
 
     if (error) throw error;
     return commissions || [];
@@ -132,7 +132,7 @@ export class CommissionsService {
 
     const { data: updated, error: updateError } = await this.supabase
       .from('commissions')
-      .update({ status: 'PAID', paid_at: new Date().toISOString() })
+      .update({ status: 'PAID', paidAt: new Date().toISOString() })
       .eq('id', id)
       .select('*')
       .single();

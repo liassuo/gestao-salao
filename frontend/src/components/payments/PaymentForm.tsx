@@ -161,7 +161,7 @@ export function PaymentForm({ onSubmit, isLoading, error }: PaymentFormProps) {
           {unpaidAppointments.map((appointment) => (
             <option key={appointment.id} value={appointment.id}>
               {new Date(appointment.scheduledAt).toLocaleDateString('pt-BR')} -{' '}
-              {appointment.services.map((s) => s.service.name).join(', ')} - R${' '}
+              {(appointment.services || []).map((s: any) => s.service?.name || s.name || 'Servico').join(', ')} - R${' '}
               {(appointment.totalPrice / 100).toFixed(2)}
             </option>
           ))}

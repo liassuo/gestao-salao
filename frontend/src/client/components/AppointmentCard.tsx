@@ -66,13 +66,13 @@ export function AppointmentCard({
           <svg className="w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0-5.758a3 3 0 10-4.243-4.243 3 3 0 004.243 4.243z" />
           </svg>
-          <span className="text-sm">{appointment.services.map((s) => s.service.name).join(', ')}</span>
+          <span className="text-sm">{(appointment.services || []).map((s) => s.service?.name || s.name || 'Servico').join(', ')}</span>
         </div>
         <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
           <svg className="w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
           </svg>
-          <span className="text-sm">{appointment.professional.name}</span>
+          <span className="text-sm">{appointment.professional?.name || 'Profissional'}</span>
         </div>
         <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
           <svg className="w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -84,7 +84,7 @@ function AppointmentBlock({ appointment }: AppointmentBlockProps) {
   const top = getTopPosition(time);
   const height = getBlockHeight(appointment.totalDuration);
   const colors = statusColors[appointment.status] || statusColors.SCHEDULED;
-  const serviceNames = appointment.services.map((s) => s.service.name).join(', ');
+  const serviceNames = (appointment.services || []).map((s) => s.service?.name || s.name || 'Servico').join(', ');
   const endMinutes = timeToMinutes(time) + appointment.totalDuration;
   const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
 
@@ -92,11 +92,11 @@ function AppointmentBlock({ appointment }: AppointmentBlockProps) {
     <div
       className={`absolute left-1 right-1 overflow-hidden rounded-lg border ${colors.border} ${colors.bg} px-2 py-1 backdrop-blur-sm transition-all duration-150 hover:z-20 hover:shadow-lg`}
       style={{ top: `${top}px`, height: `${Math.max(height, SLOT_HEIGHT)}px` }}
-      title={`${appointment.client.name} - ${serviceNames} (${time} - ${endTime})`}
+      title={`${appointment.client?.name || 'Cliente'} - ${serviceNames} (${time} - ${endTime})`}
     >
       <div className="flex h-full flex-col overflow-hidden">
         <div className={`truncate text-xs font-semibold ${colors.text}`}>
-          {appointment.client.name}
+          {appointment.client?.name || 'Cliente'}
         </div>
         {height >= 40 && (
           <div className="truncate text-[10px] text-[var(--text-muted)]">
@@ -363,7 +363,7 @@ export function CalendarView() {
                     {prof.name}
                   </div>
                   <div className="text-[10px] text-[var(--text-muted)]">
-                    {prof.appointments.length} agendamento{prof.appointments.length !== 1 ? 's' : ''}
+                    {(prof.appointments || []).length} agendamento{(prof.appointments || []).length !== 1 ? 's' : ''}
                   </div>
                 </div>
               </div>
@@ -525,12 +525,12 @@ function ProfessionalColumn({
       )}
 
       {/* Appointments */}
-      {professional.appointments.map((apt) => (
+      {(professional.appointments || []).map((apt) => (
         <AppointmentBlock key={apt.id} appointment={apt} />
       ))}
 
       {/* Time blocks */}
-      {professional.timeBlocks.map((block) => (
+      {(professional.timeBlocks || []).map((block) => (
         <TimeBlockItem
           key={block.id}
           block={block}

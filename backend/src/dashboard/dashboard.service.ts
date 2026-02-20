@@ -17,16 +17,16 @@ export class DashboardService {
     const { count: todayAppointments } = await this.supabase
       .from('appointments')
       .select('id', { count: 'exact', head: true })
-      .gte('scheduled_at', today.toISOString())
-      .lt('scheduled_at', tomorrow.toISOString())
+      .gte('scheduledAt', today.toISOString())
+      .lt('scheduledAt', tomorrow.toISOString())
       .in('status', ['SCHEDULED', 'ATTENDED']);
 
     // Today's revenue
     const { data: todayPayments } = await this.supabase
       .from('payments')
       .select('amount')
-      .gte('paid_at', today.toISOString())
-      .lt('paid_at', tomorrow.toISOString());
+      .gte('paidAt', today.toISOString())
+      .lt('paidAt', tomorrow.toISOString());
 
     const todayRevenue = (todayPayments || []).reduce((sum, p) => sum + p.amount, 0);
 
@@ -34,7 +34,7 @@ export class DashboardService {
     const { data: monthPayments } = await this.supabase
       .from('payments')
       .select('amount')
-      .gte('paid_at', startOfMonth.toISOString());
+      .gte('paidAt', startOfMonth.toISOString());
 
     const monthRevenue = (monthPayments || []).reduce((sum, p) => sum + p.amount, 0);
 
@@ -47,29 +47,29 @@ export class DashboardService {
     const { count: clientsWithDebts } = await this.supabase
       .from('clients')
       .select('id', { count: 'exact', head: true })
-      .eq('has_debts', true);
+      .eq('hasDebts', true);
 
     // Total debts
     const { data: debts } = await this.supabase
       .from('debts')
-      .select('remaining_balance')
-      .eq('is_settled', false);
+      .select('remainingBalance')
+      .eq('isSettled', false);
 
-    const totalDebts = (debts || []).reduce((sum, d) => sum + d.remaining_balance, 0);
+    const totalDebts = (debts || []).reduce((sum, d) => sum + d.remainingBalance, 0);
 
     // Pending appointments
     const { count: pendingAppointments } = await this.supabase
       .from('appointments')
       .select('id', { count: 'exact', head: true })
-      .gte('scheduled_at', today.toISOString())
-      .lt('scheduled_at', tomorrow.toISOString())
+      .gte('scheduledAt', today.toISOString())
+      .lt('scheduledAt', tomorrow.toISOString())
       .eq('status', 'SCHEDULED');
 
     // Active professionals
     const { count: totalProfessionals } = await this.supabase
       .from('professionals')
       .select('id', { count: 'exact', head: true })
-      .eq('is_active', true);
+      .eq('isActive', true);
 
     return {
       todayAppointments: todayAppointments || 0,
@@ -94,10 +94,10 @@ export class DashboardService {
     const { data: appointments, error } = await this.supabase
       .from('appointments')
       .select('*')
-      .gte('scheduled_at', today.toISOString())
-      .lt('scheduled_at', tomorrow.toISOString())
+      .gte('scheduledAt', today.toISOString())
+      .lt('scheduledAt', tomorrow.toISOString())
       .in('status', ['SCHEDULED', 'ATTENDED'])
-      .order('scheduled_at', { ascending: true });
+      .order('scheduledAt', { ascending: true });
 
     if (error) throw error;
     return appointments || [];
@@ -109,9 +109,9 @@ export class DashboardService {
     const { data: appointments, error } = await this.supabase
       .from('appointments')
       .select('*')
-      .gte('scheduled_at', now.toISOString())
+      .gte('scheduledAt', now.toISOString())
       .eq('status', 'SCHEDULED')
-      .order('scheduled_at', { ascending: true })
+      .order('scheduledAt', { ascending: true })
       .limit(limit);
 
     if (error) throw error;
@@ -121,15 +121,15 @@ export class DashboardService {
   async getRecentActivity(limit: number = 10) {
     const { data: payments } = await this.supabase
       .from('payments')
-      .select('id, amount, method, created_at')
-      .order('created_at', { ascending: false })
+      .select('id, amount, method, createdAt')
+      .order('createdAt', { ascending: false })
       .limit(5);
 
     const { data: appointments } = await this.supabase
       .from('appointments')
-      .select('id, status, updated_at')
+      .select('id, status, updatedAt')
       .in('status', ['ATTENDED', 'CANCELED', 'NO_SHOW'])
-      .order('updated_at', { ascending: false })
+      .order('updatedAt', { ascending: false })
       .limit(5);
 
     const activities = [
@@ -139,14 +139,14 @@ export class DashboardService {
         description: 'Pagamento recebido',
         amount: p.amount,
         method: p.method,
-        date: p.created_at,
+        date: p.createdAt,
       })),
       ...(appointments || []).map((a) => ({
         type: 'appointment',
         id: a.id,
         description: `Agendamento ${a.status}`,
         status: a.status,
-        date: a.updated_at,
+        date: a.updatedAt,
       })),
     ];
 
@@ -159,7 +159,7 @@ export class DashboardService {
     const { count: activeProfessionals } = await this.supabase
       .from('professionals')
       .select('id', { count: 'exact', head: true })
-      .eq('is_active', true);
+      .eq('isActive', true);
 
     const { count: openOrders } = await this.supabase
       .from('orders')
@@ -186,10 +186,10 @@ export class DashboardService {
       .select('amount, method');
 
     if (start) {
-      queryBuilder = queryBuilder.gte('paid_at', start.toISOString());
+      queryBuilder = queryBuilder.gte('paidAt', start.toISOString());
     }
     if (end) {
-      queryBuilder = queryBuilder.lte('paid_at', end.toISOString());
+      queryBuilder = queryBuilder.lte('paidAt', end.toISOString());
     }
 
     const { data: payments, error } = await queryBuilder;
@@ -206,13 +206,13 @@ export class DashboardService {
   async getProfessionalPerformance(start?: Date, end?: Date) {
     let queryBuilder = this.supabase
       .from('appointments')
-      .select('professional_id, total_price, status');
+      .select('professionalId, totalPrice, status');
 
     if (start) {
-      queryBuilder = queryBuilder.gte('scheduled_at', start.toISOString());
+      queryBuilder = queryBuilder.gte('scheduledAt', start.toISOString());
     }
     if (end) {
-      queryBuilder = queryBuilder.lte('scheduled_at', end.toISOString());
+      queryBuilder = queryBuilder.lte('scheduledAt', end.toISOString());
     }
 
     queryBuilder = queryBuilder.eq('status', 'ATTENDED');
@@ -222,11 +222,11 @@ export class DashboardService {
 
     const byProfessional: Record<string, { count: number; revenue: number }> = {};
     for (const a of appointments || []) {
-      if (!byProfessional[a.professional_id]) {
-        byProfessional[a.professional_id] = { count: 0, revenue: 0 };
+      if (!byProfessional[a.professionalId]) {
+        byProfessional[a.professionalId] = { count: 0, revenue: 0 };
       }
-      byProfessional[a.professional_id].count++;
-      byProfessional[a.professional_id].revenue += a.total_price;
+      byProfessional[a.professionalId].count++;
+      byProfessional[a.professionalId].revenue += a.totalPrice;
     }
 
     return Object.entries(byProfessional).map(([professionalId, data]) => ({
@@ -242,15 +242,15 @@ export class DashboardService {
 
     const { data: payments, error } = await this.supabase
       .from('payments')
-      .select('amount, paid_at')
-      .gte('paid_at', startDate.toISOString())
-      .order('paid_at', { ascending: true });
+      .select('amount, paidAt')
+      .gte('paidAt', startDate.toISOString())
+      .order('paidAt', { ascending: true });
 
     if (error) throw error;
 
     const byDay: Record<string, number> = {};
     for (const p of payments || []) {
-      const day = new Date(p.paid_at).toISOString().split('T')[0];
+      const day = new Date(p.paidAt).toISOString().split('T')[0];
       byDay[day] = (byDay[day] || 0) + p.amount;
     }
 
@@ -260,13 +260,13 @@ export class DashboardService {
   async getServicesPopularity(limit: number = 10) {
     const { data: items, error } = await this.supabase
       .from('appointment_services')
-      .select('service_id');
+      .select('serviceId');
 
     if (error) throw error;
 
     const counts: Record<string, number> = {};
     for (const item of items || []) {
-      counts[item.service_id] = (counts[item.service_id] || 0) + 1;
+      counts[item.serviceId] = (counts[item.serviceId] || 0) + 1;
     }
 
     return Object.entries(counts)
@@ -288,14 +288,14 @@ export class DashboardService {
     const { data: monthPayments } = await this.supabase
       .from('payments')
       .select('amount')
-      .gte('paid_at', startOfMonth.toISOString());
+      .gte('paidAt', startOfMonth.toISOString());
 
     const monthlyRevenue = (monthPayments || []).reduce((sum, p) => sum + p.amount, 0);
 
     const { data: yearPayments } = await this.supabase
       .from('payments')
       .select('amount')
-      .gte('paid_at', startOfYear.toISOString());
+      .gte('paidAt', startOfYear.toISOString());
 
     const yearlyRevenue = (yearPayments || []).reduce((sum, p) => sum + p.amount, 0);
 

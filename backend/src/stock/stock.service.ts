@@ -21,7 +21,7 @@ export class StockService {
       const { data: movements } = await this.supabase
         .from('stock_movements')
         .select('type, quantity')
-        .eq('product_id', dto.productId);
+        .eq('productId', dto.productId);
 
       const currentStock = (movements || []).reduce((acc, m) => {
         return m.type === 'ENTRY' ? acc + m.quantity : acc - m.quantity;
@@ -35,11 +35,11 @@ export class StockService {
     const { data: movement, error } = await this.supabase
       .from('stock_movements')
       .insert({
-        product_id: dto.productId,
+        productId: dto.productId,
         type: dto.type,
         quantity: dto.quantity,
         reason: dto.reason,
-        branch_id: dto.branchId,
+        branchId: dto.branchId,
       })
       .select('*')
       .single();
@@ -52,7 +52,7 @@ export class StockService {
     let queryBuilder = this.supabase.from('stock_movements').select('*');
 
     if (query.productId) {
-      queryBuilder = queryBuilder.eq('product_id', query.productId);
+      queryBuilder = queryBuilder.eq('productId', query.productId);
     }
 
     if (query.type) {
@@ -60,18 +60,18 @@ export class StockService {
     }
 
     if (query.branchId) {
-      queryBuilder = queryBuilder.eq('branch_id', query.branchId);
+      queryBuilder = queryBuilder.eq('branchId', query.branchId);
     }
 
     if (query.startDate) {
-      queryBuilder = queryBuilder.gte('created_at', new Date(query.startDate).toISOString());
+      queryBuilder = queryBuilder.gte('createdAt', new Date(query.startDate).toISOString());
     }
 
     if (query.endDate) {
-      queryBuilder = queryBuilder.lte('created_at', new Date(query.endDate + 'T23:59:59.999Z').toISOString());
+      queryBuilder = queryBuilder.lte('createdAt', new Date(query.endDate + 'T23:59:59.999Z').toISOString());
     }
 
-    const { data: movements, error } = await queryBuilder.order('created_at', { ascending: false });
+    const { data: movements, error } = await queryBuilder.order('createdAt', { ascending: false });
 
     if (error) throw error;
     return movements || [];

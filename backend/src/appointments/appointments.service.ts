@@ -15,7 +15,7 @@ export class AppointmentsService {
     // 1. Verificar se o profissional existe e está ativo
     const { data: professional, error: profError } = await this.supabase
       .from('professionals')
-      .select('id, is_active')
+      .select('id, isActive')
       .eq('id', dto.professionalId)
       .single();
 
@@ -23,7 +23,7 @@ export class AppointmentsService {
       throw new NotFoundException('Profissional não encontrado');
     }
 
-    if (!professional.is_active) {
+    if (!professional.isActive) {
       throw new BadRequestException('Profissional não está ativo');
     }
 
@@ -32,7 +32,7 @@ export class AppointmentsService {
       .from('services')
       .select('id, price, duration')
       .in('id', dto.serviceIds)
-      .eq('is_active', true);
+      .eq('isActive', true);
 
     if (svcError || !services || services.length !== dto.serviceIds.length) {
       throw new BadRequestException('Um ou mais serviços não encontrados ou inativos');
@@ -56,11 +56,11 @@ export class AppointmentsService {
     const { data: appointment, error: apptError } = await this.supabase
       .from('appointments')
       .insert({
-        client_id: dto.clientId,
-        professional_id: dto.professionalId,
-        scheduled_at: new Date(dto.scheduledAt).toISOString(),
-        total_price: totalPrice,
-        total_duration: totalDuration,
+        clientId: dto.clientId,
+        professionalId: dto.professionalId,
+        scheduledAt: new Date(dto.scheduledAt).toISOString(),
+        totalPrice: totalPrice,
+        totalDuration: totalDuration,
         status: 'SCHEDULED',
         notes: dto.notes,
       })
@@ -72,8 +72,8 @@ export class AppointmentsService {
     // 5. Criar vínculos com serviços
     for (const serviceId of dto.serviceIds) {
       await this.supabase.from('appointment_services').insert({
-        appointment_id: appointment.id,
-        service_id: serviceId,
+        appointmentId: appointment.id,
+        serviceId: serviceId,
       });
     }
 
@@ -101,7 +101,7 @@ export class AppointmentsService {
 
     const { data: updated, error: updateError } = await this.supabase
       .from('appointments')
-      .update({ status: 'CANCELED', canceled_at: new Date().toISOString() })
+      .update({ status: 'CANCELED', canceledAt: new Date().toISOString() })
       .eq('id', id)
       .select('*')
       .single();
@@ -131,7 +131,7 @@ export class AppointmentsService {
 
     const { data: updated, error: updateError } = await this.supabase
       .from('appointments')
-      .update({ status: 'ATTENDED', attended_at: new Date().toISOString() })
+      .update({ status: 'ATTENDED', attendedAt: new Date().toISOString() })
       .eq('id', id)
       .select('*')
       .single();
@@ -158,7 +158,7 @@ export class AppointmentsService {
     const { data: appointments, error } = await this.supabase
       .from('appointments')
       .select('*')
-      .order('scheduled_at', { ascending: false });
+      .order('scheduledAt', { ascending: false });
 
     if (error) throw error;
     return appointments || [];
@@ -172,10 +172,10 @@ export class AppointmentsService {
     const { data: appointments, error } = await this.supabase
       .from('appointments')
       .select('*')
-      .eq('professional_id', professionalId)
-      .gte('scheduled_at', startDate.toISOString())
-      .lte('scheduled_at', endDate.toISOString())
-      .order('scheduled_at', { ascending: true });
+      .eq('professionalId', professionalId)
+      .gte('scheduledAt', startDate.toISOString())
+      .lte('scheduledAt', endDate.toISOString())
+      .order('scheduledAt', { ascending: true });
 
     if (error) throw error;
     return appointments || [];
@@ -185,8 +185,8 @@ export class AppointmentsService {
     const { data: appointments, error } = await this.supabase
       .from('appointments')
       .select('*')
-      .eq('client_id', clientId)
-      .order('scheduled_at', { ascending: false });
+      .eq('clientId', clientId)
+      .order('scheduledAt', { ascending: false });
 
     if (error) throw error;
     return appointments || [];
@@ -196,9 +196,9 @@ export class AppointmentsService {
     const { data: appointments, error } = await this.supabase
       .from('appointments')
       .select('*')
-      .eq('is_paid', false)
+      .eq('isPaid', false)
       .eq('status', 'ATTENDED')
-      .order('scheduled_at', { ascending: false });
+      .order('scheduledAt', { ascending: false });
 
     if (error) throw error;
     return appointments || [];
@@ -246,7 +246,7 @@ export class AppointmentsService {
     }
 
     const updateData: any = {};
-    if (dto.scheduledAt) updateData.scheduled_at = new Date(dto.scheduledAt).toISOString();
+    if (dto.scheduledAt) updateData.scheduledAt = new Date(dto.scheduledAt).toISOString();
     if (dto.notes !== undefined) updateData.notes = dto.notes;
 
     const { data: updated, error: updateError } = await this.supabase
@@ -263,7 +263,7 @@ export class AppointmentsService {
   async linkPayment(appointmentId: string, paymentId: string): Promise<void> {
     await this.supabase
       .from('appointments')
-      .update({ is_paid: true })
+      .update({ isPaid: true })
       .eq('id', appointmentId);
   }
 
@@ -275,8 +275,8 @@ export class AppointmentsService {
 
     const { data: professionals, error } = await this.supabase
       .from('professionals')
-      .select('id, name, phone, working_hours')
-      .eq('is_active', true)
+      .select('id, name, phone, workingHours')
+      .eq('isActive', true)
       .order('name', { ascending: true });
 
     if (error) throw error;
@@ -297,9 +297,9 @@ export class AppointmentsService {
     const { data: block, error } = await this.supabase
       .from('time_blocks')
       .insert({
-        professional_id: dto.professionalId,
-        start_time: new Date(dto.startTime).toISOString(),
-        end_time: new Date(dto.endTime).toISOString(),
+        professionalId: dto.professionalId,
+        startTime: new Date(dto.startTime).toISOString(),
+        endTime: new Date(dto.endTime).toISOString(),
         reason: dto.reason,
       })
       .select('*')
@@ -335,7 +335,7 @@ export class AppointmentsService {
   ): Promise<{ time: string; available: boolean }[]> {
     const { data: professional } = await this.supabase
       .from('professionals')
-      .select('working_hours')
+      .select('workingHours')
       .eq('id', professionalId)
       .single();
 

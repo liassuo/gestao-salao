@@ -17,11 +17,11 @@ export class OrdersService {
     const { data: order, error } = await this.supabase
       .from('orders')
       .insert({
-        client_id: dto.clientId,
-        professional_id: dto.professionalId,
-        branch_id: dto.branchId,
+        clientId: dto.clientId,
+        professionalId: dto.professionalId,
+        branchId: dto.branchId,
         notes: dto.notes,
-        total_amount: totalAmount,
+        totalAmount: totalAmount,
         status: 'PENDING',
       })
       .select('*')
@@ -31,12 +31,12 @@ export class OrdersService {
 
     for (const item of dto.items || []) {
       await this.supabase.from('order_items').insert({
-        order_id: order.id,
-        product_id: item.productId,
-        service_id: item.serviceId,
+        orderId: order.id,
+        productId: item.productId,
+        serviceId: item.serviceId,
         quantity: item.quantity || 1,
-        unit_price: item.unitPrice,
-        item_type: item.itemType,
+        unitPrice: item.unitPrice,
+        itemType: item.itemType,
       });
     }
 
@@ -51,22 +51,22 @@ export class OrdersService {
     }
 
     if (query.branchId) {
-      queryBuilder = queryBuilder.eq('branch_id', query.branchId);
+      queryBuilder = queryBuilder.eq('branchId', query.branchId);
     }
 
     if (query.clientId) {
-      queryBuilder = queryBuilder.eq('client_id', query.clientId);
+      queryBuilder = queryBuilder.eq('clientId', query.clientId);
     }
 
     if (query.startDate) {
-      queryBuilder = queryBuilder.gte('created_at', new Date(query.startDate).toISOString());
+      queryBuilder = queryBuilder.gte('createdAt', new Date(query.startDate).toISOString());
     }
 
     if (query.endDate) {
-      queryBuilder = queryBuilder.lte('created_at', new Date(query.endDate + 'T23:59:59.999Z').toISOString());
+      queryBuilder = queryBuilder.lte('createdAt', new Date(query.endDate + 'T23:59:59.999Z').toISOString());
     }
 
-    const { data: orders, error } = await queryBuilder.order('created_at', { ascending: false });
+    const { data: orders, error } = await queryBuilder.order('createdAt', { ascending: false });
 
     if (error) throw error;
     return orders || [];
@@ -77,7 +77,7 @@ export class OrdersService {
       .from('orders')
       .select('*')
       .eq('status', 'PENDING')
-      .order('created_at', { ascending: true });
+      .order('createdAt', { ascending: true });
 
     if (error) throw error;
     return orders || [];
@@ -97,7 +97,7 @@ export class OrdersService {
     const { data: items } = await this.supabase
       .from('order_items')
       .select('*')
-      .eq('order_id', id);
+      .eq('orderId', id);
 
     return { ...order, items: items || [] };
   }
@@ -105,7 +105,7 @@ export class OrdersService {
   async addItem(orderId: string, dto: AddOrderItemDto) {
     const { data: order, error } = await this.supabase
       .from('orders')
-      .select('id, status, total_amount')
+      .select('id, status, totalAmount')
       .eq('id', orderId)
       .single();
 
@@ -120,17 +120,17 @@ export class OrdersService {
     const lineTotal = dto.unitPrice * (dto.quantity || 1);
 
     await this.supabase.from('order_items').insert({
-      order_id: orderId,
-      product_id: dto.productId,
-      service_id: dto.serviceId,
+      orderId: orderId,
+      productId: dto.productId,
+      serviceId: dto.serviceId,
       quantity: dto.quantity || 1,
-      unit_price: dto.unitPrice,
-      item_type: dto.itemType,
+      unitPrice: dto.unitPrice,
+      itemType: dto.itemType,
     });
 
     await this.supabase
       .from('orders')
-      .update({ total_amount: order.total_amount + lineTotal })
+      .update({ totalAmount: order.totalAmount + lineTotal })
       .eq('id', orderId);
 
     return this.findOne(orderId);
@@ -139,7 +139,7 @@ export class OrdersService {
   async removeItem(orderId: string, itemId: string) {
     const { data: order, error } = await this.supabase
       .from('orders')
-      .select('id, status, total_amount')
+      .select('id, status, totalAmount')
       .eq('id', orderId)
       .single();
 
@@ -153,21 +153,21 @@ export class OrdersService {
 
     const { data: item, error: itemError } = await this.supabase
       .from('order_items')
-      .select('id, unit_price, quantity, order_id')
+      .select('id, unitPrice, quantity, orderId')
       .eq('id', itemId)
       .single();
 
-    if (itemError || !item || item.order_id !== orderId) {
+    if (itemError || !item || item.orderId !== orderId) {
       throw new NotFoundException('Item não encontrado nesta comanda');
     }
 
-    const lineTotal = item.unit_price * item.quantity;
+    const lineTotal = item.unitPrice * item.quantity;
 
     await this.supabase.from('order_items').delete().eq('id', itemId);
 
     await this.supabase
       .from('orders')
-      .update({ total_amount: order.total_amount - lineTotal })
+      .update({ totalAmount: order.totalAmount - lineTotal })
       .eq('id', orderId);
   }
 
@@ -201,10 +201,10 @@ export class OrdersService {
     }
 
     // Baixa no estoque para produtos
-    const productItems = (order.items || []).filter((i: any) => i.item_type === 'PRODUCT' && i.product_id);
+    const productItems = (order.items || []).filter((i: any) => i.itemType === 'PRODUCT' && i.productId);
     for (const item of productItems) {
       await this.supabase.from('stock_movements').insert({
-        product_id: item.product_id,
+        productId: item.productId,
         type: 'EXIT',
         quantity: item.quantity,
         reason: `Venda via comanda #${order.id.slice(0, 8)}`,
@@ -213,15 +213,15 @@ export class OrdersService {
 
     // Criar pagamento se método informado
     let paymentId: string | undefined;
-    if (dto?.paymentMethod && order.client_id) {
+    if (dto?.paymentMethod && order.clientId) {
       const { data: payment } = await this.supabase
         .from('payments')
         .insert({
-          client_id: order.client_id,
-          amount: order.total_amount,
+          clientId: order.clientId,
+          amount: order.totalAmount,
           method: dto.paymentMethod,
-          paid_at: new Date().toISOString(),
-          registered_by: dto.registeredBy || order.client_id,
+          paidAt: new Date().toISOString(),
+          registeredBy: dto.registeredBy || order.clientId,
           notes: `Pagamento comanda #${order.id.slice(0, 8)}`,
         })
         .select('id')
@@ -233,13 +233,13 @@ export class OrdersService {
       const { data: openRegister } = await this.supabase
         .from('cash_registers')
         .select('id')
-        .eq('is_open', true)
+        .eq('isOpen', true)
         .single();
 
       if (openRegister && paymentId) {
         await this.supabase
           .from('payments')
-          .update({ cash_register_id: openRegister.id })
+          .update({ cashRegisterId: openRegister.id })
           .eq('id', paymentId);
       }
     }
@@ -247,7 +247,7 @@ export class OrdersService {
     // Atualizar status
     await this.supabase
       .from('orders')
-      .update({ status: 'PAID', payment_id: paymentId })
+      .update({ status: 'PAID', paymentId: paymentId })
       .eq('id', id);
 
     return this.findOne(id);
@@ -290,7 +290,7 @@ export class OrdersService {
       throw new NotFoundException('Comanda não encontrada');
     }
 
-    await this.supabase.from('order_items').delete().eq('order_id', id);
+    await this.supabase.from('order_items').delete().eq('orderId', id);
     await this.supabase.from('orders').delete().eq('id', id);
   }
 }

@@ -89,7 +89,7 @@ export function PaymentsTable({
                   {formatDateTime(payment.paidAt)}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-[var(--text-primary)]">
-                  {payment.client.name}
+                  {payment.client?.name || 'Cliente'}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold text-[var(--text-primary)]">
                   {formatCurrency(payment.amount)}
@@ -104,12 +104,12 @@ export function PaymentsTable({
                   </span>
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-muted)]">
-                  {payment.appointment
+                  {payment.appointment?.scheduledAt
                     ? formatDate(payment.appointment.scheduledAt)
                     : '-'}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-muted)]">
-                  {payment.registeredBy.name}
+                  {payment.registeredBy?.name || '-'}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-center">
                   <PaymentActions

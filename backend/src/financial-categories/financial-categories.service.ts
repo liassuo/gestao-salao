@@ -28,7 +28,7 @@ export class FinancialCategoriesService {
       .insert({
         name: dto.name,
         type: dto.type,
-        parent_id: dto.parentId,
+        parentId: dto.parentId,
       })
       .select('*')
       .single();
@@ -45,11 +45,11 @@ export class FinancialCategoriesService {
     }
 
     if (query.parentId) {
-      queryBuilder = queryBuilder.eq('parent_id', query.parentId);
+      queryBuilder = queryBuilder.eq('parentId', query.parentId);
     }
 
     if (query.isActive !== undefined) {
-      queryBuilder = queryBuilder.eq('is_active', query.isActive === 'true');
+      queryBuilder = queryBuilder.eq('isActive', query.isActive === 'true');
     }
 
     const { data: categories, error } = await queryBuilder.order('name', { ascending: true });
@@ -98,8 +98,8 @@ export class FinancialCategoriesService {
     const updateData: any = {};
     if (dto.name !== undefined) updateData.name = dto.name;
     if (dto.type !== undefined) updateData.type = dto.type;
-    if (dto.isActive !== undefined) updateData.is_active = dto.isActive;
-    if (dto.parentId !== undefined) updateData.parent_id = dto.parentId;
+    if (dto.isActive !== undefined) updateData.isActive = dto.isActive;
+    if (dto.parentId !== undefined) updateData.parentId = dto.parentId;
 
     const { data: updated, error } = await this.supabase
       .from('financial_categories')

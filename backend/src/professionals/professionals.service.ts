@@ -13,8 +13,8 @@ export class ProfessionalsService {
         name: dto.name,
         phone: dto.phone,
         email: dto.email,
-        commission_rate: dto.commissionRate,
-        working_hours: dto.workingHours || [],
+        commissionRate: dto.commissionRate,
+        workingHours: dto.workingHours || [],
       })
       .select('*')
       .single();
@@ -25,8 +25,8 @@ export class ProfessionalsService {
     if (dto.serviceIds?.length) {
       for (const serviceId of dto.serviceIds) {
         await this.supabase.from('professional_services').insert({
-          professional_id: professional.id,
-          service_id: serviceId,
+          professionalId: professional.id,
+          serviceId: serviceId,
         });
       }
     }
@@ -38,7 +38,7 @@ export class ProfessionalsService {
     let query = this.supabase
       .from('professionals')
       .select('*')
-      .eq('is_active', true)
+      .eq('isActive', true)
       .order('name', { ascending: true });
 
     const { data: professionals, error } = await query;
@@ -51,7 +51,7 @@ export class ProfessionalsService {
     const { data: professionals, error } = await this.supabase
       .from('professionals')
       .select('id, name')
-      .eq('is_active', true)
+      .eq('isActive', true)
       .order('name', { ascending: true });
 
     if (error) throw error;
@@ -75,8 +75,8 @@ export class ProfessionalsService {
   async findByService(serviceId: string) {
     const { data: professionals, error } = await this.supabase
       .from('professionals')
-      .select('id, name, working_hours')
-      .eq('is_active', true);
+      .select('id, name, workingHours')
+      .eq('isActive', true);
 
     if (error) throw error;
     return professionals || [];
@@ -89,11 +89,11 @@ export class ProfessionalsService {
   ): Promise<boolean> {
     const { data: professional } = await this.supabase
       .from('professionals')
-      .select('working_hours, is_active')
+      .select('workingHours, isActive')
       .eq('id', professionalId)
       .single();
 
-    if (!professional || !professional.is_active) {
+    if (!professional || !professional.isActive) {
       return false;
     }
 
@@ -117,9 +117,9 @@ export class ProfessionalsService {
     if (data.name !== undefined) updateData.name = data.name;
     if (data.phone !== undefined) updateData.phone = data.phone;
     if (data.email !== undefined) updateData.email = data.email;
-    if (data.commissionRate !== undefined) updateData.commission_rate = data.commissionRate;
-    if (data.workingHours !== undefined) updateData.working_hours = data.workingHours;
-    if (data.isActive !== undefined) updateData.is_active = data.isActive;
+    if (data.commissionRate !== undefined) updateData.commissionRate = data.commissionRate;
+    if (data.workingHours !== undefined) updateData.workingHours = data.workingHours;
+    if (data.isActive !== undefined) updateData.isActive = data.isActive;
 
     const { data: updatedProfessional, error } = await this.supabase
       .from('professionals')
@@ -145,7 +145,7 @@ export class ProfessionalsService {
 
     const { error } = await this.supabase
       .from('professionals')
-      .update({ is_active: false })
+      .update({ isActive: false })
       .eq('id', id);
 
     if (error) throw error;
@@ -160,12 +160,12 @@ export class ProfessionalsService {
 
     const { data: appointments, error } = await this.supabase
       .from('appointments')
-      .select('id, scheduled_at, total_duration, status, clients(name)')
-      .eq('professional_id', professionalId)
-      .gte('scheduled_at', startOfDay.toISOString())
-      .lte('scheduled_at', endOfDay.toISOString())
+      .select('id, scheduledAt, totalDuration, status, clients(name)')
+      .eq('professionalId', professionalId)
+      .gte('scheduledAt', startOfDay.toISOString())
+      .lte('scheduledAt', endOfDay.toISOString())
       .in('status', ['SCHEDULED', 'ATTENDED'])
-      .order('scheduled_at', { ascending: true });
+      .order('scheduledAt', { ascending: true });
 
     if (error) throw error;
     return appointments || [];

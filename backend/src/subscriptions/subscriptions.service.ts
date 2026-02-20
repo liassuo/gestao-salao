@@ -19,7 +19,7 @@ export class SubscriptionsService {
         name: dto.name,
         description: dto.description,
         price: dto.price,
-        cuts_per_month: dto.cutsPerMonth,
+        cutsPerMonth: dto.cutsPerMonth,
       })
       .select('*')
       .single();
@@ -35,7 +35,7 @@ export class SubscriptionsService {
       .order('price', { ascending: true });
 
     if (activeOnly) {
-      queryBuilder = queryBuilder.eq('is_active', true);
+      queryBuilder = queryBuilder.eq('isActive', true);
     }
 
     const { data: plans, error } = await queryBuilder;
@@ -73,8 +73,8 @@ export class SubscriptionsService {
     if (dto.name !== undefined) updateData.name = dto.name;
     if (dto.description !== undefined) updateData.description = dto.description;
     if (dto.price !== undefined) updateData.price = dto.price;
-    if (dto.cutsPerMonth !== undefined) updateData.cuts_per_month = dto.cutsPerMonth;
-    if (dto.isActive !== undefined) updateData.is_active = dto.isActive;
+    if (dto.cutsPerMonth !== undefined) updateData.cutsPerMonth = dto.cutsPerMonth;
+    if (dto.isActive !== undefined) updateData.isActive = dto.isActive;
 
     const { data: updated, error } = await this.supabase
       .from('subscription_plans')
@@ -108,7 +108,7 @@ export class SubscriptionsService {
 
     const { error } = await this.supabase
       .from('subscription_plans')
-      .update({ is_active: false })
+      .update({ isActive: false })
       .eq('id', id);
 
     if (error) throw error;
@@ -131,9 +131,9 @@ export class SubscriptionsService {
     // Verificar se plano existe
     const { data: plan } = await this.supabase
       .from('subscription_plans')
-      .select('id, cuts_per_month')
+      .select('id, cutsPerMonth')
       .eq('id', dto.planId)
-      .eq('is_active', true)
+      .eq('isActive', true)
       .single();
 
     if (!plan) {
@@ -144,7 +144,7 @@ export class SubscriptionsService {
     const { data: existingSubscription } = await this.supabase
       .from('client_subscriptions')
       .select('id')
-      .eq('client_id', dto.clientId)
+      .eq('clientId', dto.clientId)
       .eq('status', 'ACTIVE')
       .single();
 
@@ -160,11 +160,11 @@ export class SubscriptionsService {
     const { data: subscription, error } = await this.supabase
       .from('client_subscriptions')
       .insert({
-        client_id: dto.clientId,
-        plan_id: dto.planId,
-        start_date: startDate.toISOString(),
-        end_date: endDate.toISOString(),
-        cuts_remaining: plan.cuts_per_month,
+        clientId: dto.clientId,
+        planId: dto.planId,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        cutsUsedThisMonth: 0,
         status: 'ACTIVE',
       })
       .select('*')
@@ -197,14 +197,23 @@ export class SubscriptionsService {
 
   async getRemainingCuts(id: string) {
     const subscription = await this.findSubscription(id);
-    return { remainingCuts: subscription.cuts_remaining ?? 0 };
+
+    const { data: plan } = await this.supabase
+      .from('subscription_plans')
+      .select('cutsPerMonth')
+      .eq('id', subscription.planId)
+      .single();
+
+    const cutsPerMonth = plan?.cutsPerMonth ?? 0;
+    const cutsUsed = subscription.cutsUsedThisMonth ?? 0;
+    return { remainingCuts: Math.max(cutsPerMonth - cutsUsed, 0) };
   }
 
   async findAllSubscriptions(status?: string) {
     let queryBuilder = this.supabase
       .from('client_subscriptions')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('createdAt', { ascending: false });
 
     if (status) {
       queryBuilder = queryBuilder.eq('status', status);
@@ -221,7 +230,7 @@ export class SubscriptionsService {
     const { data: subscription } = await this.supabase
       .from('client_subscriptions')
       .select('*')
-      .eq('client_id', clientId)
+      .eq('clientId', clientId)
       .eq('status', 'ACTIVE')
       .single();
 
@@ -261,13 +270,22 @@ export class SubscriptionsService {
       throw new BadRequestException('Cliente não possui assinatura ativa');
     }
 
-    if (subscription.cuts_remaining <= 0) {
+    const { data: plan } = await this.supabase
+      .from('subscription_plans')
+      .select('cutsPerMonth')
+      .eq('id', subscription.planId)
+      .single();
+
+    const cutsPerMonth = plan?.cutsPerMonth ?? 0;
+    const cutsUsed = subscription.cutsUsedThisMonth ?? 0;
+
+    if (cutsUsed >= cutsPerMonth) {
       throw new BadRequestException('Não há cortes disponíveis nesta assinatura');
     }
 
     const { data: updated, error } = await this.supabase
       .from('client_subscriptions')
-      .update({ cuts_remaining: subscription.cuts_remaining - 1 })
+      .update({ cutsUsedThisMonth: cutsUsed + 1 })
       .eq('id', subscription.id)
       .select('*')
       .single();

@@ -41,7 +41,8 @@
       "Bash(npx sharp-cli:*)",
       "Bash(ls:*)",
       "Bash(SRC=\"/c/Users/liass/Downloads/barbearia-america-removebg-preview.png\")",
-      "Bash(DIR=\"/c/Users/liass/Downloads/gestao-salao/frontend/public/favicon\")"
+      "Bash(DIR=\"/c/Users/liass/Downloads/gestao-salao/frontend/public/favicon\")",
+      "Bash(npm ls:*)"
     ]
   }
 }

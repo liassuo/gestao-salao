@@ -43,7 +43,7 @@ export class CashRegisterService {
     const { data: openRegister } = await this.supabase
       .from('cash_registers')
       .select('id')
-      .eq('is_open', true)
+      .eq('isOpen', true)
       .single();
 
     if (openRegister) {
@@ -54,10 +54,10 @@ export class CashRegisterService {
       .from('cash_registers')
       .insert({
         date: normalizedDate.toISOString(),
-        opened_at: new Date().toISOString(),
-        opening_balance: dto.openingBalance,
-        opened_by: dto.openedBy,
-        is_open: true,
+        openedAt: new Date().toISOString(),
+        openingBalance: dto.openingBalance,
+        openedBy: dto.openedBy,
+        isOpen: true,
         notes: dto.notes,
       })
       .select('*')
@@ -78,7 +78,7 @@ export class CashRegisterService {
       throw new NotFoundException('Caixa não encontrado');
     }
 
-    if (!register.is_open) {
+    if (!register.isOpen) {
       throw new BadRequestException('Este caixa já está fechado');
     }
 
@@ -93,21 +93,21 @@ export class CashRegisterService {
     }
 
     const totals = await this.calculateDailyTotals(new Date(register.date));
-    const expectedClosingBalance = register.opening_balance + totals.cash;
+    const expectedClosingBalance = register.openingBalance + totals.cash;
     const discrepancy = dto.closingBalance - expectedClosingBalance;
 
     const { data: closedRegister, error: closeError } = await this.supabase
       .from('cash_registers')
       .update({
-        closed_at: new Date().toISOString(),
-        closed_by: dto.closedBy,
-        closing_balance: dto.closingBalance,
-        total_cash: totals.cash,
-        total_pix: totals.pix,
-        total_card: totals.card,
-        total_revenue: totals.total,
+        closedAt: new Date().toISOString(),
+        closedBy: dto.closedBy,
+        closingBalance: dto.closingBalance,
+        totalCash: totals.cash,
+        totalPix: totals.pix,
+        totalCard: totals.card,
+        totalRevenue: totals.total,
         discrepancy,
-        is_open: false,
+        isOpen: false,
         notes: dto.notes ? `${register.notes ?? ''}\n${dto.notes}`.trim() : register.notes,
       })
       .eq('id', id)
@@ -134,7 +134,7 @@ export class CashRegisterService {
     const { data: register } = await this.supabase
       .from('cash_registers')
       .select('*')
-      .eq('is_open', true)
+      .eq('isOpen', true)
       .single();
 
     return register;
@@ -184,8 +184,8 @@ export class CashRegisterService {
     const { data: payments } = await this.supabase
       .from('payments')
       .select('amount, method')
-      .gte('paid_at', normalizedDate.toISOString())
-      .lt('paid_at', nextDay.toISOString());
+      .gte('paidAt', normalizedDate.toISOString())
+      .lt('paidAt', nextDay.toISOString());
 
     const totals = { cash: 0, pix: 0, card: 0, total: 0 };
 
@@ -213,7 +213,7 @@ export class CashRegisterService {
       .select('*')
       .gte('date', this.normalizeDate(startDate).toISOString())
       .lte('date', this.normalizeDate(endDate).toISOString())
-      .eq('is_open', false);
+      .eq('isOpen', false);
 
     const summary = {
       totalRevenue: 0,
@@ -225,10 +225,10 @@ export class CashRegisterService {
     };
 
     for (const register of registers || []) {
-      summary.totalRevenue += register.total_revenue ?? 0;
-      summary.totalCash += register.total_cash ?? 0;
-      summary.totalPix += register.total_pix ?? 0;
-      summary.totalCard += register.total_card ?? 0;
+      summary.totalRevenue += register.totalRevenue ?? 0;
+      summary.totalCash += register.totalCash ?? 0;
+      summary.totalPix += register.totalPix ?? 0;
+      summary.totalCard += register.totalCard ?? 0;
       summary.totalDiscrepancy += register.discrepancy ?? 0;
     }
 
@@ -238,10 +238,10 @@ export class CashRegisterService {
   async linkPaymentToRegister(paymentId: string) {
     const todayRegister = await this.getTodayRegister();
 
-    if (todayRegister && todayRegister.is_open) {
+    if (todayRegister && todayRegister.isOpen) {
       await this.supabase
         .from('payments')
-        .update({ cash_register_id: todayRegister.id })
+        .update({ cashRegisterId: todayRegister.id })
         .eq('id', paymentId);
     }
   }

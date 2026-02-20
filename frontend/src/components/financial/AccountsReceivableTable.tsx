@@ -64,7 +64,7 @@ export function AccountsReceivableTable({ transactions, onMarkAsPaid, onDelete, 
                   </div>
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-muted)]">
-                  {transaction.category.name}
+                  {transaction.category?.name || 'Sem categoria'}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-[var(--text-primary)]">
                   {formatCurrency(transaction.netAmount)}

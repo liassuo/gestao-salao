@@ -17,9 +17,9 @@ export class ReportsService {
     const { data: payments } = await this.supabase
       .from('payments')
       .select('*')
-      .gte('paid_at', startDate.toISOString())
-      .lte('paid_at', endDate.toISOString())
-      .order('paid_at', { ascending: false });
+      .gte('paidAt', startDate.toISOString())
+      .lte('paidAt', endDate.toISOString())
+      .order('paidAt', { ascending: false });
 
     const totalRevenue = (payments || []).reduce((sum, p) => sum + p.amount, 0);
     const averageTicket = (payments || []).length > 0 ? totalRevenue / (payments || []).length : 0;
@@ -60,8 +60,8 @@ export class ReportsService {
 
     let query = this.supabase
       .from('professionals')
-      .select('id, name, commission_rate')
-      .eq('is_active', true);
+      .select('id, name, commissionRate')
+      .eq('isActive', true);
 
     if (professionalId) {
       query = query.eq('id', professionalId);
@@ -73,14 +73,14 @@ export class ReportsService {
     for (const professional of professionals || []) {
       const { data: appointments, count } = await this.supabase
         .from('appointments')
-        .select('total_price, status', { count: 'exact' })
-        .eq('professional_id', professional.id)
-        .gte('scheduled_at', startDate.toISOString())
-        .lte('scheduled_at', endDate.toISOString());
+        .select('totalPrice, status', { count: 'exact' })
+        .eq('professionalId', professional.id)
+        .gte('scheduledAt', startDate.toISOString())
+        .lte('scheduledAt', endDate.toISOString());
 
       const attended = (appointments || []).filter((a) => a.status === 'ATTENDED');
-      const totalRevenue = attended.reduce((sum, a) => sum + a.total_price, 0);
-      const commissionRate = professional.commission_rate || 0;
+      const totalRevenue = attended.reduce((sum, a) => sum + a.totalPrice, 0);
+      const commissionRate = professional.commissionRate || 0;
       const commission = Math.round(totalRevenue * (commissionRate / 100));
 
       result.push({
@@ -110,7 +110,7 @@ export class ReportsService {
     const { data: services } = await this.supabase
       .from('services')
       .select('id, name, price, duration')
-      .eq('is_active', true);
+      .eq('isActive', true);
 
     return (services || []).map((s) => ({
       id: s.id,
@@ -129,25 +129,25 @@ export class ReportsService {
     const { count: newClients } = await this.supabase
       .from('clients')
       .select('id', { count: 'exact', head: true })
-      .gte('created_at', startDate.toISOString())
-      .lte('created_at', endDate.toISOString());
+      .gte('createdAt', startDate.toISOString())
+      .lte('createdAt', endDate.toISOString());
 
     const { count: activeClients } = await this.supabase
       .from('clients')
       .select('id', { count: 'exact', head: true })
-      .eq('is_active', true);
+      .eq('isActive', true);
 
     const { data: clientsWithDebts } = await this.supabase
       .from('clients')
       .select('id, name, phone')
-      .eq('has_debts', true);
+      .eq('hasDebts', true);
 
     const { data: debts } = await this.supabase
       .from('debts')
-      .select('remaining_balance')
-      .eq('is_settled', false);
+      .select('remainingBalance')
+      .eq('isSettled', false);
 
-    const totalDebt = (debts || []).reduce((sum, d) => sum + d.remaining_balance, 0);
+    const totalDebt = (debts || []).reduce((sum, d) => sum + d.remainingBalance, 0);
 
     return {
       summary: {
@@ -173,17 +173,17 @@ export class ReportsService {
     const { data: debtsCreated } = await this.supabase
       .from('debts')
       .select('*')
-      .gte('created_at', startDate.toISOString())
-      .lte('created_at', endDate.toISOString());
+      .gte('createdAt', startDate.toISOString())
+      .lte('createdAt', endDate.toISOString());
 
     const { data: currentDebts } = await this.supabase
       .from('debts')
       .select('*')
-      .eq('is_settled', false)
-      .order('created_at', { ascending: true });
+      .eq('isSettled', false)
+      .order('createdAt', { ascending: true });
 
     const totalCreated = (debtsCreated || []).reduce((sum, d) => sum + d.amount, 0);
-    const totalOutstanding = (currentDebts || []).reduce((sum, d) => sum + d.remaining_balance, 0);
+    const totalOutstanding = (currentDebts || []).reduce((sum, d) => sum + d.remainingBalance, 0);
 
     return {
       summary: {
@@ -211,10 +211,10 @@ export class ReportsService {
 
     const summary = (registers || []).reduce(
       (acc, r) => ({
-        totalCash: acc.totalCash + (r.total_cash || 0),
-        totalPix: acc.totalPix + (r.total_pix || 0),
-        totalCard: acc.totalCard + (r.total_card || 0),
-        totalRevenue: acc.totalRevenue + (r.total_revenue || 0),
+        totalCash: acc.totalCash + (r.totalCash || 0),
+        totalPix: acc.totalPix + (r.totalPix || 0),
+        totalCard: acc.totalCard + (r.totalCard || 0),
+        totalRevenue: acc.totalRevenue + (r.totalRevenue || 0),
         totalDiscrepancy: acc.totalDiscrepancy + (r.discrepancy || 0),
       }),
       { totalCash: 0, totalPix: 0, totalCard: 0, totalRevenue: 0, totalDiscrepancy: 0 },

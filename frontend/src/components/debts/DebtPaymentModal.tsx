@@ -80,7 +80,7 @@ export function DebtPaymentModal({
           {/* Info da Dívida */}
           <div className="mb-6 rounded-xl bg-[var(--hover-bg)] p-4">
             <p className="text-sm text-[var(--text-secondary)]">
-              <span className="font-medium">Cliente:</span> {debt.client.name}
+              <span className="font-medium">Cliente:</span> {debt.client?.name || 'Cliente'}
             </p>
             <p className="text-sm text-[var(--text-secondary)]">
               <span className="font-medium">Valor total:</span>{' '}

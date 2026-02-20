@@ -77,7 +77,7 @@ export function DebtsTable({
                 <td className="whitespace-nowrap px-6 py-4">
                   <div>
                     <div className="font-medium text-[var(--text-primary)]">
-                      {debt.client.name}
+                      {debt.client?.name || 'Cliente'}
                     </div>
                     {debt.description && (
                       <div className="text-sm text-[var(--text-muted)]">

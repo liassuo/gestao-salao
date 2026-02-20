@@ -29,12 +29,7 @@
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^10.0.0",
     "@nestjs/swagger": "^7.4.2",
-<<<<<<< HEAD
     "@supabase/supabase-js": "^2.96.0",
-=======
-    "@prisma/client": "^5.0.0",
-    "@supabase/supabase-js": "^2.95.3",
->>>>>>> f381e3e55327b86d6b7ce9aa46ca9065785ced95
     "bcrypt": "^6.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.3",
@@ -55,6 +50,7 @@
     "@types/passport-jwt": "^4.0.1",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
+    "dotenv": "^17.3.1",
     "eslint": "^8.42.0",
     "eslint-config-prettier": "^9.0.0",
     "eslint-plugin-prettier": "^5.0.0",

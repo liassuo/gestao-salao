@@ -173,10 +173,10 @@ export function OperationalDashboard({
                     </div>
                     <div>
                       <p className="font-medium text-[var(--text-primary)]">
-                        {appointment.client.name}
+                        {appointment.client?.name || 'Cliente'}
                       </p>
                       <p className="text-sm text-[var(--text-muted)]">
-                        {appointment.services.map((s) => s.service.name).join(', ')}
+                        {(appointment.services || []).map((s: any) => s.service?.name || s.name).join(', ') || 'Serviço'}
                       </p>
                     </div>
                   </div>
@@ -185,7 +185,7 @@ export function OperationalDashboard({
                       {formatTime(appointment.scheduledAt)}
                     </p>
                     <p className="text-sm text-[var(--text-muted)]">
-                      {appointment.professional.name}
+                      {appointment.professional?.name || 'Profissional'}
                     </p>
                   </div>
                 </div>

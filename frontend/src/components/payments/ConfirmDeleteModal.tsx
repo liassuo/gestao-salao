@@ -38,7 +38,7 @@ export function ConfirmDeleteModal({
               Tem certeza que deseja excluir este pagamento?
             </p>
             <div className="mt-3 rounded-xl bg-[var(--hover-bg)] p-3">
-              <p className="font-medium text-[var(--text-primary)]">{payment.client.name}</p>
+              <p className="font-medium text-[var(--text-primary)]">{payment.client?.name || 'Cliente'}</p>
               <p className="text-sm text-[var(--text-muted)]">
                 {formatCurrency(payment.amount)}
               </p>

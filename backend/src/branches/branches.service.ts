@@ -35,7 +35,7 @@ export class BranchesService {
     const { data: branches, error } = await this.supabase
       .from('branches')
       .select('id, name, address, phone')
-      .eq('is_active', true)
+      .eq('isActive', true)
       .order('name', { ascending: true });
 
     if (error) throw error;
@@ -91,7 +91,7 @@ export class BranchesService {
 
     const { error } = await this.supabase
       .from('branches')
-      .update({ is_active: false })
+      .update({ isActive: false })
       .eq('id', id);
 
     if (error) throw error;

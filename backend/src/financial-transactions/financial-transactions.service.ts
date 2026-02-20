@@ -34,14 +34,14 @@ export class FinancialTransactionsService {
         amount: dto.amount,
         discount: dto.discount || 0,
         interest: dto.interest || 0,
-        net_amount: netAmount,
-        due_date: dto.dueDate,
+        netAmount: netAmount,
+        dueDate: dto.dueDate,
         status: dto.status || 'PENDING',
-        category_id: dto.categoryId,
-        subcategory_id: dto.subcategoryId,
-        branch_id: dto.branchId,
-        bank_account_id: dto.bankAccountId,
-        payment_method_config_id: dto.paymentMethodConfigId,
+        categoryId: dto.categoryId,
+        subcategoryId: dto.subcategoryId,
+        branchId: dto.branchId,
+        bankAccountId: dto.bankAccountId,
+        paymentMethodConfigId: dto.paymentMethodConfigId,
         notes: dto.notes,
       })
       .select('*')
@@ -63,22 +63,22 @@ export class FinancialTransactionsService {
     }
 
     if (query.categoryId) {
-      queryBuilder = queryBuilder.eq('category_id', query.categoryId);
+      queryBuilder = queryBuilder.eq('categoryId', query.categoryId);
     }
 
     if (query.branchId) {
-      queryBuilder = queryBuilder.eq('branch_id', query.branchId);
+      queryBuilder = queryBuilder.eq('branchId', query.branchId);
     }
 
     if (query.startDate) {
-      queryBuilder = queryBuilder.gte('due_date', query.startDate);
+      queryBuilder = queryBuilder.gte('dueDate', query.startDate);
     }
 
     if (query.endDate) {
-      queryBuilder = queryBuilder.lte('due_date', query.endDate);
+      queryBuilder = queryBuilder.lte('dueDate', query.endDate);
     }
 
-    const { data: transactions, error } = await queryBuilder.order('due_date', { ascending: false });
+    const { data: transactions, error } = await queryBuilder.order('dueDate', { ascending: false });
 
     if (error) throw error;
     return transactions || [];
@@ -114,19 +114,19 @@ export class FinancialTransactionsService {
     const newInterest = dto.interest !== undefined ? dto.interest : transaction.interest;
     const netAmount = this.calculateNetAmount(newAmount, newDiscount, newInterest);
 
-    const updateData: any = { net_amount: netAmount };
+    const updateData: any = { netAmount: netAmount };
     if (dto.type !== undefined) updateData.type = dto.type;
     if (dto.description !== undefined) updateData.description = dto.description;
     if (dto.amount !== undefined) updateData.amount = dto.amount;
     if (dto.discount !== undefined) updateData.discount = dto.discount;
     if (dto.interest !== undefined) updateData.interest = dto.interest;
-    if (dto.dueDate !== undefined) updateData.due_date = dto.dueDate;
+    if (dto.dueDate !== undefined) updateData.dueDate = dto.dueDate;
     if (dto.status !== undefined) updateData.status = dto.status;
-    if (dto.categoryId !== undefined) updateData.category_id = dto.categoryId;
-    if (dto.subcategoryId !== undefined) updateData.subcategory_id = dto.subcategoryId;
-    if (dto.branchId !== undefined) updateData.branch_id = dto.branchId;
-    if (dto.bankAccountId !== undefined) updateData.bank_account_id = dto.bankAccountId;
-    if (dto.paymentMethodConfigId !== undefined) updateData.payment_method_config_id = dto.paymentMethodConfigId;
+    if (dto.categoryId !== undefined) updateData.categoryId = dto.categoryId;
+    if (dto.subcategoryId !== undefined) updateData.subcategoryId = dto.subcategoryId;
+    if (dto.branchId !== undefined) updateData.branchId = dto.branchId;
+    if (dto.bankAccountId !== undefined) updateData.bankAccountId = dto.bankAccountId;
+    if (dto.paymentMethodConfigId !== undefined) updateData.paymentMethodConfigId = dto.paymentMethodConfigId;
     if (dto.notes !== undefined) updateData.notes = dto.notes;
 
     const { data: updated, error } = await this.supabase
@@ -153,7 +153,7 @@ export class FinancialTransactionsService {
 
     const { data: updated, error } = await this.supabase
       .from('financial_transactions')
-      .update({ status: 'PAID', paid_at: new Date().toISOString() })
+      .update({ status: 'PAID', paidAt: new Date().toISOString() })
       .eq('id', id)
       .select('*')
       .single();
@@ -181,22 +181,22 @@ export class FinancialTransactionsService {
   async getPayableTotals(query: QueryFinancialTransactionDto) {
     let queryBuilder = this.supabase
       .from('financial_transactions')
-      .select('status, net_amount')
+      .select('status, netAmount')
       .eq('type', 'EXPENSE');
 
-    if (query.startDate) queryBuilder = queryBuilder.gte('due_date', query.startDate);
-    if (query.endDate) queryBuilder = queryBuilder.lte('due_date', query.endDate);
-    if (query.branchId) queryBuilder = queryBuilder.eq('branch_id', query.branchId);
+    if (query.startDate) queryBuilder = queryBuilder.gte('dueDate', query.startDate);
+    if (query.endDate) queryBuilder = queryBuilder.lte('dueDate', query.endDate);
+    if (query.branchId) queryBuilder = queryBuilder.eq('branchId', query.branchId);
 
     const { data, error } = await queryBuilder;
     if (error) throw error;
 
     let total = 0, pending = 0, paid = 0, overdue = 0;
     for (const t of data || []) {
-      total += t.net_amount;
-      if (t.status === 'PENDING') pending += t.net_amount;
-      if (t.status === 'PAID') paid += t.net_amount;
-      if (t.status === 'OVERDUE') overdue += t.net_amount;
+      total += t.netAmount;
+      if (t.status === 'PENDING') pending += t.netAmount;
+      if (t.status === 'PAID') paid += t.netAmount;
+      if (t.status === 'OVERDUE') overdue += t.netAmount;
     }
     return { total, pending, paid, overdue };
   }
@@ -204,22 +204,22 @@ export class FinancialTransactionsService {
   async getReceivableTotals(query: QueryFinancialTransactionDto) {
     let queryBuilder = this.supabase
       .from('financial_transactions')
-      .select('status, net_amount')
+      .select('status, netAmount')
       .eq('type', 'REVENUE');
 
-    if (query.startDate) queryBuilder = queryBuilder.gte('due_date', query.startDate);
-    if (query.endDate) queryBuilder = queryBuilder.lte('due_date', query.endDate);
-    if (query.branchId) queryBuilder = queryBuilder.eq('branch_id', query.branchId);
+    if (query.startDate) queryBuilder = queryBuilder.gte('dueDate', query.startDate);
+    if (query.endDate) queryBuilder = queryBuilder.lte('dueDate', query.endDate);
+    if (query.branchId) queryBuilder = queryBuilder.eq('branchId', query.branchId);
 
     const { data, error } = await queryBuilder;
     if (error) throw error;
 
     let total = 0, pending = 0, paid = 0, overdue = 0;
     for (const t of data || []) {
-      total += t.net_amount;
-      if (t.status === 'PENDING') pending += t.net_amount;
-      if (t.status === 'PAID') paid += t.net_amount;
-      if (t.status === 'OVERDUE') overdue += t.net_amount;
+      total += t.netAmount;
+      if (t.status === 'PENDING') pending += t.netAmount;
+      if (t.status === 'PAID') paid += t.netAmount;
+      if (t.status === 'OVERDUE') overdue += t.netAmount;
     }
     return { total, pending, paid, overdue };
   }
@@ -235,18 +235,18 @@ export class FinancialTransactionsService {
   }
 
   async getSummary(type?: string, startDate?: string, endDate?: string) {
-    let queryBuilder = this.supabase.from('financial_transactions').select('type, status, net_amount');
+    let queryBuilder = this.supabase.from('financial_transactions').select('type, status, netAmount');
 
     if (type) {
       queryBuilder = queryBuilder.eq('type', type);
     }
 
     if (startDate) {
-      queryBuilder = queryBuilder.gte('due_date', startDate);
+      queryBuilder = queryBuilder.gte('dueDate', startDate);
     }
 
     if (endDate) {
-      queryBuilder = queryBuilder.lte('due_date', endDate);
+      queryBuilder = queryBuilder.lte('dueDate', endDate);
     }
 
     const { data: transactions, error } = await queryBuilder;
@@ -261,10 +261,10 @@ export class FinancialTransactionsService {
     };
 
     for (const t of transactions || []) {
-      summary.total += t.net_amount;
-      if (t.status === 'PENDING') summary.totalPending += t.net_amount;
-      if (t.status === 'PAID') summary.totalPaid += t.net_amount;
-      if (t.status === 'OVERDUE') summary.totalOverdue += t.net_amount;
+      summary.total += t.netAmount;
+      if (t.status === 'PENDING') summary.totalPending += t.netAmount;
+      if (t.status === 'PAID') summary.totalPaid += t.netAmount;
+      if (t.status === 'OVERDUE') summary.totalOverdue += t.netAmount;
     }
 
     return summary;

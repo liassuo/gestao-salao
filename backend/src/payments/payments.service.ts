@@ -37,7 +37,7 @@ export class PaymentsService {
     if (dto.appointmentId) {
       const { data: appointment, error: apptError } = await this.supabase
         .from('appointments')
-        .select('id, is_paid, client_id')
+        .select('id, isPaid, clientId')
         .eq('id', dto.appointmentId)
         .single();
 
@@ -45,11 +45,11 @@ export class PaymentsService {
         throw new NotFoundException('Agendamento não encontrado');
       }
 
-      if (appointment.is_paid) {
+      if (appointment.isPaid) {
         throw new BadRequestException('Este agendamento já está pago');
       }
 
-      if (appointment.client_id !== dto.clientId) {
+      if (appointment.clientId !== dto.clientId) {
         throw new BadRequestException('O agendamento não pertence a este cliente');
       }
     }
@@ -58,12 +58,12 @@ export class PaymentsService {
     const { data: payment, error: payError } = await this.supabase
       .from('payments')
       .insert({
-        client_id: dto.clientId,
-        appointment_id: dto.appointmentId,
+        clientId: dto.clientId,
+        appointmentId: dto.appointmentId,
         amount: dto.amount,
         method: dto.method,
-        paid_at: dto.paidAt ?? new Date().toISOString(),
-        registered_by: dto.registeredBy,
+        paidAt: dto.paidAt ?? new Date().toISOString(),
+        registeredBy: dto.registeredBy,
         notes: dto.notes,
       })
       .select('*')
@@ -75,7 +75,7 @@ export class PaymentsService {
     if (dto.appointmentId) {
       await this.supabase
         .from('appointments')
-        .update({ is_paid: true })
+        .update({ isPaid: true })
         .eq('id', dto.appointmentId);
     }
 
@@ -85,7 +85,7 @@ export class PaymentsService {
   async unlinkPayment(id: string): Promise<void> {
     const { data: payment, error } = await this.supabase
       .from('payments')
-      .select('id, appointment_id')
+      .select('id, appointmentId')
       .eq('id', id)
       .single();
 
@@ -94,11 +94,11 @@ export class PaymentsService {
     }
 
     // Se estava vinculado a agendamento, desmarcar como pago
-    if (payment.appointment_id) {
+    if (payment.appointmentId) {
       await this.supabase
         .from('appointments')
-        .update({ is_paid: false })
-        .eq('id', payment.appointment_id);
+        .update({ isPaid: false })
+        .eq('id', payment.appointmentId);
     }
 
     // Remover o pagamento
@@ -123,7 +123,7 @@ export class PaymentsService {
     const { data: payments, error } = await this.supabase
       .from('payments')
       .select('*')
-      .order('paid_at', { ascending: false });
+      .order('paidAt', { ascending: false });
 
     if (error) throw error;
     return payments || [];
@@ -133,8 +133,8 @@ export class PaymentsService {
     const { data: payments, error } = await this.supabase
       .from('payments')
       .select('*')
-      .eq('client_id', clientId)
-      .order('paid_at', { ascending: false });
+      .eq('clientId', clientId)
+      .order('paidAt', { ascending: false });
 
     if (error) throw error;
     return payments || [];
@@ -144,9 +144,9 @@ export class PaymentsService {
     const { data: payments, error } = await this.supabase
       .from('payments')
       .select('*')
-      .gte('paid_at', startDate.toISOString())
-      .lte('paid_at', endDate.toISOString())
-      .order('paid_at', { ascending: true });
+      .gte('paidAt', startDate.toISOString())
+      .lte('paidAt', endDate.toISOString())
+      .order('paidAt', { ascending: true });
 
     if (error) throw error;
     return payments || [];
@@ -157,7 +157,7 @@ export class PaymentsService {
       .from('payments')
       .select('*')
       .eq('method', method)
-      .order('paid_at', { ascending: false });
+      .order('paidAt', { ascending: false });
 
     if (error) throw error;
     return payments || [];
@@ -170,8 +170,8 @@ export class PaymentsService {
     const { data: payments, error } = await this.supabase
       .from('payments')
       .select('amount, method')
-      .gte('paid_at', startDate.toISOString())
-      .lte('paid_at', endDate.toISOString());
+      .gte('paidAt', startDate.toISOString())
+      .lte('paidAt', endDate.toISOString());
 
     if (error) throw error;
 

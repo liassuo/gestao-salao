@@ -103,7 +103,7 @@ export function Commissions() {
         onClose={() => setPayingCommission(null)}
         onConfirm={handleMarkAsPaid}
         title="Confirmar Pagamento"
-        message={`Deseja marcar a comissao de "${payingCommission?.professional.name}" como paga?`}
+        message={`Deseja marcar a comissao de "${payingCommission?.professional?.name || 'Profissional'}" como paga?`}
         confirmLabel="Pagar"
         variant="info"
         isLoading={markAsPaid.isPending}

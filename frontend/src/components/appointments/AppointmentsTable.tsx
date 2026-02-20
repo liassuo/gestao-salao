@@ -91,24 +91,24 @@ export function AppointmentsTable({
                 <td className="px-4 py-3">
                   <div>
                     <p className="text-sm font-medium text-[var(--text-primary)]">
-                      {appointment.client.name}
+                      {appointment.client?.name || 'Cliente'}
                     </p>
                     <p className="text-xs text-[var(--text-muted)]">
-                      {appointment.client.phone}
+                      {appointment.client?.phone || '-'}
                     </p>
                   </div>
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-primary)]">
-                  {appointment.professional.name}
+                  {appointment.professional?.name || 'Profissional'}
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap gap-1">
-                    {appointment.services.map((s) => (
+                    {(appointment.services || []).map((s) => (
                       <span
                         key={s.id}
                         className="inline-block rounded bg-zinc-500/20 px-2 py-0.5 text-xs text-[var(--text-secondary)]"
                       >
-                        {s.service.name}
+                        {s.service?.name || s.name || 'Servico'}
                       </span>
                     ))}
                   </div>

@@ -12,7 +12,7 @@ export class BankAccountsService {
       .insert({
         name: dto.name,
         bank: dto.bank || null,
-        account_type: dto.accountType || null,
+        accountType: dto.accountType || null,
       })
       .select('*')
       .single();
@@ -34,8 +34,8 @@ export class BankAccountsService {
   async findActive() {
     const { data: bankAccounts, error } = await this.supabase
       .from('bank_accounts')
-      .select('id, name, bank, account_type')
-      .eq('is_active', true)
+      .select('id, name, bank, accountType')
+      .eq('isActive', true)
       .order('name', { ascending: true });
 
     if (error) throw error;
@@ -70,8 +70,8 @@ export class BankAccountsService {
     const updateData: any = {};
     if (dto.name !== undefined) updateData.name = dto.name;
     if (dto.bank !== undefined) updateData.bank = dto.bank;
-    if (dto.accountType !== undefined) updateData.account_type = dto.accountType;
-    if (dto.isActive !== undefined) updateData.is_active = dto.isActive;
+    if (dto.accountType !== undefined) updateData.accountType = dto.accountType;
+    if (dto.isActive !== undefined) updateData.isActive = dto.isActive;
 
     const { data: updated, error } = await this.supabase
       .from('bank_accounts')
@@ -97,7 +97,7 @@ export class BankAccountsService {
 
     const { error } = await this.supabase
       .from('bank_accounts')
-      .update({ is_active: false })
+      .update({ isActive: false })
       .eq('id', id);
 
     if (error) throw error;

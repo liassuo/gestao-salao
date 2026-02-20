@@ -37,7 +37,7 @@ export function StockMovementsTable({ movements }: StockMovementsTableProps) {
                   {stockMovementTypeLabels[m.type]}
                 </span>
               </td>
-              <td className="px-4 py-3 font-medium text-[var(--text-primary)]">{m.product.name}</td>
+              <td className="px-4 py-3 font-medium text-[var(--text-primary)]">{m.product?.name || 'Produto'}</td>
               <td className="px-4 py-3 text-[var(--text-secondary)]">{m.quantity}</td>
               <td className="px-4 py-3 text-[var(--text-muted)]">{m.reason || '-'}</td>
               <td className="px-4 py-3 text-[var(--text-muted)]">{new Date(m.createdAt).toLocaleString('pt-BR')}</td>

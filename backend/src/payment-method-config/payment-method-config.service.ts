@@ -37,7 +37,7 @@ export class PaymentMethodConfigService {
     }
 
     if (query.isActive !== undefined) {
-      queryBuilder = queryBuilder.eq('is_active', query.isActive === 'true');
+      queryBuilder = queryBuilder.eq('isActive', query.isActive === 'true');
     }
 
     const { data: configs, error } = await queryBuilder.order('name', { ascending: true });
@@ -64,7 +64,7 @@ export class PaymentMethodConfigService {
     const { data: configs, error } = await this.supabase
       .from('payment_method_configs')
       .select('*')
-      .eq('is_active', true)
+      .eq('isActive', true)
       .or(`scope.eq.${scope},scope.eq.BOTH`)
       .order('name', { ascending: true });
 
@@ -87,7 +87,7 @@ export class PaymentMethodConfigService {
     if (dto.name !== undefined) updateData.name = dto.name;
     if (dto.type !== undefined) updateData.type = dto.type;
     if (dto.scope !== undefined) updateData.scope = dto.scope;
-    if (dto.isActive !== undefined) updateData.is_active = dto.isActive;
+    if (dto.isActive !== undefined) updateData.isActive = dto.isActive;
 
     const { data: updated, error } = await this.supabase
       .from('payment_method_configs')
@@ -113,7 +113,7 @@ export class PaymentMethodConfigService {
 
     const { error } = await this.supabase
       .from('payment_method_configs')
-      .update({ is_active: false })
+      .update({ isActive: false })
       .eq('id', id);
 
     if (error) throw error;

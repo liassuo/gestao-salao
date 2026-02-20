@@ -68,14 +68,14 @@ export function ConfirmCancelModal({
           {/* Info da Assinatura */}
           <div className="mb-6 rounded-xl bg-[var(--hover-bg)] p-4">
             <p className="text-sm text-[var(--text-secondary)]">
-              <span className="font-medium">Cliente:</span> {subscription.client.name}
+              <span className="font-medium">Cliente:</span> {subscription.client?.name || 'Cliente'}
             </p>
             <p className="text-sm text-[var(--text-secondary)]">
-              <span className="font-medium">Plano:</span> {subscription.plan.name}
+              <span className="font-medium">Plano:</span> {subscription.plan?.name || 'Plano'}
             </p>
             <p className="text-sm text-[var(--text-secondary)]">
               <span className="font-medium">Valor:</span>{' '}
-              {formatCurrency(subscription.plan.price)}/mes
+              {formatCurrency(subscription.plan?.price ?? 0)}/mes
             </p>
             <p className="text-sm text-[var(--text-secondary)]">
               <span className="font-medium">Inicio:</span>{' '}
@@ -83,7 +83,7 @@ export function ConfirmCancelModal({
             </p>
             <p className="text-sm text-[var(--text-secondary)]">
               <span className="font-medium">Cortes usados este mes:</span>{' '}
-              {subscription.cutsUsedThisMonth} / {subscription.plan.cutsPerMonth === 99 ? '∞' : subscription.plan.cutsPerMonth}
+              {subscription.cutsUsedThisMonth} / {(subscription.plan?.cutsPerMonth ?? 0) === 99 ? '∞' : subscription.plan?.cutsPerMonth ?? 0}
             </p>
           </div>
 

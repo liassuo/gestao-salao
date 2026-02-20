@@ -12,10 +12,10 @@ export class ProductsService {
       .insert({
         name: dto.name,
         description: dto.description,
-        cost_price: dto.costPrice,
-        sale_price: dto.salePrice,
-        min_stock: dto.minStock ?? 0,
-        branch_id: dto.branchId,
+        costPrice: dto.costPrice,
+        salePrice: dto.salePrice,
+        minStock: dto.minStock ?? 0,
+        branchId: dto.branchId,
       })
       .select('*')
       .single();
@@ -28,11 +28,11 @@ export class ProductsService {
     let queryBuilder = this.supabase.from('products').select('*');
 
     if (query.all !== 'true') {
-      queryBuilder = queryBuilder.eq('is_active', true);
+      queryBuilder = queryBuilder.eq('isActive', true);
     }
 
     if (query.branchId) {
-      queryBuilder = queryBuilder.eq('branch_id', query.branchId);
+      queryBuilder = queryBuilder.eq('branchId', query.branchId);
     }
 
     if (query.search) {
@@ -62,11 +62,11 @@ export class ProductsService {
   async getStock(branchId?: string) {
     let queryBuilder = this.supabase
       .from('products')
-      .select('id, name, cost_price, sale_price, min_stock')
-      .eq('is_active', true);
+      .select('id, name, costPrice, salePrice, minStock')
+      .eq('isActive', true);
 
     if (branchId) {
-      queryBuilder = queryBuilder.eq('branch_id', branchId);
+      queryBuilder = queryBuilder.eq('branchId', branchId);
     }
 
     const { data: products, error } = await queryBuilder.order('name', { ascending: true });
@@ -78,7 +78,7 @@ export class ProductsService {
       const { data: movements } = await this.supabase
         .from('stock_movements')
         .select('type, quantity')
-        .eq('product_id', product.id);
+        .eq('productId', product.id);
 
       const currentStock = (movements || []).reduce((acc, m) => {
         return m.type === 'ENTRY' ? acc + m.quantity : acc - m.quantity;
@@ -87,13 +87,13 @@ export class ProductsService {
       stockData.push({
         id: product.id,
         name: product.name,
-        costPrice: product.cost_price,
-        salePrice: product.sale_price,
-        minStock: product.min_stock,
+        costPrice: product.costPrice,
+        salePrice: product.salePrice,
+        minStock: product.minStock,
         currentStock,
-        stockValue: currentStock * product.cost_price,
-        potentialSaleValue: currentStock * product.sale_price,
-        isLowStock: currentStock <= product.min_stock,
+        stockValue: currentStock * product.costPrice,
+        potentialSaleValue: currentStock * product.salePrice,
+        isLowStock: currentStock <= product.minStock,
       });
     }
 
@@ -119,10 +119,10 @@ export class ProductsService {
     const updateData: any = {};
     if (dto.name !== undefined) updateData.name = dto.name;
     if (dto.description !== undefined) updateData.description = dto.description;
-    if (dto.costPrice !== undefined) updateData.cost_price = dto.costPrice;
-    if (dto.salePrice !== undefined) updateData.sale_price = dto.salePrice;
-    if (dto.minStock !== undefined) updateData.min_stock = dto.minStock;
-    if (dto.isActive !== undefined) updateData.is_active = dto.isActive;
+    if (dto.costPrice !== undefined) updateData.costPrice = dto.costPrice;
+    if (dto.salePrice !== undefined) updateData.salePrice = dto.salePrice;
+    if (dto.minStock !== undefined) updateData.minStock = dto.minStock;
+    if (dto.isActive !== undefined) updateData.isActive = dto.isActive;
 
     const { data: updated, error } = await this.supabase
       .from('products')
@@ -148,7 +148,7 @@ export class ProductsService {
 
     const { error } = await this.supabase
       .from('products')
-      .update({ is_active: false })
+      .update({ isActive: false })
       .eq('id', id);
 
     if (error) throw error;

@@ -15,7 +15,7 @@ export class ServicesService {
         price: dto.price,
         duration: dto.duration,
       })
-      .select('id, name, description, price, duration, is_active, created_at')
+      .select('id, name, description, price, duration, isActive, createdAt')
       .single();
 
     if (error) throw error;
@@ -25,11 +25,11 @@ export class ServicesService {
   async findAll(activeOnly: boolean = true) {
     let query = this.supabase
       .from('services')
-      .select('id, name, description, price, duration, is_active')
+      .select('id, name, description, price, duration, isActive')
       .order('name', { ascending: true });
 
     if (activeOnly) {
-      query = query.eq('is_active', true);
+      query = query.eq('isActive', true);
     }
 
     const { data: services, error } = await query;
@@ -42,7 +42,7 @@ export class ServicesService {
     const { data: services, error } = await this.supabase
       .from('services')
       .select('id, name, description, price, duration')
-      .eq('is_active', true)
+      .eq('isActive', true)
       .order('name', { ascending: true });
 
     if (error) throw error;
@@ -68,7 +68,7 @@ export class ServicesService {
       .from('services')
       .select('id, name, price, duration')
       .in('id', ids)
-      .eq('is_active', true);
+      .eq('isActive', true);
 
     if (error) throw error;
     return services || [];
@@ -81,7 +81,7 @@ export class ServicesService {
       .from('services')
       .select('price, duration')
       .in('id', serviceIds)
-      .eq('is_active', true);
+      .eq('isActive', true);
 
     if (error) throw error;
 
@@ -129,7 +129,7 @@ export class ServicesService {
 
     const { error } = await this.supabase
       .from('services')
-      .update({ is_active: false })
+      .update({ isActive: false })
       .eq('id', id);
 
     if (error) throw error;

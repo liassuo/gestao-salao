@@ -69,9 +69,11 @@ export function ClientSubscriptionTable({
           </thead>
           <tbody className="divide-y divide-[var(--border-color)]">
             {subscriptions.map((subscription) => {
-              const cutsPercentage = subscription.plan.cutsPerMonth === 99
+              const plan = subscription.plan;
+              const cutsPerMonth = plan?.cutsPerMonth ?? 0;
+              const cutsPercentage = cutsPerMonth === 99
                 ? 0
-                : (subscription.cutsUsedThisMonth / subscription.plan.cutsPerMonth) * 100;
+                : cutsPerMonth > 0 ? (subscription.cutsUsedThisMonth / cutsPerMonth) * 100 : 0;
 
               return (
                 <tr key={subscription.id} className="hover:bg-[var(--hover-bg)]">
@@ -82,11 +84,11 @@ export function ClientSubscriptionTable({
                       </div>
                       <div>
                         <p className="font-medium text-[var(--text-primary)]">
-                          {subscription.client.name}
+                          {subscription.client?.name || 'Cliente'}
                         </p>
                         <p className="flex items-center gap-1 text-sm text-[var(--text-muted)]">
                           <Phone className="h-3 w-3" />
-                          {subscription.client.phone}
+                          {subscription.client?.phone || '-'}
                         </p>
                       </div>
                     </div>
@@ -94,10 +96,10 @@ export function ClientSubscriptionTable({
                   <td className="whitespace-nowrap px-4 py-4">
                     <div>
                       <p className="font-medium text-[var(--text-primary)]">
-                        {subscription.plan.name}
+                        {plan?.name || 'Plano'}
                       </p>
                       <p className="text-sm text-[var(--text-muted)]">
-                        {formatCurrency(subscription.plan.price)}/mes
+                        {formatCurrency(plan?.price ?? 0)}/mes
                       </p>
                     </div>
                   </td>
@@ -106,9 +108,9 @@ export function ClientSubscriptionTable({
                       <Scissors className="h-4 w-4 text-[var(--text-muted)]" />
                       <div>
                         <p className="text-sm font-medium text-[var(--text-primary)]">
-                          {subscription.cutsUsedThisMonth} / {subscription.plan.cutsPerMonth === 99 ? '∞' : subscription.plan.cutsPerMonth}
+                          {subscription.cutsUsedThisMonth} / {cutsPerMonth === 99 ? '∞' : cutsPerMonth}
                         </p>
-                        {subscription.plan.cutsPerMonth !== 99 && (
+                        {cutsPerMonth !== 99 && (
                           <div className="mt-1 h-1.5 w-20 overflow-hidden rounded-full bg-[var(--hover-bg)]">
                             <div
                               className={`h-full rounded-full transition-all ${
