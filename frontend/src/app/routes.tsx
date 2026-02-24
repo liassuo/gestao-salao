@@ -3,21 +3,15 @@ import { Layout } from '@/components/layout';
 import { PrivateRoute, RoleRoute } from '@/components/auth';
 import {
   AccessDenied,
-  AccountsPayable,
-  AccountsReceivable,
   Appointments,
-  Balance,
   BankAccounts,
-  BarKitchen,
+
   Branches,
   CashRegister,
   Clients,
   Commissions,
-  CreateExpense,
-  CreateRevenue,
   Dashboard,
   Debts,
-  FinancialCategories,
   Login,
   Orders,
   Payments,
@@ -110,10 +104,7 @@ export const router = createBrowserRouter([
         path: 'comandas',
         element: withRoleProtection('/comandas', <Orders />),
       },
-      {
-        path: 'bar-cozinha',
-        element: withRoleProtection('/bar-cozinha', <BarKitchen />),
-      },
+
       {
         path: 'relatorios',
         element: withRoleProtection('/relatorios', <Reports />),
@@ -135,36 +126,12 @@ export const router = createBrowserRouter([
         element: withRoleProtection('/financeiro/comissoes', <Commissions />),
       },
       {
-        path: 'financeiro/balanco',
-        element: withRoleProtection('/financeiro/balanco', <Balance />),
-      },
-      {
-        path: 'financeiro/contas-pagar',
-        element: withRoleProtection('/financeiro/contas-pagar', <AccountsPayable />),
-      },
-      {
-        path: 'financeiro/contas-receber',
-        element: withRoleProtection('/financeiro/contas-receber', <AccountsReceivable />),
-      },
-      {
-        path: 'financeiro/despesa',
-        element: withRoleProtection('/financeiro/despesa', <CreateExpense />),
-      },
-      {
-        path: 'financeiro/receita',
-        element: withRoleProtection('/financeiro/receita', <CreateRevenue />),
-      },
-      {
         path: 'financeiro/filiais',
         element: withRoleProtection('/financeiro/filiais', <Branches />),
       },
       {
         path: 'financeiro/contas-bancarias',
         element: withRoleProtection('/financeiro/contas-bancarias', <BankAccounts />),
-      },
-      {
-        path: 'financeiro/categorias',
-        element: withRoleProtection('/financeiro/categorias', <FinancialCategories />),
       },
       {
         path: 'financeiro/formas-pagamento',

@@ -45,7 +45,9 @@ export class ClientsService {
   }
 
   async findAll(filters?: ClientFilters) {
-    let query = this.supabase.from('clients').select('*');
+    let query = this.supabase
+      .from('clients')
+      .select('*, appointment_count:appointments(count), debt_count:debts(count)');
 
     if (filters?.isActive !== undefined) {
       query = query.eq('isActive', filters.isActive);
@@ -62,7 +64,15 @@ export class ClientsService {
     const { data: clients, error } = await query.order('name', { ascending: true });
 
     if (error) throw error;
-    return clients || [];
+
+    // Transformar para o formato _count que o frontend espera
+    return (clients || []).map(({ appointment_count, debt_count, ...client }: any) => ({
+      ...client,
+      _count: {
+        appointments: appointment_count?.[0]?.count || 0,
+        debts: debt_count?.[0]?.count || 0,
+      },
+    }));
   }
 
   async findOne(id: string) {

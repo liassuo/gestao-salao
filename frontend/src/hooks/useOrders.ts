@@ -12,15 +12,6 @@ export function useOrders(filters?: OrderFilters) {
   });
 }
 
-export function usePendingOrders() {
-  return useQuery({
-    queryKey: [...ORDERS_KEY, 'pending'],
-    queryFn: () => ordersService.getPending(),
-    staleTime: 15 * 1000,
-    refetchInterval: 30 * 1000,
-  });
-}
-
 export function useOrder(id: string) {
   return useQuery({
     queryKey: [...ORDERS_KEY, id],

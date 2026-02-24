@@ -16,11 +16,6 @@ export class OrdersController {
     return this.ordersService.findAll(query);
   }
 
-  @Get('pending')
-  async findPending() {
-    return this.ordersService.findPending();
-  }
-
   @Get(':id')
   async findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.ordersService.findOne(id);

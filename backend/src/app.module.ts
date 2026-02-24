@@ -17,8 +17,6 @@ import { BankAccountsModule } from './bank-accounts/bank-accounts.module';
 import { BranchesModule } from './branches/branches.module';
 import { CommissionsModule } from './commissions/commissions.module';
 import { PaymentMethodConfigModule } from './payment-method-config/payment-method-config.module';
-import { FinancialTransactionsModule } from './financial-transactions/financial-transactions.module';
-import { FinancialCategoriesModule } from './financial-categories/financial-categories.module';
 import { ProductsModule } from './products/products.module';
 import { StockModule } from './stock/stock.module';
 import { OrdersModule } from './orders/orders.module';
@@ -45,8 +43,6 @@ import { OrdersModule } from './orders/orders.module';
     BranchesModule,
     CommissionsModule,
     PaymentMethodConfigModule,
-    FinancialTransactionsModule,
-    FinancialCategoriesModule,
     ProductsModule,
     StockModule,
     OrdersModule,

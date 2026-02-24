@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ClipboardList, Plus, AlertCircle, Eye, Trash2, CreditCard, XCircle, ShoppingCart, X, Package, Scissors, Banknote, Smartphone, CircleDollarSign } from 'lucide-react';
 import { useOrders, useCreateOrder, usePayOrder, useCancelOrder, useDeleteOrder, useAddOrderItem, useRemoveOrderItem, useClients, useProducts, useServices, getApiErrorMessage } from '@/hooks';
+import { ordersService } from '@/services/orders';
 import { Modal, ConfirmModal, useToast } from '@/components/ui';
 import type { Order, OrderStatus, AddOrderItemPayload, OrderItemType } from '@/types';
 import { orderStatusLabels, orderStatusColors } from '@/types';
@@ -118,8 +119,8 @@ export function Orders() {
       // Update the viewing order locally
       setViewingOrder((prev) => prev ? {
         ...prev,
-        items: prev.items.filter((i) => i.id !== itemId),
-        totalAmount: prev.totalAmount - (prev.items.find((i) => i.id === itemId)?.unitPrice ?? 0) * (prev.items.find((i) => i.id === itemId)?.quantity ?? 1),
+        items: (prev.items || []).filter((i) => i.id !== itemId),
+        totalAmount: prev.totalAmount - ((prev.items || []).find((i) => i.id === itemId)?.unitPrice ?? 0) * ((prev.items || []).find((i) => i.id === itemId)?.quantity ?? 1),
       } : null);
     } catch (err) { toast.error('Erro', getApiErrorMessage(err)); }
   };
@@ -188,7 +189,7 @@ export function Orders() {
                   <tr key={order.id} className="border-b border-[var(--card-border)] transition-colors hover:bg-[var(--hover-bg)]">
                     <td className="px-4 py-3 text-[var(--text-muted)] font-mono text-sm">{order.id.slice(0, 8)}</td>
                     <td className="px-4 py-3 text-[var(--text-primary)]">{order.client?.name || '-'}</td>
-                    <td className="px-4 py-3 text-[var(--text-secondary)]">{order.items.length}</td>
+                    <td className="px-4 py-3 text-[var(--text-secondary)]">{order.items?.length ?? '-'}</td>
                     <td className="px-4 py-3 font-medium text-[var(--text-primary)]">{formatCents(order.totalAmount)}</td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${orderStatusColors[order.status]}`}>{orderStatusLabels[order.status]}</span>
@@ -196,7 +197,7 @@ export function Orders() {
                     <td className="px-4 py-3 text-[var(--text-muted)]">{new Date(order.createdAt).toLocaleString('pt-BR')}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => setViewingOrder(order)} className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-[#D4A85C]"><Eye className="h-4 w-4" /></button>
+                        <button onClick={async () => { try { const full = await ordersService.getById(order.id); setViewingOrder(full); } catch { setViewingOrder({ ...order, items: [] }); } }} className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-[#D4A85C]"><Eye className="h-4 w-4" /></button>
                         {order.status === 'PENDING' && (
                           <>
                             <button onClick={() => openPayModal(order.id)} className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-green-400"><CreditCard className="h-4 w-4" /></button>
@@ -263,7 +264,7 @@ export function Orders() {
             {/* Items section */}
             <div>
               <div className="flex items-center justify-between mb-3">
-                <h4 className="font-medium text-[var(--text-primary)]">Itens ({viewingOrder.items.length})</h4>
+                <h4 className="font-medium text-[var(--text-primary)]">Itens ({viewingOrder.items?.length ?? 0})</h4>
                 {viewingOrder.status === 'PENDING' && (
                   <button
                     onClick={() => { resetAddItemForm(); setIsAddItemOpen(true); }}
@@ -274,7 +275,7 @@ export function Orders() {
                 )}
               </div>
 
-              {viewingOrder.items.length === 0 ? (
+              {!viewingOrder.items || viewingOrder.items.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-[var(--text-muted)]">
                   <ShoppingCart className="h-10 w-10 mb-2 opacity-50" />
                   <p className="text-sm">Nenhum item na comanda</p>

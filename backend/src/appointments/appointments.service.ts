@@ -11,6 +11,14 @@ import { CreateAppointmentDto, CreateTimeBlockDto, UpdateAppointmentDto } from '
 export class AppointmentsService {
   constructor(private readonly supabase: SupabaseService) {}
 
+  /** Select padrão com joins para client, professional e services */
+  private readonly APPOINTMENT_SELECT = `
+    *,
+    client:clients(id, name, phone, email),
+    professional:professionals(id, name),
+    services:appointment_services(id, service:services(id, name, price, duration))
+  `;
+
   async create(dto: CreateAppointmentDto) {
     // 1. Verificar se o profissional existe e está ativo
     const { data: professional, error: profError } = await this.supabase
@@ -64,7 +72,7 @@ export class AppointmentsService {
         status: 'SCHEDULED',
         notes: dto.notes,
       })
-      .select('*')
+      .select(this.APPOINTMENT_SELECT)
       .single();
 
     if (apptError) throw apptError;
@@ -103,7 +111,7 @@ export class AppointmentsService {
       .from('appointments')
       .update({ status: 'CANCELED', canceledAt: new Date().toISOString() })
       .eq('id', id)
-      .select('*')
+      .select(this.APPOINTMENT_SELECT)
       .single();
 
     if (updateError) throw updateError;
@@ -133,7 +141,7 @@ export class AppointmentsService {
       .from('appointments')
       .update({ status: 'ATTENDED', attendedAt: new Date().toISOString() })
       .eq('id', id)
-      .select('*')
+      .select(this.APPOINTMENT_SELECT)
       .single();
 
     if (updateError) throw updateError;
@@ -143,7 +151,7 @@ export class AppointmentsService {
   async findOne(id: string) {
     const { data: appointment, error } = await this.supabase
       .from('appointments')
-      .select('*')
+      .select(this.APPOINTMENT_SELECT)
       .eq('id', id)
       .single();
 
@@ -157,7 +165,7 @@ export class AppointmentsService {
   async findAll() {
     const { data: appointments, error } = await this.supabase
       .from('appointments')
-      .select('*')
+      .select(this.APPOINTMENT_SELECT)
       .order('scheduledAt', { ascending: false });
 
     if (error) throw error;
@@ -171,7 +179,7 @@ export class AppointmentsService {
   ) {
     const { data: appointments, error } = await this.supabase
       .from('appointments')
-      .select('*')
+      .select(this.APPOINTMENT_SELECT)
       .eq('professionalId', professionalId)
       .gte('scheduledAt', startDate.toISOString())
       .lte('scheduledAt', endDate.toISOString())
@@ -184,7 +192,7 @@ export class AppointmentsService {
   async findByClient(clientId: string) {
     const { data: appointments, error } = await this.supabase
       .from('appointments')
-      .select('*')
+      .select(this.APPOINTMENT_SELECT)
       .eq('clientId', clientId)
       .order('scheduledAt', { ascending: false });
 
@@ -195,7 +203,7 @@ export class AppointmentsService {
   async findUnpaid() {
     const { data: appointments, error } = await this.supabase
       .from('appointments')
-      .select('*')
+      .select(this.APPOINTMENT_SELECT)
       .eq('isPaid', false)
       .eq('status', 'ATTENDED')
       .order('scheduledAt', { ascending: false });
@@ -223,7 +231,7 @@ export class AppointmentsService {
       .from('appointments')
       .update({ status: 'NO_SHOW' })
       .eq('id', id)
-      .select('*')
+      .select(this.APPOINTMENT_SELECT)
       .single();
 
     if (updateError) throw updateError;
@@ -253,7 +261,7 @@ export class AppointmentsService {
       .from('appointments')
       .update(updateData)
       .eq('id', id)
-      .select('*')
+      .select(this.APPOINTMENT_SELECT)
       .single();
 
     if (updateError) throw updateError;
@@ -273,14 +281,43 @@ export class AppointmentsService {
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
 
-    const { data: professionals, error } = await this.supabase
+    // 1. Buscar profissionais ativos
+    const { data: professionals, error: profError } = await this.supabase
       .from('professionals')
       .select('id, name, phone, workingHours')
       .eq('isActive', true)
       .order('name', { ascending: true });
 
-    if (error) throw error;
-    return professionals || [];
+    if (profError) throw profError;
+
+    // 2. Buscar agendamentos do dia (com dados do cliente e serviços)
+    const { data: appointments, error: apptError } = await this.supabase
+      .from('appointments')
+      .select(`
+        id, scheduledAt, status, totalPrice, totalDuration, isPaid, notes, professionalId,
+        client:clients(id, name, phone),
+        services:appointment_services(service:services(name))
+      `)
+      .gte('scheduledAt', startOfDay.toISOString())
+      .lte('scheduledAt', endOfDay.toISOString());
+
+    if (apptError) throw apptError;
+
+    // 3. Buscar bloqueios de horário do dia
+    const { data: timeBlocks, error: tbError } = await this.supabase
+      .from('time_blocks')
+      .select('id, startTime, endTime, reason, professionalId')
+      .gte('startTime', startOfDay.toISOString())
+      .lte('endTime', endOfDay.toISOString());
+
+    if (tbError) throw tbError;
+
+    // 4. Agrupar por profissional
+    return (professionals || []).map(prof => ({
+      ...prof,
+      appointments: (appointments || []).filter(a => a.professionalId === prof.id),
+      timeBlocks: (timeBlocks || []).filter(tb => tb.professionalId === prof.id),
+    }));
   }
 
   async createTimeBlock(dto: CreateTimeBlockDto) {

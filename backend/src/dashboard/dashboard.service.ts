@@ -5,6 +5,14 @@ import { SupabaseService } from '../supabase/supabase.service';
 export class DashboardService {
   constructor(private readonly supabase: SupabaseService) {}
 
+  /** Select padrão com joins para appointments */
+  private readonly APPOINTMENT_SELECT = `
+    *,
+    client:clients(id, name, phone, email),
+    professional:professionals(id, name),
+    services:appointment_services(id, service:services(id, name, price, duration))
+  `;
+
   async getStats() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -93,7 +101,7 @@ export class DashboardService {
 
     const { data: appointments, error } = await this.supabase
       .from('appointments')
-      .select('*')
+      .select(this.APPOINTMENT_SELECT)
       .gte('scheduledAt', today.toISOString())
       .lt('scheduledAt', tomorrow.toISOString())
       .in('status', ['SCHEDULED', 'ATTENDED'])
@@ -108,7 +116,7 @@ export class DashboardService {
 
     const { data: appointments, error } = await this.supabase
       .from('appointments')
-      .select('*')
+      .select(this.APPOINTMENT_SELECT)
       .gte('scheduledAt', now.toISOString())
       .eq('status', 'SCHEDULED')
       .order('scheduledAt', { ascending: true })
@@ -121,30 +129,36 @@ export class DashboardService {
   async getRecentActivity(limit: number = 10) {
     const { data: payments } = await this.supabase
       .from('payments')
-      .select('id, amount, method, createdAt')
+      .select('id, amount, method, createdAt, client:clients(name)')
       .order('createdAt', { ascending: false })
       .limit(5);
 
     const { data: appointments } = await this.supabase
       .from('appointments')
-      .select('id, status, updatedAt')
+      .select('id, status, updatedAt, client:clients(name)')
       .in('status', ['ATTENDED', 'CANCELED', 'NO_SHOW'])
       .order('updatedAt', { ascending: false })
       .limit(5);
 
+    const statusLabels: Record<string, string> = {
+      ATTENDED: 'atendido',
+      CANCELED: 'cancelado',
+      NO_SHOW: 'não compareceu',
+    };
+
     const activities = [
-      ...(payments || []).map((p) => ({
+      ...(payments || []).map((p: any) => ({
         type: 'payment',
         id: p.id,
-        description: 'Pagamento recebido',
+        description: `Pagamento recebido - ${p.client?.name || 'Cliente'}`,
         amount: p.amount,
         method: p.method,
         date: p.createdAt,
       })),
-      ...(appointments || []).map((a) => ({
+      ...(appointments || []).map((a: any) => ({
         type: 'appointment',
         id: a.id,
-        description: `Agendamento ${a.status}`,
+        description: `${a.client?.name || 'Cliente'} - ${statusLabels[a.status] || a.status}`,
         status: a.status,
         date: a.updatedAt,
       })),
@@ -206,7 +220,7 @@ export class DashboardService {
   async getProfessionalPerformance(start?: Date, end?: Date) {
     let queryBuilder = this.supabase
       .from('appointments')
-      .select('professionalId, totalPrice, status');
+      .select('professionalId, totalPrice, status, professional:professionals(name)');
 
     if (start) {
       queryBuilder = queryBuilder.gte('scheduledAt', start.toISOString());
@@ -220,10 +234,10 @@ export class DashboardService {
     const { data: appointments, error } = await queryBuilder;
     if (error) throw error;
 
-    const byProfessional: Record<string, { count: number; revenue: number }> = {};
-    for (const a of appointments || []) {
+    const byProfessional: Record<string, { name: string; count: number; revenue: number }> = {};
+    for (const a of appointments as any[] || []) {
       if (!byProfessional[a.professionalId]) {
-        byProfessional[a.professionalId] = { count: 0, revenue: 0 };
+        byProfessional[a.professionalId] = { name: a.professional?.name || '', count: 0, revenue: 0 };
       }
       byProfessional[a.professionalId].count++;
       byProfessional[a.professionalId].revenue += a.totalPrice;

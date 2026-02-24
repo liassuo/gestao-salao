@@ -23,17 +23,6 @@ export enum SubscriptionStatus {
   SUSPENDED = 'SUSPENDED',
 }
 
-export enum TransactionType {
-  EXPENSE = 'EXPENSE',
-  REVENUE = 'REVENUE',
-}
-
-export enum TransactionStatus {
-  PENDING = 'PENDING',
-  PAID = 'PAID',
-  OVERDUE = 'OVERDUE',
-  CANCELED = 'CANCELED',
-}
 
 export enum PaymentCondition {
   A_VISTA = 'A_VISTA',

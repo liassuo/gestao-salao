@@ -11,7 +11,5 @@ export { servicesService } from './services';
 export { subscriptionsService } from './subscriptions';
 export { branchesService } from './branches';
 export { bankAccountsService } from './bankAccounts';
-export { financialCategoriesService } from './financialCategories';
 export { paymentMethodConfigService } from './paymentMethodConfig';
-export { financialTransactionsService } from './financialTransactions';
 export { commissionsService } from './commissions';

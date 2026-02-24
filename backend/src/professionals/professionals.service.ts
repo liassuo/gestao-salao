@@ -35,16 +35,20 @@ export class ProfessionalsService {
   }
 
   async findAll(serviceId?: string) {
-    let query = this.supabase
+    const { data: professionals, error } = await this.supabase
       .from('professionals')
-      .select('*')
+      .select('*, appointment_count:appointments(count)')
       .eq('isActive', true)
       .order('name', { ascending: true });
 
-    const { data: professionals, error } = await query;
-
     if (error) throw error;
-    return professionals || [];
+
+    return (professionals || []).map(({ appointment_count, ...prof }: any) => ({
+      ...prof,
+      _count: {
+        appointments: appointment_count?.[0]?.count || 0,
+      },
+    }));
   }
 
   async findActive() {

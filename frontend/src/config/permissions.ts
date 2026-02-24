@@ -12,19 +12,12 @@ import {
   Settings,
   BadgeCheck,
   DollarSign,
-  Scale,
-  TrendingDown,
-  TrendingUp,
-  MinusCircle,
-  PlusCircle,
   Building2,
   Landmark,
-  FolderTree,
   Package,
   Warehouse,
   ArrowLeftRight,
   ClipboardList,
-  UtensilsCrossed,
 } from 'lucide-react';
 import type { Role } from '@/auth/roles';
 
@@ -98,12 +91,7 @@ export const menuItems: MenuItem[] = [
     path: '/comandas',
     roles: ['ADMIN'],
   },
-  {
-    icon: UtensilsCrossed,
-    label: 'Bar / Cozinha',
-    path: '/bar-cozinha',
-    roles: ['ADMIN', 'PROFESSIONAL'],
-  },
+
   {
     icon: BarChart3,
     label: 'Relatórios',
@@ -140,41 +128,6 @@ export const menuItems: MenuItem[] = [
     roles: ['ADMIN'],
     group: 'Financeiro',
   },
-  {
-    icon: Scale,
-    label: 'Balanco',
-    path: '/financeiro/balanco',
-    roles: ['ADMIN'],
-    group: 'Financeiro',
-  },
-  {
-    icon: TrendingDown,
-    label: 'Contas a Pagar',
-    path: '/financeiro/contas-pagar',
-    roles: ['ADMIN'],
-    group: 'Financeiro',
-  },
-  {
-    icon: TrendingUp,
-    label: 'Contas a Receber',
-    path: '/financeiro/contas-receber',
-    roles: ['ADMIN'],
-    group: 'Financeiro',
-  },
-  {
-    icon: MinusCircle,
-    label: 'Criar Despesa',
-    path: '/financeiro/despesa',
-    roles: ['ADMIN'],
-    group: 'Financeiro',
-  },
-  {
-    icon: PlusCircle,
-    label: 'Criar Receita',
-    path: '/financeiro/receita',
-    roles: ['ADMIN'],
-    group: 'Financeiro',
-  },
   // Cadastros group
   {
     icon: Building2,
@@ -187,13 +140,6 @@ export const menuItems: MenuItem[] = [
     icon: Landmark,
     label: 'Contas Bancarias',
     path: '/financeiro/contas-bancarias',
-    roles: ['ADMIN'],
-    group: 'Cadastros',
-  },
-  {
-    icon: FolderTree,
-    label: 'Categorias',
-    path: '/financeiro/categorias',
     roles: ['ADMIN'],
     group: 'Cadastros',
   },

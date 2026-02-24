@@ -15,11 +15,6 @@ export const ordersService = {
     return response.data;
   },
 
-  async getPending(): Promise<Order[]> {
-    const response = await api.get<Order[]>('/orders/pending');
-    return response.data;
-  },
-
   async getById(id: string): Promise<Order> {
     const response = await api.get<Order>(`/orders/${id}`);
     return response.data;

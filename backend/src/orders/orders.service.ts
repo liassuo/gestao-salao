@@ -72,17 +72,6 @@ export class OrdersService {
     return orders || [];
   }
 
-  async findPending() {
-    const { data: orders, error } = await this.supabase
-      .from('orders')
-      .select('*')
-      .eq('status', 'PENDING')
-      .order('createdAt', { ascending: true });
-
-    if (error) throw error;
-    return orders || [];
-  }
-
   async findOne(id: string) {
     const { data: order, error } = await this.supabase
       .from('orders')
