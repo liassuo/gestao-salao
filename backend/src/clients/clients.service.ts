@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { SupabaseService } from '../supabase/supabase.service';
+import { AsaasService } from '../asaas/asaas.service';
 import { CreateClientDto, UpdateClientDto } from './dto';
 
 export interface ClientFilters {
@@ -24,7 +25,12 @@ export interface Client {
 
 @Injectable()
 export class ClientsService {
-  constructor(private readonly supabase: SupabaseService) {}
+  private readonly logger = new Logger(ClientsService.name);
+
+  constructor(
+    private readonly supabase: SupabaseService,
+    private readonly asaasService: AsaasService,
+  ) {}
 
   async create(dto: CreateClientDto) {
     const { data: client, error } = await this.supabase
@@ -41,6 +47,26 @@ export class ClientsService {
       .single();
 
     if (error) throw error;
+
+    // Sincronizar com Asaas (sem bloquear o fluxo principal)
+    if (this.asaasService.configured && client) {
+      try {
+        const asaasCustomer = await this.asaasService.createCustomer({
+          name: dto.name,
+          email: dto.email || undefined,
+          mobilePhone: dto.phone || undefined,
+          externalReference: client.id,
+        });
+        await this.supabase
+          .from('clients')
+          .update({ asaasCustomerId: asaasCustomer.id })
+          .eq('id', client.id);
+        this.logger.log(`Cliente sincronizado com Asaas: ${asaasCustomer.id}`);
+      } catch (syncError) {
+        this.logger.warn(`Falha ao sincronizar cliente com Asaas: ${syncError}`);
+      }
+    }
+
     return client;
   }
 
@@ -130,6 +156,20 @@ export class ClientsService {
       .single();
 
     if (error) throw error;
+
+    // Sincronizar com Asaas (se já tem asaasCustomerId)
+    if (this.asaasService.configured && updatedClient?.asaasCustomerId) {
+      try {
+        await this.asaasService.updateCustomer(updatedClient.asaasCustomerId, {
+          name: dto.name || updatedClient.name,
+          email: dto.email || updatedClient.email || undefined,
+          mobilePhone: dto.phone || updatedClient.phone || undefined,
+        });
+      } catch (syncError) {
+        this.logger.warn(`Falha ao atualizar cliente no Asaas: ${syncError}`);
+      }
+    }
+
     return updatedClient;
   }
 
@@ -163,5 +203,34 @@ export class ClientsService {
       .from('clients')
       .update({ hasDebts: (count || 0) > 0 })
       .eq('id', clientId);
+  }
+
+  /**
+   * Sincroniza um cliente com o Asaas manualmente.
+   */
+  async syncWithAsaas(clientId: string) {
+    const client = await this.findOne(clientId);
+
+    if (!this.asaasService.configured) {
+      throw new Error('Integração Asaas não está configurada');
+    }
+
+    const payload = {
+      name: client.name,
+      email: client.email || undefined,
+      mobilePhone: client.phone || undefined,
+      externalReference: client.id,
+    };
+
+    if (client.asaasCustomerId) {
+      return this.asaasService.updateCustomer(client.asaasCustomerId, payload);
+    } else {
+      const asaasCustomer = await this.asaasService.createCustomer(payload);
+      await this.supabase
+        .from('clients')
+        .update({ asaasCustomerId: asaasCustomer.id })
+        .eq('id', client.id);
+      return asaasCustomer;
+    }
   }
 }

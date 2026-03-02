@@ -1,10 +1,17 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { SupabaseService } from '../supabase/supabase.service';
+import { AsaasService } from '../asaas/asaas.service';
+import { AsaasBillingType } from '../asaas/asaas.types';
 import { CreateOrderDto, UpdateOrderDto, AddOrderItemDto, QueryOrderDto, PayOrderDto } from './dto';
 
 @Injectable()
 export class OrdersService {
-  constructor(private readonly supabase: SupabaseService) {}
+  private readonly logger = new Logger(OrdersService.name);
+
+  constructor(
+    private readonly supabase: SupabaseService,
+    private readonly asaasService: AsaasService,
+  ) {}
 
   async create(dto: CreateOrderDto) {
     let totalAmount = 0;
@@ -189,6 +196,17 @@ export class OrdersService {
       throw new BadRequestException('Comanda não está pendente');
     }
 
+    // ============================
+    // FLUXO ASAAS (cobrança digital)
+    // ============================
+    if (dto?.billingType && this.asaasService.configured) {
+      return this.payWithAsaas(id, order, dto);
+    }
+
+    // ============================
+    // FLUXO MANUAL (original)
+    // ============================
+
     // Baixa no estoque para produtos
     const productItems = (order.items || []).filter((i: any) => i.itemType === 'PRODUCT' && i.productId);
     for (const item of productItems) {
@@ -240,6 +258,121 @@ export class OrdersService {
       .eq('id', id);
 
     return this.findOne(id);
+  }
+
+  /**
+   * Pagar comanda via Asaas (cobrança digital)
+   * O pagamento só será confirmado via webhook.
+   */
+  private async payWithAsaas(id: string, order: any, dto: PayOrderDto) {
+    if (!order.clientId) {
+      throw new BadRequestException('Comanda precisa ter um cliente para cobrança digital');
+    }
+
+    // Buscar cliente com asaasCustomerId
+    const { data: client } = await this.supabase
+      .from('clients')
+      .select('id, name, email, phone, asaasCustomerId')
+      .eq('id', order.clientId)
+      .single();
+
+    if (!client) {
+      throw new BadRequestException('Cliente não encontrado');
+    }
+
+    // Criar customer no Asaas se necessário
+    let asaasCustomerId = client.asaasCustomerId;
+    if (!asaasCustomerId) {
+      const asaasCustomer = await this.asaasService.createCustomer({
+        name: client.name,
+        email: client.email || undefined,
+        mobilePhone: client.phone || undefined,
+        externalReference: client.id,
+      });
+      asaasCustomerId = asaasCustomer.id;
+      await this.supabase
+        .from('clients')
+        .update({ asaasCustomerId })
+        .eq('id', client.id);
+    }
+
+    // Criar cobrança no Asaas
+    const billingType = dto.billingType as unknown as AsaasBillingType;
+    const dueDate = dto.dueDate || new Date().toISOString().split('T')[0];
+
+    const asaasCharge = await this.asaasService.createCharge({
+      customer: asaasCustomerId,
+      billingType,
+      value: this.asaasService.centavosToReais(order.totalAmount),
+      dueDate,
+      description: `Comanda #${order.id.slice(0, 8)}`,
+      externalReference: order.id,
+    });
+
+    // Criar registro de pagamento local (pendente)
+    const paymentMethodMap: Record<string, string> = {
+      PIX: 'PIX',
+      BOLETO: 'BOLETO',
+      CREDIT_CARD: 'CARD',
+    };
+
+    const { data: payment } = await this.supabase
+      .from('payments')
+      .insert({
+        clientId: order.clientId,
+        amount: order.totalAmount,
+        method: paymentMethodMap[dto.billingType!] || 'PIX',
+        paidAt: new Date().toISOString(),
+        registeredBy: dto.registeredBy || order.clientId,
+        notes: `Cobrança Asaas #${asaasCharge.id} - Comanda #${order.id.slice(0, 8)}`,
+        asaasPaymentId: asaasCharge.id,
+        asaasStatus: asaasCharge.status,
+        billingType: dto.billingType,
+        invoiceUrl: asaasCharge.invoiceUrl || null,
+        bankSlipUrl: asaasCharge.bankSlipUrl || null,
+      })
+      .select('id')
+      .single();
+
+    // Buscar QR Code PIX se aplicável
+    let pixQrCode = null;
+    if (dto.billingType === 'PIX' && payment) {
+      try {
+        pixQrCode = await this.asaasService.getPixQrCode(asaasCharge.id);
+        await this.supabase
+          .from('payments')
+          .update({
+            pixQrCodeBase64: pixQrCode.encodedImage,
+            pixCopyPaste: pixQrCode.payload,
+          })
+          .eq('id', payment.id);
+      } catch {
+        this.logger.warn('QR Code PIX não disponível imediatamente');
+      }
+    }
+
+    // Atualizar comanda com paymentId (status fica PENDING até webhook confirmar)
+    await this.supabase
+      .from('orders')
+      .update({ paymentId: payment?.id })
+      .eq('id', id);
+
+    // Baixa no estoque
+    const productItems = (order.items || []).filter((i: any) => i.itemType === 'PRODUCT' && i.productId);
+    for (const item of productItems) {
+      await this.supabase.from('stock_movements').insert({
+        productId: item.productId,
+        type: 'EXIT',
+        quantity: item.quantity,
+        reason: `Venda via comanda #${order.id.slice(0, 8)} (Asaas)`,
+      });
+    }
+
+    return {
+      order: await this.findOne(id),
+      asaasCharge,
+      pixQrCode,
+    };
   }
 
   async cancel(id: string) {

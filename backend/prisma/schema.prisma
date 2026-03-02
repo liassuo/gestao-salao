@@ -30,6 +30,7 @@ enum PaymentMethod {
   CASH
   PIX
   CARD
+  BOLETO
 }
 
 enum SubscriptionStatus {
@@ -97,6 +98,9 @@ model Client {
   debts        Debt[]
   subscription ClientSubscription?
   orders       Order[]
+
+  // Asaas
+  asaasCustomerId String? // ID do cliente no Asaas
 
   @@map("clients")
 }
@@ -208,6 +212,15 @@ model Payment {
 
   order Order?
 
+  // Asaas
+  asaasPaymentId  String? // ID da cobrança no Asaas
+  asaasStatus     String? // Status da cobrança no Asaas
+  billingType     String? // PIX, BOLETO, CREDIT_CARD
+  invoiceUrl      String? // URL da fatura Asaas
+  pixQrCodeBase64 String? // QR Code PIX em Base64
+  pixCopyPaste    String? // Chave copia-e-cola PIX
+  bankSlipUrl     String? // URL do boleto
+
   @@map("payments")
 }
 
@@ -294,6 +307,9 @@ model ClientSubscription {
 
   planId String
   plan   SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  // Asaas
+  asaasSubscriptionId String? // ID da assinatura no Asaas
 
   @@map("client_subscriptions")
 }

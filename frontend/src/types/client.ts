@@ -6,6 +6,7 @@ export interface Client {
   hasDebts: boolean;
   isActive: boolean;
   notes?: string | null;
+  asaasCustomerId?: string | null;
   createdAt: string;
   updatedAt?: string;
   _count?: {
