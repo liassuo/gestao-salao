@@ -12,3 +12,4 @@ export * from './financial';
 export * from './product';
 export * from './order';
 export * from './calendar';
+export * from './asaas';

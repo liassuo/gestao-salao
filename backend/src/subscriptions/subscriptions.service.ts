@@ -1,14 +1,22 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
 import { SupabaseService } from '../supabase/supabase.service';
+import { AsaasService } from '../asaas/asaas.service';
+import { AsaasBillingType, AsaasSubscriptionCycle } from '../asaas/asaas.types';
 import { CreatePlanDto, UpdatePlanDto, SubscribeClientDto } from './dto';
 
 @Injectable()
 export class SubscriptionsService {
-  constructor(private readonly supabase: SupabaseService) {}
+  private readonly logger = new Logger(SubscriptionsService.name);
+
+  constructor(
+    private readonly supabase: SupabaseService,
+    private readonly asaasService: AsaasService,
+  ) {}
 
   // SUBSCRIPTION PLANS
 
@@ -131,7 +139,7 @@ export class SubscriptionsService {
     // Verificar se plano existe
     const { data: plan } = await this.supabase
       .from('subscription_plans')
-      .select('id, cutsPerMonth')
+      .select('id, cutsPerMonth, price, name')
       .eq('id', dto.planId)
       .eq('isActive', true)
       .single();
@@ -171,6 +179,55 @@ export class SubscriptionsService {
       .single();
 
     if (error) throw error;
+
+    // Criar assinatura recorrente no Asaas (se configurado)
+    if (this.asaasService.configured && subscription) {
+      try {
+        // Buscar cliente com asaasCustomerId
+        const { data: clientData } = await this.supabase
+          .from('clients')
+          .select('id, name, email, phone, asaasCustomerId')
+          .eq('id', dto.clientId)
+          .single();
+
+        let asaasCustomerId = clientData?.asaasCustomerId;
+        if (!asaasCustomerId && clientData) {
+          const asaasCustomer = await this.asaasService.createCustomer({
+            name: clientData.name,
+            email: clientData.email || undefined,
+            mobilePhone: clientData.phone || undefined,
+            externalReference: clientData.id,
+          });
+          asaasCustomerId = asaasCustomer.id;
+          await this.supabase
+            .from('clients')
+            .update({ asaasCustomerId })
+            .eq('id', clientData.id);
+        }
+
+        if (asaasCustomerId) {
+          const asaasSub = await this.asaasService.createSubscription({
+            customer: asaasCustomerId,
+            billingType: AsaasBillingType.PIX,
+            value: this.asaasService.centavosToReais(plan.price ?? 0),
+            nextDueDate: startDate.toISOString().split('T')[0],
+            cycle: AsaasSubscriptionCycle.MONTHLY,
+            description: `Plano ${plan.name ?? 'Assinatura'}`,
+            externalReference: subscription.id,
+          });
+
+          await this.supabase
+            .from('client_subscriptions')
+            .update({ asaasSubscriptionId: asaasSub.id })
+            .eq('id', subscription.id);
+
+          this.logger.log(`Assinatura Asaas criada: ${asaasSub.id}`);
+        }
+      } catch (syncError) {
+        this.logger.warn(`Falha ao criar assinatura no Asaas: ${syncError}`);
+      }
+    }
+
     return subscription;
   }
 
@@ -240,7 +297,7 @@ export class SubscriptionsService {
   async cancelSubscription(id: string) {
     const { data: subscription, error: findError } = await this.supabase
       .from('client_subscriptions')
-      .select('id, status')
+      .select('id, status, asaasSubscriptionId')
       .eq('id', id)
       .single();
 
@@ -260,6 +317,17 @@ export class SubscriptionsService {
       .single();
 
     if (error) throw error;
+
+    // Cancelar assinatura no Asaas (se vinculada)
+    if (this.asaasService.configured && subscription.asaasSubscriptionId) {
+      try {
+        await this.asaasService.cancelSubscription(subscription.asaasSubscriptionId);
+        this.logger.log(`Assinatura Asaas cancelada: ${subscription.asaasSubscriptionId}`);
+      } catch (syncError) {
+        this.logger.warn(`Falha ao cancelar assinatura no Asaas: ${syncError}`);
+      }
+    }
+
     return updated;
   }
 

@@ -33,7 +33,8 @@ Esta API fornece endpoints para gerenciar:
 - **Profissionais**: Barbeiros/Cabeleireiros
 - **Serviços**: Catálogo de serviços oferecidos
 - **Agendamentos**: Marcação e gestão de horários
-- **Pagamentos**: Registro de pagamentos (sem processamento)
+- **Pagamentos**: Registro de pagamentos (manual e digital via Asaas)
+- **Asaas**: Integração com gateway de pagamento (PIX, Boleto, Cartão)
 - **Dívidas**: Controle de fiado/crédito de clientes
 - **Caixa**: Abertura e fechamento de caixa diário
 - **Dashboard**: Estatísticas e métricas
@@ -42,7 +43,7 @@ Esta API fornece endpoints para gerenciar:
 ### Regras de Negócio Importantes
 
 - **Agendamento ≠ Pagamento**: Um atendimento pode ser realizado sem pagamento
-- **Pagamentos são manuais**: O sistema apenas registra, não processa pagamentos
+- **Pagamentos manuais e digitais**: Suporta registro manual (dinheiro, PIX, cartão) e cobrança digital via Asaas
 - **Dívidas são independentes**: Não estão vinculadas ao método de pagamento
 - **Preços em centavos**: Todos os valores monetários são em centavos (5000 = R$ 50,00)
 - **Um caixa por dia**: Apenas um caixa pode estar aberto por data
@@ -71,6 +72,8 @@ Esta API fornece endpoints para gerenciar:
     .addTag('Cash Register', 'Controle de caixa')
     .addTag('Dashboard', 'Estatísticas e métricas')
     .addTag('Reports', 'Relatórios gerenciais')
+    .addTag('Asaas', 'Integração com gateway de pagamento Asaas')
+    .addTag('Webhooks', 'Webhooks para notificações externas')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

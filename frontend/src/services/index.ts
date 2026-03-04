@@ -13,3 +13,4 @@ export { branchesService } from './branches';
 export { bankAccountsService } from './bankAccounts';
 export { paymentMethodConfigService } from './paymentMethodConfig';
 export { commissionsService } from './commissions';
+export { asaasService } from './asaas';

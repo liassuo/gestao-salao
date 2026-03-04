@@ -20,6 +20,7 @@ export interface ClientSubscription {
   endDate: string | null;
   cutsUsedThisMonth: number;
   lastResetDate: string;
+  asaasSubscriptionId?: string | null;
   createdAt: string;
   client: {
     id: string;
