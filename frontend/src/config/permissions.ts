@@ -18,6 +18,7 @@ import {
   Warehouse,
   ArrowLeftRight,
   ClipboardList,
+  Tag,
 } from 'lucide-react';
 import type { Role } from '@/auth/roles';
 
@@ -91,7 +92,12 @@ export const menuItems: MenuItem[] = [
     path: '/comandas',
     roles: ['ADMIN'],
   },
-
+  {
+    icon: Tag,
+    label: 'Promocoes',
+    path: '/promocoes',
+    roles: ['ADMIN'],
+  },
   {
     icon: BarChart3,
     label: 'Relatórios',

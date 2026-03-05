@@ -18,6 +18,7 @@ import {
   PaymentMethods,
   Products,
   Professionals,
+  Promotions,
   Reports,
   Services,
   Settings,
@@ -104,7 +105,10 @@ export const router = createBrowserRouter([
         path: 'comandas',
         element: withRoleProtection('/comandas', <Orders />),
       },
-
+      {
+        path: 'promocoes',
+        element: withRoleProtection('/promocoes', <Promotions />),
+      },
       {
         path: 'relatorios',
         element: withRoleProtection('/relatorios', <Reports />),

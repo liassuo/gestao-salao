@@ -1,11 +1,15 @@
-/**
- * DTO for creating a new client
- */
 export class CreateClientDto {
   name: string;
-  email: string;
+  email?: string;
   phone: string;
+  cpf?: string;
   password?: string;
   googleId?: string;
+  birthDate?: string;
+  address?: string;
+  addressNumber?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
   notes?: string;
 }

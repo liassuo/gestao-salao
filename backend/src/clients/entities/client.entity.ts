@@ -6,28 +6,21 @@
 export class Client {
   id: string;
   name: string;
-  email?: string; // Optional: Many barbershop clients don't have email
+  email?: string;
   phone: string;
-  password?: string; // Optional: null if using Google auth
-
-  /**
-   * Google OAuth ID if using social login
-   */
+  cpf?: string;
+  password?: string;
   googleId?: string;
-
-  /**
-   * Indicates if client has active debts
-   * IMPORTANT: This is a derived field for performance
-   * Always update when debts change to avoid inconsistency
-   */
   hasDebts: boolean;
-
   isActive: boolean;
+  birthDate?: string;
+  address?: string;
+  addressNumber?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  lastVisitAt?: string;
+  notes?: string;
   createdAt: Date;
   updatedAt: Date;
-
-  /**
-   * Additional info for better customer service
-   */
-  notes?: string;
 }

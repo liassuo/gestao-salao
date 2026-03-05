@@ -1,0 +1,12 @@
+-- Adicionar novos campos na tabela clients
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS cpf TEXT UNIQUE;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS "birthDate" DATE;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS "addressNumber" TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS neighborhood TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS city TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS state TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS "lastVisitAt" TIMESTAMP WITH TIME ZONE;
+
+-- Indice para busca por CPF
+CREATE INDEX IF NOT EXISTS idx_clients_cpf ON clients(cpf);

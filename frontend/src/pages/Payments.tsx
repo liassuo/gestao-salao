@@ -2,7 +2,6 @@ import { useState, useMemo } from 'react';
 import { CreditCard, AlertCircle, Plus, Search } from 'lucide-react';
 import {
   usePayments,
-  usePaymentTotals,
   usePaymentActions,
   useCreatePayment,
   getApiErrorMessage,
@@ -36,7 +35,17 @@ export function Payments() {
       return true;
     });
   }, [payments, searchTerm, methodFilter]);
-  const { data: totals, isLoading: isLoadingTotals } = usePaymentTotals();
+
+  const totals = useMemo(() => {
+    const t = { cash: 0, pix: 0, card: 0, total: 0 };
+    const methodMap: Record<string, keyof typeof t> = { CASH: 'cash', PIX: 'pix', CARD: 'card' };
+    for (const p of payments || []) {
+      const key = methodMap[p.method];
+      if (key) t[key] += p.amount;
+      t.total += p.amount;
+    }
+    return t;
+  }, [payments]);
   const { remove, isLoading: isActionLoading } = usePaymentActions();
   const createPayment = useCreatePayment();
   const toast = useToast();
@@ -132,13 +141,10 @@ export function Payments() {
       </div>
 
       {/* Totais */}
-      {isLoadingTotals ? (
+      {isLoading ? (
         <SkeletonSummaryCards count={4} />
       ) : (
-        <PaymentTotals
-          totals={totals || { cash: 0, pix: 0, card: 0, total: 0 }}
-          isLoading={false}
-        />
+        <PaymentTotals totals={totals} />
       )}
 
       {/* Conteúdo */}

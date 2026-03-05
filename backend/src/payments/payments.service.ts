@@ -166,7 +166,7 @@ export class PaymentsService {
   async calculateTotalsByMethod(
     startDate: Date,
     endDate: Date,
-  ): Promise<{ CASH: number; PIX: number; CARD: number; total: number }> {
+  ): Promise<{ cash: number; pix: number; card: number; total: number }> {
     const { data: payments, error } = await this.supabase
       .from('payments')
       .select('amount, method')
@@ -175,10 +175,16 @@ export class PaymentsService {
 
     if (error) throw error;
 
-    const totals = { CASH: 0, PIX: 0, CARD: 0, total: 0 };
+    const totals = { cash: 0, pix: 0, card: 0, total: 0 };
+    const methodMap: Record<string, keyof typeof totals> = {
+      CASH: 'cash',
+      PIX: 'pix',
+      CARD: 'card',
+    };
 
     for (const payment of payments || []) {
-      totals[payment.method as keyof typeof totals] += payment.amount;
+      const key = methodMap[payment.method];
+      if (key) totals[key] += payment.amount;
       totals.total += payment.amount;
     }
 

@@ -14,10 +14,18 @@ export interface Client {
   name: string;
   email: string | null;
   phone: string;
+  cpf: string | null;
   password: string | null;
   googleId: string | null;
   hasDebts: boolean;
   isActive: boolean;
+  birthDate: string | null;
+  address: string | null;
+  addressNumber: string | null;
+  neighborhood: string | null;
+  city: string | null;
+  state: string | null;
+  lastVisitAt: string | null;
   notes: string | null;
   createdAt: string;
   updatedAt: string;
@@ -39,11 +47,18 @@ export class ClientsService {
         name: dto.name,
         phone: dto.phone,
         email: dto.email || null,
+        cpf: dto.cpf || null,
         password: dto.password,
         googleId: dto.googleId,
+        birthDate: dto.birthDate || null,
+        address: dto.address || null,
+        addressNumber: dto.addressNumber || null,
+        neighborhood: dto.neighborhood || null,
+        city: dto.city || null,
+        state: dto.state || null,
         notes: dto.notes,
       })
-      .select('id, name, phone, email, isActive, createdAt')
+      .select('*')
       .single();
 
     if (error) throw error;
@@ -55,6 +70,7 @@ export class ClientsService {
           name: dto.name,
           email: dto.email || undefined,
           mobilePhone: dto.phone || undefined,
+          cpfCnpj: dto.cpf || undefined,
           externalReference: client.id,
         });
         await this.supabase
@@ -84,7 +100,7 @@ export class ClientsService {
     }
 
     if (filters?.search) {
-      query = query.or(`name.ilike.%${filters.search}%,email.ilike.%${filters.search}%,phone.ilike.%${filters.search}%`);
+      query = query.or(`name.ilike.%${filters.search}%,email.ilike.%${filters.search}%,phone.ilike.%${filters.search}%,cpf.ilike.%${filters.search}%`);
     }
 
     const { data: clients, error } = await query.order('name', { ascending: true });
@@ -164,6 +180,7 @@ export class ClientsService {
           name: dto.name || updatedClient.name,
           email: dto.email || updatedClient.email || undefined,
           mobilePhone: dto.phone || updatedClient.phone || undefined,
+          cpfCnpj: dto.cpf || updatedClient.cpf || undefined,
         });
       } catch (syncError) {
         this.logger.warn(`Falha ao atualizar cliente no Asaas: ${syncError}`);

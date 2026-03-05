@@ -19,3 +19,4 @@ export * from './Settings';
 export * from './StockCurrent';
 export * from './StockMovements';
 export * from './Subscriptions';
+export * from './Promotions';

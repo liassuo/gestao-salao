@@ -13,3 +13,4 @@ export * from './product';
 export * from './order';
 export * from './calendar';
 export * from './asaas';
+export * from './promotion';

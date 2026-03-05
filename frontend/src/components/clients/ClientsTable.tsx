@@ -20,7 +20,6 @@ function formatDate(date: string): string {
 }
 
 function formatPhone(phone: string): string {
-  // Formata telefone brasileiro
   const cleaned = phone.replace(/\D/g, '');
   if (cleaned.length === 11) {
     return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 7)}-${cleaned.slice(7)}`;
@@ -29,6 +28,14 @@ function formatPhone(phone: string): string {
     return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 6)}-${cleaned.slice(6)}`;
   }
   return phone;
+}
+
+function formatCpf(cpf: string): string {
+  const cleaned = cpf.replace(/\D/g, '');
+  if (cleaned.length === 11) {
+    return `${cleaned.slice(0, 3)}.${cleaned.slice(3, 6)}.${cleaned.slice(6, 9)}-${cleaned.slice(9)}`;
+  }
+  return cpf;
 }
 
 export function ClientsTable({
@@ -45,7 +52,7 @@ export function ClientsTable({
       <EmptyState
         icon={Users}
         title="Nenhum cliente cadastrado"
-        description="Cadastre seu primeiro cliente para começar a gerenciar os agendamentos."
+        description="Cadastre seu primeiro cliente para comecar a gerenciar os agendamentos."
         action={onNewClient ? { label: 'Novo Cliente', onClick: onNewClient } : undefined}
       />
     );
@@ -64,7 +71,7 @@ export function ClientsTable({
                 Contato
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                Agendamentos
+                CPF
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Status
@@ -72,8 +79,11 @@ export function ClientsTable({
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Cadastro
               </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                Ultima Visita
+              </th>
               <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                Ações
+                Acoes
               </th>
             </tr>
           </thead>
@@ -112,13 +122,13 @@ export function ClientsTable({
                   </div>
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-secondary)]">
-                  {client._count?.appointments || 0}
+                  {client.cpf ? formatCpf(client.cpf) : '-'}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3">
                   <div className="flex flex-col gap-1">
                     {client.hasDebts && (
                       <span className="inline-flex w-fit rounded-full bg-red-500/20 px-2 py-0.5 text-xs font-medium text-[#A63030]">
-                        Com dívida
+                        Com divida
                       </span>
                     )}
                     {!client.isActive && (
@@ -135,6 +145,9 @@ export function ClientsTable({
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-muted)]">
                   {formatDate(client.createdAt)}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-muted)]">
+                  {client.lastVisitAt ? formatDate(client.lastVisitAt) : '-'}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-center">
                   <div className="relative inline-block">

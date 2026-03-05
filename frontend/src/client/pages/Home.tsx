@@ -4,6 +4,7 @@ import { useClientAuth } from '../auth';
 import { useClientAppointments } from '../hooks';
 import { AppointmentCard } from '../components/AppointmentCard';
 import { LoadingState, EmptyState } from '../components/ui';
+import { PromotionBanners } from '../components/PromotionBanners';
 import type { Appointment } from '../types';
 
 export function ClientHome() {
@@ -70,6 +71,9 @@ export function ClientHome() {
           </svg>
         </button>
       </div>
+
+      {/* Banners de Promocoes */}
+      <PromotionBanners />
 
       {/* Content */}
       <div className="px-5 pb-24">
