@@ -51,7 +51,7 @@ export class OrdersService {
   }
 
   async findAll(query: QueryOrderDto) {
-    let queryBuilder = this.supabase.from('orders').select('*');
+    let queryBuilder = this.supabase.from('orders').select('*, client:clients(id, name), items:order_items(id, itemType, productId, serviceId, quantity, unitPrice, product:products(id, name), service:services(id, name))');
 
     if (query.status) {
       queryBuilder = queryBuilder.eq('status', query.status);
@@ -82,7 +82,7 @@ export class OrdersService {
   async findOne(id: string) {
     const { data: order, error } = await this.supabase
       .from('orders')
-      .select('*')
+      .select('*, client:clients(id, name), items:order_items(id, itemType, productId, serviceId, quantity, unitPrice, product:products(id, name), service:services(id, name))')
       .eq('id', id)
       .single();
 
@@ -90,12 +90,7 @@ export class OrdersService {
       throw new NotFoundException('Comanda não encontrada');
     }
 
-    const { data: items } = await this.supabase
-      .from('order_items')
-      .select('*')
-      .eq('orderId', id);
-
-    return { ...order, items: items || [] };
+    return order;
   }
 
   async addItem(orderId: string, dto: AddOrderItemDto) {

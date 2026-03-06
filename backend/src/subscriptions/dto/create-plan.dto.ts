@@ -1,9 +1,18 @@
-/**
- * DTO for creating a new subscription plan
- */
+import { IsString, IsOptional, IsNumber, Min } from 'class-validator';
+
 export class CreatePlanDto {
+  @IsString()
   name: string;
+
+  @IsOptional()
+  @IsString()
   description?: string;
-  price: number; // Price in cents
-  cutsPerMonth: number; // Number of cuts allowed per month
+
+  @IsNumber()
+  @Min(0)
+  price: number;
+
+  @IsNumber()
+  @Min(1)
+  cutsPerMonth: number;
 }

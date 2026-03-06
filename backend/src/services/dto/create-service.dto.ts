@@ -1,9 +1,18 @@
-/**
- * DTO for creating a new service
- */
+import { IsString, IsOptional, IsNumber, Min } from 'class-validator';
+
 export class CreateServiceDto {
+  @IsString()
   name: string;
+
+  @IsOptional()
+  @IsString()
   description?: string;
-  price: number; // Price in cents
-  duration: number; // Duration in minutes
+
+  @IsNumber()
+  @Min(0)
+  price: number;
+
+  @IsNumber()
+  @Min(1)
+  duration: number;
 }

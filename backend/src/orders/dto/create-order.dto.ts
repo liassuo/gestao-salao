@@ -1,15 +1,49 @@
-export class CreateOrderDto {
-  clientId?: string;
-  professionalId?: string;
-  branchId?: string;
-  notes?: string;
-  items?: CreateOrderItemDto[];
-}
+import { IsOptional, IsString, IsArray, IsNumber, IsIn, ValidateNested, Min } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateOrderItemDto {
+  @IsOptional()
+  @IsString()
   productId?: string;
+
+  @IsOptional()
+  @IsString()
   serviceId?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
   quantity?: number;
-  unitPrice: number; // centavos
+
+  @IsNumber()
+  @Min(0)
+  unitPrice: number;
+
+  @IsString()
+  @IsIn(['PRODUCT', 'SERVICE'])
   itemType: 'PRODUCT' | 'SERVICE';
+}
+
+export class CreateOrderDto {
+  @IsOptional()
+  @IsString()
+  clientId?: string;
+
+  @IsOptional()
+  @IsString()
+  professionalId?: string;
+
+  @IsOptional()
+  @IsString()
+  branchId?: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateOrderItemDto)
+  items?: CreateOrderItemDto[];
 }
