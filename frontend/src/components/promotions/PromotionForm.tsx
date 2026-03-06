@@ -32,6 +32,10 @@ export function PromotionForm({ promotion, onSubmit, isLoading, error }: Promoti
   const uploadBanner = useUploadBanner();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const initialItemTab = (promotion?.products?.length || 0) > 0 && (promotion?.services?.length || 0) === 0
+    ? 'products' : 'services';
+  const [itemTab, setItemTab] = useState<'services' | 'products'>(initialItemTab);
+
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>(
     promotion?.services.map((s) => s.id) || []
   );
@@ -121,7 +125,7 @@ export function PromotionForm({ promotion, onSubmit, isLoading, error }: Promoti
       startDate: new Date(data.startDate).toISOString(),
       endDate: new Date(data.endDate).toISOString(),
       isTemplate: data.isTemplate,
-      serviceIds: selectedServiceIds,
+      serviceIds: selectedServiceIds.length > 0 ? selectedServiceIds : undefined,
       productIds: selectedProductIds.length > 0 ? selectedProductIds : undefined,
     };
 
@@ -214,44 +218,85 @@ export function PromotionForm({ promotion, onSubmit, isLoading, error }: Promoti
         </div>
       </div>
 
-      {/* Servicos */}
+      {/* Tipo de item + seleção */}
       <div>
         <label className="mb-1.5 block text-sm font-medium text-[var(--text-primary)]">
-          Servicos com Desconto
+          Itens com Desconto *
         </label>
         {selectedServiceIds.length === 0 && selectedProductIds.length === 0 && (
           <p className="mb-2 text-xs text-[#C45050]">Selecione pelo menos um servico ou produto</p>
         )}
-        <div className="max-h-48 overflow-y-auto rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-2 space-y-1">
-          {allServices?.map((service) => {
-            const isSelected = selectedServiceIds.includes(service.id);
-            return (
-              <button
-                key={service.id}
-                type="button"
-                onClick={() => toggleService(service.id)}
-                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors ${
-                  isSelected
-                    ? 'bg-[#C8923A]/20 text-[#C8923A] border border-[#C8923A]/30'
-                    : 'text-[var(--text-primary)] hover:bg-[var(--hover-bg)]'
-                }`}
-              >
-                <span>{service.name}</span>
-                <span className="text-xs text-[var(--text-muted)]">{formatPrice(service.price)}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
 
-      {/* Produtos */}
-      {allProducts && allProducts.length > 0 && (
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-[var(--text-primary)]">
-            Produtos com Desconto
-          </label>
+        {/* Tabs */}
+        <div className="flex rounded-xl border border-[var(--border-color)] overflow-hidden mb-3">
+          <button
+            type="button"
+            onClick={() => setItemTab('services')}
+            className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+              itemTab === 'services'
+                ? 'bg-[#C8923A] text-white'
+                : 'bg-[var(--card-bg)] text-[var(--text-muted)] hover:bg-[var(--hover-bg)]'
+            }`}
+          >
+            Servicos
+            {selectedServiceIds.length > 0 && (
+              <span className={`ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs font-semibold ${
+                itemTab === 'services' ? 'bg-white/20 text-white' : 'bg-[#C8923A]/20 text-[#C8923A]'
+              }`}>
+                {selectedServiceIds.length}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setItemTab('products')}
+            className={`flex-1 px-4 py-2 text-sm font-medium transition-colors border-l border-[var(--border-color)] ${
+              itemTab === 'products'
+                ? 'bg-[#C8923A] text-white'
+                : 'bg-[var(--card-bg)] text-[var(--text-muted)] hover:bg-[var(--hover-bg)]'
+            }`}
+          >
+            Produtos
+            {selectedProductIds.length > 0 && (
+              <span className={`ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs font-semibold ${
+                itemTab === 'products' ? 'bg-white/20 text-white' : 'bg-[#C8923A]/20 text-[#C8923A]'
+              }`}>
+                {selectedProductIds.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Lista de serviços */}
+        {itemTab === 'services' && (
           <div className="max-h-48 overflow-y-auto rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-2 space-y-1">
-            {allProducts.map((product) => {
+            {allServices?.length ? allServices.map((service) => {
+              const isSelected = selectedServiceIds.includes(service.id);
+              return (
+                <button
+                  key={service.id}
+                  type="button"
+                  onClick={() => toggleService(service.id)}
+                  className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors ${
+                    isSelected
+                      ? 'bg-[#C8923A]/20 text-[#C8923A] border border-[#C8923A]/30'
+                      : 'text-[var(--text-primary)] hover:bg-[var(--hover-bg)]'
+                  }`}
+                >
+                  <span>{service.name}</span>
+                  <span className="text-xs text-[var(--text-muted)]">{formatPrice(service.price)}</span>
+                </button>
+              );
+            }) : (
+              <p className="px-3 py-4 text-center text-sm text-[var(--text-muted)]">Nenhum servico cadastrado</p>
+            )}
+          </div>
+        )}
+
+        {/* Lista de produtos */}
+        {itemTab === 'products' && (
+          <div className="max-h-48 overflow-y-auto rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-2 space-y-1">
+            {allProducts?.length ? allProducts.map((product) => {
               const isSelected = selectedProductIds.includes(product.id);
               return (
                 <button
@@ -268,10 +313,12 @@ export function PromotionForm({ promotion, onSubmit, isLoading, error }: Promoti
                   <span className="text-xs text-[var(--text-muted)]">{formatPrice(product.salePrice)}</span>
                 </button>
               );
-            })}
+            }) : (
+              <p className="px-3 py-4 text-center text-sm text-[var(--text-muted)]">Nenhum produto cadastrado</p>
+            )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Banner Mode Toggle */}
       <div>
