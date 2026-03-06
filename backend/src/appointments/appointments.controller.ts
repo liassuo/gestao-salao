@@ -103,16 +103,10 @@ export class AppointmentsController {
     @Req() req: RequestWithUser,
     @Body() dto: CreateClientAppointmentDto,
   ) {
-    console.log('=== CREATE APPOINTMENT CLIENT ===');
-    console.log('User from token:', req.user);
-    console.log('Body received:', dto);
-
     // Combina data e hora para criar o scheduledAt
     // startTime pode vir como "09:00" ou "09:00:00"
     const timeWithSeconds = dto.startTime.length === 5 ? `${dto.startTime}:00` : dto.startTime;
     const scheduledAt = new Date(`${dto.date}T${timeWithSeconds}`);
-
-    console.log('scheduledAt:', scheduledAt);
 
     return this.appointmentsService.create({
       clientId: req.user.id,

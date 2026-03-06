@@ -91,7 +91,6 @@ export class AppointmentsService {
     // 4. Criar o agendamento
     const now = new Date().toISOString();
     const appointmentId = randomUUID();
-    console.log('Generated appointment id:', appointmentId);
     const { data: appointment, error: apptError } = await this.supabase
       .from('appointments')
       .insert({
@@ -110,7 +109,6 @@ export class AppointmentsService {
       .single();
 
     if (apptError) {
-      console.error('Error creating appointment:', apptError);
       throw new BadRequestException(apptError.message || 'Erro ao criar agendamento');
     }
 
@@ -123,7 +121,7 @@ export class AppointmentsService {
         createdAt: now,
       });
       if (linkError) {
-        console.error('Error linking service:', linkError);
+        throw new BadRequestException('Erro ao vincular serviço ao agendamento');
       }
     }
 
