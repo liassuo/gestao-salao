@@ -84,7 +84,7 @@ export function ClientBooking() {
   const [activePromotions, setActivePromotions] = useState<ActivePromotion[]>([]);
 
   const { services, isLoading: servicesLoading, fetchServices } = useClientServices();
-  const { professionals, isLoading: professionalsLoading, fetchProfessionals } = useClientProfessionals();
+  const { professionals, isLoading: professionalsLoading, fetchAvailableProfessionals } = useClientProfessionals();
   const { slots, isLoading: slotsLoading, fetchSlots, clearSlots } = useAvailableSlots();
   const { createAppointment } = useClientAppointments();
 
@@ -104,19 +104,15 @@ export function ClientBooking() {
   }, [fetchServices]);
 
   useEffect(() => {
-    if (currentStep === 'schedule') {
-      fetchProfessionals();
+    if (currentStep === 'schedule' && selectedServices.length > 0) {
+      const serviceIds = selectedServices.map((s) => s.id);
+      const date = formatDateISO(selectedDate);
+      fetchAvailableProfessionals(serviceIds, date);
+      // Limpar profissional selecionado ao mudar data/serviços
+      setSelectedProfessional(null);
+      setSelectedTime(null);
     }
-  }, [currentStep, fetchProfessionals]);
-
-  const filteredProfessionals = useMemo(() => {
-    if (selectedServices.length === 0) return professionals;
-    const selectedIds = selectedServices.map((s) => s.id);
-    return professionals.filter((p) => {
-      if (!p.serviceIds || p.serviceIds.length === 0) return true;
-      return selectedIds.every((sid) => p.serviceIds!.includes(sid));
-    });
-  }, [professionals, selectedServices]);
+  }, [currentStep, selectedDate, selectedServices, fetchAvailableProfessionals]);
 
   useEffect(() => {
     if (selectedProfessional && selectedDate) {
@@ -380,11 +376,11 @@ export function ClientBooking() {
         <p className="font-semibold text-[var(--text-primary)] mb-3">Selecione o profissional</p>
         {professionalsLoading ? (
           <LoadingState message="Carregando profissionais..." />
-        ) : filteredProfessionals.length === 0 ? (
+        ) : professionals.length === 0 ? (
           <EmptyState icon="users" title="Nenhum profissional disponivel" subtitle="Nenhum profissional realiza todos os servicos selecionados" />
         ) : (
           <div className="flex gap-4 overflow-x-auto pb-3 -mx-5 px-5 scrollbar-hide">
-            {filteredProfessionals.map((professional) => {
+            {professionals.map((professional) => {
               const isSelected = selectedProfessional?.id === professional.id;
               return (
                 <button

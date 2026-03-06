@@ -21,10 +21,25 @@ export function useClientProfessionals() {
     }
   }, []);
 
+  const fetchAvailableProfessionals = useCallback(async (serviceIds: string[], date: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await professionalsApi.getAvailableForBooking(serviceIds, date);
+      setProfessionals(data);
+    } catch (err) {
+      const message = 'Nao foi possivel carregar os profissionais';
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   return {
     professionals,
     isLoading,
     error,
     fetchProfessionals,
+    fetchAvailableProfessionals,
   };
 }

@@ -259,9 +259,22 @@ export function ProfessionalForm({ professional, onSubmit, isLoading, error }: P
       <div className="grid grid-cols-2 gap-4">
         {allServices && allServices.length > 0 && (
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
-              Serviços
-            </label>
+            <div className="mb-1.5 flex items-center justify-between">
+              <label className="text-sm font-medium text-[var(--text-secondary)]">
+                Serviços
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  const allIds = allServices!.map((s) => s.id);
+                  const allSelected = allIds.every((id) => selectedServiceIds.includes(id));
+                  setSelectedServiceIds(allSelected ? [] : allIds);
+                }}
+                className="text-xs font-medium text-[#C8923A] hover:text-[#8B6914] transition-colors"
+              >
+                {allServices!.every((s) => selectedServiceIds.includes(s.id)) ? 'Desmarcar todos' : 'Selecionar todos'}
+              </button>
+            </div>
             <div className="flex flex-wrap gap-2">
               {allServices.map((service) => {
                 const isSelected = selectedServiceIds.includes(service.id);

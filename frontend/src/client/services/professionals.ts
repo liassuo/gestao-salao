@@ -18,4 +18,11 @@ export const professionalsApi = {
     });
     return response.data;
   },
+
+  getAvailableForBooking: async (serviceIds: string[], date: string): Promise<Professional[]> => {
+    const response = await clientApi.get<Professional[]>('/professionals/available-for-booking', {
+      params: { serviceIds: serviceIds.join(','), date },
+    });
+    return response.data;
+  },
 };

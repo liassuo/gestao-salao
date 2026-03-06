@@ -95,6 +95,88 @@ export class ProfessionalsService {
     return professionals || [];
   }
 
+  async findAvailableForBooking(serviceIds: string[], date: string) {
+    console.log('=== findAvailableForBooking ===');
+    console.log('serviceIds:', serviceIds, 'date:', date);
+
+    // 1. Buscar profissionais vinculados aos serviços via _ProfessionalToService
+    const { data: links, error: linkError } = await this.supabase
+      .from('_ProfessionalToService')
+      .select('A, B')
+      .in('B', serviceIds);
+
+    console.log('links:', links, 'linkError:', linkError);
+    if (linkError) throw linkError;
+
+    // Filtrar profissionais que atendem TODOS os serviços selecionados
+    const profCountMap: Record<string, number> = {};
+    for (const link of links || []) {
+      profCountMap[link.A] = (profCountMap[link.A] || 0) + 1;
+    }
+    const eligibleProfIds = Object.entries(profCountMap)
+      .filter(([, count]) => count >= serviceIds.length)
+      .map(([id]) => id);
+
+    console.log('eligibleProfIds:', eligibleProfIds);
+    if (eligibleProfIds.length === 0) return [];
+
+    // 2. Buscar dados dos profissionais ativos
+    const { data: professionals, error: profError } = await this.supabase
+      .from('professionals')
+      .select('id, name, phone, email, avatarUrl, workingHours')
+      .eq('isActive', true)
+      .in('id', eligibleProfIds);
+
+    if (profError) throw profError;
+    if (!professionals || professionals.length === 0) return [];
+
+    // 3. Filtrar por dia de trabalho (workingHours)
+    const targetDate = new Date(date + 'T12:00:00Z');
+    const dayOfWeek = targetDate.getUTCDay(); // 0=Dom, 1=Seg, ..., 6=Sab
+
+    console.log('dayOfWeek:', dayOfWeek, 'professionals workingHours:', professionals.map((p: any) => ({ name: p.name, wh: p.workingHours })));
+
+    const workingProfessionals = professionals.filter((prof: any) => {
+      if (!prof.workingHours || prof.workingHours.length === 0) return false;
+      return prof.workingHours.some((wh: any) => wh.dayOfWeek === dayOfWeek);
+    });
+
+    console.log('workingProfessionals:', workingProfessionals.map((p: any) => p.name));
+    if (workingProfessionals.length === 0) return [];
+
+    // 4. Excluir profissionais com bloqueio de dia inteiro na data
+    const startOfDay = new Date(date + 'T00:00:00.000Z');
+    const endOfDay = new Date(date + 'T23:59:59.999Z');
+
+    const { data: timeBlocks } = await this.supabase
+      .from('time_blocks')
+      .select('professionalId, startTime, endTime')
+      .in('professionalId', workingProfessionals.map((p: any) => p.id))
+      .lte('startTime', endOfDay.toISOString())
+      .gte('endTime', startOfDay.toISOString());
+
+    // Profissionais com bloqueio que cobre o dia inteiro (8h+ de bloqueio)
+    const blockedProfIds = new Set<string>();
+    for (const block of timeBlocks || []) {
+      const blockStart = new Date(block.startTime);
+      const blockEnd = new Date(block.endTime);
+      const blockHours = (blockEnd.getTime() - blockStart.getTime()) / (1000 * 60 * 60);
+      if (blockHours >= 8) {
+        blockedProfIds.add(block.professionalId);
+      }
+    }
+
+    return workingProfessionals
+      .filter((p: any) => !blockedProfIds.has(p.id))
+      .map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        phone: p.phone,
+        email: p.email,
+        avatarUrl: p.avatarUrl,
+      }));
+  }
+
   async isAvailable(
     professionalId: string,
     dateTime: Date,

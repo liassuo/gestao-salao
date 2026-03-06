@@ -126,13 +126,11 @@ export const menuItems: MenuItem[] = [
     roles: ['ADMIN'],
     group: 'Estoque',
   },
-  // Financeiro group
   {
     icon: DollarSign,
     label: 'Comissoes',
     path: '/financeiro/comissoes',
     roles: ['ADMIN'],
-    group: 'Financeiro',
   },
   // Cadastros group
   {

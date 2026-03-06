@@ -43,6 +43,19 @@ export class ProfessionalsController {
   }
 
   /**
+   * GET /professionals/available-for-booking?serviceIds=id1,id2&date=2026-03-06
+   * Returns professionals that can perform the selected services on the given date
+   */
+  @Get('available-for-booking')
+  async findAvailableForBooking(
+    @Query('serviceIds') serviceIds: string,
+    @Query('date') date: string,
+  ) {
+    const ids = serviceIds.split(',').filter(Boolean);
+    return this.professionalsService.findAvailableForBooking(ids, date);
+  }
+
+  /**
    * GET /professionals/by-service/:serviceId
    * Returns professionals who can perform a specific service
    */
