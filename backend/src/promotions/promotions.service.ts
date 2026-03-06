@@ -45,13 +45,17 @@ export class PromotionsService {
       await this.syncServices(promotion.id, dto.serviceIds);
     }
 
+    if (dto.productIds?.length) {
+      await this.syncProducts(promotion.id, dto.productIds);
+    }
+
     return this.findOne(promotion.id);
   }
 
   async findAll(filters?: { status?: string; isTemplate?: boolean }) {
     let query = this.supabase
       .from('promotions')
-      .select('*, promotion_services(serviceId, service:services(id, name, price))')
+      .select('*, promotion_services(serviceId, service:services(id, name, price)), promotion_products(productId, product:products(id, name, salePrice))')
       .order('createdAt', { ascending: false });
 
     if (filters?.status) {
@@ -70,7 +74,7 @@ export class PromotionsService {
   async findTemplates() {
     const { data, error } = await this.supabase
       .from('promotions')
-      .select('*, promotion_services(serviceId, service:services(id, name, price))')
+      .select('*, promotion_services(serviceId, service:services(id, name, price)), promotion_products(productId, product:products(id, name, salePrice))')
       .eq('isTemplate', true)
       .eq('isActive', true)
       .order('name', { ascending: true });
@@ -84,7 +88,7 @@ export class PromotionsService {
 
     const { data, error } = await this.supabase
       .from('promotions')
-      .select('*, promotion_services(serviceId, service:services(id, name, price))')
+      .select('*, promotion_services(serviceId, service:services(id, name, price)), promotion_products(productId, product:products(id, name, salePrice))')
       .eq('isActive', true)
       .eq('status', 'ACTIVE')
       .lte('startDate', now)
@@ -97,7 +101,7 @@ export class PromotionsService {
   async findOne(id: string) {
     const { data: promotion, error } = await this.supabase
       .from('promotions')
-      .select('*, promotion_services(serviceId, service:services(id, name, price, duration))')
+      .select('*, promotion_services(serviceId, service:services(id, name, price, duration)), promotion_products(productId, product:products(id, name, salePrice))')
       .eq('id', id)
       .single();
 
@@ -143,6 +147,10 @@ export class PromotionsService {
       await this.syncServices(id, dto.serviceIds);
     }
 
+    if (dto.productIds) {
+      await this.syncProducts(id, dto.productIds);
+    }
+
     return this.findOne(id);
   }
 
@@ -178,6 +186,7 @@ export class PromotionsService {
       bannerText: overrides.bannerText ?? template.bannerText,
       isTemplate: false,
       serviceIds: overrides.serviceIds || template.services.map((s: any) => s.id),
+      productIds: overrides.productIds || template.products?.map((p: any) => p.id) || [],
     };
 
     return this.create(dto);
@@ -211,6 +220,26 @@ export class PromotionsService {
       .remove([path]);
   }
 
+  private async syncProducts(promotionId: string, productIds: string[]) {
+    await this.supabase
+      .from('promotion_products')
+      .delete()
+      .eq('promotionId', promotionId);
+
+    if (productIds.length > 0) {
+      const rows = productIds.map((productId) => ({
+        promotionId,
+        productId,
+      }));
+
+      const { error } = await this.supabase
+        .from('promotion_products')
+        .insert(rows);
+
+      if (error) throw error;
+    }
+  }
+
   private async syncServices(promotionId: string, serviceIds: string[]) {
     // Remove servicos existentes
     await this.supabase
@@ -241,6 +270,12 @@ export class PromotionsService {
       duration: ps.service?.duration,
     }));
 
+    const products = (raw.promotion_products || []).map((pp: any) => ({
+      id: pp.product?.id || pp.productId,
+      name: pp.product?.name,
+      salePrice: pp.product?.salePrice,
+    }));
+
     return {
       id: raw.id,
       name: raw.name,
@@ -256,6 +291,7 @@ export class PromotionsService {
       createdAt: raw.createdAt,
       updatedAt: raw.updatedAt,
       services,
+      products,
     };
   }
 }

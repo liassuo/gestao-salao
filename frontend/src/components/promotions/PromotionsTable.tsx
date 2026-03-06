@@ -62,7 +62,7 @@ export function PromotionsTable({
               Periodo
             </th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
-              Servicos
+              Itens
             </th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
               Status
@@ -109,7 +109,7 @@ export function PromotionsTable({
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap gap-1">
-                    {promo.services.slice(0, 3).map((s) => (
+                    {promo.services.slice(0, 2).map((s) => (
                       <span
                         key={s.id}
                         className="rounded-md bg-[var(--hover-bg)] px-2 py-0.5 text-xs text-[var(--text-secondary)]"
@@ -117,9 +117,17 @@ export function PromotionsTable({
                         {s.name}
                       </span>
                     ))}
-                    {promo.services.length > 3 && (
+                    {promo.products?.slice(0, 2).map((p) => (
+                      <span
+                        key={p.id}
+                        className="rounded-md bg-blue-500/10 px-2 py-0.5 text-xs text-blue-400"
+                      >
+                        {p.name}
+                      </span>
+                    ))}
+                    {(promo.services.length + (promo.products?.length || 0)) > 4 && (
                       <span className="rounded-md bg-[var(--hover-bg)] px-2 py-0.5 text-xs text-[var(--text-muted)]">
-                        +{promo.services.length - 3}
+                        +{promo.services.length + (promo.products?.length || 0) - 4}
                       </span>
                     )}
                   </div>

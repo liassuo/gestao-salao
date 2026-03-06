@@ -45,7 +45,13 @@ export class CreatePromotionDto {
   @IsBoolean()
   isActive?: boolean;
 
+  @IsOptional()
   @IsArray()
-  @IsUUID('4', { each: true })
-  serviceIds: string[];
+  @IsString({ each: true })
+  serviceIds?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  productIds?: string[];
 }

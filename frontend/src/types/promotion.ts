@@ -7,6 +7,12 @@ export interface PromotionService {
   duration?: number;
 }
 
+export interface PromotionProduct {
+  id: string;
+  name: string;
+  salePrice: number;
+}
+
 export interface Promotion {
   id: string;
   name: string;
@@ -22,6 +28,7 @@ export interface Promotion {
   createdAt: string;
   updatedAt: string;
   services: PromotionService[];
+  products: PromotionProduct[];
 }
 
 export interface CreatePromotionPayload {
@@ -33,7 +40,8 @@ export interface CreatePromotionPayload {
   bannerTitle?: string;
   bannerText?: string;
   isTemplate?: boolean;
-  serviceIds: string[];
+  serviceIds?: string[];
+  productIds?: string[];
 }
 
 export type UpdatePromotionPayload = Partial<CreatePromotionPayload> & { isActive?: boolean };
