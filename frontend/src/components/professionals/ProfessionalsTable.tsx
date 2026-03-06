@@ -1,5 +1,5 @@
 import { UserCog, Phone, Mail, MoreVertical, Edit2, Trash2 } from 'lucide-react';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { EmptyState } from '@/components/ui';
 import type { Professional } from '@/types';
 import { weekDayShortLabels } from '@/types';
