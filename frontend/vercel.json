@@ -3,6 +3,10 @@
     {
       "source": "/api/:path*",
       "destination": "https://gestao-salao-backend-jiss.onrender.com/api/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
