@@ -9,6 +9,7 @@ export interface Professional {
   name: string;
   phone: string;
   email?: string | null;
+  avatarUrl?: string | null;
   commissionRate?: number | null; // percentual (ex: 50.00 = 50%)
   workingHours?: WorkingHours[] | null;
   isActive?: boolean;
@@ -24,6 +25,7 @@ export interface CreateProfessionalPayload {
   name: string;
   phone: string;
   email?: string;
+  avatarUrl?: string;
   commissionRate?: number;
   workingHours?: WorkingHours[];
   serviceIds?: string[];
@@ -33,6 +35,7 @@ export interface UpdateProfessionalPayload {
   name?: string;
   phone?: string;
   email?: string;
+  avatarUrl?: string;
   commissionRate?: number;
   workingHours?: WorkingHours[];
   isActive?: boolean;

@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { SubscriptionsService } from './subscriptions.service';
 import { SubscriptionsController } from './subscriptions.controller';
-import { PrismaModule } from '../prisma/prisma.module';
 import { AsaasModule } from '../asaas/asaas.module';
 
 /**
@@ -10,7 +9,7 @@ import { AsaasModule } from '../asaas/asaas.module';
  * Handles plan catalog, client subscription management, and cut tracking
  */
 @Module({
-  imports: [PrismaModule, AsaasModule],
+  imports: [AsaasModule],
   controllers: [SubscriptionsController],
   providers: [SubscriptionsService],
   exports: [SubscriptionsService],

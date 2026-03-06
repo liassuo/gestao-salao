@@ -14,6 +14,8 @@ export interface Professional {
   name: string;
   phone: string;
   email?: string;
+  avatarUrl?: string | null;
+  serviceIds?: string[];
   services?: { id: string; name: string }[];
 }
 

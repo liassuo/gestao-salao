@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
 import { CreateAppointmentDto, CreateTimeBlockDto, UpdateAppointmentDto } from './dto';
 
@@ -46,8 +47,35 @@ export class AppointmentsService {
       throw new BadRequestException('Um ou mais serviços não encontrados ou inativos');
     }
 
+    // 2.1 Buscar promoções ativas para aplicar desconto
+    const now2 = new Date().toISOString();
+    const { data: activePromos } = await this.supabase
+      .from('promotions')
+      .select('discountPercent, promotion_services(serviceId)')
+      .eq('isActive', true)
+      .eq('status', 'ACTIVE')
+      .lte('startDate', now2)
+      .gte('endDate', now2);
+
+    const getDiscount = (serviceId: string): number | null => {
+      if (!activePromos) return null;
+      for (const promo of activePromos) {
+        const match = (promo.promotion_services as any[])?.find(
+          (ps) => ps.serviceId === serviceId,
+        );
+        if (match) return promo.discountPercent;
+      }
+      return null;
+    };
+
     const totalDuration = services.reduce((sum, s) => sum + s.duration, 0);
-    const totalPrice = services.reduce((sum, s) => sum + s.price, 0);
+    const totalPrice = services.reduce((sum, s) => {
+      const discount = getDiscount(s.id);
+      if (discount !== null) {
+        return sum + Math.round(s.price * (100 - discount) / 100);
+      }
+      return sum + s.price;
+    }, 0);
 
     // 3. Verificar se o cliente existe
     const { data: client, error: clientError } = await this.supabase
@@ -61,9 +89,13 @@ export class AppointmentsService {
     }
 
     // 4. Criar o agendamento
+    const now = new Date().toISOString();
+    const appointmentId = randomUUID();
+    console.log('Generated appointment id:', appointmentId);
     const { data: appointment, error: apptError } = await this.supabase
       .from('appointments')
       .insert({
+        id: appointmentId,
         clientId: dto.clientId,
         professionalId: dto.professionalId,
         scheduledAt: new Date(dto.scheduledAt).toISOString(),
@@ -71,18 +103,28 @@ export class AppointmentsService {
         totalDuration: totalDuration,
         status: 'SCHEDULED',
         notes: dto.notes,
+        createdAt: now,
+        updatedAt: now,
       })
       .select(this.APPOINTMENT_SELECT)
       .single();
 
-    if (apptError) throw apptError;
+    if (apptError) {
+      console.error('Error creating appointment:', apptError);
+      throw new BadRequestException(apptError.message || 'Erro ao criar agendamento');
+    }
 
     // 5. Criar vínculos com serviços
     for (const serviceId of dto.serviceIds) {
-      await this.supabase.from('appointment_services').insert({
+      const { error: linkError } = await this.supabase.from('appointment_services').insert({
+        id: randomUUID(),
         appointmentId: appointment.id,
         serviceId: serviceId,
+        createdAt: now,
       });
+      if (linkError) {
+        console.error('Error linking service:', linkError);
+      }
     }
 
     return appointment;

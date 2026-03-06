@@ -1,5 +1,5 @@
 import { UserCog, Phone, Mail, MoreVertical, Edit2, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { EmptyState } from '@/components/ui';
 import type { Professional } from '@/types';
 import { weekDayShortLabels } from '@/types';
@@ -41,6 +41,8 @@ export function ProfessionalsTable({
   onNewProfessional,
 }: ProfessionalsTableProps) {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const menuBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   if (professionals.length === 0) {
     return (
@@ -54,7 +56,7 @@ export function ProfessionalsTable({
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)]">
+    <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)]">
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
@@ -81,10 +83,14 @@ export function ProfessionalsTable({
               <tr key={professional.id} className="hover:bg-[var(--hover-bg)]">
                 <td className="px-4 py-4">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#C8923A]/20 text-[#C8923A]">
-                      <span className="text-sm font-medium">
-                        {professional.name.charAt(0).toUpperCase()}
-                      </span>
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#C8923A]/20 text-[#C8923A] overflow-hidden">
+                      {professional.avatarUrl ? (
+                        <img src={professional.avatarUrl} alt={professional.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-sm font-medium">
+                          {professional.name.charAt(0).toUpperCase()}
+                        </span>
+                      )}
                     </div>
                     <div>
                       <p className="font-medium text-[var(--text-primary)]">{professional.name}</p>
@@ -137,7 +143,19 @@ export function ProfessionalsTable({
                 <td className="whitespace-nowrap px-4 py-4 text-center">
                   <div className="relative inline-block">
                     <button
-                      onClick={() => setOpenMenuId(openMenuId === professional.id ? null : professional.id)}
+                      ref={(el) => { menuBtnRefs.current[professional.id] = el; }}
+                      onClick={() => {
+                        if (openMenuId === professional.id) {
+                          setOpenMenuId(null);
+                        } else {
+                          const btn = menuBtnRefs.current[professional.id];
+                          if (btn) {
+                            const rect = btn.getBoundingClientRect();
+                            setMenuPos({ top: rect.bottom + 4, left: rect.right - 144 });
+                          }
+                          setOpenMenuId(professional.id);
+                        }
+                      }}
                       disabled={isLoading}
                       className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] disabled:opacity-50"
                     >
@@ -150,7 +168,10 @@ export function ProfessionalsTable({
                           className="fixed inset-0 z-10"
                           onClick={() => setOpenMenuId(null)}
                         />
-                        <div className="absolute right-0 z-20 mt-1 w-36 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-1 shadow-lg">
+                        <div
+                          className="fixed z-20 w-36 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-1 shadow-lg"
+                          style={{ top: menuPos.top, left: menuPos.left }}
+                        >
                           <button
                             onClick={() => {
                               onEdit(professional);

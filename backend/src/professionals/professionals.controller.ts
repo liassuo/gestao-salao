@@ -10,7 +10,10 @@ import {
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags } from '@nestjs/swagger';
 import { ProfessionalsService } from './professionals.service';
 import { CreateProfessionalDto, UpdateProfessionalDto } from './dto';
@@ -78,6 +81,16 @@ export class ProfessionalsController {
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() dto: CreateProfessionalDto) {
     return this.professionalsService.create(dto);
+  }
+
+  /**
+   * POST /professionals/upload-avatar
+   * Uploads a professional avatar image
+   */
+  @Post('upload-avatar')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadAvatar(@UploadedFile() file: Express.Multer.File) {
+    return this.professionalsService.uploadAvatar(file);
   }
 
   /**

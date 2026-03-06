@@ -13,6 +13,7 @@ export class ProfessionalsService {
         name: dto.name,
         phone: dto.phone,
         email: dto.email,
+        avatarUrl: dto.avatarUrl || null,
         commissionRate: dto.commissionRate,
         workingHours: dto.workingHours || [],
       })
@@ -37,14 +38,18 @@ export class ProfessionalsService {
   async findAll(serviceId?: string) {
     const { data: professionals, error } = await this.supabase
       .from('professionals')
-      .select('*, appointment_count:appointments(count)')
+      .select('*, appointment_count:appointments(count), professional_services(serviceId, service:services(id, name))')
       .eq('isActive', true)
       .order('name', { ascending: true });
 
     if (error) throw error;
 
-    return (professionals || []).map(({ appointment_count, ...prof }: any) => ({
+    return (professionals || []).map(({ appointment_count, professional_services, ...prof }: any) => ({
       ...prof,
+      services: (professional_services || []).map((ps: any) => ({
+        id: ps.service?.id || ps.serviceId,
+        name: ps.service?.name,
+      })),
       _count: {
         appointments: appointment_count?.[0]?.count || 0,
       },
@@ -54,12 +59,16 @@ export class ProfessionalsService {
   async findActive() {
     const { data: professionals, error } = await this.supabase
       .from('professionals')
-      .select('id, name')
+      .select('id, name, avatarUrl, professional_services(serviceId)')
       .eq('isActive', true)
       .order('name', { ascending: true });
 
     if (error) throw error;
-    return professionals || [];
+
+    return (professionals || []).map(({ professional_services, ...prof }: any) => ({
+      ...prof,
+      serviceIds: (professional_services || []).map((ps: any) => ps.serviceId),
+    }));
   }
 
   async findOne(id: string) {
@@ -121,6 +130,7 @@ export class ProfessionalsService {
     if (data.name !== undefined) updateData.name = data.name;
     if (data.phone !== undefined) updateData.phone = data.phone;
     if (data.email !== undefined) updateData.email = data.email;
+    if (data.avatarUrl !== undefined) updateData.avatarUrl = data.avatarUrl;
     if (data.commissionRate !== undefined) updateData.commissionRate = data.commissionRate;
     if (data.workingHours !== undefined) updateData.workingHours = data.workingHours;
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
@@ -133,6 +143,25 @@ export class ProfessionalsService {
       .single();
 
     if (error) throw error;
+
+    if (serviceIds) {
+      // Remove existing service links
+      await this.supabase
+        .from('professional_services')
+        .delete()
+        .eq('professionalId', id);
+
+      // Insert new ones
+      if (serviceIds.length > 0) {
+        for (const svcId of serviceIds) {
+          await this.supabase.from('professional_services').insert({
+            professionalId: id,
+            serviceId: svcId,
+          });
+        }
+      }
+    }
+
     return updatedProfessional;
   }
 
@@ -153,6 +182,25 @@ export class ProfessionalsService {
       .eq('id', id);
 
     if (error) throw error;
+  }
+
+  async uploadAvatar(file: Express.Multer.File) {
+    const fileName = `${Date.now()}-${file.originalname.replace(/\s+/g, '-')}`;
+
+    const { data, error } = await this.supabase.client.storage
+      .from('professional-avatars')
+      .upload(fileName, file.buffer, {
+        contentType: file.mimetype,
+        upsert: false,
+      });
+
+    if (error) throw error;
+
+    const { data: urlData } = this.supabase.client.storage
+      .from('professional-avatars')
+      .getPublicUrl(data.path);
+
+    return { url: urlData.publicUrl };
   }
 
   async getAppointmentsByDate(professionalId: string, date: Date) {

@@ -3,7 +3,27 @@ import { useNavigate } from 'react-router-dom';
 import { useClientServices, useClientProfessionals, useAvailableSlots, useClientAppointments } from '../hooks';
 import { LoadingState, EmptyState } from '../components/ui';
 import { formatPrice, formatDuration, formatDateISO, formatDateLong } from '../utils/format';
+import { clientApi } from '../services/api';
 import type { Service, Professional, TimeSlot } from '../types';
+
+interface ActivePromotion {
+  id: string;
+  name: string;
+  discountPercent: number;
+  services: { id: string; name: string; price: number }[];
+}
+
+function getServiceDiscount(serviceId: string, promotions: ActivePromotion[]): number | null {
+  for (const promo of promotions) {
+    const match = promo.services.find((s) => s.id === serviceId);
+    if (match) return promo.discountPercent;
+  }
+  return null;
+}
+
+function discountedPrice(price: number, discountPercent: number): number {
+  return Math.round(price * (100 - discountPercent) / 100);
+}
 
 type Step = 'service' | 'schedule' | 'confirm';
 
@@ -61,6 +81,7 @@ export function ClientBooking() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const navigate = useNavigate();
+  const [activePromotions, setActivePromotions] = useState<ActivePromotion[]>([]);
 
   const { services, isLoading: servicesLoading, fetchServices } = useClientServices();
   const { professionals, isLoading: professionalsLoading, fetchProfessionals } = useClientProfessionals();
@@ -77,6 +98,9 @@ export function ClientBooking() {
 
   useEffect(() => {
     fetchServices();
+    clientApi.get<ActivePromotion[]>('/promotions/active')
+      .then((res) => setActivePromotions(res.data))
+      .catch(() => {});
   }, [fetchServices]);
 
   useEffect(() => {
@@ -84,6 +108,15 @@ export function ClientBooking() {
       fetchProfessionals();
     }
   }, [currentStep, fetchProfessionals]);
+
+  const filteredProfessionals = useMemo(() => {
+    if (selectedServices.length === 0) return professionals;
+    const selectedIds = selectedServices.map((s) => s.id);
+    return professionals.filter((p) => {
+      if (!p.serviceIds || p.serviceIds.length === 0) return true;
+      return selectedIds.every((sid) => p.serviceIds!.includes(sid));
+    });
+  }, [professionals, selectedServices]);
 
   useEffect(() => {
     if (selectedProfessional && selectedDate) {
@@ -101,6 +134,8 @@ export function ClientBooking() {
       }
       return [...prev, service];
     });
+    setSelectedProfessional(null);
+    setSelectedTime(null);
   };
 
   const handleNext = () => {
@@ -153,7 +188,10 @@ export function ClientBooking() {
     }
   }, [currentStep, selectedServices, selectedProfessional, selectedDate, selectedTime]);
 
-  const totalPrice = selectedServices.reduce((sum, s) => sum + s.price, 0);
+  const totalPrice = selectedServices.reduce((sum, s) => {
+    const discount = getServiceDiscount(s.id, activePromotions);
+    return sum + (discount !== null ? discountedPrice(s.price, discount) : s.price);
+  }, 0);
   const totalDuration = selectedServices.reduce((sum, s) => sum + s.duration, 0);
   const stepIndex = STEPS.indexOf(currentStep);
 
@@ -173,6 +211,9 @@ export function ClientBooking() {
       <div className="space-y-3">
         {services.map((service) => {
           const isSelected = selectedServices.some((s) => s.id === service.id);
+          const discount = getServiceDiscount(service.id, activePromotions);
+          const hasPromo = discount !== null;
+          const promoPrice = hasPromo ? discountedPrice(service.price, discount) : service.price;
           return (
             <button
               key={service.id}
@@ -184,16 +225,34 @@ export function ClientBooking() {
               }`}
             >
               <div className="flex-1">
-                <p className="font-semibold text-[var(--text-primary)]">{service.name}</p>
+                <div className="flex items-center gap-2">
+                  <p className="font-semibold text-[var(--text-primary)]">{service.name}</p>
+                  {hasPromo && (
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-[#C8923A] text-[#1c1006] px-1.5 py-0.5 rounded">
+                      {discount}% OFF
+                    </span>
+                  )}
+                </div>
                 {service.description && (
                   <p className="text-[var(--text-muted)] text-sm mt-1 line-clamp-2">
                     {service.description}
                   </p>
                 )}
                 <div className="flex items-center gap-3 mt-2">
-                  <span className="text-[#C8923A] font-semibold text-sm">
-                    {formatPrice(service.price)}
-                  </span>
+                  {hasPromo ? (
+                    <>
+                      <span className="text-[var(--text-muted)] text-sm line-through">
+                        {formatPrice(service.price)}
+                      </span>
+                      <span className="text-[#C8923A] font-semibold text-sm">
+                        {formatPrice(promoPrice)}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-[#C8923A] font-semibold text-sm">
+                      {formatPrice(service.price)}
+                    </span>
+                  )}
                   <span className="text-[var(--text-muted)] text-sm">
                     {formatDuration(service.duration)}
                   </span>
@@ -321,11 +380,11 @@ export function ClientBooking() {
         <p className="font-semibold text-[var(--text-primary)] mb-3">Selecione o profissional</p>
         {professionalsLoading ? (
           <LoadingState message="Carregando profissionais..." />
-        ) : professionals.length === 0 ? (
-          <EmptyState icon="users" title="Nenhum profissional disponivel" subtitle="Tente novamente mais tarde" />
+        ) : filteredProfessionals.length === 0 ? (
+          <EmptyState icon="users" title="Nenhum profissional disponivel" subtitle="Nenhum profissional realiza todos os servicos selecionados" />
         ) : (
           <div className="flex gap-4 overflow-x-auto pb-3 -mx-5 px-5 scrollbar-hide">
-            {professionals.map((professional) => {
+            {filteredProfessionals.map((professional) => {
               const isSelected = selectedProfessional?.id === professional.id;
               return (
                 <button
@@ -336,14 +395,18 @@ export function ClientBooking() {
                   }}
                   className="flex flex-col items-center flex-shrink-0 w-20"
                 >
-                  <div className={`w-16 h-16 rounded-full flex items-center justify-center transition-colors ${
+                  <div className={`w-16 h-16 rounded-full flex items-center justify-center transition-colors overflow-hidden ${
                     isSelected
                       ? 'ring-2 ring-[#C8923A] ring-offset-2 ring-offset-[var(--bg-primary)] bg-[#C8923A]/20'
                       : 'bg-[var(--hover-bg)]'
                   }`}>
-                    <svg className={`w-7 h-7 ${isSelected ? 'text-[#C8923A]' : 'text-[var(--text-muted)]'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
+                    {professional.avatarUrl ? (
+                      <img src={professional.avatarUrl} alt={professional.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <svg className={`w-7 h-7 ${isSelected ? 'text-[#C8923A]' : 'text-[var(--text-muted)]'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    )}
                   </div>
                   <p className={`mt-2 text-xs font-medium text-center leading-tight ${
                     isSelected ? 'text-[#C8923A]' : 'text-[var(--text-secondary)]'
@@ -394,9 +457,22 @@ export function ClientBooking() {
           </svg>
           <div>
             <p className="text-xs text-[var(--text-muted)]">Servicos</p>
-            <p className="text-[var(--text-primary)] font-medium">
-              {selectedServices.map((s) => s.name).join(', ')}
-            </p>
+            {selectedServices.map((s) => {
+              const disc = getServiceDiscount(s.id, activePromotions);
+              return (
+                <div key={s.id} className="flex items-center gap-2">
+                  <p className="text-[var(--text-primary)] font-medium">{s.name}</p>
+                  {disc !== null ? (
+                    <>
+                      <span className="text-xs text-[var(--text-muted)] line-through">{formatPrice(s.price)}</span>
+                      <span className="text-xs font-semibold text-[#C8923A]">{formatPrice(discountedPrice(s.price, disc))}</span>
+                    </>
+                  ) : (
+                    <span className="text-xs text-[var(--text-muted)]">{formatPrice(s.price)}</span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 

@@ -157,6 +157,7 @@ export function Professionals() {
         isOpen={isCreateModalOpen}
         onClose={handleCloseCreateModal}
         title="Novo Profissional"
+        size="lg"
       >
         <ProfessionalForm
           onSubmit={handleCreateProfessional}
@@ -170,6 +171,7 @@ export function Professionals() {
         isOpen={!!editingProfessional}
         onClose={handleCloseEditModal}
         title="Editar Profissional"
+        size="lg"
       >
         <ProfessionalForm
           professional={editingProfessional}
