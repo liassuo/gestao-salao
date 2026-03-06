@@ -84,7 +84,7 @@ function AppointmentBlock({ appointment }: AppointmentBlockProps) {
   const top = getTopPosition(time);
   const height = getBlockHeight(appointment.totalDuration);
   const colors = statusColors[appointment.status] || statusColors.SCHEDULED;
-  const serviceNames = (appointment.services || []).map((s) => s.service?.name || s.name || 'Servico').join(', ');
+  const serviceNames = (appointment.services || []).map((s) => s.service?.name || 'Servico').join(', ');
   const endMinutes = timeToMinutes(time) + appointment.totalDuration;
   const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
 

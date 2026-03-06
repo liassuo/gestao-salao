@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Tag, AlertCircle, Plus, Search, LayoutTemplate, Zap, Clock, Archive } from 'lucide-react';
+import { Tag, AlertCircle, Plus, Search, LayoutTemplate, Zap, Archive } from 'lucide-react';
 import {
   usePromotions,
   useCreatePromotion,

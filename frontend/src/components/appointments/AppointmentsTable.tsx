@@ -108,7 +108,7 @@ export function AppointmentsTable({
                         key={s.id}
                         className="inline-block rounded bg-zinc-500/20 px-2 py-0.5 text-xs text-[var(--text-secondary)]"
                       >
-                        {s.service?.name || s.name || 'Servico'}
+                        {s.service?.name || 'Servico'}
                       </span>
                     ))}
                   </div>

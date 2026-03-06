@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useClientServices, useClientProfessionals, useAvailableSlots, useClientAppointments } from '../hooks';
 import { LoadingState, EmptyState } from '../components/ui';
-import { formatPrice, formatDuration, formatDateISO, formatWeekday, formatDateShort, formatDateLong } from '../utils/format';
+import { formatPrice, formatDuration, formatDateISO, formatDateLong } from '../utils/format';
 import type { Service, Professional, TimeSlot } from '../types';
 
 type Step = 'service' | 'schedule' | 'confirm';

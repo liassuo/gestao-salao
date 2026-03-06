@@ -125,7 +125,6 @@ export function ClientLogin() {
               width="100%"
               text="continue_with"
               shape="rectangular"
-              locale="pt_BR"
             />
           </div>
 
