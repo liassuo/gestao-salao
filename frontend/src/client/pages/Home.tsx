@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useClientAuth } from '../auth';
 import { useClientAppointments } from '../hooks';
+import { subscribeToPushNotifications } from '../services/notifications';
 import { AppointmentCard } from '../components/AppointmentCard';
 import { LoadingState, EmptyState } from '../components/ui';
 import { PromotionBanners } from '../components/PromotionBanners';
@@ -20,6 +21,15 @@ export function ClientHome() {
     fetchAppointments,
     cancelAppointment,
   } = useClientAppointments();
+
+  // Pedir permissão de notificação uma vez após login
+  const pushSubscribed = useRef(false);
+  useEffect(() => {
+    if (!pushSubscribed.current && user) {
+      pushSubscribed.current = true;
+      subscribeToPushNotifications();
+    }
+  }, [user]);
 
   useEffect(() => {
     fetchAppointments();

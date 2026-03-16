@@ -55,3 +55,40 @@ self.addEventListener('fetch', (event) => {
       })
   );
 });
+
+// Push: receive push notification from server
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+
+  const data = event.data.json();
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: data.icon || '/favicon/web-app-manifest-192x192.png',
+      badge: data.badge || '/favicon/favicon-96x96.png',
+      vibrate: [200, 100, 200],
+      data: data.data,
+    })
+  );
+});
+
+// Notification click: open the app
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  const url = event.notification.data?.url || '/cliente/';
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      // Focus existing window if open
+      for (const client of clients) {
+        if (client.url.includes('/cliente') && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      // Otherwise open new window
+      return self.clients.openWindow(url);
+    })
+  );
+});
