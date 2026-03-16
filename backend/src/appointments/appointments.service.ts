@@ -458,27 +458,29 @@ export class AppointmentsService {
     // Determinar horário de trabalho do profissional
     let startHour = 8;
     let endHour = 18;
-    const dayOfWeek = new Date(date).getDay(); // 0=Dom, 1=Seg...
-    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    let startMinute = 0;
+    let endMinute = 0;
+    const dayOfWeek = new Date(date + 'T12:00:00Z').getUTCDay(); // 0=Dom, 1=Seg...
 
-    if (professional.workingHours) {
-      const wh = typeof professional.workingHours === 'string'
-        ? JSON.parse(professional.workingHours)
-        : professional.workingHours;
-      const dayKey = dayNames[dayOfWeek];
-      const daySchedule = wh[dayKey] || wh[dayOfWeek];
+    if (professional.workingHours && Array.isArray(professional.workingHours)) {
+      // Formato: [{dayOfWeek: 1, startTime: '09:00', endTime: '18:00'}]
+      const daySchedule = (professional.workingHours as any[]).find(
+        (wh: any) => wh.dayOfWeek === dayOfWeek,
+      );
 
-      if (daySchedule === false || daySchedule?.off) {
+      if (!daySchedule) {
         return []; // Profissional não trabalha neste dia
       }
 
-      if (daySchedule?.start) {
-        const [h] = daySchedule.start.split(':').map(Number);
+      if (daySchedule.startTime) {
+        const [h, m] = daySchedule.startTime.split(':').map(Number);
         startHour = h;
+        startMinute = m || 0;
       }
-      if (daySchedule?.end) {
-        const [h] = daySchedule.end.split(':').map(Number);
+      if (daySchedule.endTime) {
+        const [h, m] = daySchedule.endTime.split(':').map(Number);
         endHour = h;
+        endMinute = m || 0;
       }
     }
 
@@ -528,38 +530,39 @@ export class AppointmentsService {
     const now = new Date();
     const isToday =
       startOfDay.toDateString() === now.toDateString();
+    const workStart = startHour * 60 + startMinute;
+    const workEnd = endHour * 60 + endMinute;
 
-    for (let hour = startHour; hour < endHour; hour++) {
-      for (const minutes of [0, 30]) {
-        const slotMinutes = hour * 60 + minutes;
-        const slotTime = `${hour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+    for (let slotMinutes = workStart; slotMinutes < workEnd; slotMinutes += 30) {
+      const hour = Math.floor(slotMinutes / 60);
+      const minutes = slotMinutes % 60;
+      const slotTime = `${hour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
 
-        // Verificar se já passou (se for hoje)
-        if (isToday) {
-          const nowMinutes = now.getHours() * 60 + now.getMinutes();
-          if (slotMinutes <= nowMinutes) {
-            slots.push({ time: slotTime, available: false });
-            continue;
-          }
-        }
-
-        // Verificar conflito com agendamentos e bloqueios
-        const duration = serviceDuration || 30;
-        const slotEnd = slotMinutes + duration;
-
-        // Verificar se o serviço caberia antes do fechamento
-        if (slotEnd > endHour * 60) {
+      // Verificar se já passou (se for hoje)
+      if (isToday) {
+        const nowMinutes = now.getHours() * 60 + now.getMinutes();
+        if (slotMinutes <= nowMinutes) {
           slots.push({ time: slotTime, available: false });
           continue;
         }
-
-        // Verificar conflito: o slot inteiro (start até start+duration) não pode sobrepor nenhum busy
-        const hasConflict = busySlots.some(
-          (busy) => slotMinutes < busy.end && slotEnd > busy.start,
-        );
-
-        slots.push({ time: slotTime, available: !hasConflict });
       }
+
+      // Verificar conflito com agendamentos e bloqueios
+      const duration = serviceDuration || 30;
+      const slotEnd = slotMinutes + duration;
+
+      // Verificar se o serviço caberia antes do fim do expediente
+      if (slotEnd > workEnd) {
+        slots.push({ time: slotTime, available: false });
+        continue;
+      }
+
+      // Verificar conflito: o slot inteiro (start até start+duration) não pode sobrepor nenhum busy
+      const hasConflict = busySlots.some(
+        (busy) => slotMinutes < busy.end && slotEnd > busy.start,
+      );
+
+      slots.push({ time: slotTime, available: !hasConflict });
     }
 
     return slots;

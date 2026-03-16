@@ -95,12 +95,13 @@ export function ClientProfile() {
   const navigate = useNavigate();
   const { user, logout, isLoading: authLoading } = useClientAuth();
   const [profile, setProfile] = useState<ClientProfile | null>(null);
+  const [profileError, setProfileError] = useState(false);
 
   useEffect(() => {
     if (user?.id) {
       clientApi.get(`/clients/${user.id}`)
         .then((res) => setProfile(res.data))
-        .catch(() => {});
+        .catch(() => setProfileError(true));
     }
   }, [user?.id]);
 
@@ -110,6 +111,18 @@ export function ClientProfile() {
       navigate('/cliente/login');
     }
   };
+
+  if (profileError) {
+    return (
+      <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center px-6">
+        <div className="text-center">
+          <p className="text-[var(--text-primary)] font-medium">Erro ao carregar perfil</p>
+          <p className="text-sm text-[var(--text-muted)] mt-1">Tente novamente mais tarde</p>
+          <button onClick={() => navigate('/cliente')} className="mt-4 text-sm text-[#C8923A]">Voltar</button>
+        </div>
+      </div>
+    );
+  }
 
   const data = profile || user;
   const fullAddress = [

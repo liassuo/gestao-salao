@@ -180,14 +180,18 @@ function RatingSection({ appointmentId }: { appointmentId: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
+  const [error, setError] = useState(false);
+
   const handleRate = async (rating: number) => {
     setSelectedStar(rating);
     setSubmitting(true);
+    setError(false);
     try {
       await appointmentsApi.rate(appointmentId, rating);
       setSubmitted(true);
     } catch {
       setSelectedStar(0);
+      setError(true);
     } finally {
       setSubmitting(false);
     }
@@ -207,6 +211,7 @@ function RatingSection({ appointmentId }: { appointmentId: string }) {
   return (
     <div className="mt-3">
       <p className="text-xs text-[var(--text-muted)] mb-1.5">Como foi o atendimento?</p>
+      {error && <p className="text-xs text-[#A63030] mb-1">Erro ao salvar. Tente novamente.</p>}
       <div className="flex items-center gap-1">
         {[1, 2, 3, 4, 5].map((star) => (
           <button

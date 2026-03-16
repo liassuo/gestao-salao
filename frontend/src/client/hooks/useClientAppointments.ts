@@ -39,8 +39,9 @@ export function useClientAppointments() {
     try {
       const appointment = await appointmentsApi.create(data);
       return appointment;
-    } catch (err) {
-      return null;
+    } catch (err: any) {
+      const msg = err.response?.data?.message || 'Erro ao criar agendamento';
+      throw new Error(msg);
     }
   }, []);
 
