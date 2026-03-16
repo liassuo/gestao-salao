@@ -1,7 +1,22 @@
+import { useState, useEffect } from 'react';
 import { formatDate, formatTime, formatEndTime, formatPrice, hoursUntil } from '../utils/format';
+import { clientApi } from '../services/api';
 import type { Appointment, AppointmentStatus } from '../types';
 
-const CANCELLATION_HOURS_LIMIT = 2;
+const CANCELLATION_HOURS_LIMIT = 1;
+
+// Cache do WhatsApp para não buscar toda hora
+let cachedWhatsapp: string | null = null;
+async function getWhatsapp(): Promise<string> {
+  if (cachedWhatsapp !== null) return cachedWhatsapp;
+  try {
+    const { data } = await clientApi.get('/settings/whatsapp');
+    cachedWhatsapp = data.whatsapp || '';
+  } catch {
+    cachedWhatsapp = '';
+  }
+  return cachedWhatsapp;
+}
 
 const STATUS_CONFIG: Record<AppointmentStatus, { label: string; bgColor: string; textColor: string }> = {
   SCHEDULED: { label: 'Agendado', bgColor: 'bg-[#C8923A]/20', textColor: 'text-[#C8923A]' },
@@ -24,11 +39,30 @@ export function AppointmentCard({
   variant = 'default',
 }: AppointmentCardProps) {
   const status = STATUS_CONFIG[appointment.status] || STATUS_CONFIG.SCHEDULED;
-  const canCancel =
-    appointment.status === 'SCHEDULED' &&
-    hoursUntil(appointment.scheduledAt) > CANCELLATION_HOURS_LIMIT;
+  const hours = hoursUntil(appointment.scheduledAt);
+  const isScheduled = appointment.status === 'SCHEDULED';
+  const canCancel = isScheduled && hours > CANCELLATION_HOURS_LIMIT;
+  const showContactButton = isScheduled && hours > 0 && hours <= CANCELLATION_HOURS_LIMIT;
 
   const isHighlight = variant === 'highlight';
+  const [whatsapp, setWhatsapp] = useState('');
+
+  useEffect(() => {
+    if (showContactButton) {
+      getWhatsapp().then(setWhatsapp);
+    }
+  }, [showContactButton]);
+
+  const handleContact = () => {
+    if (!whatsapp) {
+      alert('Numero de WhatsApp da barbearia nao configurado. Entre em contato por telefone.');
+      return;
+    }
+    const services = (appointment.services || []).map((s) => s.service?.name || 'Servico').join(', ');
+    const time = formatTime(appointment.scheduledAt);
+    const message = `Olá! Gostaria de cancelar meu agendamento de ${services} às ${time}. Poderia me ajudar?`;
+    window.open(`https://wa.me/${whatsapp}?text=${encodeURIComponent(message)}`, '_blank');
+  };
 
   return (
     <div
@@ -100,6 +134,19 @@ export function AppointmentCard({
               Cancelar agendamento
             </>
           )}
+        </button>
+      )}
+
+      {showContactButton && (
+        <button
+          onClick={handleContact}
+          className="w-full mt-4 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-green-600/10 text-green-600 font-medium text-sm transition-colors hover:bg-green-600/20"
+        >
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
+            <path d="M12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2 22l4.832-1.438A9.955 9.955 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18a8 8 0 01-4.243-1.214l-.252-.148-2.697.707.72-2.633-.168-.268A8 8 0 1112 20z" />
+          </svg>
+          Falar com a barbearia para cancelar
         </button>
       )}
     </div>

@@ -1,11 +1,13 @@
-import { useState } from 'react';
-import { Save, Building2, Clock, Bell, Shield, Palette, Sun, Moon, Monitor } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Save, Building2, Clock, Bell, Shield, Palette, Sun, Moon, Monitor, MessageCircle } from 'lucide-react';
 import { useToast } from '../components/ui/ToastContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { api } from '../services/api';
 
 interface BusinessSettings {
   businessName: string;
   phone: string;
+  whatsapp: string;
   address: string;
   openingTime: string;
   closingTime: string;
@@ -93,13 +95,21 @@ export function Settings() {
   const { showToast } = useToast();
 
   const [businessSettings, setBusinessSettings] = useState<BusinessSettings>({
-    businessName: 'Barbearia Exemplo',
-    phone: '(11) 99999-9999',
-    address: 'Rua Exemplo, 123 - Centro',
+    businessName: '',
+    phone: '',
+    whatsapp: '',
+    address: '',
     openingTime: '09:00',
     closingTime: '19:00',
     slotDuration: 30,
   });
+  const [savingBusiness, setSavingBusiness] = useState(false);
+
+  useEffect(() => {
+    api.get('/settings').then(({ data }) => {
+      setBusinessSettings((prev) => ({ ...prev, ...data }));
+    }).catch(() => {});
+  }, []);
 
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>({
     emailNotifications: true,
@@ -110,9 +120,16 @@ export function Settings() {
 
   const [activeTab, setActiveTab] = useState<'business' | 'notifications' | 'security' | 'appearance'>('business');
 
-  const handleSaveBusinessSettings = () => {
-    // TODO: Implementar API
-    showToast('success', 'Configurações salvas com sucesso!');
+  const handleSaveBusinessSettings = async () => {
+    setSavingBusiness(true);
+    try {
+      await api.patch('/settings', businessSettings);
+      showToast('success', 'Configurações salvas com sucesso!');
+    } catch {
+      showToast('error', 'Erro ao salvar configurações');
+    } finally {
+      setSavingBusiness(false);
+    }
   };
 
   const handleSaveNotificationSettings = () => {
@@ -180,6 +197,23 @@ export function Settings() {
             </div>
 
             <div className="md:col-span-2">
+              <label className="mb-1 flex items-center gap-2 text-sm font-medium text-[var(--text-secondary)]">
+                <MessageCircle className="h-4 w-4 text-green-500" />
+                WhatsApp para contato dos clientes
+              </label>
+              <input
+                type="text"
+                value={businessSettings.whatsapp}
+                onChange={(e) => setBusinessSettings({ ...businessSettings, whatsapp: e.target.value })}
+                placeholder="5511999999999 (codigo do pais + DDD + numero)"
+                className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-4 py-2 text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none"
+              />
+              <p className="mt-1 text-xs text-[var(--text-muted)]">
+                Usado quando o cliente precisa falar com a barbearia (ex: cancelamento em cima da hora)
+              </p>
+            </div>
+
+            <div className="md:col-span-2">
               <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">
                 Endereço
               </label>
@@ -242,10 +276,11 @@ export function Settings() {
           <div className="mt-8 flex justify-end">
             <button
               onClick={handleSaveBusinessSettings}
-              className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-6 py-2 text-sm font-medium text-white hover:bg-[#725510]"
+              disabled={savingBusiness}
+              className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-6 py-2 text-sm font-medium text-white hover:bg-[#725510] disabled:opacity-60"
             >
               <Save className="h-4 w-4" />
-              Salvar Alterações
+              {savingBusiness ? 'Salvando...' : 'Salvar Alterações'}
             </button>
           </div>
         </div>

@@ -24,6 +24,7 @@ import { OrdersModule } from './orders/orders.module';
 import { AsaasModule } from './asaas/asaas.module';
 import { PromotionsModule } from './promotions/promotions.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { SettingsModule } from './settings/settings.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     AsaasModule,
     PromotionsModule,
     NotificationsModule,
+    SettingsModule,
   ],
 })
 export class AppModule {}
