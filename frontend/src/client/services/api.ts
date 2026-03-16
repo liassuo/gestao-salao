@@ -65,6 +65,15 @@ export const clientAuthApi = {
     });
     return response.data;
   },
+  register: async (name: string, email: string, password: string, phone?: string): Promise<ClientLoginResponse> => {
+    const response = await clientApi.post<ClientLoginResponse>('/auth/client/register', {
+      name,
+      email,
+      password,
+      phone,
+    });
+    return response.data;
+  },
 };
 
 export const storage = {

@@ -52,8 +52,13 @@ export class AppointmentsController {
   async getAvailableSlots(
     @Query('professionalId') professionalId: string,
     @Query('date') date: string,
+    @Query('duration') duration?: string,
   ) {
-    return this.appointmentsService.getAvailableSlots(professionalId, date);
+    return this.appointmentsService.getAvailableSlots(
+      professionalId,
+      date,
+      duration ? parseInt(duration, 10) : undefined,
+    );
   }
 
   /**
@@ -168,5 +173,19 @@ export class AppointmentsController {
   @Patch(':id/no-show')
   async markAsNoShow(@Param('id', ParseUUIDPipe) id: string) {
     return this.appointmentsService.markAsNoShow(id);
+  }
+
+  /**
+   * PATCH /appointments/:id/rate
+   * Cliente avalia um agendamento atendido
+   */
+  @UseGuards(JwtAuthGuard)
+  @Patch(':id/rate')
+  async rate(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: RequestWithUser,
+    @Body() dto: { rating: number; comment?: string },
+  ) {
+    return this.appointmentsService.rateAppointment(id, req.user.id, dto.rating, dto.comment);
   }
 }

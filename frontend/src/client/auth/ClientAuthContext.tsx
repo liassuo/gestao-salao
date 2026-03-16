@@ -10,6 +10,7 @@ interface ClientAuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: (credential: string) => Promise<void>;
+  register: (name: string, email: string, password: string, phone?: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -71,6 +72,17 @@ export function ClientAuthProvider({ children }: ClientAuthProviderProps) {
     storage.setUser(userData);
   }, []);
 
+  const register = useCallback(async (name: string, email: string, password: string, phone?: string) => {
+    const response = await clientAuthApi.register(name, email, password, phone);
+    const { accessToken: token, user: userData } = response;
+
+    setAccessToken(token);
+    setUser(userData);
+
+    storage.setToken(token);
+    storage.setUser(userData);
+  }, []);
+
   const value = useMemo(
     () => ({
       user,
@@ -79,9 +91,10 @@ export function ClientAuthProvider({ children }: ClientAuthProviderProps) {
       isLoading,
       login,
       loginWithGoogle,
+      register,
       logout,
     }),
-    [user, accessToken, isLoading, login, loginWithGoogle, logout]
+    [user, accessToken, isLoading, login, loginWithGoogle, register, logout]
   );
 
   return (

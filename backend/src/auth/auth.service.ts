@@ -72,6 +72,53 @@ export class AuthService {
     }
   }
 
+  async clientRegister(dto: { name: string; email: string; password: string; phone?: string }): Promise<AuthResponseDto> {
+    // Verificar se email já existe
+    const { data: existing } = await this.supabase
+      .from('clients')
+      .select('id')
+      .eq('email', dto.email)
+      .single();
+
+    if (existing) {
+      throw new UnauthorizedException('Email ja cadastrado');
+    }
+
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
+
+    const { data: client, error } = await this.supabase
+      .from('clients')
+      .insert({
+        name: dto.name,
+        email: dto.email,
+        password: hashedPassword,
+        phone: dto.phone || '',
+        isActive: true,
+      })
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    const payload: JwtPayload = {
+      sub: client.id,
+      email: client.email,
+      role: UserRole.CLIENT,
+    };
+
+    const accessToken = this.jwtService.sign(payload);
+
+    return {
+      accessToken,
+      user: {
+        id: client.id,
+        email: client.email,
+        name: client.name,
+        role: UserRole.CLIENT,
+      },
+    };
+  }
+
   async clientLogin(dto: LoginDto): Promise<AuthResponseDto> {
     const { data: client } = await this.supabase
       .from('clients')

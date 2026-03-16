@@ -29,6 +29,15 @@ export class AuthController {
     return this.authService.login(loginDto);
   }
 
+  @Post('client/register')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Cadastro de cliente com email/senha' })
+  async clientRegister(
+    @Body() body: { name: string; email: string; password: string; phone?: string },
+  ): Promise<AuthResponseDto> {
+    return this.authService.clientRegister(body);
+  }
+
   @Post('client/login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login de cliente com email/senha' })

@@ -9,10 +9,11 @@ export const appointmentsApi = {
 
   getAvailableSlots: async (
     professionalId: string,
-    date: string
+    date: string,
+    duration?: number
   ): Promise<TimeSlot[]> => {
     const response = await clientApi.get<TimeSlot[]>('/appointments/available-slots', {
-      params: { professionalId, date },
+      params: { professionalId, date, duration },
     });
     return response.data;
   },
@@ -24,6 +25,11 @@ export const appointmentsApi = {
 
   cancel: async (id: string): Promise<Appointment> => {
     const response = await clientApi.patch<Appointment>(`/appointments/${id}/cancel`);
+    return response.data;
+  },
+
+  rate: async (id: string, rating: number, comment?: string): Promise<Appointment> => {
+    const response = await clientApi.patch<Appointment>(`/appointments/${id}/rate`, { rating, comment });
     return response.data;
   },
 };

@@ -308,6 +308,40 @@ export class AppointmentsService {
     return updated;
   }
 
+  async rateAppointment(id: string, clientId: string, rating: number, comment?: string) {
+    const { data: appointment, error } = await this.supabase
+      .from('appointments')
+      .select('id, status, clientId, rating')
+      .eq('id', id)
+      .single();
+
+    if (error || !appointment) {
+      throw new NotFoundException('Agendamento nao encontrado');
+    }
+
+    if (appointment.clientId !== clientId) {
+      throw new BadRequestException('Voce so pode avaliar seus proprios agendamentos');
+    }
+
+    if (appointment.status !== 'ATTENDED') {
+      throw new BadRequestException('So e possivel avaliar agendamentos ja atendidos');
+    }
+
+    if (appointment.rating) {
+      throw new BadRequestException('Este agendamento ja foi avaliado');
+    }
+
+    const { data: updated, error: updateError } = await this.supabase
+      .from('appointments')
+      .update({ rating, ratingComment: comment || null })
+      .eq('id', id)
+      .select(this.APPOINTMENT_SELECT)
+      .single();
+
+    if (updateError) throw updateError;
+    return updated;
+  }
+
   async linkPayment(appointmentId: string, paymentId: string): Promise<void> {
     await this.supabase
       .from('appointments')
@@ -409,6 +443,7 @@ export class AppointmentsService {
   async getAvailableSlots(
     professionalId: string,
     date: string,
+    serviceDuration?: number,
   ): Promise<{ time: string; available: boolean }[]> {
     const { data: professional } = await this.supabase
       .from('professionals')
@@ -509,8 +544,18 @@ export class AppointmentsService {
         }
 
         // Verificar conflito com agendamentos e bloqueios
+        const duration = serviceDuration || 30;
+        const slotEnd = slotMinutes + duration;
+
+        // Verificar se o serviço caberia antes do fechamento
+        if (slotEnd > endHour * 60) {
+          slots.push({ time: slotTime, available: false });
+          continue;
+        }
+
+        // Verificar conflito: o slot inteiro (start até start+duration) não pode sobrepor nenhum busy
         const hasConflict = busySlots.some(
-          (busy) => slotMinutes >= busy.start && slotMinutes < busy.end,
+          (busy) => slotMinutes < busy.end && slotEnd > busy.start,
         );
 
         slots.push({ time: slotTime, available: !hasConflict });

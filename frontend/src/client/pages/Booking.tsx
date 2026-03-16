@@ -114,13 +114,16 @@ export function ClientBooking() {
     }
   }, [currentStep, selectedDate, selectedServices, fetchAvailableProfessionals]);
 
+  // Calcular duração total dos serviços selecionados
+  const totalDuration = selectedServices.reduce((sum, s) => sum + (s.duration || 30), 0);
+
   useEffect(() => {
     if (selectedProfessional && selectedDate) {
-      fetchSlots(selectedProfessional.id, formatDateISO(selectedDate));
+      fetchSlots(selectedProfessional.id, formatDateISO(selectedDate), totalDuration);
     } else {
       clearSlots();
     }
-  }, [selectedProfessional, selectedDate, fetchSlots, clearSlots]);
+  }, [selectedProfessional, selectedDate, totalDuration, fetchSlots, clearSlots]);
 
   const handleServiceToggle = (service: Service) => {
     setSelectedServices((prev) => {

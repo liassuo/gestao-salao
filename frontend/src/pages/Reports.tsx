@@ -7,6 +7,7 @@ import {
   AlertCircle,
   Wallet,
   Calendar,
+  Download,
 } from 'lucide-react';
 import { reportsService } from '../services/reports';
 import type { SalesReport, ProfessionalReport, ServicesReport, ClientsReport, DebtsReport, CashRegisterReport } from '../services/reports';
@@ -65,6 +66,57 @@ export function Reports() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const exportToCSV = () => {
+    if (!data) return;
+    let csvContent = '';
+    const reportLabel = reportOptions.find((r) => r.id === selectedReport)?.label || selectedReport;
+
+    const formatValue = (v: any) => {
+      if (typeof v === 'number') return v.toString();
+      if (typeof v === 'string' && v.includes(',')) return `"${v}"`;
+      return String(v ?? '');
+    };
+
+    // Extrai dados tabulares de cada tipo de relatório
+    let rows: Record<string, any>[] = [];
+    switch (selectedReport) {
+      case 'sales':
+        rows = data.byMethod || [];
+        break;
+      case 'professionals':
+        rows = data.professionals || [];
+        break;
+      case 'services':
+        rows = data.services || [];
+        break;
+      case 'clients':
+        rows = data.clients || [];
+        break;
+      case 'debts':
+        rows = data.debts || [];
+        break;
+      case 'cash-register':
+        rows = data.registers || [];
+        break;
+    }
+
+    if (rows.length === 0) return;
+
+    const headers = Object.keys(rows[0]);
+    csvContent = headers.join(';') + '\n';
+    for (const row of rows) {
+      csvContent += headers.map((h) => formatValue(row[h])).join(';') + '\n';
+    }
+
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `relatorio-${reportLabel}-${startDate}-${endDate}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   const renderSalesReport = (report: SalesReport) => (
@@ -489,14 +541,25 @@ export function Reports() {
               />
             </div>
           </div>
-          <button
-            onClick={fetchReport}
-            disabled={loading}
-            className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-6 py-2 text-sm font-medium text-white hover:bg-[#725510] disabled:opacity-50"
-          >
-            <BarChart3 className="h-4 w-4" />
-            Gerar Relatório
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={fetchReport}
+              disabled={loading}
+              className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-6 py-2 text-sm font-medium text-white hover:bg-[#725510] disabled:opacity-50"
+            >
+              <BarChart3 className="h-4 w-4" />
+              Gerar Relatorio
+            </button>
+            {data && (
+              <button
+                onClick={exportToCSV}
+                className="flex items-center gap-2 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] px-4 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]"
+              >
+                <Download className="h-4 w-4" />
+                Exportar CSV
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

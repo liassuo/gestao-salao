@@ -32,6 +32,8 @@ export interface Appointment {
   totalDuration: number; // Em minutos
   isPaid: boolean;
   notes?: string;
+  rating?: number;
+  ratingComment?: string;
   services: AppointmentService[];
   professional: Professional;
   createdAt: string;

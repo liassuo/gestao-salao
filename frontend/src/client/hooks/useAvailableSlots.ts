@@ -7,11 +7,11 @@ export function useAvailableSlots() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchSlots = useCallback(async (professionalId: string, date: string) => {
+  const fetchSlots = useCallback(async (professionalId: string, date: string, duration?: number) => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await appointmentsApi.getAvailableSlots(professionalId, date);
+      const data = await appointmentsApi.getAvailableSlots(professionalId, date, duration);
       setSlots(data);
     } catch (err) {
       const message = 'Nao foi possivel carregar os horarios disponiveis';

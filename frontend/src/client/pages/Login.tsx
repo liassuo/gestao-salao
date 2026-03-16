@@ -2,16 +2,19 @@ import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
 import type { CredentialResponse } from '@react-oauth/google';
-import { Mail, Lock, LogIn } from 'lucide-react';
+import { Mail, Lock, LogIn, UserPlus, User, Phone } from 'lucide-react';
 import { useClientAuth } from '../auth';
 
 export function ClientLogin() {
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { login, loginWithGoogle } = useClientAuth();
+  const { login, loginWithGoogle, register } = useClientAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -19,6 +22,29 @@ export function ClientLogin() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (mode === 'register') {
+      if (!name.trim() || !email.trim() || !password.trim()) {
+        setError('Preencha todos os campos obrigatorios');
+        return;
+      }
+      if (password.length < 6) {
+        setError('A senha deve ter pelo menos 6 caracteres');
+        return;
+      }
+      setIsSubmitting(true);
+      setError(null);
+      try {
+        await register(name.trim(), email.trim(), password, phone.trim() || undefined);
+        navigate(from, { replace: true });
+      } catch (err: any) {
+        const msg = err.response?.data?.message || 'Erro ao criar conta. Tente novamente.';
+        setError(msg);
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
 
     if (!email.trim() || !password.trim()) {
       setError('Preencha todos os campos');
@@ -36,6 +62,11 @@ export function ClientLogin() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const toggleMode = () => {
+    setMode((prev) => (prev === 'login' ? 'register' : 'login'));
+    setError(null);
   };
 
   const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
@@ -102,7 +133,7 @@ export function ClientLogin() {
               />
             </div>
             <p className="mt-6 text-sm font-medium tracking-widest uppercase text-[#8B7D6B]">
-              Portal do Cliente
+              {mode === 'register' ? 'Criar Conta' : 'Portal do Cliente'}
             </p>
           </div>
 
@@ -141,10 +172,33 @@ export function ClientLogin() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Nome (só no registro) */}
+            {mode === 'register' && (
+              <div className="space-y-2">
+                <label htmlFor="name" className="block text-sm font-medium text-[#D4C4A0]">
+                  Nome *
+                </label>
+                <div className="relative">
+                  <div className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#8B7D6B]">
+                    <User className="h-5 w-5" />
+                  </div>
+                  <input
+                    type="text"
+                    id="name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Seu nome completo"
+                    disabled={isSubmitting}
+                    className="w-full rounded-xl border border-[#3D2B1F] bg-[#15100A] py-3.5 pl-12 pr-4 text-[#F2E8D5] placeholder-[#6B5D4F] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#C8923A]/50 focus:border-[#C8923A]/50 hover:border-[#5C4530] disabled:opacity-60"
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Email */}
             <div className="space-y-2">
               <label htmlFor="email" className="block text-sm font-medium text-[#D4C4A0]">
-                Email
+                Email {mode === 'register' && '*'}
               </label>
               <div className="relative">
                 <div className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#8B7D6B]">
@@ -162,10 +216,33 @@ export function ClientLogin() {
               </div>
             </div>
 
+            {/* Telefone (só no registro) */}
+            {mode === 'register' && (
+              <div className="space-y-2">
+                <label htmlFor="phone" className="block text-sm font-medium text-[#D4C4A0]">
+                  Telefone
+                </label>
+                <div className="relative">
+                  <div className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#8B7D6B]">
+                    <Phone className="h-5 w-5" />
+                  </div>
+                  <input
+                    type="tel"
+                    id="phone"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="(11) 99999-9999"
+                    disabled={isSubmitting}
+                    className="w-full rounded-xl border border-[#3D2B1F] bg-[#15100A] py-3.5 pl-12 pr-4 text-[#F2E8D5] placeholder-[#6B5D4F] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#C8923A]/50 focus:border-[#C8923A]/50 hover:border-[#5C4530] disabled:opacity-60"
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Senha */}
             <div className="space-y-2">
               <label htmlFor="password" className="block text-sm font-medium text-[#D4C4A0]">
-                Senha
+                Senha {mode === 'register' && '* (min. 6 caracteres)'}
               </label>
               <div className="relative">
                 <div className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#8B7D6B]">
@@ -195,16 +272,28 @@ export function ClientLogin() {
               {isSubmitting ? (
                 <>
                   <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#F2E8D5] border-t-transparent" />
-                  <span>Entrando...</span>
+                  <span>{mode === 'register' ? 'Criando conta...' : 'Entrando...'}</span>
                 </>
               ) : (
                 <>
-                  <LogIn className="h-5 w-5" />
-                  <span>Entrar</span>
+                  {mode === 'register' ? <UserPlus className="h-5 w-5" /> : <LogIn className="h-5 w-5" />}
+                  <span>{mode === 'register' ? 'Criar Conta' : 'Entrar'}</span>
                 </>
               )}
             </button>
           </form>
+
+          {/* Toggle login/register */}
+          <div className="mt-6 text-center">
+            <button
+              onClick={toggleMode}
+              className="text-sm text-[#C8923A] hover:text-[#D4A85C] transition-colors"
+            >
+              {mode === 'login'
+                ? 'Nao tem conta? Criar conta'
+                : 'Ja tem conta? Fazer login'}
+            </button>
+          </div>
 
           {/* Divisor decorativo */}
           <div className="my-6 flex items-center gap-4">
