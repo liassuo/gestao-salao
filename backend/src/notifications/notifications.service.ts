@@ -27,7 +27,7 @@ export class NotificationsService implements OnModuleInit {
     }
   }
 
-  async saveSubscription(clientId: string, subscription: webpush.PushSubscription) {
+  async saveSubscription(userId: string, subscription: webpush.PushSubscription, role: 'CLIENT' | 'STAFF' = 'CLIENT') {
     // Remove subscriptions antigas do mesmo endpoint
     await this.supabase
       .from('push_subscriptions')
@@ -36,7 +36,9 @@ export class NotificationsService implements OnModuleInit {
 
     const { error } = await this.supabase.from('push_subscriptions').insert({
       id: randomUUID(),
-      clientId,
+      clientId: role === 'CLIENT' ? userId : null,
+      userId: role === 'STAFF' ? userId : null,
+      role,
       endpoint: subscription.endpoint,
       p256dh: subscription.keys.p256dh,
       auth: subscription.keys.auth,
@@ -146,6 +148,53 @@ export class NotificationsService implements OnModuleInit {
 
     for (const sub of subs) {
       await this.sendPush(sub, payload);
+    }
+  }
+
+  /** Envia notificação para todos os admins/profissionais */
+  async notifyStaff(title: string, body: string, url = '/agendamentos') {
+    const { data: subs } = await this.supabase
+      .from('push_subscriptions')
+      .select('*')
+      .eq('role', 'STAFF');
+
+    if (!subs?.length) return;
+
+    const payload = {
+      title,
+      body,
+      icon: '/favicon/web-app-manifest-192x192.png',
+      badge: '/favicon/favicon-96x96.png',
+      data: { url },
+    };
+
+    for (const sub of subs) {
+      await this.sendPush(sub, payload);
+    }
+  }
+
+  /** Notifica staff quando um novo agendamento é criado pelo cliente */
+  async notifyNewBooking(appointment: any) {
+    const publicKey = this.config.get<string>('VAPID_PUBLIC_KEY');
+    if (!publicKey) return;
+
+    try {
+      const clientName = appointment.client?.name || 'Cliente';
+      const profName = appointment.professional?.name || 'profissional';
+      const services = (appointment.services || [])
+        .map((s: any) => s.service?.name)
+        .filter(Boolean)
+        .join(', ');
+      const scheduledAt = new Date(appointment.scheduledAt);
+      const time = scheduledAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      const date = scheduledAt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+
+      await this.notifyStaff(
+        `Novo agendamento!`,
+        `${clientName} agendou ${services} com ${profName} em ${date} as ${time}`,
+      );
+    } catch (err) {
+      this.logger.error(`Failed to notify staff of new booking: ${err}`);
     }
   }
 }

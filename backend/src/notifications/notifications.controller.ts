@@ -33,7 +33,8 @@ export class NotificationsController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   async subscribe(@Req() req: any, @Body() body: any) {
-    await this.notifications.saveSubscription(req.user.sub, body);
+    const role = req.user.role === 'CLIENT' ? 'CLIENT' : 'STAFF';
+    await this.notifications.saveSubscription(req.user.sub, body, role);
     return { message: 'Subscription saved' };
   }
 

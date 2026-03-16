@@ -24,6 +24,7 @@ import {
 } from './dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
+import { NotificationsService } from '../notifications/notifications.service';
 
 interface RequestWithUser extends Request {
   user: AuthenticatedUser;
@@ -32,7 +33,10 @@ interface RequestWithUser extends Request {
 @ApiTags('Appointments')
 @Controller('appointments')
 export class AppointmentsController {
-  constructor(private readonly appointmentsService: AppointmentsService) {}
+  constructor(
+    private readonly appointmentsService: AppointmentsService,
+    private readonly notificationsService: NotificationsService,
+  ) {}
 
   /**
    * GET /appointments/me
@@ -113,13 +117,18 @@ export class AppointmentsController {
     const timeWithSeconds = dto.startTime.length === 5 ? `${dto.startTime}:00` : dto.startTime;
     const scheduledAt = new Date(`${dto.date}T${timeWithSeconds}`);
 
-    return this.appointmentsService.create({
+    const appointment = await this.appointmentsService.create({
       clientId: req.user.id,
       professionalId: dto.professionalId,
       serviceIds: dto.serviceIds,
       scheduledAt,
       notes: dto.notes,
     });
+
+    // Notificar admin/profissional do novo agendamento (fire-and-forget)
+    this.notificationsService.notifyNewBooking(appointment).catch(() => {});
+
+    return appointment;
   }
 
   @Get()
