@@ -1,6 +1,9 @@
 {
   "name": "Barbearia América",
   "short_name": "Barbearia",
+  "description": "Agende seus serviços na Barbearia América",
+  "start_url": "/cliente/",
+  "scope": "/",
   "icons": [
     {
       "src": "/favicon/web-app-manifest-192x192.png",
@@ -13,9 +16,16 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    },
+    {
+      "src": "/favicon/favicon-96x96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
     }
   ],
   "theme_color": "#110D07",
   "background_color": "#110D07",
-  "display": "standalone"
+  "display": "standalone",
+  "orientation": "portrait"
 }
