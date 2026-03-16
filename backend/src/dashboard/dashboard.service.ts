@@ -184,13 +184,63 @@ export class DashboardService {
       .from('clients')
       .select('id', { count: 'exact', head: true });
 
+    // Top 5 clientes por gasto (agendamentos atendidos)
+    const { data: allAttended } = await this.supabase
+      .from('appointments')
+      .select('clientId, totalPrice, client:clients(id, name, phone)')
+      .eq('status', 'ATTENDED');
+
+    const clientSpending: Record<string, { name: string; phone: string; total: number; count: number }> = {};
+    for (const a of allAttended as any[] || []) {
+      if (!clientSpending[a.clientId]) {
+        clientSpending[a.clientId] = {
+          name: a.client?.name || '',
+          phone: a.client?.phone || '',
+          total: 0,
+          count: 0,
+        };
+      }
+      clientSpending[a.clientId].total += a.totalPrice;
+      clientSpending[a.clientId].count++;
+    }
+    const topClients = Object.entries(clientSpending)
+      .map(([id, data]) => ({ id, ...data }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5);
+
+    // Produtos com estoque baixo (quantidade <= minStock)
+    const { data: products } = await this.supabase
+      .from('products')
+      .select('id, name, stock, minStock')
+      .eq('isActive', true);
+
+    const lowStockProducts = (products || [])
+      .filter((p: any) => p.minStock != null && p.stock <= p.minStock)
+      .map((p: any) => ({ id: p.id, name: p.name, stock: p.stock, minStock: p.minStock }))
+      .slice(0, 5);
+
+    // Clientes com dividas em aberto
+    const { data: debts } = await this.supabase
+      .from('debts')
+      .select('clientId, remainingBalance, client:clients(name, phone)')
+      .eq('isSettled', false)
+      .gt('remainingBalance', 0)
+      .order('remainingBalance', { ascending: false })
+      .limit(5);
+
+    const unpaidClients = (debts || []).map((d: any) => ({
+      name: d.client?.name || '',
+      phone: d.client?.phone || '',
+      debt: d.remainingBalance,
+    }));
+
     return {
       activeProfessionals: activeProfessionals || 0,
       openOrders: openOrders || 0,
       totalClients: totalClients || 0,
-      topClients: [],
-      lowStockProducts: [],
-      unpaidClients: [],
+      topClients,
+      lowStockProducts,
+      unpaidClients,
     };
   }
 

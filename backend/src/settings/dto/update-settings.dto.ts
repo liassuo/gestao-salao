@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsNumber, Min, Max } from 'class-validator';
+import { IsOptional, IsString, IsNumber, IsBoolean, Min, Max } from 'class-validator';
 
 export class UpdateSettingsDto {
   @IsOptional()
@@ -30,4 +30,20 @@ export class UpdateSettingsDto {
   @Min(15)
   @Max(60)
   slotDuration?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  emailNotifications?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  smsNotifications?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  appointmentReminders?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  reminderHoursBefore?: number;
 }

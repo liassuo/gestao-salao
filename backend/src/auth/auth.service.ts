@@ -116,6 +116,33 @@ export class AuthService {
     };
   }
 
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    const { data: user } = await this.supabase
+      .from('users')
+      .select('id, password')
+      .eq('id', userId)
+      .single();
+
+    if (!user) {
+      throw new UnauthorizedException('Usuário não encontrado');
+    }
+
+    const isValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isValid) {
+      throw new UnauthorizedException('Senha atual incorreta');
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await this.supabase
+      .from('users')
+      .update({ password: hashedPassword, updatedAt: new Date().toISOString() })
+      .eq('id', userId);
+  }
+
   async clientGoogleLogin(dto: GoogleAuthDto): Promise<AuthResponseDto> {
     if (!this.googleClient) {
       throw new UnauthorizedException('Google login não configurado');

@@ -23,6 +23,10 @@ export class SettingsService {
         openingTime: '09:00',
         closingTime: '19:00',
         slotDuration: 30,
+        emailNotifications: true,
+        smsNotifications: false,
+        appointmentReminders: true,
+        reminderHoursBefore: 24,
       };
     }
 

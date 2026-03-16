@@ -420,14 +420,100 @@ export class AppointmentsService {
       throw new NotFoundException('Profissional não encontrado');
     }
 
+    // Determinar horário de trabalho do profissional
+    let startHour = 8;
+    let endHour = 18;
+    const dayOfWeek = new Date(date).getDay(); // 0=Dom, 1=Seg...
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+    if (professional.workingHours) {
+      const wh = typeof professional.workingHours === 'string'
+        ? JSON.parse(professional.workingHours)
+        : professional.workingHours;
+      const dayKey = dayNames[dayOfWeek];
+      const daySchedule = wh[dayKey] || wh[dayOfWeek];
+
+      if (daySchedule === false || daySchedule?.off) {
+        return []; // Profissional não trabalha neste dia
+      }
+
+      if (daySchedule?.start) {
+        const [h] = daySchedule.start.split(':').map(Number);
+        startHour = h;
+      }
+      if (daySchedule?.end) {
+        const [h] = daySchedule.end.split(':').map(Number);
+        endHour = h;
+      }
+    }
+
+    // Buscar agendamentos existentes do profissional neste dia
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const { data: existingAppts } = await this.supabase
+      .from('appointments')
+      .select('scheduledAt, totalDuration')
+      .eq('professionalId', professionalId)
+      .in('status', ['SCHEDULED', 'ATTENDED'])
+      .gte('scheduledAt', startOfDay.toISOString())
+      .lte('scheduledAt', endOfDay.toISOString());
+
+    // Buscar bloqueios de horário
+    const { data: timeBlocks } = await this.supabase
+      .from('time_blocks')
+      .select('startTime, endTime')
+      .eq('professionalId', professionalId)
+      .gte('startTime', startOfDay.toISOString())
+      .lte('endTime', endOfDay.toISOString());
+
+    // Criar intervalos ocupados (em minutos desde meia-noite)
+    const busySlots: { start: number; end: number }[] = [];
+
+    for (const appt of existingAppts || []) {
+      const apptDate = new Date(appt.scheduledAt);
+      const apptStart = apptDate.getHours() * 60 + apptDate.getMinutes();
+      const apptEnd = apptStart + (appt.totalDuration || 30);
+      busySlots.push({ start: apptStart, end: apptEnd });
+    }
+
+    for (const block of timeBlocks || []) {
+      const blockStart = new Date(block.startTime);
+      const blockEnd = new Date(block.endTime);
+      busySlots.push({
+        start: blockStart.getHours() * 60 + blockStart.getMinutes(),
+        end: blockEnd.getHours() * 60 + blockEnd.getMinutes(),
+      });
+    }
+
+    // Gerar slots e verificar disponibilidade
     const slots: { time: string; available: boolean }[] = [];
-    const startHour = 8;
-    const endHour = 18;
+    const now = new Date();
+    const isToday =
+      startOfDay.toDateString() === now.toDateString();
 
     for (let hour = startHour; hour < endHour; hour++) {
       for (const minutes of [0, 30]) {
+        const slotMinutes = hour * 60 + minutes;
         const slotTime = `${hour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-        slots.push({ time: slotTime, available: true });
+
+        // Verificar se já passou (se for hoje)
+        if (isToday) {
+          const nowMinutes = now.getHours() * 60 + now.getMinutes();
+          if (slotMinutes <= nowMinutes) {
+            slots.push({ time: slotTime, available: false });
+            continue;
+          }
+        }
+
+        // Verificar conflito com agendamentos e bloqueios
+        const hasConflict = busySlots.some(
+          (busy) => slotMinutes >= busy.start && slotMinutes < busy.end,
+        );
+
+        slots.push({ time: slotTime, available: !hasConflict });
       }
     }
 
