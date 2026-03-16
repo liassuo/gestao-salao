@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router-dom';
 import { useClientAuth } from '../../auth';
+import { IOSInstallBanner } from '../IOSInstallBanner';
 
 export function ClientLayout() {
   const { isLoading } = useClientAuth();
@@ -15,6 +16,7 @@ export function ClientLayout() {
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
       <Outlet />
+      <IOSInstallBanner />
     </div>
   );
 }
