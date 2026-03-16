@@ -1,5 +1,14 @@
 import { useState } from 'react';
-import { Wallet, AlertCircle, History } from 'lucide-react';
+import {
+  Wallet,
+  AlertCircle,
+  History,
+  CheckCircle2,
+  Clock,
+  Banknote,
+  Smartphone,
+  CreditCard,
+} from 'lucide-react';
 import {
   useCashRegisterToday,
   useOpenCashRegister,
@@ -21,9 +30,132 @@ import type {
   CashRegisterFilters as CashRegisterFiltersType,
   OpenCashRegisterPayload,
   CloseCashRegisterPayload,
+  CashRegister as CashRegisterType,
 } from '@/types';
 
 type Tab = 'today' | 'history';
+
+function formatCurrency(cents: number): string {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(cents / 100);
+}
+
+function formatTime(dateStr: string): string {
+  return new Date(dateStr).toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+/** Componente para quando o caixa já foi fechado hoje */
+function ClosedTodaySummary({ cashRegister }: { cashRegister: CashRegisterType }) {
+  const discColor =
+    cashRegister.discrepancy > 0
+      ? 'text-amber-500'
+      : cashRegister.discrepancy < 0
+      ? 'text-[#A63030]'
+      : 'text-green-500';
+  const discBg =
+    cashRegister.discrepancy > 0
+      ? 'bg-amber-500/10 border-amber-500/30'
+      : cashRegister.discrepancy < 0
+      ? 'bg-red-500/10 border-red-500/30'
+      : 'bg-green-500/10 border-green-500/30';
+
+  return (
+    <div className="space-y-5">
+      {/* Banner fechado */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-600 to-zinc-700 p-6 text-white">
+        <div className="absolute right-0 top-0 h-32 w-32 translate-x-8 -translate-y-8 rounded-full bg-white/10" />
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <CheckCircle2 className="h-5 w-5" />
+              <span className="text-lg font-bold">Caixa Fechado</span>
+            </div>
+            <p className="mt-1 text-sm text-zinc-300">O caixa de hoje ja foi encerrado</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-zinc-400 uppercase">Receita do dia</p>
+            <p className="text-2xl font-bold">{formatCurrency(cashRegister.totalRevenue)}</p>
+          </div>
+        </div>
+        <div className="mt-4 flex items-center gap-4 text-sm text-zinc-300">
+          <div className="flex items-center gap-1.5">
+            <Clock className="h-3.5 w-3.5" />
+            Aberto as {formatTime(cashRegister.openedAt)}
+          </div>
+          {cashRegister.closedAt && (
+            <div className="flex items-center gap-1.5">
+              <Clock className="h-3.5 w-3.5" />
+              Fechado as {formatTime(cashRegister.closedAt)}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Cards de método */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-500/10">
+              <Banknote className="h-5 w-5 text-green-500" />
+            </div>
+            <div>
+              <p className="text-xs text-[var(--text-muted)]">Dinheiro</p>
+              <p className="text-lg font-bold text-[var(--text-primary)]">
+                {formatCurrency(cashRegister.totalCash)}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-500/10">
+              <Smartphone className="h-5 w-5 text-purple-500" />
+            </div>
+            <div>
+              <p className="text-xs text-[var(--text-muted)]">PIX</p>
+              <p className="text-lg font-bold text-[var(--text-primary)]">
+                {formatCurrency(cashRegister.totalPix)}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10">
+              <CreditCard className="h-5 w-5 text-blue-500" />
+            </div>
+            <div>
+              <p className="text-xs text-[var(--text-muted)]">Cartao</p>
+              <p className="text-lg font-bold text-[var(--text-primary)]">
+                {formatCurrency(cashRegister.totalCard)}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Discrepância */}
+      <div className={`flex items-center justify-between rounded-xl border p-4 ${discBg}`}>
+        <span className={`text-sm font-semibold ${discColor}`}>
+          {cashRegister.discrepancy > 0
+            ? 'Sobra'
+            : cashRegister.discrepancy < 0
+            ? 'Falta'
+            : 'Caixa conferido'}
+        </span>
+        <span className={`text-lg font-bold ${discColor}`}>
+          {cashRegister.discrepancy !== 0 && (cashRegister.discrepancy > 0 ? '+' : '')}
+          {formatCurrency(cashRegister.discrepancy)}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 export function CashRegister() {
   const [activeTab, setActiveTab] = useState<Tab>('today');
@@ -84,9 +216,14 @@ export function CashRegister() {
     }
   };
 
+  // Determinar estado do caixa de hoje
+  const isClosed = todayCashRegister && !todayCashRegister.isOpen;
+  const isOpen = todayCashRegister?.isOpen;
+  const needsOpening = !todayCashRegister;
+
   const tabs = [
     { id: 'today' as const, label: 'Caixa de Hoje', icon: Wallet },
-    { id: 'history' as const, label: 'Histórico', icon: History },
+    { id: 'history' as const, label: 'Historico', icon: History },
   ];
 
   return (
@@ -147,11 +284,13 @@ export function CashRegister() {
                 </div>
               </div>
             </div>
-          ) : todayCashRegister?.isOpen ? (
+          ) : isOpen ? (
             <CashRegisterStatus
-              cashRegister={todayCashRegister}
+              cashRegister={todayCashRegister!}
               onClose={handleOpenCloseModal}
             />
+          ) : isClosed ? (
+            <ClosedTodaySummary cashRegister={todayCashRegister!} />
           ) : (
             <div className="mx-auto max-w-md">
               <OpenCashRegisterForm
@@ -166,13 +305,11 @@ export function CashRegister() {
 
       {activeTab === 'history' && (
         <div className="space-y-6">
-          {/* Filtros */}
           <CashRegisterFilters
             filters={historyFilters}
             onChange={setHistoryFilters}
           />
 
-          {/* Resumo */}
           {isLoadingSummary ? (
             <SkeletonSummaryCards count={5} />
           ) : (
@@ -191,7 +328,6 @@ export function CashRegister() {
             />
           )}
 
-          {/* Tabela */}
           {isLoadingHistory ? (
             <SkeletonTable rows={5} cols={6} />
           ) : (

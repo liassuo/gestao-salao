@@ -1,5 +1,16 @@
 import { useState, useEffect } from 'react';
-import { AlertCircle, Loader2, X, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import {
+  AlertCircle,
+  Loader2,
+  X,
+  TrendingUp,
+  TrendingDown,
+  CheckCircle2,
+  Banknote,
+  Smartphone,
+  CreditCard,
+  Clock,
+} from 'lucide-react';
 import type { CashRegister, CloseCashRegisterPayload } from '@/types';
 
 interface CloseCashRegisterModalProps {
@@ -18,6 +29,13 @@ function formatCurrency(cents: number): string {
   }).format(cents / 100);
 }
 
+function formatTime(dateStr: string): string {
+  return new Date(dateStr).toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 export function CloseCashRegisterModal({
   isOpen,
   onClose,
@@ -29,7 +47,6 @@ export function CloseCashRegisterModal({
   const [closingBalanceReais, setClosingBalanceReais] = useState('');
   const [notes, setNotes] = useState('');
 
-  // Limpa o formulário quando abre/fecha
   useEffect(() => {
     if (isOpen) {
       setClosingBalanceReais('');
@@ -40,104 +57,123 @@ export function CloseCashRegisterModal({
   if (!isOpen || !cashRegister) return null;
 
   const expectedBalance = cashRegister.openingBalance + cashRegister.totalCash;
-
   const closingBalanceCents = closingBalanceReais
     ? Math.round(parseFloat(closingBalanceReais.replace(',', '.')) * 100)
     : 0;
-
   const discrepancy = closingBalanceCents - expectedBalance;
+  const hasInput = closingBalanceReais.length > 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!closingBalanceReais) return;
-
     await onSubmit({
       closingBalance: closingBalanceCents,
       notes: notes || undefined,
     });
   };
 
-  const getDiscrepancyIcon = () => {
-    if (discrepancy > 0) return <TrendingUp className="h-5 w-5 text-[#C8923A]" />;
-    if (discrepancy < 0) return <TrendingDown className="h-5 w-5 text-[#A63030]" />;
-    return <Minus className="h-5 w-5 text-[var(--text-muted)]" />;
-  };
-
-  const getDiscrepancyColor = () => {
-    if (discrepancy > 0) return 'text-[#C8923A] bg-[#C8923A]/20';
-    if (discrepancy < 0) return 'text-[#A63030] bg-red-500/20';
-    return 'text-[var(--text-muted)] bg-[var(--hover-bg)]';
-  };
-
-  const getDiscrepancyLabel = () => {
-    if (discrepancy > 0) return 'Sobra';
-    if (discrepancy < 0) return 'Falta';
-    return 'Conferido';
-  };
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Modal */}
-      <div className="relative w-full max-w-lg rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] shadow-xl">
+      <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)] shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-[var(--border-color)] px-6 py-4">
-          <h2 className="text-lg font-semibold text-[var(--text-primary)]">Fechar Caixa</h2>
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border-color)] bg-[var(--card-bg)] px-6 py-4 rounded-t-2xl">
+          <div>
+            <h2 className="text-lg font-bold text-[var(--text-primary)]">Fechar Caixa</h2>
+            <p className="text-xs text-[var(--text-muted)]">
+              Aberto as {formatTime(cashRegister.openedAt)}
+            </p>
+          </div>
           <button
             onClick={onClose}
-            className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
+            className="rounded-lg p-2 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)] transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        {/* Content */}
-        <form onSubmit={handleSubmit} className="p-6">
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
           {error && (
-            <div className="mb-4 flex items-center gap-2 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-[#A63030]">
+            <div className="flex items-center gap-2 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-[#A63030]">
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
               {error}
             </div>
           )}
 
-          {/* Resumo do Caixa */}
-          <div className="mb-6 rounded-xl bg-[var(--hover-bg)] p-4">
-            <h3 className="mb-3 font-medium text-[var(--text-primary)]">Resumo do Caixa</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-[var(--text-secondary)]">Saldo Inicial</span>
-                <span className="text-[var(--text-primary)]">
-                  {formatCurrency(cashRegister.openingBalance)}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[var(--text-secondary)]">+ Dinheiro Recebido</span>
-                <span className="text-[#C8923A]">
+          {/* Resumo do dia - visual */}
+          <div className="rounded-xl bg-[var(--hover-bg)] p-4 space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+              Resumo do dia
+            </p>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className="text-center rounded-lg bg-[var(--card-bg)] p-3">
+                <Banknote className="h-4 w-4 mx-auto text-green-500 mb-1" />
+                <p className="text-xs text-[var(--text-muted)]">Dinheiro</p>
+                <p className="text-sm font-bold text-[var(--text-primary)]">
                   {formatCurrency(cashRegister.totalCash)}
-                </span>
+                </p>
               </div>
-              <div className="flex justify-between border-t border-[var(--border-color)] pt-2">
-                <span className="font-medium text-[var(--text-primary)]">Valor Esperado</span>
-                <span className="font-bold text-[var(--text-primary)]">
-                  {formatCurrency(expectedBalance)}
-                </span>
+              <div className="text-center rounded-lg bg-[var(--card-bg)] p-3">
+                <Smartphone className="h-4 w-4 mx-auto text-purple-500 mb-1" />
+                <p className="text-xs text-[var(--text-muted)]">PIX</p>
+                <p className="text-sm font-bold text-[var(--text-primary)]">
+                  {formatCurrency(cashRegister.totalPix)}
+                </p>
               </div>
+              <div className="text-center rounded-lg bg-[var(--card-bg)] p-3">
+                <CreditCard className="h-4 w-4 mx-auto text-blue-500 mb-1" />
+                <p className="text-xs text-[var(--text-muted)]">Cartao</p>
+                <p className="text-sm font-bold text-[var(--text-primary)]">
+                  {formatCurrency(cashRegister.totalCard)}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between border-t border-[var(--border-color)] pt-3">
+              <span className="text-sm text-[var(--text-secondary)]">Receita total</span>
+              <span className="text-base font-bold text-[var(--text-primary)]">
+                {formatCurrency(cashRegister.totalRevenue)}
+              </span>
             </div>
           </div>
 
-          {/* Valor Contado */}
-          <div className="mb-4">
+          {/* Calculo do caixa fisico */}
+          <div className="rounded-xl border border-[var(--border-color)] p-4 space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">
+              Caixa fisico (dinheiro)
+            </p>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-[var(--text-secondary)]">Saldo inicial</span>
+              <span className="text-[var(--text-primary)]">
+                {formatCurrency(cashRegister.openingBalance)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-[var(--text-secondary)]">+ Dinheiro recebido</span>
+              <span className="text-green-500">
+                +{formatCurrency(cashRegister.totalCash)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between border-t border-dashed border-[var(--border-color)] pt-2">
+              <span className="text-sm font-semibold text-[var(--text-primary)]">Esperado</span>
+              <span className="text-base font-bold text-[#C8923A]">
+                {formatCurrency(expectedBalance)}
+              </span>
+            </div>
+          </div>
+
+          {/* Input do valor contado */}
+          <div>
             <label
               htmlFor="closingBalance"
-              className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]"
+              className="mb-2 block text-sm font-medium text-[var(--text-secondary)]"
             >
-              Valor Contado no Caixa (R$) *
+              Quanto tem no caixa agora?
             </label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-semibold text-[var(--text-muted)]">
                 R$
               </span>
               <input
@@ -149,62 +185,111 @@ export function CloseCashRegisterModal({
                   setClosingBalanceReais(value);
                 }}
                 placeholder="0,00"
-                className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] py-2.5 pl-10 pr-3 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[#C8923A] focus:outline-none focus:ring-1 focus:ring-[#C8923A]"
+                className="w-full rounded-xl border-2 border-[var(--border-color)] bg-[var(--hover-bg)] py-3.5 pl-14 pr-4 text-2xl font-bold text-[var(--text-primary)] placeholder:text-[var(--text-muted)]/40 focus:border-[#C8923A] focus:outline-none transition-colors"
                 autoFocus
                 required
               />
             </div>
+            <p className="mt-1.5 text-xs text-[var(--text-muted)]">
+              Conte todo o dinheiro fisico no caixa
+            </p>
           </div>
 
-          {/* Discrepância */}
-          {closingBalanceReais && (
+          {/* Discrepância - visual grande */}
+          {hasInput && (
             <div
-              className={`mb-4 flex items-center justify-between rounded-xl p-4 ${getDiscrepancyColor()}`}
+              className={`flex items-center justify-between rounded-xl p-4 transition-all ${
+                discrepancy > 0
+                  ? 'bg-amber-500/10 border border-amber-500/30'
+                  : discrepancy < 0
+                  ? 'bg-red-500/10 border border-red-500/30'
+                  : 'bg-green-500/10 border border-green-500/30'
+              }`}
             >
-              <div className="flex items-center gap-2">
-                {getDiscrepancyIcon()}
-                <span className="font-medium">{getDiscrepancyLabel()}</span>
+              <div className="flex items-center gap-3">
+                {discrepancy > 0 ? (
+                  <TrendingUp className="h-6 w-6 text-amber-500" />
+                ) : discrepancy < 0 ? (
+                  <TrendingDown className="h-6 w-6 text-[#A63030]" />
+                ) : (
+                  <CheckCircle2 className="h-6 w-6 text-green-500" />
+                )}
+                <div>
+                  <p
+                    className={`text-sm font-semibold ${
+                      discrepancy > 0
+                        ? 'text-amber-500'
+                        : discrepancy < 0
+                        ? 'text-[#A63030]'
+                        : 'text-green-500'
+                    }`}
+                  >
+                    {discrepancy > 0 ? 'Sobra no caixa' : discrepancy < 0 ? 'Falta no caixa' : 'Caixa conferido!'}
+                  </p>
+                  {discrepancy !== 0 && (
+                    <p className="text-xs text-[var(--text-muted)]">
+                      {discrepancy > 0
+                        ? 'Ha mais dinheiro do que o esperado'
+                        : 'Ha menos dinheiro do que o esperado'}
+                    </p>
+                  )}
+                </div>
               </div>
-              <span className="text-lg font-bold">
-                {formatCurrency(Math.abs(discrepancy))}
+              <span
+                className={`text-xl font-bold ${
+                  discrepancy > 0
+                    ? 'text-amber-500'
+                    : discrepancy < 0
+                    ? 'text-[#A63030]'
+                    : 'text-green-500'
+                }`}
+              >
+                {discrepancy !== 0 && (discrepancy > 0 ? '+' : '')}
+                {formatCurrency(discrepancy)}
               </span>
             </div>
           )}
 
           {/* Observações */}
-          <div className="mb-6">
+          <div>
             <label
               htmlFor="closeNotes"
               className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]"
             >
-              Observações
+              Observacoes do fechamento
             </label>
             <textarea
               id="closeNotes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Observações sobre o fechamento..."
+              placeholder="Ex: Faltou troco, retirada para deposito..."
               rows={2}
-              className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[#C8923A] focus:outline-none focus:ring-1 focus:ring-[#C8923A]"
+              className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[#C8923A] focus:outline-none focus:ring-1 focus:ring-[#C8923A]"
             />
           </div>
 
           {/* Botões */}
-          <div className="flex justify-end gap-3">
+          <div className="flex gap-3 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl border border-[var(--border-color)] px-4 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]"
+              className="flex-1 rounded-xl border border-[var(--border-color)] px-4 py-3 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={isLoading || !closingBalanceReais}
-              className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-4 py-2 text-sm font-medium text-white hover:bg-[#725510] disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-[#8B6914] px-4 py-3 text-sm font-semibold text-white hover:bg-[#725510] disabled:cursor-not-allowed disabled:opacity-50 transition-all active:scale-[0.98]"
             >
-              {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {isLoading ? 'Fechando...' : 'Confirmar Fechamento'}
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  <Lock className="h-4 w-4" />
+                  Fechar Caixa
+                </>
+              )}
             </button>
           </div>
         </form>
