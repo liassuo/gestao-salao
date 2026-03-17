@@ -4,6 +4,21 @@ import { useToast } from '../components/ui/ToastContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { api } from '../services/api';
 
+function formatWhatsAppInput(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 13);
+  if (digits.length <= 2) return `+${digits}`;
+  if (digits.length <= 4) return `+${digits.slice(0, 2)} (${digits.slice(2)}`;
+  if (digits.length <= 9) return `+${digits.slice(0, 2)} (${digits.slice(2, 4)}) ${digits.slice(4)}`;
+  return `+${digits.slice(0, 2)} (${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9)}`;
+}
+
+function formatWhatsAppDisplay(value: string): string {
+  if (!value) return '';
+  const digits = value.replace(/\D/g, '');
+  if (digits.length === 0) return '';
+  return formatWhatsAppInput(digits);
+}
+
 interface BusinessSettings {
   businessName: string;
   phone: string;
@@ -277,9 +292,12 @@ export function Settings() {
               </label>
               <input
                 type="text"
-                value={businessSettings.whatsapp}
-                onChange={(e) => setBusinessSettings({ ...businessSettings, whatsapp: e.target.value })}
-                placeholder="5511999999999 (codigo do pais + DDD + numero)"
+                value={formatWhatsAppDisplay(businessSettings.whatsapp)}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/\D/g, '').slice(0, 13);
+                  setBusinessSettings({ ...businessSettings, whatsapp: digits });
+                }}
+                placeholder="+55 (11) 99999-9999"
                 className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-4 py-2 text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none"
               />
               <p className="mt-1 text-xs text-[var(--text-muted)]">

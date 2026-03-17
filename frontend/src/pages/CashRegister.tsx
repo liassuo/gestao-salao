@@ -298,13 +298,11 @@ export function CashRegister() {
           ) : isClosed ? (
             <ClosedTodaySummary cashRegister={todayCashRegister!} />
           ) : (
-            <div className="mx-auto max-w-md">
-              <OpenCashRegisterForm
-                onSubmit={handleOpenCashRegister}
-                isLoading={openCashRegister.isPending}
-                error={openError}
-              />
-            </div>
+            <OpenCashRegisterForm
+              onSubmit={handleOpenCashRegister}
+              isLoading={openCashRegister.isPending}
+              error={openError}
+            />
           )}
         </div>
       )}
