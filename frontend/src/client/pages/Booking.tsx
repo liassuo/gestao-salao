@@ -191,7 +191,6 @@ export function ClientBooking() {
     const discount = getServiceDiscount(s.id, activePromotions);
     return sum + (discount !== null ? discountedPrice(s.price, discount) : s.price);
   }, 0);
-  const totalDuration = selectedServices.reduce((sum, s) => sum + s.duration, 0);
   const stepIndex = STEPS.indexOf(currentStep);
 
   const todayISO = formatDateISO(new Date());
