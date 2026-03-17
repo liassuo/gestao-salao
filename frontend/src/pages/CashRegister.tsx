@@ -51,16 +51,22 @@ function formatTime(dateStr: string): string {
 
 /** Componente para quando o caixa já foi fechado hoje */
 function ClosedTodaySummary({ cashRegister }: { cashRegister: CashRegisterType }) {
+  const totalRevenue = cashRegister.totalRevenue ?? 0;
+  const totalCash = cashRegister.totalCash ?? 0;
+  const totalPix = cashRegister.totalPix ?? 0;
+  const totalCard = cashRegister.totalCard ?? 0;
+  const discrepancy = cashRegister.discrepancy ?? 0;
+
   const discColor =
-    cashRegister.discrepancy > 0
+    discrepancy > 0
       ? 'text-amber-500'
-      : cashRegister.discrepancy < 0
+      : discrepancy < 0
       ? 'text-[#A63030]'
       : 'text-green-500';
   const discBg =
-    cashRegister.discrepancy > 0
+    discrepancy > 0
       ? 'bg-amber-500/10 border-amber-500/30'
-      : cashRegister.discrepancy < 0
+      : discrepancy < 0
       ? 'bg-red-500/10 border-red-500/30'
       : 'bg-green-500/10 border-green-500/30';
 
@@ -79,7 +85,7 @@ function ClosedTodaySummary({ cashRegister }: { cashRegister: CashRegisterType }
           </div>
           <div className="text-right">
             <p className="text-xs text-zinc-400 uppercase">Receita do dia</p>
-            <p className="text-2xl font-bold">{formatCurrency(cashRegister.totalRevenue)}</p>
+            <p className="text-2xl font-bold">{formatCurrency(totalRevenue)}</p>
           </div>
         </div>
         <div className="mt-4 flex items-center gap-4 text-sm text-zinc-300">
@@ -106,7 +112,7 @@ function ClosedTodaySummary({ cashRegister }: { cashRegister: CashRegisterType }
             <div>
               <p className="text-xs text-[var(--text-muted)]">Dinheiro</p>
               <p className="text-lg font-bold text-[var(--text-primary)]">
-                {formatCurrency(cashRegister.totalCash)}
+                {formatCurrency(totalCash)}
               </p>
             </div>
           </div>
@@ -119,7 +125,7 @@ function ClosedTodaySummary({ cashRegister }: { cashRegister: CashRegisterType }
             <div>
               <p className="text-xs text-[var(--text-muted)]">PIX</p>
               <p className="text-lg font-bold text-[var(--text-primary)]">
-                {formatCurrency(cashRegister.totalPix)}
+                {formatCurrency(totalPix)}
               </p>
             </div>
           </div>
@@ -132,7 +138,7 @@ function ClosedTodaySummary({ cashRegister }: { cashRegister: CashRegisterType }
             <div>
               <p className="text-xs text-[var(--text-muted)]">Cartao</p>
               <p className="text-lg font-bold text-[var(--text-primary)]">
-                {formatCurrency(cashRegister.totalCard)}
+                {formatCurrency(totalCard)}
               </p>
             </div>
           </div>
@@ -142,15 +148,15 @@ function ClosedTodaySummary({ cashRegister }: { cashRegister: CashRegisterType }
       {/* Discrepância */}
       <div className={`flex items-center justify-between rounded-xl border p-4 ${discBg}`}>
         <span className={`text-sm font-semibold ${discColor}`}>
-          {cashRegister.discrepancy > 0
+          {discrepancy > 0
             ? 'Sobra'
-            : cashRegister.discrepancy < 0
+            : discrepancy < 0
             ? 'Falta'
             : 'Caixa conferido'}
         </span>
         <span className={`text-lg font-bold ${discColor}`}>
-          {cashRegister.discrepancy !== 0 && (cashRegister.discrepancy > 0 ? '+' : '')}
-          {formatCurrency(cashRegister.discrepancy)}
+          {discrepancy !== 0 && (discrepancy > 0 ? '+' : '')}
+          {formatCurrency(discrepancy)}
         </span>
       </div>
     </div>

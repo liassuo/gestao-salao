@@ -20,8 +20,12 @@ export const cashRegisterService = {
 
   async getToday(): Promise<CashRegister | null> {
     try {
-      const response = await api.get<CashRegister>('/cash-register/today');
-      return response.data;
+      const response = await api.get<CashRegister | { message: string }>('/cash-register/today');
+      // Backend retorna { message: '...' } quando não há caixa hoje (HTTP 200)
+      if (!response.data || !('id' in response.data)) {
+        return null;
+      }
+      return response.data as CashRegister;
     } catch (error: unknown) {
       // Se não houver caixa hoje, retorna null
       if (error && typeof error === 'object' && 'response' in error) {
@@ -36,8 +40,12 @@ export const cashRegisterService = {
 
   async getOpen(): Promise<CashRegister | null> {
     try {
-      const response = await api.get<CashRegister>('/cash-register/open');
-      return response.data;
+      const response = await api.get<CashRegister | { message: string }>('/cash-register/open');
+      // Backend retorna { message: '...' } quando não há caixa aberto (HTTP 200)
+      if (!response.data || !('id' in response.data)) {
+        return null;
+      }
+      return response.data as CashRegister;
     } catch (error: unknown) {
       // Se não houver caixa aberto, retorna null
       if (error && typeof error === 'object' && 'response' in error) {
