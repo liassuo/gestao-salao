@@ -9,7 +9,7 @@ import {
   Banknote,
   Smartphone,
   CreditCard,
-  Clock,
+  Lock,
 } from 'lucide-react';
 import type { CashRegister, CloseCashRegisterPayload } from '@/types';
 
