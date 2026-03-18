@@ -225,7 +225,6 @@ export function CashRegister() {
   // Determinar estado do caixa de hoje
   const isClosed = todayCashRegister && !todayCashRegister.isOpen;
   const isOpen = todayCashRegister?.isOpen;
-  const needsOpening = !todayCashRegister;
 
   const tabs = [
     { id: 'today' as const, label: 'Caixa de Hoje', icon: Wallet },
