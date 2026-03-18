@@ -16,7 +16,7 @@ async function getWhatsapp(): Promise<string> {
   } catch {
     cachedWhatsapp = '';
   }
-  return cachedWhatsapp;
+  return cachedWhatsapp!;
 }
 
 const STATUS_CONFIG: Record<AppointmentStatus, { label: string; bgColor: string; textColor: string }> = {
