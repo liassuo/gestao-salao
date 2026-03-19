@@ -151,4 +151,14 @@ export class SubscriptionsController {
   async getRemainingCuts(@Param('id', ParseUUIDPipe) id: string) {
     return this.subscriptionsService.getRemainingCuts(id);
   }
+
+  /**
+   * POST /subscriptions/:id/force-charge
+   * Força uma nova cobrança manual para a assinatura (Admin)
+   */
+  @Post(':id/force-charge')
+  async forceCharge(@Param('id', ParseUUIDPipe) id: string) {
+    return this.subscriptionsService.forceCharge(id);
+  }
 }
+

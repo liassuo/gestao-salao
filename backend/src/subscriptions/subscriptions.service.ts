@@ -395,4 +395,87 @@ export class SubscriptionsService {
     if (error) throw error;
     return updated;
   }
+
+  /**
+   * Força uma cobrança manual no Asaas para uma assinatura específica.
+   * Cria um registro de pagamento pendente vinculado à assinatura.
+   */
+  async forceCharge(subscriptionId: string) {
+    const subscription = await this.findSubscription(subscriptionId);
+    const plan = subscription.plan;
+    const client = subscription.client;
+
+    if (!subscription.status || subscription.status !== 'ACTIVE') {
+      throw new BadRequestException('Apenas assinaturas ativas podem ser cobradas');
+    }
+
+    if (!this.asaasService.configured) {
+      throw new BadRequestException('Integração Asaas não configurada');
+    }
+
+    // 1. Buscar asaasCustomerId do cliente (se não tiver, criar)
+    const { data: clientData } = await this.supabase
+      .from('clients')
+      .select('asaasCustomerId, email, phone, name')
+      .eq('id', subscription.clientId)
+      .single();
+
+    let asaasCustomerId = clientData?.asaasCustomerId;
+    if (!asaasCustomerId && clientData) {
+      const asaasCustomer = await this.asaasService.createCustomer({
+        name: clientData.name,
+        email: clientData.email || undefined,
+        mobilePhone: clientData.phone || undefined,
+        externalReference: subscription.clientId,
+      });
+      asaasCustomerId = asaasCustomer.id;
+      await this.supabase
+        .from('clients')
+        .update({ asaasCustomerId })
+        .eq('id', subscription.clientId);
+    }
+
+    if (!asaasCustomerId) {
+      throw new BadRequestException('Não foi possível obter o ID do cliente no Asaas');
+    }
+
+    // 2. Criar cobrança avulsa no Asaas
+    const today = new Date().toISOString().split('T')[0];
+    const asaasCharge = await this.asaasService.createCharge({
+      customer: asaasCustomerId,
+      billingType: AsaasBillingType.PIX, // Padrão para cobrança forçada
+      value: this.asaasService.centavosToReais(plan.price || 0),
+      dueDate: today,
+      description: `Renovação Manual: Plano ${plan.name}`,
+      externalReference: subscriptionId,
+    });
+
+    // 3. Registrar pagamento pendente no banco local vinculado à assinatura
+    const now = new Date().toISOString();
+    const { data: payment, error } = await this.supabase
+      .from('payments')
+      .insert({
+        id: crypto.randomUUID(),
+        clientId: subscription.clientId,
+        subscriptionId: subscriptionId,
+        amount: plan.price,
+        method: 'PIX', // Mapeado do Asaas
+        asaasPaymentId: asaasCharge.id,
+        asaasStatus: asaasCharge.status,
+        paidAt: null, // Pendente
+        createdAt: now,
+        updatedAt: now,
+      })
+      .select('*')
+      .single();
+
+    if (error) throw error;
+
+    return {
+      message: 'Cobrança gerada com sucesso',
+      payment,
+      asaasCharge,
+    };
+  }
 }
+

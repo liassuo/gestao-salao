@@ -101,7 +101,7 @@ export class AsaasWebhookController {
     // Buscar pagamento local pelo asaasPaymentId
     const { data: localPayment } = await this.supabase
       .from('payments')
-      .select('id, appointmentId, clientId, amount')
+      .select('id, appointmentId, clientId, amount, subscriptionId')
       .eq('asaasPaymentId', asaasPaymentId)
       .single();
 
@@ -141,6 +141,23 @@ export class AsaasWebhookController {
         .from('payments')
         .update({ cashRegisterId: openRegister.id })
         .eq('id', localPayment.id);
+    }
+
+    // Se vinculado a assinatura, resetar contador de cortes (Renovação)
+    if (localPayment.subscriptionId) {
+      const now = new Date().toISOString();
+      await this.supabase
+        .from('client_subscriptions')
+        .update({
+          cutsUsedThisMonth: 0,
+          lastResetDate: now,
+          updatedAt: now,
+        })
+        .eq('id', localPayment.subscriptionId);
+
+      this.logger.log(
+        `Assinatura ${localPayment.subscriptionId} renovada (cortes resetados)`,
+      );
     }
 
     this.logger.log(
