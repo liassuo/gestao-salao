@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
   ConflictException,
@@ -10,6 +11,8 @@ import { CreateAppointmentDto, CreateTimeBlockDto, UpdateAppointmentDto } from '
 
 @Injectable()
 export class AppointmentsService {
+  private readonly logger = new Logger(AppointmentsService.name);
+
   constructor(private readonly supabase: SupabaseService) {}
 
   /** Select padrão com joins para client, professional e services */
@@ -97,7 +100,7 @@ export class AppointmentsService {
         id: appointmentId,
         clientId: dto.clientId,
         professionalId: dto.professionalId,
-        scheduledAt: new Date(dto.scheduledAt).toISOString(),
+        scheduledAt: String(dto.scheduledAt),
         totalPrice: totalPrice,
         totalDuration: totalDuration,
         status: 'SCHEDULED',
@@ -350,41 +353,50 @@ export class AppointmentsService {
   }
 
   async getCalendarData(date: string) {
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
+    if (!date || isNaN(new Date(date).getTime())) {
+      throw new BadRequestException('Data inválida');
+    }
+
+    const startOfDay = `${date}T00:00:00`;
+    const endOfDay = `${date}T23:59:59`;
+
+    this.logger.log(`Calendar query for ${date}: ${startOfDay} - ${endOfDay}`);
 
     // 1. Buscar profissionais ativos
     const { data: professionals, error: profError } = await this.supabase
       .from('professionals')
-      .select('id, name, phone, workingHours')
+      .select('id, name, workingHours, avatarUrl')
       .eq('isActive', true)
       .order('name', { ascending: true });
 
-    if (profError) throw profError;
+    if (profError) {
+      this.logger.error(`Calendar professionals query error: ${JSON.stringify(profError)}`);
+      throw profError;
+    }
 
     // 2. Buscar agendamentos do dia (com dados do cliente e serviços)
     const { data: appointments, error: apptError } = await this.supabase
       .from('appointments')
-      .select(`
-        id, scheduledAt, status, totalPrice, totalDuration, isPaid, notes, professionalId,
-        client:clients(id, name, phone),
-        services:appointment_services(service:services(name))
-      `)
-      .gte('scheduledAt', startOfDay.toISOString())
-      .lte('scheduledAt', endOfDay.toISOString());
+      .select(this.APPOINTMENT_SELECT)
+      .gte('scheduledAt', startOfDay)
+      .lte('scheduledAt', endOfDay);
 
-    if (apptError) throw apptError;
+    if (apptError) {
+      this.logger.error(`Calendar appointments query error: ${JSON.stringify(apptError)}`);
+      throw apptError;
+    }
 
     // 3. Buscar bloqueios de horário do dia
     const { data: timeBlocks, error: tbError } = await this.supabase
       .from('time_blocks')
       .select('id, startTime, endTime, reason, professionalId')
-      .gte('startTime', startOfDay.toISOString())
-      .lte('endTime', endOfDay.toISOString());
+      .gte('startTime', startOfDay)
+      .lte('endTime', endOfDay);
 
-    if (tbError) throw tbError;
+    if (tbError) {
+      this.logger.error(`Calendar time_blocks query error: ${JSON.stringify(tbError)}`);
+      throw tbError;
+    }
 
     // 4. Agrupar por profissional
     return (professionals || []).map(prof => ({
@@ -405,13 +417,16 @@ export class AppointmentsService {
       throw new NotFoundException('Profissional não encontrado');
     }
 
+    const now = new Date().toISOString();
     const { data: block, error } = await this.supabase
       .from('time_blocks')
       .insert({
+        id: randomUUID(),
         professionalId: dto.professionalId,
-        startTime: new Date(dto.startTime).toISOString(),
-        endTime: new Date(dto.endTime).toISOString(),
+        startTime: String(dto.startTime),
+        endTime: String(dto.endTime),
         reason: dto.reason,
+        createdAt: now,
       })
       .select('*')
       .single();
@@ -485,26 +500,24 @@ export class AppointmentsService {
     }
 
     // Buscar agendamentos existentes do profissional neste dia
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
+    const startOfDay = `${date}T00:00:00`;
+    const endOfDay = `${date}T23:59:59`;
 
     const { data: existingAppts } = await this.supabase
       .from('appointments')
       .select('scheduledAt, totalDuration')
       .eq('professionalId', professionalId)
       .in('status', ['SCHEDULED', 'ATTENDED'])
-      .gte('scheduledAt', startOfDay.toISOString())
-      .lte('scheduledAt', endOfDay.toISOString());
+      .gte('scheduledAt', startOfDay)
+      .lte('scheduledAt', endOfDay);
 
     // Buscar bloqueios de horário
     const { data: timeBlocks } = await this.supabase
       .from('time_blocks')
       .select('startTime, endTime')
       .eq('professionalId', professionalId)
-      .gte('startTime', startOfDay.toISOString())
-      .lte('endTime', endOfDay.toISOString());
+      .gte('startTime', startOfDay)
+      .lte('endTime', endOfDay);
 
     // Criar intervalos ocupados (em minutos desde meia-noite)
     const busySlots: { start: number; end: number }[] = [];
@@ -528,8 +541,8 @@ export class AppointmentsService {
     // Gerar slots e verificar disponibilidade
     const slots: { time: string; available: boolean }[] = [];
     const now = new Date();
-    const isToday =
-      startOfDay.toDateString() === now.toDateString();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const isToday = date === todayStr;
     const workStart = startHour * 60 + startMinute;
     const workEnd = endHour * 60 + endMinute;
 

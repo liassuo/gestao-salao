@@ -110,11 +110,11 @@
 - [X] Status muda para ABERTO
 
 ### 4.2 Criar agendamento pelo admin
-- [ ] Va em Agendamentos (/agendamentos)
-- [ ] Crie um agendamento: Carlos Silva + Joao + Corte Masculino + hoje 14h
-- [ ] Agendamento aparece na lista como AGENDADO
-- [ ] Mude para visualizacao de calendario → agendamento visivel
-- [ ] Volte ao Dashboard → agendamento aparece em "Agendamentos de Hoje"
+- [X] Va em Agendamentos (/agendamentos)
+- [X] Crie um agendamento: Carlos Silva + Joao + Corte Masculino + hoje 14h
+- [X] Agendamento aparece na lista como AGENDADO
+- [X] Mude para visualizacao de calendario → agendamento visivel
+- [X] Volte ao Dashboard → agendamento aparece em "Agendamentos de Hoje"
 
 ### 4.3 Criar bloqueio de horario
 - [ ] Volte em Agendamentos

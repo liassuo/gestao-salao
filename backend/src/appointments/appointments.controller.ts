@@ -112,16 +112,15 @@ export class AppointmentsController {
     @Req() req: RequestWithUser,
     @Body() dto: CreateClientAppointmentDto,
   ) {
-    // Combina data e hora para criar o scheduledAt
-    // startTime pode vir como "09:00" ou "09:00:00"
+    // Combina data e hora sem conversão de timezone
     const timeWithSeconds = dto.startTime.length === 5 ? `${dto.startTime}:00` : dto.startTime;
-    const scheduledAt = new Date(`${dto.date}T${timeWithSeconds}`);
+    const scheduledAt = `${dto.date}T${timeWithSeconds}`;
 
     const appointment = await this.appointmentsService.create({
       clientId: req.user.id,
       professionalId: dto.professionalId,
       serviceIds: dto.serviceIds,
-      scheduledAt,
+      scheduledAt: scheduledAt as any,
       notes: dto.notes,
     });
 

@@ -35,6 +35,7 @@ export function AppointmentForm({ onSubmit, isLoading, error }: AppointmentFormP
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<AppointmentFormData>({
     defaultValues: {
@@ -42,6 +43,25 @@ export function AppointmentForm({ onSubmit, isLoading, error }: AppointmentFormP
       time: '09:00',
     },
   });
+
+  const watchedProfessionalId = watch('professionalId');
+
+  const availableServices = useMemo(() => {
+    if (!watchedProfessionalId) return services;
+    const professional = professionals.find((p) => p.id === watchedProfessionalId);
+    if (!professional?.services?.length) return services;
+    const profServiceIds = new Set(professional.services.map((s) => s.id));
+    return services.filter((s) => profServiceIds.has(s.id));
+  }, [services, professionals, watchedProfessionalId]);
+
+  // Limpar serviços selecionados que não estão mais disponíveis ao trocar profissional
+  useMemo(() => {
+    const availableIds = new Set(availableServices.map((s) => s.id));
+    const filtered = selectedServiceIds.filter((id) => availableIds.has(id));
+    if (filtered.length !== selectedServiceIds.length) {
+      setSelectedServiceIds(filtered);
+    }
+  }, [availableServices]);
 
   const selectedServices = useMemo(() => {
     return services.filter((s) => selectedServiceIds.includes(s.id));
@@ -56,7 +76,8 @@ export function AppointmentForm({ onSubmit, isLoading, error }: AppointmentFormP
   };
 
   const handleFormSubmit = async (data: AppointmentFormData) => {
-    const scheduledAt = new Date(`${data.date}T${data.time}:00`).toISOString();
+    // Enviar como string local sem converter para UTC, evitando deslocamento de fuso
+    const scheduledAt = `${data.date}T${data.time}:00`;
 
     await onSubmit({
       clientId: data.clientId,
@@ -142,14 +163,20 @@ export function AppointmentForm({ onSubmit, isLoading, error }: AppointmentFormP
           Serviços *
         </label>
         <div className="max-h-48 space-y-2 overflow-y-auto rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-3">
-          {services.map((service) => (
-            <ServiceCheckbox
-              key={service.id}
-              service={service}
-              isSelected={selectedServiceIds.includes(service.id)}
-              onToggle={() => handleServiceToggle(service.id)}
-            />
-          ))}
+          {availableServices.length === 0 ? (
+            <p className="py-2 text-center text-sm text-[var(--text-muted)]">
+              {watchedProfessionalId ? 'Nenhum serviço vinculado a este profissional' : 'Selecione um profissional primeiro'}
+            </p>
+          ) : (
+            availableServices.map((service) => (
+              <ServiceCheckbox
+                key={service.id}
+                service={service}
+                isSelected={selectedServiceIds.includes(service.id)}
+                onToggle={() => handleServiceToggle(service.id)}
+              />
+            ))
+          )}
         </div>
         {selectedServiceIds.length === 0 && (
           <p className="mt-1 text-sm text-[var(--text-muted)]">
