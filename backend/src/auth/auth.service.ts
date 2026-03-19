@@ -194,6 +194,34 @@ export class AuthService {
     };
   }
 
+  async checkClientEmail(email: string): Promise<{ status: 'new' | 'login' | 'setup_password' | 'google'; name?: string }> {
+    const { data: client } = await this.supabase
+      .from('clients')
+      .select('id, name, password, googleId, mustChangePassword, isActive')
+      .eq('email', email)
+      .single();
+
+    if (!client) {
+      return { status: 'new' };
+    }
+
+    if (!client.isActive) {
+      return { status: 'new' }; // Conta desativada, tratar como inexistente
+    }
+
+    // Cliente tem googleId e não tem senha → só Google
+    if (client.googleId && !client.password) {
+      return { status: 'google', name: client.name };
+    }
+
+    // Cliente sem senha (pré-cadastrado) ou mustChangePassword
+    if (!client.password || client.mustChangePassword) {
+      return { status: 'setup_password', name: client.name };
+    }
+
+    return { status: 'login', name: client.name };
+  }
+
   async clientLogin(dto: LoginDto): Promise<AuthResponseDto & { mustChangePassword?: boolean }> {
     const { data: client } = await this.supabase
       .from('clients')

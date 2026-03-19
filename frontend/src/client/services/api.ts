@@ -51,7 +51,16 @@ clientApi.interceptors.response.use(
   }
 );
 
+export interface CheckEmailResponse {
+  status: 'new' | 'login' | 'setup_password' | 'google';
+  name?: string;
+}
+
 export const clientAuthApi = {
+  checkEmail: async (email: string): Promise<CheckEmailResponse> => {
+    const response = await clientApi.post<CheckEmailResponse>('/auth/client/check-email', { email });
+    return response.data;
+  },
   login: async (email: string, password: string): Promise<ClientLoginResponse> => {
     const response = await clientApi.post<ClientLoginResponse>('/auth/client/login', {
       email,

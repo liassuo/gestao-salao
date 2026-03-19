@@ -38,6 +38,13 @@ export class AuthController {
     return this.authService.clientRegister(body);
   }
 
+  @Post('client/check-email')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verificar status do email do cliente' })
+  async checkClientEmail(@Body() body: { email: string }) {
+    return this.authService.checkClientEmail(body.email);
+  }
+
   @Post('client/login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login de cliente com email/senha' })
