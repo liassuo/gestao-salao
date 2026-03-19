@@ -25,7 +25,6 @@ export class ProfessionalsService {
       .insert({
         id: crypto.randomUUID(),
         name: dto.name,
-        email: dto.email,
         avatarUrl: dto.avatarUrl || null,
         commissionRate: dto.commissionRate,
         workingHours: dto.workingHours || [],
@@ -154,7 +153,7 @@ export class ProfessionalsService {
     // 2. Buscar dados dos profissionais ativos
     const { data: professionals, error: profError } = await this.supabase
       .from('professionals')
-      .select('id, name, email, avatarUrl, workingHours')
+      .select('id, name, avatarUrl, workingHours')
       .eq('isActive', true)
       .in('id', eligibleProfIds);
 
@@ -204,7 +203,6 @@ export class ProfessionalsService {
       .map((p: any) => ({
         id: p.id,
         name: p.name,
-        email: p.email,
         avatarUrl: p.avatarUrl,
       }));
   }
