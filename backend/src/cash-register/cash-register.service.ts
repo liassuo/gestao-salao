@@ -116,15 +116,8 @@ export class CashRegisterService {
       throw new BadRequestException('Este caixa já está fechado');
     }
 
-    const { data: user } = await this.supabase
-      .from('users')
-      .select('id')
-      .eq('id', dto.closedBy)
-      .single();
-
-    if (!user) {
-      throw new NotFoundException('Usuário não encontrado');
-    }
+    // Usar closedBy do DTO ou fallback para openedBy do registro
+    const closedBy = dto.closedBy || register.openedBy;
 
     const totals = await this.calculateDailyTotals(register.date);
     const expectedClosingBalance = register.openingBalance + totals.cash;
@@ -134,12 +127,11 @@ export class CashRegisterService {
       .from('cash_registers')
       .update({
         closedAt: this.getLocalDateTimeStr(),
-        closedBy: dto.closedBy,
+        closedBy,
         closingBalance: dto.closingBalance,
         totalCash: totals.cash,
         totalPix: totals.pix,
         totalCard: totals.card,
-        totalBoleto: totals.boleto,
         totalRevenue: totals.total,
         discrepancy,
         isOpen: false,
@@ -171,7 +163,6 @@ export class CashRegisterService {
       register.totalCash = totals.cash;
       register.totalPix = totals.pix;
       register.totalCard = totals.card;
-      register.totalBoleto = totals.boleto;
       register.totalRevenue = totals.total;
     }
 
