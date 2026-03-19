@@ -1,9 +1,13 @@
-import { IsDateString } from 'class-validator';
+import { IsDateString, IsOptional, IsString } from 'class-validator';
 
 export class GenerateCommissionDto {
   @IsDateString({}, { message: 'Data de início deve ser uma data válida' })
-  startDate: string;
+  periodStart: string;
 
   @IsDateString({}, { message: 'Data de fim deve ser uma data válida' })
-  endDate: string;
+  periodEnd: string;
+
+  @IsOptional()
+  @IsString()
+  branchId?: string;
 }

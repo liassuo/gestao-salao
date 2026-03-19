@@ -19,6 +19,7 @@ import {
   Promotions,
   Reports,
   Services,
+  SetPassword,
   Settings,
   StockCurrent,
   StockMovements,
@@ -33,6 +34,7 @@ import {
   ClientHome,
   ClientBooking,
   ClientProfile,
+  ClientSetPassword,
 } from '@/client';
 
 // Helper para criar rota protegida por role
@@ -50,6 +52,10 @@ export const router = createBrowserRouter([
   {
     path: '/login',
     element: <Login />,
+  },
+  {
+    path: '/criar-senha',
+    element: <SetPassword />,
   },
   {
     path: '/',
@@ -154,6 +160,10 @@ export const router = createBrowserRouter([
       {
         path: 'login',
         element: <ClientLogin />,
+      },
+      {
+        path: 'criar-senha',
+        element: <ClientSetPassword />,
       },
       {
         index: true,

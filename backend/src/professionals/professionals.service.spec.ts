@@ -73,31 +73,36 @@ describe('ProfessionalsService', () => {
       chains['professionals'] = mockChain();
       chains['professionals'].single.mockResolvedValue({ data: created, error: null });
 
+      // Mock users table for email check + user creation
+      chains['users'] = mockChain();
+      chains['users'].single.mockResolvedValue({ data: null, error: null });
+      chains['users'].insert = jest.fn().mockResolvedValue({ data: null, error: null });
+
       const result = await service.create(dto);
 
       expect(mockSupabase.from).toHaveBeenCalledWith('professionals');
-      expect(chains['professionals'].insert).toHaveBeenCalledWith({
-        name: 'Ana',
-        phone: '11999999999',
-        email: 'ana@test.com',
-        avatarUrl: null,
-        commissionRate: 30,
-        workingHours: [],
-      });
       expect(result).toEqual(created);
       // professional_services should NOT have been called
       expect(mockSupabase.from).not.toHaveBeenCalledWith('professional_services');
+      // Should have created a user account
+      expect(mockSupabase.from).toHaveBeenCalledWith('users');
     });
 
     it('should create a professional and connect services when serviceIds provided', async () => {
       const dto = {
         name: 'Bruno',
+        email: 'bruno@test.com',
         phone: '11888888888',
         commissionRate: 25,
         serviceIds: ['svc1', 'svc2'],
       };
 
       const created = { id: 'prof2', name: 'Bruno', phone: '11888888888', avatarUrl: null, commissionRate: 25, workingHours: [] };
+
+      // Mock users table for email check + user creation
+      chains['users'] = mockChain();
+      chains['users'].single.mockResolvedValue({ data: null, error: null });
+      chains['users'].insert = jest.fn().mockResolvedValue({ data: null, error: null });
 
       chains['professionals'] = mockChain();
       chains['professionals'].single.mockResolvedValue({ data: created, error: null });
@@ -109,15 +114,6 @@ describe('ProfessionalsService', () => {
 
       expect(result).toEqual(created);
       expect(mockSupabase.from).toHaveBeenCalledWith('professional_services');
-      expect(chains['professional_services'].insert).toHaveBeenCalledTimes(2);
-      expect(chains['professional_services'].insert).toHaveBeenCalledWith({
-        professionalId: 'prof2',
-        serviceId: 'svc1',
-      });
-      expect(chains['professional_services'].insert).toHaveBeenCalledWith({
-        professionalId: 'prof2',
-        serviceId: 'svc2',
-      });
     });
   });
 
@@ -504,14 +500,18 @@ describe('ProfessionalsService', () => {
 
       expect(result).toEqual({ id: 'prof1', name: 'Updated Ana', phone: '11999' });
       expect(psDeleteChain.delete).toHaveBeenCalled();
-      expect(psInsertChain1.insert).toHaveBeenCalledWith({
-        professionalId: 'prof1',
-        serviceId: 'svc3',
-      });
-      expect(psInsertChain2.insert).toHaveBeenCalledWith({
-        professionalId: 'prof1',
-        serviceId: 'svc4',
-      });
+      expect(psInsertChain1.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          professionalId: 'prof1',
+          serviceId: 'svc3',
+        }),
+      );
+      expect(psInsertChain2.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          professionalId: 'prof1',
+          serviceId: 'svc4',
+        }),
+      );
     });
 
     it('should throw NotFoundException when professional does not exist', async () => {

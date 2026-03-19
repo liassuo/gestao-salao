@@ -22,15 +22,26 @@ function formatCurrency(cents: number): string {
   }).format(cents / 100);
 }
 
+function parseLocalDate(dateStr: string): Date {
+  // Remove Z ou offset para interpretar como horário local
+  const clean = dateStr.replace(/Z$/, '').replace(/[+-]\d{2}:\d{2}$/, '');
+  // Strings "YYYY-MM-DD" sem hora são interpretadas como UTC pelo JS,
+  // causando o dia anterior em fusos negativos. Adiciona T12:00:00 para forçar local.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+    return new Date(clean + 'T12:00:00');
+  }
+  return new Date(clean);
+}
+
 function formatTime(dateStr: string): string {
-  return new Date(dateStr).toLocaleTimeString('pt-BR', {
+  return parseLocalDate(dateStr).toLocaleTimeString('pt-BR', {
     hour: '2-digit',
     minute: '2-digit',
   });
 }
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('pt-BR', {
+  return parseLocalDate(dateStr).toLocaleDateString('pt-BR', {
     weekday: 'long',
     day: '2-digit',
     month: 'long',
@@ -38,9 +49,10 @@ function formatDate(dateStr: string): string {
 }
 
 function getElapsedTime(openedAt: string): string {
-  const opened = new Date(openedAt).getTime();
+  const opened = parseLocalDate(openedAt).getTime();
   const now = Date.now();
   const diff = Math.floor((now - opened) / 1000);
+  if (diff < 0) return '0min';
   const hours = Math.floor(diff / 3600);
   const minutes = Math.floor((diff % 3600) / 60);
   if (hours > 0) return `${hours}h ${minutes}min`;

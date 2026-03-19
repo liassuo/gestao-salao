@@ -24,8 +24,12 @@ export function Login() {
     setError(null);
 
     try {
-      await login(data);
-      navigate(from, { replace: true });
+      const result = await login(data);
+      if (result.mustChangePassword) {
+        navigate('/criar-senha', { replace: true });
+      } else {
+        navigate(from, { replace: true });
+      }
     } catch (err) {
       if (err instanceof Error) {
         setError('Credenciais inválidas. Verifique seu email e senha.');

@@ -1,4 +1,4 @@
-import { Controller, Post, Patch, Body, HttpCode, HttpStatus, UseGuards, Req } from '@nestjs/common';
+import { Controller, Post, Patch, Body, Param, HttpCode, HttpStatus, UseGuards, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto, AuthResponseDto, GoogleAuthDto } from './dto';
@@ -34,9 +34,25 @@ export class AuthController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Cadastro de cliente com email/senha' })
   async clientRegister(
-    @Body() body: { name: string; email: string; password: string; phone?: string },
+    @Body() body: { name: string; email: string; password: string; phone: string; birthDate?: string },
   ): Promise<AuthResponseDto> {
     return this.authService.clientRegister(body);
+  }
+
+  @Public()
+  @Post('client/check-email')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verificar status do email do cliente' })
+  async checkClientEmail(@Body() body: { email: string }) {
+    return this.authService.checkClientEmail(body.email);
+  }
+
+  @Public()
+  @Post('client/init-setup-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Criar senha para cliente pré-cadastrado (sem auth)' })
+  async clientInitSetupPassword(@Body() body: { email: string; password: string }) {
+    return this.authService.clientInitSetupPassword(body.email, body.password);
   }
 
   @Public()
@@ -58,5 +74,38 @@ export class AuthController {
   ): Promise<AuthResponseDto> {
     return this.authService.clientGoogleLogin(googleAuthDto);
   }
+
+  @Post('client/setup-password')
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Criar senha no primeiro acesso do cliente' })
+  async clientSetupPassword(
+    @Req() req: any,
+    @Body() body: { password: string },
+  ): Promise<AuthResponseDto> {
+    return this.authService.clientSetupPassword(req.user.sub, body.password);
+  }
+
+  @Post('setup-password')
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Criar senha no primeiro acesso do profissional' })
+  async userSetupPassword(
+    @Req() req: any,
+    @Body() body: { password: string },
+  ): Promise<AuthResponseDto> {
+    return this.authService.userSetupPassword(req.user.sub, body.password);
+  }
+
+  @Post('reset-professional-password/:professionalId')
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Admin reseta senha de um profissional' })
+  async resetProfessionalPassword(
+    @Param('professionalId') professionalId: string,
+  ) {
+    return this.authService.resetProfessionalPassword(professionalId);
+  }
 }
+
 

@@ -1,5 +1,4 @@
 import { Crown } from 'lucide-react';
-import { formatCurrency } from '@/utils/format';
 import type { TopClient } from '@/types/dashboard';
 
 interface TopClientsCardProps {
@@ -19,33 +18,16 @@ export function TopClientsCard({ clients }: TopClientsCardProps) {
       {clients.length === 0 ? (
         <p className="text-[var(--text-muted)]">Nenhum dado disponível.</p>
       ) : (
-        <div className="space-y-3">
-          <div className="grid grid-cols-4 gap-2 text-xs font-medium text-[var(--text-muted)] pb-2 border-b border-[var(--border-color)]">
-            <span>Cliente</span>
-            <span className="text-right">Serviços</span>
-            <span className="text-right">Produtos</span>
-            <span className="text-right">Total</span>
-          </div>
+        <div className="space-y-2">
           {clients.map((client, index) => (
             <div
               key={client.id}
-              className="grid grid-cols-4 gap-2 items-center rounded-lg border border-[var(--border-color)] bg-[var(--hover-bg)] p-3"
+              className="flex items-center gap-3 rounded-lg border border-[var(--border-color)] bg-[var(--hover-bg)] p-3"
             >
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#C8923A]/20 text-xs font-bold text-[#C8923A]">
-                  {index + 1}
-                </span>
-                <span className="truncate text-sm font-medium text-[var(--text-primary)]">{client.name}</span>
-              </div>
-              <span className="text-right text-sm text-[var(--text-secondary)]">
-                {formatCurrency(client.totalServices)}
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#C8923A]/20 text-xs font-bold text-[#C8923A]">
+                {index + 1}
               </span>
-              <span className="text-right text-sm text-[var(--text-secondary)]">
-                {formatCurrency(client.totalProducts)}
-              </span>
-              <span className="text-right text-sm font-semibold text-[var(--text-primary)]">
-                {formatCurrency(client.total)}
-              </span>
+              <span className="truncate text-sm font-medium text-[var(--text-primary)]">{client.name}</span>
             </div>
           ))}
         </div>

@@ -19,3 +19,4 @@ export * from './StockCurrent';
 export * from './StockMovements';
 export * from './Subscriptions';
 export * from './Promotions';
+export * from './SetPassword';

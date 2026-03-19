@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 import { SupabaseService } from '../supabase/supabase.service';
 import { CreateProfessionalDto, UpdateProfessionalDto } from './dto';
 
@@ -7,6 +8,17 @@ export class ProfessionalsService {
   constructor(private readonly supabase: SupabaseService) {}
 
   async create(dto: CreateProfessionalDto) {
+    // Verificar se email já existe na tabela users
+    const { data: existingUser } = await this.supabase
+      .from('users')
+      .select('id')
+      .eq('email', dto.email)
+      .single();
+
+    if (existingUser) {
+      throw new ConflictException('Email já cadastrado no sistema');
+    }
+
     const now = new Date().toISOString();
     const { data: professional, error } = await this.supabase
       .from('professionals')
@@ -24,6 +36,23 @@ export class ProfessionalsService {
       .single();
 
     if (error) throw error;
+
+    // Auto-criar conta de usuário para o profissional fazer login
+    const tempPassword = crypto.randomUUID(); // senha temporária (nunca será usada)
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+    await this.supabase
+      .from('users')
+      .insert({
+        email: dto.email,
+        name: dto.name,
+        password: hashedPassword,
+        role: 'PROFESSIONAL',
+        professionalId: professional.id,
+        isActive: true,
+        mustChangePassword: true,
+        updatedAt: now,
+      });
 
     // Connect services if provided
     if (dto.serviceIds?.length) {
@@ -100,18 +129,20 @@ export class ProfessionalsService {
   }
 
   async findAvailableForBooking(serviceIds: string[], date: string) {
-    // 1. Buscar profissionais vinculados aos serviços via _ProfessionalToService
+    // 1. Buscar profissionais vinculados aos serviços via professional_services
     const { data: links, error: linkError } = await this.supabase
-      .from('_ProfessionalToService')
-      .select('A, B')
-      .in('B', serviceIds);
+      .from('professional_services')
+      .select('professionalId, serviceId')
+      .in('serviceId', serviceIds);
 
-    if (linkError) throw linkError;
+    if (linkError) {
+      throw new Error(`Erro ao buscar serviços: ${linkError.message}`);
+    }
 
     // Filtrar profissionais que atendem TODOS os serviços selecionados
     const profCountMap: Record<string, number> = {};
     for (const link of links || []) {
-      profCountMap[link.A] = (profCountMap[link.A] || 0) + 1;
+      profCountMap[link.professionalId] = (profCountMap[link.professionalId] || 0) + 1;
     }
     const eligibleProfIds = Object.entries(profCountMap)
       .filter(([, count]) => count >= serviceIds.length)
@@ -122,11 +153,13 @@ export class ProfessionalsService {
     // 2. Buscar dados dos profissionais ativos
     const { data: professionals, error: profError } = await this.supabase
       .from('professionals')
-      .select('id, name, phone, email, avatarUrl, workingHours')
+      .select('id, name, avatarUrl, workingHours')
       .eq('isActive', true)
       .in('id', eligibleProfIds);
 
-    if (profError) throw profError;
+    if (profError) {
+      throw new Error(`Erro ao buscar profissionais: ${profError.message}`);
+    }
     if (!professionals || professionals.length === 0) return [];
 
     // 3. Filtrar por dia de trabalho (workingHours)
@@ -141,25 +174,28 @@ export class ProfessionalsService {
     if (workingProfessionals.length === 0) return [];
 
     // 4. Excluir profissionais com bloqueio de dia inteiro na data
-    const startOfDay = new Date(date + 'T00:00:00.000Z');
-    const endOfDay = new Date(date + 'T23:59:59.999Z');
-
-    const { data: timeBlocks } = await this.supabase
-      .from('time_blocks')
-      .select('professionalId, startTime, endTime')
-      .in('professionalId', workingProfessionals.map((p: any) => p.id))
-      .lte('startTime', endOfDay.toISOString())
-      .gte('endTime', startOfDay.toISOString());
-
-    // Profissionais com bloqueio que cobre o dia inteiro (8h+ de bloqueio)
     const blockedProfIds = new Set<string>();
-    for (const block of timeBlocks || []) {
-      const blockStart = new Date(block.startTime);
-      const blockEnd = new Date(block.endTime);
-      const blockHours = (blockEnd.getTime() - blockStart.getTime()) / (1000 * 60 * 60);
-      if (blockHours >= 8) {
-        blockedProfIds.add(block.professionalId);
+    try {
+      const startOfDay = `${date}T00:00:00`;
+      const endOfDay = `${date}T23:59:59`;
+
+      const { data: timeBlocks } = await this.supabase
+        .from('time_blocks')
+        .select('professionalId, startTime, endTime')
+        .in('professionalId', workingProfessionals.map((p: any) => p.id))
+        .lte('startTime', endOfDay)
+        .gte('endTime', startOfDay);
+
+      for (const block of timeBlocks || []) {
+        const blockStart = new Date(block.startTime);
+        const blockEnd = new Date(block.endTime);
+        const blockHours = (blockEnd.getTime() - blockStart.getTime()) / (1000 * 60 * 60);
+        if (blockHours >= 8) {
+          blockedProfIds.add(block.professionalId);
+        }
       }
+    } catch {
+      // Se a tabela time_blocks não existir, ignorar bloqueios
     }
 
     return workingProfessionals
@@ -167,8 +203,6 @@ export class ProfessionalsService {
       .map((p: any) => ({
         id: p.id,
         name: p.name,
-        phone: p.phone,
-        email: p.email,
         avatarUrl: p.avatarUrl,
       }));
   }
@@ -281,18 +315,14 @@ export class ProfessionalsService {
   }
 
   async getAppointmentsByDate(professionalId: string, date: Date) {
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
+    const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
     const { data: appointments, error } = await this.supabase
       .from('appointments')
       .select('id, scheduledAt, totalDuration, status, clients(name)')
       .eq('professionalId', professionalId)
-      .gte('scheduledAt', startOfDay.toISOString())
-      .lte('scheduledAt', endOfDay.toISOString())
+      .gte('scheduledAt', `${dateStr}T00:00:00`)
+      .lte('scheduledAt', `${dateStr}T23:59:59`)
       .in('status', ['SCHEDULED', 'ATTENDED'])
       .order('scheduledAt', { ascending: true });
 

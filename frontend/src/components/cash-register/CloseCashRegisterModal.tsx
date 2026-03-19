@@ -44,28 +44,42 @@ export function CloseCashRegisterModal({
   isLoading,
   error,
 }: CloseCashRegisterModalProps) {
-  const [closingBalanceReais, setClosingBalanceReais] = useState('');
+  const [closingBalanceCents, setClosingBalanceCents] = useState(0);
+  const [closingBalanceDisplay, setClosingBalanceDisplay] = useState('');
   const [notes, setNotes] = useState('');
 
   useEffect(() => {
     if (isOpen) {
-      setClosingBalanceReais('');
+      setClosingBalanceCents(0);
+      setClosingBalanceDisplay('');
       setNotes('');
     }
   }, [isOpen]);
 
+  const handleCurrencyInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Remove tudo que não é dígito
+    const digits = e.target.value.replace(/\D/g, '');
+    const cents = parseInt(digits || '0', 10);
+    setClosingBalanceCents(cents);
+
+    if (cents === 0) {
+      setClosingBalanceDisplay('');
+    } else {
+      setClosingBalanceDisplay(
+        new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(cents / 100)
+      );
+    }
+  };
+
   if (!isOpen || !cashRegister) return null;
 
   const expectedBalance = cashRegister.openingBalance + cashRegister.totalCash;
-  const closingBalanceCents = closingBalanceReais
-    ? Math.round(parseFloat(closingBalanceReais.replace(',', '.')) * 100)
-    : 0;
   const discrepancy = closingBalanceCents - expectedBalance;
-  const hasInput = closingBalanceReais.length > 0;
+  const hasInput = closingBalanceCents > 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!closingBalanceReais) return;
+    if (!closingBalanceCents) return;
     await onSubmit({
       closingBalance: closingBalanceCents,
       notes: notes || undefined,
@@ -178,12 +192,10 @@ export function CloseCashRegisterModal({
               </span>
               <input
                 type="text"
+                inputMode="numeric"
                 id="closingBalance"
-                value={closingBalanceReais}
-                onChange={(e) => {
-                  const value = e.target.value.replace(/[^\d,\.]/g, '');
-                  setClosingBalanceReais(value);
-                }}
+                value={closingBalanceDisplay}
+                onChange={handleCurrencyInput}
                 placeholder="0,00"
                 className="w-full rounded-xl border-2 border-[var(--border-color)] bg-[var(--hover-bg)] py-3.5 pl-14 pr-4 text-2xl font-bold text-[var(--text-primary)] placeholder:text-[var(--text-muted)]/40 focus:border-[#C8923A] focus:outline-none transition-colors"
                 autoFocus
@@ -279,7 +291,7 @@ export function CloseCashRegisterModal({
             </button>
             <button
               type="submit"
-              disabled={isLoading || !closingBalanceReais}
+              disabled={isLoading || !closingBalanceCents}
               className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-[#8B6914] px-4 py-3 text-sm font-semibold text-white hover:bg-[#725510] disabled:cursor-not-allowed disabled:opacity-50 transition-all active:scale-[0.98]"
             >
               {isLoading ? (

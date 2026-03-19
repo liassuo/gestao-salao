@@ -91,7 +91,61 @@ export class AppointmentsService {
       throw new NotFoundException('Cliente não encontrado');
     }
 
-    // 4. Criar o agendamento
+    // 4. Verificar conflitos com bloqueios de horário e agendamentos existentes
+    const scheduledDate = String(dto.scheduledAt).substring(0, 10); // YYYY-MM-DD
+    const startOfDay = `${scheduledDate}T00:00:00`;
+    const endOfDay = `${scheduledDate}T23:59:59`;
+
+    // Extrair horas e minutos de string datetime sem depender de timezone do JS
+    const parseMin = (dateStr: string): number => {
+      const timePart = String(dateStr).substring(11, 16);
+      const [h, m] = timePart.split(':').map(Number);
+      return (h || 0) * 60 + (m || 0);
+    };
+
+    const apptStartMinutes = parseMin(String(dto.scheduledAt));
+    const apptEndMinutes = apptStartMinutes + totalDuration;
+
+    // 4a. Verificar bloqueios de horário
+    const { data: timeBlocks } = await this.supabase
+      .from('time_blocks')
+      .select('startTime, endTime')
+      .eq('professionalId', dto.professionalId)
+      .gte('startTime', startOfDay)
+      .lte('endTime', endOfDay);
+
+    for (const block of timeBlocks || []) {
+      const blockStartMin = parseMin(block.startTime);
+      const blockEndMin = parseMin(block.endTime);
+
+      if (apptStartMinutes < blockEndMin && apptEndMinutes > blockStartMin) {
+        throw new ConflictException(
+          'O horário selecionado conflita com um bloqueio de horário do profissional',
+        );
+      }
+    }
+
+    // 4b. Verificar agendamentos existentes
+    const { data: existingAppts } = await this.supabase
+      .from('appointments')
+      .select('scheduledAt, totalDuration')
+      .eq('professionalId', dto.professionalId)
+      .in('status', ['SCHEDULED', 'ATTENDED'])
+      .gte('scheduledAt', startOfDay)
+      .lte('scheduledAt', endOfDay);
+
+    for (const existing of existingAppts || []) {
+      const existStartMin = parseMin(existing.scheduledAt);
+      const existEndMin = existStartMin + (existing.totalDuration || 30);
+
+      if (apptStartMinutes < existEndMin && apptEndMinutes > existStartMin) {
+        throw new ConflictException(
+          'O horário selecionado conflita com outro agendamento existente',
+        );
+      }
+    }
+
+    // 5. Criar o agendamento
     const now = new Date().toISOString();
     const appointmentId = randomUUID();
     const { data: appointment, error: apptError } = await this.supabase
@@ -205,11 +259,38 @@ export class AppointmentsService {
     return appointment;
   }
 
-  async findAll() {
-    const { data: appointments, error } = await this.supabase
+  async findAll(filters?: {
+    professionalId?: string;
+    clientId?: string;
+    startDate?: string;
+    endDate?: string;
+    status?: string;
+  }) {
+    let query = this.supabase
       .from('appointments')
-      .select(this.APPOINTMENT_SELECT)
-      .order('scheduledAt', { ascending: false });
+      .select(this.APPOINTMENT_SELECT);
+
+    if (filters?.professionalId) {
+      query = query.eq('professionalId', filters.professionalId);
+    }
+
+    if (filters?.clientId) {
+      query = query.eq('clientId', filters.clientId);
+    }
+
+    if (filters?.startDate) {
+      query = query.gte('scheduledAt', `${filters.startDate}T00:00:00`);
+    }
+
+    if (filters?.endDate) {
+      query = query.lte('scheduledAt', `${filters.endDate}T23:59:59`);
+    }
+
+    if (filters?.status) {
+      query = query.eq('status', filters.status);
+    }
+
+    const { data: appointments, error } = await query.order('scheduledAt', { ascending: false });
 
     if (error) throw error;
     return appointments || [];
@@ -232,12 +313,17 @@ export class AppointmentsService {
     return appointments || [];
   }
 
-  async findByClient(clientId: string) {
-    const { data: appointments, error } = await this.supabase
+  async findByClient(clientId: string, status?: string) {
+    let query = this.supabase
       .from('appointments')
       .select(this.APPOINTMENT_SELECT)
-      .eq('clientId', clientId)
-      .order('scheduledAt', { ascending: false });
+      .eq('clientId', clientId);
+
+    if (status) {
+      query = query.eq('status', status);
+    }
+
+    const { data: appointments, error } = await query.order('scheduledAt', { ascending: false });
 
     if (error) throw error;
     return appointments || [];
@@ -519,22 +605,27 @@ export class AppointmentsService {
       .gte('startTime', startOfDay)
       .lte('endTime', endOfDay);
 
+    // Extrair horas e minutos de uma string datetime (local, sem depender de timezone do JS)
+    const parseMinutes = (dateStr: string): number => {
+      // Formato esperado: "YYYY-MM-DDTHH:mm:ss" ou "YYYY-MM-DDTHH:mm:ss.sssZ"
+      const timePart = String(dateStr).substring(11, 16); // "HH:mm"
+      const [h, m] = timePart.split(':').map(Number);
+      return (h || 0) * 60 + (m || 0);
+    };
+
     // Criar intervalos ocupados (em minutos desde meia-noite)
     const busySlots: { start: number; end: number }[] = [];
 
     for (const appt of existingAppts || []) {
-      const apptDate = new Date(appt.scheduledAt);
-      const apptStart = apptDate.getHours() * 60 + apptDate.getMinutes();
+      const apptStart = parseMinutes(appt.scheduledAt);
       const apptEnd = apptStart + (appt.totalDuration || 30);
       busySlots.push({ start: apptStart, end: apptEnd });
     }
 
     for (const block of timeBlocks || []) {
-      const blockStart = new Date(block.startTime);
-      const blockEnd = new Date(block.endTime);
       busySlots.push({
-        start: blockStart.getHours() * 60 + blockStart.getMinutes(),
-        end: blockEnd.getHours() * 60 + blockEnd.getMinutes(),
+        start: parseMinutes(block.startTime),
+        end: parseMinutes(block.endTime),
       });
     }
 

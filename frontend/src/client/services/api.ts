@@ -51,7 +51,20 @@ clientApi.interceptors.response.use(
   }
 );
 
+export interface CheckEmailResponse {
+  status: 'new' | 'login' | 'setup_password' | 'google';
+  name?: string;
+}
+
 export const clientAuthApi = {
+  checkEmail: async (email: string): Promise<CheckEmailResponse> => {
+    const response = await clientApi.post<CheckEmailResponse>('/auth/client/check-email', { email });
+    return response.data;
+  },
+  initSetupPassword: async (email: string, password: string): Promise<ClientLoginResponse> => {
+    const response = await clientApi.post<ClientLoginResponse>('/auth/client/init-setup-password', { email, password });
+    return response.data;
+  },
   login: async (email: string, password: string): Promise<ClientLoginResponse> => {
     const response = await clientApi.post<ClientLoginResponse>('/auth/client/login', {
       email,
@@ -65,12 +78,19 @@ export const clientAuthApi = {
     });
     return response.data;
   },
-  register: async (name: string, email: string, password: string, phone?: string): Promise<ClientLoginResponse> => {
+  register: async (name: string, email: string, password: string, phone: string, birthDate?: string): Promise<ClientLoginResponse> => {
     const response = await clientApi.post<ClientLoginResponse>('/auth/client/register', {
       name,
       email,
       password,
       phone,
+      birthDate,
+    });
+    return response.data;
+  },
+  setupPassword: async (password: string): Promise<ClientLoginResponse> => {
+    const response = await clientApi.post<ClientLoginResponse>('/auth/client/setup-password', {
+      password,
     });
     return response.data;
   },

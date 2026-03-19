@@ -27,10 +27,16 @@ export async function subscribeToPushNotifications(): Promise<boolean> {
       return false;
     }
 
-    // 2. Pedir permissão
-    const permission = await Notification.requestPermission();
+    // 2. Verificar permissão atual antes de pedir (evita spam de prompt)
+    if (Notification.permission === 'denied') {
+      return false;
+    }
+
+    const permission = Notification.permission === 'granted'
+      ? 'granted'
+      : await Notification.requestPermission();
+
     if (permission !== 'granted') {
-      console.warn('Notification permission denied');
       return false;
     }
 

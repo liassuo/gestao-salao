@@ -1,4 +1,4 @@
-import { UserCog, MoreVertical, Edit2, Trash2 } from 'lucide-react';
+import { UserCog, MoreVertical, Edit2, Trash2, KeyRound } from 'lucide-react';
 import { useState, useRef } from 'react';
 import { EmptyState } from '@/components/ui';
 import type { Professional } from '@/types';
@@ -8,6 +8,7 @@ interface ProfessionalsTableProps {
   professionals: Professional[];
   onEdit: (professional: Professional) => void;
   onDelete: (professional: Professional) => void;
+  onResetPassword: (professional: Professional) => void;
   isLoading?: boolean;
   onNewProfessional?: () => void;
 }
@@ -26,6 +27,7 @@ export function ProfessionalsTable({
   professionals,
   onEdit,
   onDelete,
+  onResetPassword,
   isLoading,
   onNewProfessional,
 }: ProfessionalsTableProps) {
@@ -153,6 +155,16 @@ export function ProfessionalsTable({
                           >
                             <Edit2 className="h-4 w-4" />
                             Editar
+                          </button>
+                          <button
+                            onClick={() => {
+                              onResetPassword(professional);
+                              setOpenMenuId(null);
+                            }}
+                            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[#C8923A] hover:bg-[#C8923A]/10"
+                          >
+                            <KeyRound className="h-4 w-4" />
+                            Resetar Senha
                           </button>
                           <button
                             onClick={() => {

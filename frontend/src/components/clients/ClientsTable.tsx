@@ -97,7 +97,14 @@ export function ClientsTable({
                       </span>
                     </div>
                     <div>
-                      <p className="font-medium text-[var(--text-primary)]">{client.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-[var(--text-primary)]">{client.name}</p>
+                        {client.hasDebts && (
+                          <span className="inline-flex items-center rounded-md bg-[#A63030]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[#A63030] ring-1 ring-inset ring-[#A63030]/20">
+                            DIVIDA
+                          </span>
+                        )}
+                      </div>
                       {client.notes && (
                         <p className="text-xs text-[var(--text-muted)] truncate max-w-[200px]">
                           {client.notes}

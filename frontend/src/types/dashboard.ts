@@ -86,12 +86,20 @@ export interface ServicePopularity {
   count: number;
 }
 
+export interface BirthdayClient {
+  id: string;
+  name: string;
+  phone: string;
+  birthDate: string;
+  day: number;
+}
+
 export interface OperationalData {
   activeProfessionals: number;
   openOrders: number;
   totalClients: number;
   topClients: TopClient[];
-  lowStockProducts: LowStockProduct[];
+  birthdayClients: BirthdayClient[];
   unpaidClients: UnpaidClient[];
 }
 

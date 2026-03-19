@@ -2,7 +2,7 @@ import { Calendar, Users, DollarSign, AlertCircle, TrendingUp, Clock, CreditCard
 import { Spinner } from '@/components/ui';
 import { formatCurrency, formatDateTime, formatTime } from '@/utils/format';
 import { TopClientsCard } from './TopClientsCard';
-import { LowStockCard } from './LowStockCard';
+import { BirthdayClientsCard } from './BirthdayClientsCard';
 import { UnpaidClientsCard } from './UnpaidClientsCard';
 import type { DashboardStats, UpcomingAppointment, RecentActivity, OperationalData } from '@/types/dashboard';
 
@@ -242,7 +242,7 @@ export function OperationalDashboard({
       ) : operationalData && (
         <div className="mt-8 grid gap-6 lg:grid-cols-3">
           <TopClientsCard clients={operationalData.topClients} />
-          <LowStockCard products={operationalData.lowStockProducts} />
+          <BirthdayClientsCard clients={operationalData.birthdayClients} />
           <UnpaidClientsCard clients={operationalData.unpaidClients} />
         </div>
       )}

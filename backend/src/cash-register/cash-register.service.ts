@@ -17,6 +17,16 @@ export class CashRegisterService {
     return normalized;
   }
 
+  /** Retorna data local no formato YYYY-MM-DD */
+  private getLocalDateStr(date: Date = new Date()): string {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  }
+
+  /** Retorna datetime local no formato YYYY-MM-DDTHH:mm:ss (sem Z, evita problemas de fuso) */
+  private getLocalDateTimeStr(date: Date = new Date()): string {
+    return `${this.getLocalDateStr(date)}T${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
+  }
+
   async openRegister(dto: OpenCashRegisterDto) {
     let openedBy = dto.openedBy;
 
@@ -45,12 +55,15 @@ export class CashRegisterService {
       }
     }
 
-    const normalizedDate = this.normalizeDate(dto.date ?? new Date());
+    const dateStr = this.getLocalDateStr(dto.date ?? new Date());
+    const startOfDay = `${dateStr}T00:00:00`;
+    const endOfDay = `${dateStr}T23:59:59`;
 
     const { data: existingRegister } = await this.supabase
       .from('cash_registers')
       .select('id')
-      .eq('date', normalizedDate.toISOString())
+      .gte('date', startOfDay)
+      .lte('date', endOfDay)
       .single();
 
     if (existingRegister) {
@@ -67,12 +80,12 @@ export class CashRegisterService {
       throw new BadRequestException('Existe um caixa aberto que precisa ser fechado primeiro');
     }
 
-    const now = new Date().toISOString();
+    const now = this.getLocalDateTimeStr();
     const { data: register, error } = await this.supabase
       .from('cash_registers')
       .insert({
         id: crypto.randomUUID(),
-        date: normalizedDate.toISOString(),
+        date: `${dateStr}T00:00:00`,
         openedAt: now,
         openingBalance: dto.openingBalance,
         openedBy: openedBy,
@@ -103,25 +116,18 @@ export class CashRegisterService {
       throw new BadRequestException('Este caixa já está fechado');
     }
 
-    const { data: user } = await this.supabase
-      .from('users')
-      .select('id')
-      .eq('id', dto.closedBy)
-      .single();
+    // Usar closedBy do DTO ou fallback para openedBy do registro
+    const closedBy = dto.closedBy || register.openedBy;
 
-    if (!user) {
-      throw new NotFoundException('Usuário não encontrado');
-    }
-
-    const totals = await this.calculateDailyTotals(new Date(register.date));
+    const totals = await this.calculateDailyTotals(register.date);
     const expectedClosingBalance = register.openingBalance + totals.cash;
     const discrepancy = dto.closingBalance - expectedClosingBalance;
 
     const { data: closedRegister, error: closeError } = await this.supabase
       .from('cash_registers')
       .update({
-        closedAt: new Date().toISOString(),
-        closedBy: dto.closedBy,
+        closedAt: this.getLocalDateTimeStr(),
+        closedBy,
         closingBalance: dto.closingBalance,
         totalCash: totals.cash,
         totalPix: totals.pix,
@@ -140,13 +146,25 @@ export class CashRegisterService {
   }
 
   async getTodayRegister() {
-    const today = this.normalizeDate(new Date());
+    const todayStr = this.getLocalDateStr();
+    const startOfDay = `${todayStr}T00:00:00`;
+    const endOfDay = `${todayStr}T23:59:59`;
 
     const { data: register } = await this.supabase
       .from('cash_registers')
       .select('*')
-      .eq('date', today.toISOString())
+      .gte('date', startOfDay)
+      .lte('date', endOfDay)
       .single();
+
+    // Se o caixa está aberto, calcular totais em tempo real
+    if (register && register.isOpen) {
+      const totals = await this.calculateDailyTotals(register.date);
+      register.totalCash = totals.cash;
+      register.totalPix = totals.pix;
+      register.totalCard = totals.card;
+      register.totalRevenue = totals.total;
+    }
 
     return register;
   }
@@ -176,12 +194,15 @@ export class CashRegisterService {
   }
 
   async findByDate(date: Date) {
-    const normalizedDate = this.normalizeDate(date);
+    const dateStr = this.getLocalDateStr(date);
+    const startOfDay = `${dateStr}T00:00:00`;
+    const endOfDay = `${dateStr}T23:59:59`;
 
     const { data: register } = await this.supabase
       .from('cash_registers')
       .select('*')
-      .eq('date', normalizedDate.toISOString())
+      .gte('date', startOfDay)
+      .lte('date', endOfDay)
       .single();
 
     return register;
@@ -197,20 +218,30 @@ export class CashRegisterService {
     return registers || [];
   }
 
-  async calculateDailyTotals(date: Date) {
-    const normalizedDate = this.normalizeDate(date);
-    const nextDay = new Date(normalizedDate);
-    nextDay.setDate(nextDay.getDate() + 1);
+  async calculateDailyTotals(dateInput: Date | string) {
+    let dateStr: string;
+    if (typeof dateInput === 'string') {
+      dateStr = dateInput.substring(0, 10);
+    } else {
+      dateStr = this.getLocalDateStr(dateInput);
+    }
+    const startOfDay = `${dateStr}T00:00:00`;
+    const endOfDay = `${dateStr}T23:59:59`;
 
     const { data: payments } = await this.supabase
       .from('payments')
-      .select('amount, method')
-      .gte('paidAt', normalizedDate.toISOString())
-      .lt('paidAt', nextDay.toISOString());
+      .select('amount, method, asaasStatus')
+      .gte('paidAt', startOfDay)
+      .lte('paidAt', endOfDay);
 
-    const totals = { cash: 0, pix: 0, card: 0, total: 0 };
+    const totals = { cash: 0, pix: 0, card: 0, boleto: 0, total: 0 };
 
     for (const payment of payments || []) {
+      // Ignorar pagamentos Asaas que foram estornados ou deletados
+      if (payment.asaasStatus && ['REFUNDED', 'DELETED', 'CANCELED'].includes(payment.asaasStatus)) {
+        continue;
+      }
+
       switch (payment.method) {
         case 'CASH':
           totals.cash += payment.amount;
@@ -221,6 +252,9 @@ export class CashRegisterService {
         case 'CARD':
           totals.card += payment.amount;
           break;
+        case 'BOLETO':
+          totals.boleto += payment.amount;
+          break;
       }
       totals.total += payment.amount;
     }
@@ -229,11 +263,14 @@ export class CashRegisterService {
   }
 
   async getSummary(startDate: Date, endDate: Date) {
+    const startStr = `${this.getLocalDateStr(startDate)}T00:00:00`;
+    const endStr = `${this.getLocalDateStr(endDate)}T23:59:59`;
+
     const { data: registers } = await this.supabase
       .from('cash_registers')
       .select('*')
-      .gte('date', this.normalizeDate(startDate).toISOString())
-      .lte('date', this.normalizeDate(endDate).toISOString())
+      .gte('date', startStr)
+      .lte('date', endStr)
       .eq('isOpen', false);
 
     const summary = {

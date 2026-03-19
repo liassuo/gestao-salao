@@ -20,9 +20,12 @@ export interface LoginCredentials {
 export interface LoginResponse {
   accessToken: string;
   user: User;
+  mustChangePassword?: boolean;
 }
 
 export interface AuthContextType extends AuthState {
-  login: (credentials: LoginCredentials) => Promise<void>;
+  mustChangePassword: boolean;
+  login: (credentials: LoginCredentials) => Promise<{ mustChangePassword?: boolean }>;
+  setupPassword: (password: string) => Promise<void>;
   logout: () => void;
 }

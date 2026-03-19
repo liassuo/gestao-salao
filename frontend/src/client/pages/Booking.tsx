@@ -491,7 +491,7 @@ export function ClientBooking() {
           <div>
             <p className="text-xs text-[var(--text-muted)]">Data e horario</p>
             <p className="text-[var(--text-primary)] font-medium">
-              {selectedDate && formatDateLong(selectedDate.toISOString())} as {selectedTime?.slice(0, 5)}
+              {selectedDate && formatDateLong(formatDateISO(selectedDate))} as {selectedTime?.slice(0, 5)}
             </p>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { IsOptional, IsUUID, IsDateString } from 'class-validator';
+import { IsOptional, IsUUID, IsDateString, IsString } from 'class-validator';
 
 export class QueryAppointmentDto {
   @IsOptional()
@@ -16,4 +16,8 @@ export class QueryAppointmentDto {
   @IsOptional()
   @IsDateString()
   endDate?: string;
+
+  @IsOptional()
+  @IsString()
+  status?: string;
 }

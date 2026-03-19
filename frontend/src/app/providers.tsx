@@ -16,22 +16,30 @@ const queryClient = new QueryClient({
 });
 
 // GOOGLE_CLIENT_ID deve ser configurado no .env
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+export const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
 export function Providers() {
+  const content = (
+    <ThemeProvider>
+      <SidebarProvider>
+        <AuthProvider>
+          <ToastProvider>
+            <RouterProvider router={router} />
+          </ToastProvider>
+        </AuthProvider>
+      </SidebarProvider>
+    </ThemeProvider>
+  );
+
   return (
     <QueryClientProvider client={queryClient}>
-      <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-        <ThemeProvider>
-          <SidebarProvider>
-            <AuthProvider>
-              <ToastProvider>
-                <RouterProvider router={router} />
-              </ToastProvider>
-            </AuthProvider>
-          </SidebarProvider>
-        </ThemeProvider>
-      </GoogleOAuthProvider>
+      {GOOGLE_CLIENT_ID ? (
+        <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+          {content}
+        </GoogleOAuthProvider>
+      ) : (
+        content
+      )}
     </QueryClientProvider>
   );
 }
