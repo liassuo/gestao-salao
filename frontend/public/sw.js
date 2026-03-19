@@ -28,8 +28,13 @@ self.addEventListener('activate', (event) => {
 
 // Fetch: network-first strategy (tries network, falls back to cache)
 self.addEventListener('fetch', (event) => {
-  // Skip non-GET requests and API calls
-  if (event.request.method !== 'GET' || event.request.url.includes('/api/')) {
+  // Skip non-GET, API calls, and non-http(s) schemes (chrome-extension, etc)
+  const url = event.request.url;
+  if (
+    event.request.method !== 'GET' ||
+    url.includes('/api/') ||
+    (!url.startsWith('http://') && !url.startsWith('https://'))
+  ) {
     return;
   }
 
