@@ -270,7 +270,7 @@ export function ClientLogin() {
                   onSuccess={handleGoogleSuccess}
                   onError={() => setError('Erro ao conectar com Google.')}
                   size="large"
-                  width="100%"
+                  width={400}
                   text="continue_with"
                   shape="rectangular"
                 />
