@@ -136,7 +136,9 @@ export class ProfessionalsService {
       .select('professionalId, serviceId')
       .in('serviceId', serviceIds);
 
-    if (linkError) throw linkError;
+    if (linkError) {
+      throw new Error(`Erro ao buscar serviços: ${linkError.message}`);
+    }
 
     // Filtrar profissionais que atendem TODOS os serviços selecionados
     const profCountMap: Record<string, number> = {};
@@ -152,11 +154,13 @@ export class ProfessionalsService {
     // 2. Buscar dados dos profissionais ativos
     const { data: professionals, error: profError } = await this.supabase
       .from('professionals')
-      .select('id, name, phone, email, avatarUrl, workingHours')
+      .select('id, name, email, avatarUrl, workingHours')
       .eq('isActive', true)
       .in('id', eligibleProfIds);
 
-    if (profError) throw profError;
+    if (profError) {
+      throw new Error(`Erro ao buscar profissionais: ${profError.message}`);
+    }
     if (!professionals || professionals.length === 0) return [];
 
     // 3. Filtrar por dia de trabalho (workingHours)
@@ -171,25 +175,28 @@ export class ProfessionalsService {
     if (workingProfessionals.length === 0) return [];
 
     // 4. Excluir profissionais com bloqueio de dia inteiro na data
-    const startOfDay = `${date}T00:00:00`;
-    const endOfDay = `${date}T23:59:59`;
-
-    const { data: timeBlocks } = await this.supabase
-      .from('time_blocks')
-      .select('professionalId, startTime, endTime')
-      .in('professionalId', workingProfessionals.map((p: any) => p.id))
-      .lte('startTime', endOfDay)
-      .gte('endTime', startOfDay);
-
-    // Profissionais com bloqueio que cobre o dia inteiro (8h+ de bloqueio)
     const blockedProfIds = new Set<string>();
-    for (const block of timeBlocks || []) {
-      const blockStart = new Date(block.startTime);
-      const blockEnd = new Date(block.endTime);
-      const blockHours = (blockEnd.getTime() - blockStart.getTime()) / (1000 * 60 * 60);
-      if (blockHours >= 8) {
-        blockedProfIds.add(block.professionalId);
+    try {
+      const startOfDay = `${date}T00:00:00`;
+      const endOfDay = `${date}T23:59:59`;
+
+      const { data: timeBlocks } = await this.supabase
+        .from('time_blocks')
+        .select('professionalId, startTime, endTime')
+        .in('professionalId', workingProfessionals.map((p: any) => p.id))
+        .lte('startTime', endOfDay)
+        .gte('endTime', startOfDay);
+
+      for (const block of timeBlocks || []) {
+        const blockStart = new Date(block.startTime);
+        const blockEnd = new Date(block.endTime);
+        const blockHours = (blockEnd.getTime() - blockStart.getTime()) / (1000 * 60 * 60);
+        if (blockHours >= 8) {
+          blockedProfIds.add(block.professionalId);
+        }
       }
+    } catch {
+      // Se a tabela time_blocks não existir, ignorar bloqueios
     }
 
     return workingProfessionals
@@ -197,7 +204,6 @@ export class ProfessionalsService {
       .map((p: any) => ({
         id: p.id,
         name: p.name,
-        phone: p.phone,
         email: p.email,
         avatarUrl: p.avatarUrl,
       }));
