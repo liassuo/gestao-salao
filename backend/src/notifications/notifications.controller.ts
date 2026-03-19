@@ -4,13 +4,12 @@ import {
   Delete,
   Body,
   Req,
-  UseGuards,
   Get,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { NotificationsService } from './notifications.service';
 import { ConfigService } from '@nestjs/config';
+import { Public } from '../auth/decorators/public.decorator';
 
 @ApiTags('Notifications')
 @Controller('notifications')
@@ -21,6 +20,7 @@ export class NotificationsController {
   ) {}
 
   /** Retorna a VAPID public key pro frontend se inscrever */
+  @Public()
   @Get('vapid-public-key')
   getVapidPublicKey() {
     return {
@@ -30,7 +30,6 @@ export class NotificationsController {
 
   /** Salva a push subscription de um cliente autenticado */
   @Post('subscribe')
-  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   async subscribe(@Req() req: any, @Body() body: any) {
     const role = req.user.role === 'CLIENT' ? 'CLIENT' : 'STAFF';
@@ -40,7 +39,6 @@ export class NotificationsController {
 
   /** Remove uma push subscription */
   @Delete('unsubscribe')
-  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   async unsubscribe(@Body() body: { endpoint: string }) {
     await this.notifications.removeSubscription(body.endpoint);

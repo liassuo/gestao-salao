@@ -2,7 +2,7 @@ import { Controller, Post, Patch, Body, HttpCode, HttpStatus, UseGuards, Req } f
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto, AuthResponseDto, GoogleAuthDto } from './dto';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { Public } from './decorators/public.decorator';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -10,7 +10,6 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Patch('change-password')
-  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Alterar senha do usuário autenticado' })
   async changePassword(
@@ -21,6 +20,7 @@ export class AuthController {
     return { message: 'Senha alterada com sucesso' };
   }
 
+  @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login de usuário administrativo' })
@@ -29,6 +29,7 @@ export class AuthController {
     return this.authService.login(loginDto);
   }
 
+  @Public()
   @Post('client/register')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Cadastro de cliente com email/senha' })
@@ -38,6 +39,7 @@ export class AuthController {
     return this.authService.clientRegister(body);
   }
 
+  @Public()
   @Post('client/login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login de cliente com email/senha' })
@@ -46,6 +48,7 @@ export class AuthController {
     return this.authService.clientLogin(loginDto);
   }
 
+  @Public()
   @Post('client/google')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login de cliente com Google OAuth' })
@@ -56,3 +59,4 @@ export class AuthController {
     return this.authService.clientGoogleLogin(googleAuthDto);
   }
 }
+

@@ -10,7 +10,6 @@ import {
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
-  UseGuards,
   Req,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
@@ -22,7 +21,6 @@ import {
   UpdateAppointmentDto,
   QueryAppointmentDto,
 } from './dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -42,7 +40,6 @@ export class AppointmentsController {
    * GET /appointments/me
    * Retorna agendamentos do cliente autenticado (app mobile)
    */
-  @UseGuards(JwtAuthGuard)
   @Get('me')
   async findMyAppointments(@Req() req: RequestWithUser) {
     return this.appointmentsService.findByClient(req.user.id);
@@ -105,7 +102,6 @@ export class AppointmentsController {
    * Cria agendamento pelo app mobile (cliente autenticado)
    * clientId é extraído do token JWT
    */
-  @UseGuards(JwtAuthGuard)
   @Post('client')
   @HttpCode(HttpStatus.CREATED)
   async createAsClient(
@@ -187,7 +183,6 @@ export class AppointmentsController {
    * PATCH /appointments/:id/rate
    * Cliente avalia um agendamento atendido
    */
-  @UseGuards(JwtAuthGuard)
   @Patch(':id/rate')
   async rate(
     @Param('id', ParseUUIDPipe) id: string,

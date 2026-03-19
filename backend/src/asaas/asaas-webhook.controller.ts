@@ -13,8 +13,12 @@ import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../supabase/supabase.service';
 import { AsaasService } from './asaas.service';
 import { AsaasWebhookEvent, AsaasChargeStatus } from './asaas.types';
+import { Public } from '../auth/decorators/public.decorator';
+import { SkipThrottle } from '@nestjs/throttler';
 
 @ApiTags('Webhooks')
+@Public()
+@SkipThrottle()
 @Controller('webhooks')
 export class AsaasWebhookController {
   private readonly logger = new Logger(AsaasWebhookController.name);
