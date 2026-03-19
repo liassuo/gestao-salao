@@ -11,19 +11,19 @@ export class CommissionsService {
   constructor(private readonly supabase: SupabaseService) {}
 
   async generate(dto: GenerateCommissionDto) {
-    const startDate = new Date(dto.startDate);
-    const endDate = new Date(dto.endDate);
-
-    if (startDate >= endDate) {
+    if (dto.periodStart >= dto.periodEnd) {
       throw new BadRequestException('A data de início deve ser anterior à data de fim');
     }
+
+    const startStr = `${dto.periodStart}T00:00:00`;
+    const endStr = `${dto.periodEnd}T23:59:59`;
 
     const { data: appointments } = await this.supabase
       .from('appointments')
       .select('professionalId, totalPrice')
       .eq('status', 'ATTENDED')
-      .gte('scheduledAt', startDate.toISOString())
-      .lte('scheduledAt', endDate.toISOString());
+      .gte('scheduledAt', startStr)
+      .lte('scheduledAt', endStr);
 
     if (!appointments || appointments.length === 0) {
       throw new BadRequestException('Nenhum atendimento encontrado no período informado');
@@ -51,21 +51,22 @@ export class CommissionsService {
 
       if (commissionAmount <= 0) continue;
 
-      const comNow = new Date().toISOString();
+      const d = new Date();
+      const comNow = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
       const { data: commission, error } = await this.supabase
         .from('commissions')
         .insert({
           id: crypto.randomUUID(),
           amount: commissionAmount,
-          periodStart: startDate.toISOString(),
-          periodEnd: endDate.toISOString(),
+          periodStart: startStr,
+          periodEnd: endStr,
           status: 'PENDING',
           professionalId: professionalId,
           branchId: professional.branchId,
           createdAt: comNow,
           updatedAt: comNow,
         })
-        .select('*')
+        .select('*, professional:professionals(id, name, commissionRate)')
         .single();
 
       if (!error) createdCommissions.push(commission);
@@ -81,7 +82,9 @@ export class CommissionsService {
   }
 
   async findAll(query: QueryCommissionDto) {
-    let queryBuilder = this.supabase.from('commissions').select('*');
+    let queryBuilder = this.supabase
+      .from('commissions')
+      .select('*, professional:professionals(id, name, commissionRate)');
 
     if (query.professionalId) {
       queryBuilder = queryBuilder.eq('professionalId', query.professionalId);
@@ -92,11 +95,11 @@ export class CommissionsService {
     }
 
     if (query.startDate) {
-      queryBuilder = queryBuilder.gte('periodStart', new Date(query.startDate).toISOString());
+      queryBuilder = queryBuilder.gte('periodStart', `${query.startDate}T00:00:00`);
     }
 
     if (query.endDate) {
-      queryBuilder = queryBuilder.lte('periodStart', new Date(query.endDate).toISOString());
+      queryBuilder = queryBuilder.lte('periodStart', `${query.endDate}T23:59:59`);
     }
 
     const { data: commissions, error } = await queryBuilder.order('createdAt', { ascending: false });
@@ -134,11 +137,13 @@ export class CommissionsService {
       throw new BadRequestException('Esta comissão já foi paga');
     }
 
+    const d = new Date();
+    const paidNow = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
     const { data: updated, error: updateError } = await this.supabase
       .from('commissions')
-      .update({ status: 'PAID', paidAt: new Date().toISOString() })
+      .update({ status: 'PAID', paidAt: paidNow })
       .eq('id', id)
-      .select('*')
+      .select('*, professional:professionals(id, name, commissionRate)')
       .single();
 
     if (updateError) throw updateError;

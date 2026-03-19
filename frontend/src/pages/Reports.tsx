@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { reportsService } from '../services/reports';
 import type { SalesReport, ProfessionalReport, ServicesReport, ClientsReport, DebtsReport, CashRegisterReport } from '../services/reports';
-import { formatCurrency, formatDate } from '../utils/format';
+import { formatCurrency, formatDate, formatPhone } from '../utils/format';
 import { Spinner } from '../components/ui';
 
 type ReportType = 'sales' | 'professionals' | 'services' | 'clients' | 'debts' | 'cash-register';
@@ -316,7 +316,7 @@ export function Reports() {
             {report.topClients.map((client) => (
               <tr key={client.id} className="text-[var(--text-secondary)]">
                 <td className="py-2">{client.name}</td>
-                <td className="py-2">{client.phone}</td>
+                <td className="py-2">{formatPhone(client.phone)}</td>
                 <td className="py-2 text-right">{client.appointmentsCount}</td>
                 <td className="py-2 text-right font-medium text-[var(--text-primary)]">{formatCurrency(client.totalSpent)}</td>
               </tr>
@@ -342,7 +342,7 @@ export function Reports() {
               {report.debtors.map((debtor) => (
                 <tr key={debtor.id} className="text-[var(--text-secondary)]">
                   <td className="py-2">{debtor.name}</td>
-                  <td className="py-2">{debtor.phone}</td>
+                  <td className="py-2">{formatPhone(debtor.phone)}</td>
                   <td className="py-2 text-right">{debtor.debtsCount}</td>
                   <td className="py-2 text-right font-medium text-[#A63030]">{formatCurrency(debtor.totalDebt)}</td>
                 </tr>

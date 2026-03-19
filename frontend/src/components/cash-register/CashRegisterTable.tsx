@@ -23,8 +23,16 @@ function formatCurrency(cents: number): string {
   }).format(cents / 100);
 }
 
+function parseLocalDate(dateStr: string): Date {
+  const clean = dateStr.replace(/Z$/, '').replace(/[+-]\d{2}:\d{2}$/, '');
+  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+    return new Date(clean + 'T12:00:00');
+  }
+  return new Date(clean);
+}
+
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('pt-BR', {
+  return parseLocalDate(dateStr).toLocaleDateString('pt-BR', {
     weekday: 'short',
     day: '2-digit',
     month: '2-digit',
@@ -32,7 +40,7 @@ function formatDate(dateStr: string): string {
 }
 
 function formatDateLong(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('pt-BR', {
+  return parseLocalDate(dateStr).toLocaleDateString('pt-BR', {
     weekday: 'long',
     day: '2-digit',
     month: 'long',
@@ -40,7 +48,7 @@ function formatDateLong(dateStr: string): string {
 }
 
 function formatTime(dateStr: string): string {
-  return new Date(dateStr).toLocaleTimeString('pt-BR', {
+  return parseLocalDate(dateStr).toLocaleTimeString('pt-BR', {
     hour: '2-digit',
     minute: '2-digit',
   });

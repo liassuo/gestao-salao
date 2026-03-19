@@ -9,10 +9,21 @@ export function formatPrice(priceInCents: number): string {
 }
 
 /**
+ * Parse seguro de data - strings YYYY-MM-DD recebem T12:00:00 para evitar bug de timezone
+ */
+function safeParseDate(dateStr: string): Date {
+  const clean = dateStr.replace(/Z$/, '').replace(/[+-]\d{2}:\d{2}$/, '');
+  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+    return new Date(clean + 'T12:00:00');
+  }
+  return new Date(clean);
+}
+
+/**
  * Formata data ISO para exibicao curta
  */
 export function formatDate(isoDate: string): string {
-  const date = new Date(isoDate);
+  const date = safeParseDate(isoDate);
   return date.toLocaleDateString('pt-BR', {
     weekday: 'short',
     day: '2-digit',
@@ -24,7 +35,7 @@ export function formatDate(isoDate: string): string {
  * Formata data ISO para exibicao completa
  */
 export function formatDateLong(isoDate: string): string {
-  const date = new Date(isoDate);
+  const date = safeParseDate(isoDate);
   return date.toLocaleDateString('pt-BR', {
     weekday: 'long',
     day: '2-digit',

@@ -401,8 +401,8 @@ describe('PaymentsService', () => {
         error: null,
       });
 
-      const start = new Date('2026-01-01');
-      const end = new Date('2026-01-31');
+      const start = '2026-01-01T00:00:00';
+      const end = '2026-01-31T23:59:59';
       const result = await service.findByDateRange(start, end);
 
       expect(result).toEqual(payments);
@@ -415,8 +415,8 @@ describe('PaymentsService', () => {
         error: null,
       });
 
-      const start = new Date('2026-06-01');
-      const end = new Date('2026-06-30');
+      const start = '2026-06-01T00:00:00';
+      const end = '2026-06-30T23:59:59';
       const result = await service.findByDateRange(start, end);
 
       expect(result).toEqual([]);
@@ -475,8 +475,8 @@ describe('PaymentsService', () => {
         error: null,
       });
 
-      const start = new Date('2026-01-01');
-      const end = new Date('2026-01-31');
+      const start = '2026-01-01T00:00:00';
+      const end = '2026-01-31T23:59:59';
       const result = await service.calculateTotalsByMethod(start, end);
 
       expect(result).toEqual({
@@ -494,8 +494,8 @@ describe('PaymentsService', () => {
         error: null,
       });
 
-      const start = new Date('2026-06-01');
-      const end = new Date('2026-06-30');
+      const start = '2026-06-01T00:00:00';
+      const end = '2026-06-30T23:59:59';
       const result = await service.calculateTotalsByMethod(start, end);
 
       expect(result).toEqual({

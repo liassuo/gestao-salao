@@ -132,22 +132,7 @@ export class AppointmentsController {
 
   @Get()
   async findAll(@Query() query: QueryAppointmentDto) {
-    // Se tem filtro por profissional e datas, usa método específico
-    if (query.professionalId && query.startDate && query.endDate) {
-      return this.appointmentsService.findByProfessionalAndDate(
-        query.professionalId,
-        new Date(query.startDate),
-        new Date(query.endDate),
-      );
-    }
-
-    // Se tem filtro por cliente
-    if (query.clientId) {
-      return this.appointmentsService.findByClient(query.clientId);
-    }
-
-    // Sem filtros, retorna todos
-    return this.appointmentsService.findAll();
+    return this.appointmentsService.findAll(query);
   }
 
   @Get('unpaid')

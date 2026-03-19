@@ -31,8 +31,8 @@ export class PaymentsController {
     // Se tem filtro por período
     if (query.startDate && query.endDate) {
       return this.paymentsService.findByDateRange(
-        new Date(query.startDate),
-        new Date(query.endDate),
+        `${query.startDate}T00:00:00`,
+        `${query.endDate}T23:59:59`,
       );
     }
 
@@ -56,18 +56,17 @@ export class PaymentsController {
     @Query('endDate') endDate: string,
   ) {
     if (!startDate || !endDate) {
-      // Se não informado, usa o dia atual
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-
-      return this.paymentsService.calculateTotalsByMethod(today, tomorrow);
+      const now = new Date();
+      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      return this.paymentsService.calculateTotalsByMethod(
+        `${todayStr}T00:00:00`,
+        `${todayStr}T23:59:59`,
+      );
     }
 
     return this.paymentsService.calculateTotalsByMethod(
-      new Date(startDate),
-      new Date(endDate),
+      `${startDate}T00:00:00`,
+      `${endDate}T23:59:59`,
     );
   }
 

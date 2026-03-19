@@ -15,24 +15,30 @@ export class ReportsController {
     if (!startDate || !endDate) {
       // Default: current month
       const now = new Date();
-      const start = new Date(now.getFullYear(), now.getMonth(), 1);
-      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-      return { startDate: start, endDate: end, professionalId };
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
+      return {
+        startDate: `${year}-${month}-01T00:00:00`,
+        endDate: `${year}-${month}-${String(lastDay).padStart(2, '0')}T23:59:59`,
+        professionalId,
+      };
     }
 
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999);
-
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-      throw new BadRequestException('Datas inválidas');
+    // Validar formato YYYY-MM-DD
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+      throw new BadRequestException('Datas inválidas. Use o formato YYYY-MM-DD');
     }
 
-    if (start > end) {
+    if (startDate > endDate) {
       throw new BadRequestException('Data inicial deve ser anterior à data final');
     }
 
-    return { startDate: start, endDate: end, professionalId };
+    return {
+      startDate: `${startDate}T00:00:00`,
+      endDate: `${endDate}T23:59:59`,
+      professionalId,
+    };
   }
 
   /**

@@ -55,7 +55,8 @@ export class PaymentsService {
     }
 
     // 4. Criar o pagamento
-    const now = new Date().toISOString();
+    const d = new Date();
+    const now = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
     const { data: payment, error: payError } = await this.supabase
       .from('payments')
       .insert({
@@ -81,6 +82,22 @@ export class PaymentsService {
         .from('appointments')
         .update({ isPaid: true })
         .eq('id', dto.appointmentId);
+    }
+
+    // 6. Vincular ao caixa aberto (se houver)
+    if (payment) {
+      const { data: openRegister } = await this.supabase
+        .from('cash_registers')
+        .select('id')
+        .eq('isOpen', true)
+        .single();
+
+      if (openRegister) {
+        await this.supabase
+          .from('payments')
+          .update({ cashRegisterId: openRegister.id })
+          .eq('id', payment.id);
+      }
     }
 
     return payment;
@@ -144,12 +161,12 @@ export class PaymentsService {
     return payments || [];
   }
 
-  async findByDateRange(startDate: Date, endDate: Date) {
+  async findByDateRange(startDate: string, endDate: string) {
     const { data: payments, error } = await this.supabase
       .from('payments')
       .select('*')
-      .gte('paidAt', startDate.toISOString())
-      .lte('paidAt', endDate.toISOString())
+      .gte('paidAt', startDate)
+      .lte('paidAt', endDate)
       .order('paidAt', { ascending: true });
 
     if (error) throw error;
@@ -168,14 +185,14 @@ export class PaymentsService {
   }
 
   async calculateTotalsByMethod(
-    startDate: Date,
-    endDate: Date,
+    startDate: string,
+    endDate: string,
   ): Promise<{ cash: number; pix: number; card: number; total: number }> {
     const { data: payments, error } = await this.supabase
       .from('payments')
       .select('amount, method')
-      .gte('paidAt', startDate.toISOString())
-      .lte('paidAt', endDate.toISOString());
+      .gte('paidAt', startDate)
+      .lte('paidAt', endDate);
 
     if (error) throw error;
 

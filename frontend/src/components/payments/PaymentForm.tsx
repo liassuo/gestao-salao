@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { useClients, useAppointments } from '@/hooks';
 import { useAuth } from '@/auth';
+import { formatPhone } from '@/utils/format';
 import type { PaymentMethod, CreatePaymentPayload } from '@/types';
 import { paymentMethodLabels } from '@/types';
 
@@ -132,7 +133,7 @@ export function PaymentForm({ onSubmit, isLoading, error }: PaymentFormProps) {
           <option value="">Selecione um cliente</option>
           {clients.map((client) => (
             <option key={client.id} value={client.id}>
-              {client.name} - {client.phone}
+              {client.name} - {formatPhone(client.phone)}
             </option>
           ))}
         </select>
@@ -197,11 +198,6 @@ export function PaymentForm({ onSubmit, isLoading, error }: PaymentFormProps) {
         </div>
         {errors.amount && (
           <p className="mt-1 text-sm text-[#A63030]">{errors.amount.message}</p>
-        )}
-        {watchedAmount && (
-          <p className="mt-1 text-xs text-[var(--text-muted)]">
-            {reaisToCentavos(watchedAmount)} centavos
-          </p>
         )}
       </div>
 

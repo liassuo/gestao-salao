@@ -130,18 +130,18 @@ export class ProfessionalsService {
   }
 
   async findAvailableForBooking(serviceIds: string[], date: string) {
-    // 1. Buscar profissionais vinculados aos serviços via _ProfessionalToService
+    // 1. Buscar profissionais vinculados aos serviços via professional_services
     const { data: links, error: linkError } = await this.supabase
-      .from('_ProfessionalToService')
-      .select('A, B')
-      .in('B', serviceIds);
+      .from('professional_services')
+      .select('professionalId, serviceId')
+      .in('serviceId', serviceIds);
 
     if (linkError) throw linkError;
 
     // Filtrar profissionais que atendem TODOS os serviços selecionados
     const profCountMap: Record<string, number> = {};
     for (const link of links || []) {
-      profCountMap[link.A] = (profCountMap[link.A] || 0) + 1;
+      profCountMap[link.professionalId] = (profCountMap[link.professionalId] || 0) + 1;
     }
     const eligibleProfIds = Object.entries(profCountMap)
       .filter(([, count]) => count >= serviceIds.length)
@@ -171,15 +171,15 @@ export class ProfessionalsService {
     if (workingProfessionals.length === 0) return [];
 
     // 4. Excluir profissionais com bloqueio de dia inteiro na data
-    const startOfDay = new Date(date + 'T00:00:00.000Z');
-    const endOfDay = new Date(date + 'T23:59:59.999Z');
+    const startOfDay = `${date}T00:00:00`;
+    const endOfDay = `${date}T23:59:59`;
 
     const { data: timeBlocks } = await this.supabase
       .from('time_blocks')
       .select('professionalId, startTime, endTime')
       .in('professionalId', workingProfessionals.map((p: any) => p.id))
-      .lte('startTime', endOfDay.toISOString())
-      .gte('endTime', startOfDay.toISOString());
+      .lte('startTime', endOfDay)
+      .gte('endTime', startOfDay);
 
     // Profissionais com bloqueio que cobre o dia inteiro (8h+ de bloqueio)
     const blockedProfIds = new Set<string>();
@@ -311,18 +311,14 @@ export class ProfessionalsService {
   }
 
   async getAppointmentsByDate(professionalId: string, date: Date) {
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
+    const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
     const { data: appointments, error } = await this.supabase
       .from('appointments')
       .select('id, scheduledAt, totalDuration, status, clients(name)')
       .eq('professionalId', professionalId)
-      .gte('scheduledAt', startOfDay.toISOString())
-      .lte('scheduledAt', endOfDay.toISOString())
+      .gte('scheduledAt', `${dateStr}T00:00:00`)
+      .lte('scheduledAt', `${dateStr}T23:59:59`)
       .in('status', ['SCHEDULED', 'ATTENDED'])
       .order('scheduledAt', { ascending: true });
 
