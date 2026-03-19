@@ -5,8 +5,9 @@ export class CloseCashRegisterDto {
   @Min(0, { message: 'Saldo de fechamento não pode ser negativo' })
   closingBalance: number;
 
+  @IsOptional()
   @IsUUID()
-  closedBy: string;
+  closedBy?: string;
 
   @IsOptional()
   @IsString()
