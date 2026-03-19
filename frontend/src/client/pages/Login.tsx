@@ -5,6 +5,8 @@ import type { CredentialResponse } from '@react-oauth/google';
 import { Mail, Lock, ArrowRight, ArrowLeft, User, Phone, CalendarDays } from 'lucide-react';
 import { useClientAuth } from '../auth';
 import { clientAuthApi, storage } from '../services/api';
+import { formatPhoneInput } from '@/utils/format';
+import { GOOGLE_CLIENT_ID } from '@/app/providers';
 import type { CheckEmailResponse } from '../services/api';
 
 type Step = 'email' | 'login' | 'register' | 'setup_password';
@@ -263,8 +265,8 @@ export function ClientLogin() {
             </div>
           )}
 
-          {/* Google Login - só na etapa de email */}
-          {step === 'email' && (
+          {/* Google Login - só na etapa de email e se configurado */}
+          {step === 'email' && GOOGLE_CLIENT_ID && (
             <>
               <div className="mb-5">
                 <GoogleLogin
@@ -403,7 +405,7 @@ export function ClientLogin() {
                   <div className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#8B7D6B]">
                     <Phone className="h-5 w-5" />
                   </div>
-                  <input type="tel" id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(11) 99999-9999" disabled={isSubmitting} className={inputClass} />
+                  <input type="tel" id="phone" value={phone} onChange={(e) => setPhone(formatPhoneInput(e.target.value))} placeholder="(62) 99999-9999" disabled={isSubmitting} className={inputClass} />
                 </div>
               </div>
 
