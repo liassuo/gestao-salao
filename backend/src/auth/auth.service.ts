@@ -195,6 +195,44 @@ export class AuthService {
     };
   }
 
+  async clientInitSetupPassword(email: string): Promise<AuthResponseDto & { mustChangePassword: true }> {
+    const { data: client } = await this.supabase
+      .from('clients')
+      .select('*')
+      .eq('email', email)
+      .single();
+
+    if (!client) {
+      throw new UnauthorizedException('Email não encontrado');
+    }
+
+    if (!client.isActive) {
+      throw new UnauthorizedException('Conta desativada');
+    }
+
+    if (client.password && !client.mustChangePassword) {
+      throw new UnauthorizedException('Conta já possui senha');
+    }
+
+    const payload: JwtPayload = {
+      sub: client.id,
+      email: client.email,
+      role: UserRole.CLIENT,
+    };
+    const tempToken = this.jwtService.sign(payload, { expiresIn: '30m' });
+
+    return {
+      accessToken: tempToken,
+      mustChangePassword: true,
+      user: {
+        id: client.id,
+        email: client.email,
+        name: client.name,
+        role: UserRole.CLIENT,
+      },
+    };
+  }
+
   async checkClientEmail(email: string): Promise<{ status: 'new' | 'login' | 'setup_password' | 'google'; name?: string }> {
     const { data: client } = await this.supabase
       .from('clients')

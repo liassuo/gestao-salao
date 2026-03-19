@@ -4,7 +4,7 @@ import { GoogleLogin } from '@react-oauth/google';
 import type { CredentialResponse } from '@react-oauth/google';
 import { Mail, Lock, ArrowRight, ArrowLeft, User, Phone, CalendarDays } from 'lucide-react';
 import { useClientAuth } from '../auth';
-import { clientAuthApi } from '../services/api';
+import { clientAuthApi, storage } from '../services/api';
 import type { CheckEmailResponse } from '../services/api';
 
 type Step = 'email' | 'login' | 'register' | 'setup_password';
@@ -153,9 +153,11 @@ export function ClientLogin() {
     setError(null);
 
     try {
-      // Fazer login primeiro (sem senha, o backend retorna mustChangePassword)
-      await login(email.trim(), 'temp');
-      // Agora definir a senha
+      // Obter token temporário para o cliente pré-cadastrado (sem exigir senha)
+      const initResponse = await clientAuthApi.initSetupPassword(email.trim());
+      // Configurar o token temporário para a chamada de setupPassword
+      storage.setToken(initResponse.accessToken);
+      // Definir a senha definitiva
       await setupPassword(password);
       navigate(from, { replace: true });
     } catch (err: any) {
