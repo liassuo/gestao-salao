@@ -217,33 +217,66 @@ export function Reports() {
     </div>
   );
 
-  const renderServicesReport = (report: ServicesReport[]) => (
-    <div className="rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-4">
-      <h4 className="mb-4 font-semibold text-[var(--text-primary)]">Serviços Mais Realizados</h4>
-      <table className="min-w-full text-sm">
-        <thead className="border-b border-[var(--border-color)]">
-          <tr className="text-[var(--text-muted)]">
-            <th className="pb-2 text-left">Serviço</th>
-            <th className="pb-2 text-right">Preço</th>
-            <th className="pb-2 text-right">Quantidade</th>
-            <th className="pb-2 text-right">Receita</th>
-            <th className="pb-2 text-right">%</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-[var(--border-color)]">
-          {report.map((service) => (
-            <tr key={service.id} className="text-[var(--text-secondary)]">
-              <td className="py-2">{service.name}</td>
-              <td className="py-2 text-right">{formatCurrency(service.price)}</td>
-              <td className="py-2 text-right">{service.count}</td>
-              <td className="py-2 text-right font-medium text-[var(--text-primary)]">{formatCurrency(service.revenue)}</td>
-              <td className="py-2 text-right text-[var(--text-muted)]">{service.percentage}%</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+  const renderServicesReport = (report: ServicesReport[]) => {
+    const totalRevenue = report.reduce((sum, s) => sum + s.revenue, 0);
+    const totalCount = report.reduce((sum, s) => sum + s.count, 0);
+
+    return (
+      <div className="space-y-4">
+        {/* Resumo */}
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-4">
+            <p className="text-sm text-[var(--text-muted)]">Receita Total</p>
+            <p className="text-2xl font-bold text-[#C8923A]">{formatCurrency(totalRevenue)}</p>
+          </div>
+          <div className="rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-4">
+            <p className="text-sm text-[var(--text-muted)]">Total de Atendimentos</p>
+            <p className="text-2xl font-bold text-[var(--text-primary)]">{totalCount}</p>
+          </div>
+          <div className="rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-4">
+            <p className="text-sm text-[var(--text-muted)]">Ticket Medio por Servico</p>
+            <p className="text-2xl font-bold text-[var(--text-primary)]">{totalCount > 0 ? formatCurrency(Math.round(totalRevenue / totalCount)) : formatCurrency(0)}</p>
+          </div>
+        </div>
+
+        {/* Tabela */}
+        <div className="rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-4">
+          <h4 className="mb-4 font-semibold text-[var(--text-primary)]">Servicos Mais Realizados</h4>
+          <table className="min-w-full text-sm">
+            <thead className="border-b border-[var(--border-color)]">
+              <tr className="text-[var(--text-muted)]">
+                <th className="pb-2 text-left">Servico</th>
+                <th className="pb-2 text-right">Preco</th>
+                <th className="pb-2 text-right">Quantidade</th>
+                <th className="pb-2 text-right">Receita</th>
+                <th className="pb-2 text-right">%</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--border-color)]">
+              {report.map((service) => (
+                <tr key={service.id} className="text-[var(--text-secondary)]">
+                  <td className="py-2">
+                    <div className="flex items-center gap-2">
+                      {service.name}
+                      {service.hadPromotion && (
+                        <span className="inline-flex items-center rounded-md bg-green-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-green-500 ring-1 ring-inset ring-green-500/20">
+                          PROMO
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="py-2 text-right">{formatCurrency(service.price)}</td>
+                  <td className="py-2 text-right">{service.count}</td>
+                  <td className="py-2 text-right font-medium text-[var(--text-primary)]">{formatCurrency(service.revenue)}</td>
+                  <td className="py-2 text-right text-[var(--text-muted)]">{service.percentage}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
 
   const renderClientsReport = (report: ClientsReport) => (
     <div className="space-y-6">

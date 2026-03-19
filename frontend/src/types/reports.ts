@@ -56,6 +56,7 @@ export interface ServicesReport {
   count: number;
   revenue: number;
   percentage: number;
+  hadPromotion?: boolean;
 }
 
 export interface ClientsReport {
