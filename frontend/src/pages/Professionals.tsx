@@ -10,6 +10,7 @@ import {
 import { ProfessionalsTable, ProfessionalForm, ConfirmDeleteModal } from '@/components/professionals';
 import { Modal, SkeletonTable, useToast } from '@/components/ui';
 import type { Professional, CreateProfessionalPayload, UpdateProfessionalPayload } from '@/types';
+import { professionalsService } from '@/services/professionals';
 
 export function Professionals() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -86,6 +87,18 @@ export function Professionals() {
     }
   };
 
+  const handleResetPassword = async (professional: Professional) => {
+    if (!confirm(`Tem certeza que deseja resetar a senha de ${professional.name}? O profissional precisará criar uma nova senha no próximo login.`)) {
+      return;
+    }
+    try {
+      await professionalsService.resetPassword(professional.id);
+      toast.success('Senha resetada', `${professional.name} precisará criar uma nova senha no próximo login.`);
+    } catch {
+      toast.error('Erro', 'Não foi possível resetar a senha do profissional.');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -145,6 +158,7 @@ export function Professionals() {
           professionals={filteredProfessionals}
           onEdit={handleOpenEditModal}
           onDelete={setDeletingProfessional}
+          onResetPassword={handleResetPassword}
           isLoading={deleteProfessional.isPending}
           onNewProfessional={handleOpenCreateModal}
         />

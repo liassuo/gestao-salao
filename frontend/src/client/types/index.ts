@@ -61,4 +61,5 @@ export interface ClientUser {
 export interface ClientLoginResponse {
   accessToken: string;
   user: ClientUser;
+  mustChangePassword?: boolean;
 }

@@ -74,6 +74,12 @@ export const clientAuthApi = {
     });
     return response.data;
   },
+  setupPassword: async (password: string): Promise<ClientLoginResponse> => {
+    const response = await clientApi.post<ClientLoginResponse>('/auth/client/setup-password', {
+      password,
+    });
+    return response.data;
+  },
 };
 
 export const storage = {

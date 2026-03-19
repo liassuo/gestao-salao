@@ -8,6 +8,7 @@ import { weekDayShortLabels } from '@/types';
 
 interface ProfessionalFormData {
   name: string;
+  email: string;
   commissionRate: string;
 }
 
@@ -68,6 +69,7 @@ export function ProfessionalForm({ professional, onSubmit, isLoading, error }: P
   } = useForm<ProfessionalFormData>({
     defaultValues: {
       name: professional?.name || '',
+      email: professional?.email || '',
       commissionRate: professional?.commissionRate?.toString() || '',
     },
   });
@@ -99,6 +101,7 @@ export function ProfessionalForm({ professional, onSubmit, isLoading, error }: P
   const handleFormSubmit = async (data: ProfessionalFormData) => {
     await onSubmit({
       name: data.name,
+      email: data.email,
       avatarUrl: avatarUrl || undefined,
       commissionRate: data.commissionRate ? parseFloat(data.commissionRate) : undefined,
       serviceIds: selectedServiceIds.length > 0 ? selectedServiceIds : undefined,
@@ -156,43 +159,70 @@ export function ProfessionalForm({ professional, onSubmit, isLoading, error }: P
           )}
         </div>
 
-        <div className="flex-1 grid grid-cols-2 gap-3">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">
-              Nome *
-            </label>
-            <input
-              type="text"
-              {...register('name', { required: 'Nome é obrigatório' })}
-              placeholder="Nome do profissional"
-              className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] ${
-                errors.name ? 'border-[#A63030]' : 'border-[var(--border-color)]'
-              }`}
-            />
-            {errors.name && (
-              <p className="mt-1 text-sm text-[#A63030]">{errors.name.message}</p>
-            )}
+        <div className="flex-1 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">
+                Nome *
+              </label>
+              <input
+                type="text"
+                {...register('name', { required: 'Nome é obrigatório' })}
+                placeholder="Nome do profissional"
+                className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] ${
+                  errors.name ? 'border-[#A63030]' : 'border-[var(--border-color)]'
+                }`}
+              />
+              {errors.name && (
+                <p className="mt-1 text-sm text-[#A63030]">{errors.name.message}</p>
+              )}
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">
+                Comissão (%)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                {...register('commissionRate', {
+                  min: { value: 0, message: 'Mínimo 0%' },
+                  max: { value: 100, message: 'Máximo 100%' },
+                })}
+                placeholder="Ex: 50"
+                className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] ${
+                  errors.commissionRate ? 'border-[#A63030]' : 'border-[var(--border-color)]'
+                }`}
+              />
+              {errors.commissionRate && (
+                <p className="mt-1 text-sm text-[#A63030]">{errors.commissionRate.message}</p>
+              )}
+            </div>
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">
-              Comissão (%)
+              Email * (usado para login)
             </label>
             <input
-              type="number"
-              step="0.01"
-              min="0"
-              max="100"
-              {...register('commissionRate', {
-                min: { value: 0, message: 'Mínimo 0%' },
-                max: { value: 100, message: 'Máximo 100%' },
+              type="email"
+              {...register('email', {
+                required: 'Email é obrigatório',
+                pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Email inválido' },
               })}
-              placeholder="Ex: 50"
-              className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] ${
-                errors.commissionRate ? 'border-[#A63030]' : 'border-[var(--border-color)]'
+              placeholder="email@exemplo.com"
+              disabled={isEditing}
+              className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] disabled:opacity-60 disabled:cursor-not-allowed ${
+                errors.email ? 'border-[#A63030]' : 'border-[var(--border-color)]'
               }`}
             />
-            {errors.commissionRate && (
-              <p className="mt-1 text-sm text-[#A63030]">{errors.commissionRate.message}</p>
+            {errors.email && (
+              <p className="mt-1 text-sm text-[#A63030]">{errors.email.message}</p>
+            )}
+            {!isEditing && (
+              <p className="mt-1 text-xs text-[var(--text-muted)]">
+                O profissional usará este email para fazer login no sistema.
+              </p>
             )}
           </div>
         </div>

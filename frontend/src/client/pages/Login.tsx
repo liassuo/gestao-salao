@@ -55,8 +55,12 @@ export function ClientLogin() {
     setError(null);
 
     try {
-      await login(email.trim(), password);
-      navigate(from, { replace: true });
+      const result = await login(email.trim(), password);
+      if (result.mustChangePassword) {
+        navigate('/cliente/criar-senha', { replace: true });
+      } else {
+        navigate(from, { replace: true });
+      }
     } catch (err) {
       setError('Email ou senha incorretos. Tente novamente.');
     } finally {

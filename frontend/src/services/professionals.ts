@@ -26,4 +26,9 @@ export const professionalsService = {
   async delete(id: string): Promise<void> {
     await api.delete(`/professionals/${id}`);
   },
+
+  async resetPassword(professionalId: string): Promise<{ message: string }> {
+    const response = await api.post<{ message: string }>(`/auth/reset-professional-password/${professionalId}`);
+    return response.data;
+  },
 };

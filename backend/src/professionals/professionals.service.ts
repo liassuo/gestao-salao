@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 import { SupabaseService } from '../supabase/supabase.service';
 import { CreateProfessionalDto, UpdateProfessionalDto } from './dto';
 
@@ -7,12 +8,24 @@ export class ProfessionalsService {
   constructor(private readonly supabase: SupabaseService) {}
 
   async create(dto: CreateProfessionalDto) {
+    // Verificar se email já existe na tabela users
+    const { data: existingUser } = await this.supabase
+      .from('users')
+      .select('id')
+      .eq('email', dto.email)
+      .single();
+
+    if (existingUser) {
+      throw new ConflictException('Email já cadastrado no sistema');
+    }
+
     const now = new Date().toISOString();
     const { data: professional, error } = await this.supabase
       .from('professionals')
       .insert({
         id: crypto.randomUUID(),
         name: dto.name,
+        email: dto.email,
         avatarUrl: dto.avatarUrl || null,
         commissionRate: dto.commissionRate,
         workingHours: dto.workingHours || [],
@@ -24,6 +37,23 @@ export class ProfessionalsService {
       .single();
 
     if (error) throw error;
+
+    // Auto-criar conta de usuário para o profissional fazer login
+    const tempPassword = crypto.randomUUID(); // senha temporária (nunca será usada)
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+    await this.supabase
+      .from('users')
+      .insert({
+        email: dto.email,
+        name: dto.name,
+        password: hashedPassword,
+        role: 'PROFESSIONAL',
+        professionalId: professional.id,
+        isActive: true,
+        mustChangePassword: true,
+        updatedAt: now,
+      });
 
     // Connect services if provided
     if (dto.serviceIds?.length) {

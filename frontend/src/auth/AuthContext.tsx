@@ -16,6 +16,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [mustChangePassword, setMustChangePassword] = useState(false);
 
   // Carregar dados do localStorage na inicialização
   useEffect(() => {
@@ -52,19 +53,35 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, []);
 
-  const login = useCallback(async (credentials: LoginCredentials) => {
+  const login = useCallback(async (credentials: LoginCredentials): Promise<{ mustChangePassword?: boolean }> => {
     const response = await api.post<LoginResponse>('/auth/login', credentials);
-    const { accessToken: token, user: userData } = response.data;
+    const { accessToken: token, user: userData, mustChangePassword: needsPassword } = response.data;
 
-    // Salvar no state
     setAccessToken(token);
     setUser(userData);
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
-    // Salvar no localStorage
+    if (needsPassword) {
+      // Não salvar no localStorage - é temporário
+      setMustChangePassword(true);
+      return { mustChangePassword: true };
+    }
+
     localStorage.setItem(STORAGE_KEY_TOKEN, token);
     localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(userData));
+    return {};
+  }, []);
 
-    // Configurar header de autorização
+  const setupPassword = useCallback(async (password: string) => {
+    const response = await api.post<LoginResponse>('/auth/setup-password', { password });
+    const { accessToken: token, user: userData } = response.data;
+
+    setAccessToken(token);
+    setUser(userData);
+    setMustChangePassword(false);
+
+    localStorage.setItem(STORAGE_KEY_TOKEN, token);
+    localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(userData));
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
   }, []);
 
@@ -81,7 +98,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     accessToken,
     isAuthenticated: !!accessToken && !!user,
     isLoading,
+    mustChangePassword,
     login,
+    setupPassword,
     logout,
   };
 

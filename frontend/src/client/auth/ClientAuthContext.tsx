@@ -8,9 +8,11 @@ interface ClientAuthContextType {
   accessToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  mustChangePassword: boolean;
+  login: (email: string, password: string) => Promise<{ mustChangePassword?: boolean }>;
   loginWithGoogle: (credential: string) => Promise<void>;
   register: (name: string, email: string, password: string, phone?: string) => Promise<void>;
+  setupPassword: (password: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -24,6 +26,7 @@ export function ClientAuthProvider({ children }: ClientAuthProviderProps) {
   const [user, setUser] = useState<ClientUser | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [mustChangePassword, setMustChangePassword] = useState(false);
 
   const logout = useCallback(() => {
     setUser(null);
@@ -50,15 +53,21 @@ export function ClientAuthProvider({ children }: ClientAuthProviderProps) {
     setIsLoading(false);
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string): Promise<{ mustChangePassword?: boolean }> => {
     const response = await clientAuthApi.login(email, password);
-    const { accessToken: token, user: userData } = response;
+    const { accessToken: token, user: userData, mustChangePassword: needsPassword } = response;
 
     setAccessToken(token);
     setUser(userData);
-
     storage.setToken(token);
+
+    if (needsPassword) {
+      setMustChangePassword(true);
+      return { mustChangePassword: true };
+    }
+
     storage.setUser(userData);
+    return {};
   }, []);
 
   const loginWithGoogle = useCallback(async (credential: string) => {
@@ -83,18 +92,32 @@ export function ClientAuthProvider({ children }: ClientAuthProviderProps) {
     storage.setUser(userData);
   }, []);
 
+  const setupPassword = useCallback(async (password: string) => {
+    const response = await clientAuthApi.setupPassword(password);
+    const { accessToken: token, user: userData } = response;
+
+    setAccessToken(token);
+    setUser(userData);
+    setMustChangePassword(false);
+
+    storage.setToken(token);
+    storage.setUser(userData);
+  }, []);
+
   const value = useMemo(
     () => ({
       user,
       accessToken,
       isAuthenticated: !!accessToken && !!user,
       isLoading,
+      mustChangePassword,
       login,
       loginWithGoogle,
       register,
+      setupPassword,
       logout,
     }),
-    [user, accessToken, isLoading, login, loginWithGoogle, register, logout]
+    [user, accessToken, isLoading, mustChangePassword, login, loginWithGoogle, register, setupPassword, logout]
   );
 
   return (

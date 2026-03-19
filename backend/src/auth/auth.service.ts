@@ -25,7 +25,7 @@ export class AuthService {
     }
   }
 
-  async login(dto: LoginDto): Promise<AuthResponseDto> {
+  async login(dto: LoginDto): Promise<AuthResponseDto & { mustChangePassword?: boolean }> {
     const user = await this.usersService.findByEmailWithPassword(dto.email);
 
     if (!user) {
@@ -36,6 +36,27 @@ export class AuthService {
       throw new UnauthorizedException('Usuário desativado');
     }
 
+    // Profissional no primeiro login: precisa criar senha
+    if ((user as any).mustChangePassword) {
+      const payload: JwtPayload = {
+        sub: user.id,
+        email: user.email,
+        role: user.role as unknown as UserRole,
+      };
+      const tempToken = this.jwtService.sign(payload, { expiresIn: '30m' });
+
+      return {
+        accessToken: tempToken,
+        mustChangePassword: true,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role as unknown as UserRole,
+        },
+      };
+    }
+
     const isPasswordValid = await this.usersService.validatePassword(
       dto.password,
       user.password,
@@ -44,6 +65,55 @@ export class AuthService {
     if (!isPasswordValid) {
       throw new UnauthorizedException('Credenciais inválidas');
     }
+
+    const payload: JwtPayload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role as unknown as UserRole,
+    };
+
+    const accessToken = this.jwtService.sign(payload);
+
+    return {
+      accessToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role as unknown as UserRole,
+      },
+    };
+  }
+
+  async userSetupPassword(userId: string, newPassword: string): Promise<AuthResponseDto> {
+    const { data: user } = await this.supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    if (!user) {
+      throw new UnauthorizedException('Usuário não encontrado');
+    }
+
+    if (!user.mustChangePassword) {
+      throw new UnauthorizedException('Senha já foi definida. Use a tela de login.');
+    }
+
+    if (newPassword.length < 6) {
+      throw new UnauthorizedException('A senha deve ter pelo menos 6 caracteres');
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await this.supabase
+      .from('users')
+      .update({
+        password: hashedPassword,
+        mustChangePassword: false,
+        updatedAt: new Date().toISOString(),
+      })
+      .eq('id', userId);
 
     const payload: JwtPayload = {
       sub: user.id,
@@ -124,7 +194,7 @@ export class AuthService {
     };
   }
 
-  async clientLogin(dto: LoginDto): Promise<AuthResponseDto> {
+  async clientLogin(dto: LoginDto): Promise<AuthResponseDto & { mustChangePassword?: boolean }> {
     const { data: client } = await this.supabase
       .from('clients')
       .select('*')
@@ -139,8 +209,51 @@ export class AuthService {
       throw new UnauthorizedException('Conta desativada');
     }
 
+    // Cliente pré-cadastrado sem senha: precisa criar senha no primeiro acesso
     if (!client.password) {
-      throw new UnauthorizedException('Use o login com Google');
+      const payload: JwtPayload = {
+        sub: client.id,
+        email: client.email,
+        role: UserRole.CLIENT,
+      };
+      const tempToken = this.jwtService.sign(payload, { expiresIn: '30m' });
+
+      return {
+        accessToken: tempToken,
+        mustChangePassword: true,
+        user: {
+          id: client.id,
+          email: client.email,
+          name: client.name,
+          role: UserRole.CLIENT,
+        },
+      };
+    }
+
+    // Cliente com mustChangePassword ativo (admin forçou troca de senha)
+    if (client.mustChangePassword) {
+      const isPasswordValid = await bcrypt.compare(dto.password, client.password);
+      if (!isPasswordValid) {
+        throw new UnauthorizedException('Credenciais inválidas');
+      }
+
+      const payload: JwtPayload = {
+        sub: client.id,
+        email: client.email,
+        role: UserRole.CLIENT,
+      };
+      const tempToken = this.jwtService.sign(payload, { expiresIn: '30m' });
+
+      return {
+        accessToken: tempToken,
+        mustChangePassword: true,
+        user: {
+          id: client.id,
+          email: client.email,
+          name: client.name,
+          role: UserRole.CLIENT,
+        },
+      };
     }
 
     const isPasswordValid = await bcrypt.compare(dto.password, client.password);
@@ -148,6 +261,55 @@ export class AuthService {
     if (!isPasswordValid) {
       throw new UnauthorizedException('Credenciais inválidas');
     }
+
+    const payload: JwtPayload = {
+      sub: client.id,
+      email: client.email,
+      role: UserRole.CLIENT,
+    };
+
+    const accessToken = this.jwtService.sign(payload);
+
+    return {
+      accessToken,
+      user: {
+        id: client.id,
+        email: client.email,
+        name: client.name,
+        role: UserRole.CLIENT,
+      },
+    };
+  }
+
+  async clientSetupPassword(clientId: string, newPassword: string): Promise<AuthResponseDto> {
+    const { data: client } = await this.supabase
+      .from('clients')
+      .select('*')
+      .eq('id', clientId)
+      .single();
+
+    if (!client) {
+      throw new UnauthorizedException('Cliente não encontrado');
+    }
+
+    if (client.password && !client.mustChangePassword) {
+      throw new UnauthorizedException('Senha já foi definida. Use a tela de login.');
+    }
+
+    if (newPassword.length < 6) {
+      throw new UnauthorizedException('A senha deve ter pelo menos 6 caracteres');
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await this.supabase
+      .from('clients')
+      .update({
+        password: hashedPassword,
+        mustChangePassword: false,
+        updatedAt: new Date().toISOString(),
+      })
+      .eq('id', clientId);
 
     const payload: JwtPayload = {
       sub: client.id,
@@ -195,6 +357,34 @@ export class AuthService {
       .eq('id', userId);
   }
 
+  async resetProfessionalPassword(professionalId: string): Promise<{ message: string }> {
+    // Buscar o user vinculado ao profissional
+    const { data: user } = await this.supabase
+      .from('users')
+      .select('id')
+      .eq('professionalId', professionalId)
+      .single();
+
+    if (!user) {
+      throw new UnauthorizedException('Conta de usuário não encontrada para este profissional');
+    }
+
+    // Resetar senha com valor temporário e forçar troca no próximo login
+    const tempPassword = crypto.randomUUID();
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+    await this.supabase
+      .from('users')
+      .update({
+        password: hashedPassword,
+        mustChangePassword: true,
+        updatedAt: new Date().toISOString(),
+      })
+      .eq('id', user.id);
+
+    return { message: 'Senha resetada. O profissional deverá criar uma nova senha no próximo login.' };
+  }
+
   async clientGoogleLogin(dto: GoogleAuthDto): Promise<AuthResponseDto> {
     if (!this.googleClient) {
       throw new UnauthorizedException('Google login não configurado');
@@ -229,7 +419,7 @@ export class AuthService {
       if (!existingClient.googleId) {
         const { data: updatedClient, error } = await this.supabase
           .from('clients')
-          .update({ googleId })
+          .update({ googleId, mustChangePassword: false })
           .eq('id', existingClient.id)
           .select()
           .single();

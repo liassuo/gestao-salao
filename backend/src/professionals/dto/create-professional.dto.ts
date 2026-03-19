@@ -16,6 +16,9 @@ export class CreateProfessionalDto {
   @IsString()
   name: string;
 
+  @IsString()
+  email: string;
+
   @IsOptional()
   @IsString()
   avatarUrl?: string;
