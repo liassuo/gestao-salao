@@ -74,12 +74,13 @@ export const clientAuthApi = {
     });
     return response.data;
   },
-  register: async (name: string, email: string, password: string, phone?: string): Promise<ClientLoginResponse> => {
+  register: async (name: string, email: string, password: string, phone: string, birthDate?: string): Promise<ClientLoginResponse> => {
     const response = await clientApi.post<ClientLoginResponse>('/auth/client/register', {
       name,
       email,
       password,
       phone,
+      birthDate,
     });
     return response.data;
   },

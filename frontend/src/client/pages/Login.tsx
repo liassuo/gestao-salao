@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
 import type { CredentialResponse } from '@react-oauth/google';
-import { Mail, Lock, ArrowRight, ArrowLeft, User, Phone } from 'lucide-react';
+import { Mail, Lock, ArrowRight, ArrowLeft, User, Phone, CalendarDays } from 'lucide-react';
 import { useClientAuth } from '../auth';
 import { clientAuthApi } from '../services/api';
 import type { CheckEmailResponse } from '../services/api';
@@ -15,6 +15,7 @@ export function ClientLogin() {
   const [clientName, setClientName] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [birthDate, setBirthDate] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -99,6 +100,16 @@ export function ClientLogin() {
       return;
     }
 
+    if (!phone.trim()) {
+      setError('Digite seu telefone');
+      return;
+    }
+
+    if (!birthDate) {
+      setError('Informe sua data de nascimento');
+      return;
+    }
+
     const pwError = validatePassword(password);
     if (pwError) {
       setError(pwError);
@@ -114,7 +125,7 @@ export function ClientLogin() {
     setError(null);
 
     try {
-      await register(name.trim(), email.trim(), password, phone.trim() || undefined);
+      await register(name.trim(), email.trim(), password, phone.trim(), birthDate || undefined);
       navigate(from, { replace: true });
     } catch (err: any) {
       const msg = err.response?.data?.message || 'Erro ao criar conta. Tente novamente.';
@@ -386,12 +397,22 @@ export function ClientLogin() {
               </div>
 
               <div className="space-y-2">
-                <label htmlFor="phone" className="block text-sm font-medium text-[#D4C4A0]">Telefone</label>
+                <label htmlFor="phone" className="block text-sm font-medium text-[#D4C4A0]">Telefone *</label>
                 <div className="relative">
                   <div className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#8B7D6B]">
                     <Phone className="h-5 w-5" />
                   </div>
                   <input type="tel" id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(11) 99999-9999" disabled={isSubmitting} className={inputClass} />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="birthDate" className="block text-sm font-medium text-[#D4C4A0]">Data de Nascimento *</label>
+                <div className="relative">
+                  <div className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#8B7D6B]">
+                    <CalendarDays className="h-5 w-5" />
+                  </div>
+                  <input type="date" id="birthDate" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} disabled={isSubmitting} className={inputClass} />
                 </div>
               </div>
 

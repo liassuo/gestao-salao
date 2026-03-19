@@ -33,7 +33,7 @@ export class AuthController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Cadastro de cliente com email/senha' })
   async clientRegister(
-    @Body() body: { name: string; email: string; password: string; phone?: string },
+    @Body() body: { name: string; email: string; password: string; phone: string; birthDate?: string },
   ): Promise<AuthResponseDto> {
     return this.authService.clientRegister(body);
   }

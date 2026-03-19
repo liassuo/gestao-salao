@@ -11,7 +11,7 @@ interface ClientAuthContextType {
   mustChangePassword: boolean;
   login: (email: string, password: string) => Promise<{ mustChangePassword?: boolean }>;
   loginWithGoogle: (credential: string) => Promise<void>;
-  register: (name: string, email: string, password: string, phone?: string) => Promise<void>;
+  register: (name: string, email: string, password: string, phone: string, birthDate?: string) => Promise<void>;
   setupPassword: (password: string) => Promise<void>;
   logout: () => void;
 }
@@ -81,8 +81,8 @@ export function ClientAuthProvider({ children }: ClientAuthProviderProps) {
     storage.setUser(userData);
   }, []);
 
-  const register = useCallback(async (name: string, email: string, password: string, phone?: string) => {
-    const response = await clientAuthApi.register(name, email, password, phone);
+  const register = useCallback(async (name: string, email: string, password: string, phone: string, birthDate?: string) => {
+    const response = await clientAuthApi.register(name, email, password, phone, birthDate);
     const { accessToken: token, user: userData } = response;
 
     setAccessToken(token);

@@ -142,7 +142,7 @@ export class AuthService {
     }
   }
 
-  async clientRegister(dto: { name: string; email: string; password: string; phone?: string }): Promise<AuthResponseDto> {
+  async clientRegister(dto: { name: string; email: string; password: string; phone: string; birthDate?: string }): Promise<AuthResponseDto> {
     // Verificar se email já existe
     const { data: existing } = await this.supabase
       .from('clients')
@@ -164,7 +164,8 @@ export class AuthService {
         name: dto.name,
         email: dto.email,
         password: hashedPassword,
-        phone: dto.phone || '',
+        phone: dto.phone,
+        birthDate: dto.birthDate || null,
         isActive: true,
         hasDebts: false,
         createdAt: regNow,
