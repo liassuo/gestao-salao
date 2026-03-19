@@ -24,9 +24,7 @@ export function Professionals() {
     if (!professionals || !searchTerm) return professionals || [];
     const term = searchTerm.toLowerCase();
     return professionals.filter((p) =>
-      p.name.toLowerCase().includes(term) ||
-      p.email?.toLowerCase().includes(term) ||
-      p.phone?.includes(term)
+      p.name.toLowerCase().includes(term)
     );
   }, [professionals, searchTerm]);
   const createProfessional = useCreateProfessional();
@@ -121,7 +119,7 @@ export function Professionals() {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar por nome, email ou telefone..."
+            placeholder="Buscar por nome..."
             className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-2 pl-10 pr-4 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[#C8923A] focus:outline-none focus:ring-1 focus:ring-[#C8923A] transition-colors"
           />
         </div>

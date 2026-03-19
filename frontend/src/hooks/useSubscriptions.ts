@@ -108,6 +108,19 @@ export function useUseCut() {
     mutationFn: (id: string) => subscriptionsService.useCut(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [SUBSCRIPTIONS_KEY] });
+      queryClient.invalidateQueries({ queryKey: [SUBSCRIPTION_PLANS_KEY] });
+    },
+  });
+}
+
+export function useResetCuts() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => subscriptionsService.resetCuts(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [SUBSCRIPTIONS_KEY] });
+      queryClient.invalidateQueries({ queryKey: [SUBSCRIPTION_PLANS_KEY] });
     },
   });
 }

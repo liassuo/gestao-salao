@@ -21,13 +21,18 @@ export class SubscriptionsService {
   // SUBSCRIPTION PLANS
 
   async createPlan(dto: CreatePlanDto) {
+    const now = new Date().toISOString();
     const { data: plan, error } = await this.supabase
       .from('subscription_plans')
       .insert({
+        id: crypto.randomUUID(),
         name: dto.name,
         description: dto.description,
         price: dto.price,
         cutsPerMonth: dto.cutsPerMonth,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
       })
       .select('*')
       .single();
@@ -39,7 +44,7 @@ export class SubscriptionsService {
   async findAllPlans(activeOnly: boolean = true) {
     let queryBuilder = this.supabase
       .from('subscription_plans')
-      .select('*')
+      .select('*, subscriptions:client_subscriptions(id)')
       .order('price', { ascending: true });
 
     if (activeOnly) {
@@ -49,7 +54,11 @@ export class SubscriptionsService {
     const { data: plans, error } = await queryBuilder;
 
     if (error) throw error;
-    return plans || [];
+    return (plans || []).map((plan: any) => ({
+      ...plan,
+      _count: { subscriptions: plan.subscriptions?.length ?? 0 },
+      subscriptions: undefined,
+    }));
   }
 
   async findOnePlan(id: string) {
@@ -165,20 +174,31 @@ export class SubscriptionsService {
     const endDate = new Date(startDate);
     endDate.setMonth(endDate.getMonth() + 1);
 
-    const { data: subscription, error } = await this.supabase
+    const subNow = new Date().toISOString();
+    const { data: insertedSub, error } = await this.supabase
       .from('client_subscriptions')
       .insert({
+        id: crypto.randomUUID(),
         clientId: dto.clientId,
         planId: dto.planId,
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
         cutsUsedThisMonth: 0,
         status: 'ACTIVE',
+        createdAt: subNow,
+        updatedAt: subNow,
       })
       .select('*')
       .single();
 
     if (error) throw error;
+
+    // Re-fetch with relations
+    const { data: subscription } = await this.supabase
+      .from('client_subscriptions')
+      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth)')
+      .eq('id', insertedSub.id)
+      .single();
 
     // Criar assinatura recorrente no Asaas (se configurado)
     if (this.asaasService.configured && subscription) {
@@ -238,7 +258,7 @@ export class SubscriptionsService {
   async findSubscription(id: string) {
     const { data: subscription, error } = await this.supabase
       .from('client_subscriptions')
-      .select('*')
+      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth)')
       .eq('id', id)
       .single();
 
@@ -269,7 +289,7 @@ export class SubscriptionsService {
   async findAllSubscriptions(status?: string) {
     let queryBuilder = this.supabase
       .from('client_subscriptions')
-      .select('*')
+      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth)')
       .order('createdAt', { ascending: false });
 
     if (status) {
@@ -286,7 +306,7 @@ export class SubscriptionsService {
   async findClientSubscription(clientId: string) {
     const { data: subscription } = await this.supabase
       .from('client_subscriptions')
-      .select('*')
+      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth)')
       .eq('clientId', clientId)
       .eq('status', 'ACTIVE')
       .single();
@@ -331,23 +351,18 @@ export class SubscriptionsService {
     return updated;
   }
 
-  async useCut(clientId: string) {
-    const subscription = await this.findClientSubscription(clientId);
+  async useCut(subscriptionId: string) {
+    const subscription = await this.findSubscription(subscriptionId);
 
-    if (!subscription) {
-      throw new BadRequestException('Cliente não possui assinatura ativa');
+    if (subscription.status !== 'ACTIVE') {
+      throw new BadRequestException('Assinatura não está ativa');
     }
 
-    const { data: plan } = await this.supabase
-      .from('subscription_plans')
-      .select('cutsPerMonth')
-      .eq('id', subscription.planId)
-      .single();
-
-    const cutsPerMonth = plan?.cutsPerMonth ?? 0;
+    const cutsPerMonth = subscription.plan?.cutsPerMonth ?? 0;
     const cutsUsed = subscription.cutsUsedThisMonth ?? 0;
 
-    if (cutsUsed >= cutsPerMonth) {
+    // Plano ilimitado (99) sempre permite
+    if (cutsPerMonth !== 99 && cutsUsed >= cutsPerMonth) {
       throw new BadRequestException('Não há cortes disponíveis nesta assinatura');
     }
 
@@ -355,7 +370,26 @@ export class SubscriptionsService {
       .from('client_subscriptions')
       .update({ cutsUsedThisMonth: cutsUsed + 1 })
       .eq('id', subscription.id)
-      .select('*')
+      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth)')
+      .single();
+
+    if (error) throw error;
+    return updated;
+  }
+
+  async resetCuts(subscriptionId: string) {
+    const subscription = await this.findSubscription(subscriptionId);
+
+    if (subscription.status !== 'ACTIVE') {
+      throw new BadRequestException('Assinatura não está ativa');
+    }
+
+    const now = new Date().toISOString();
+    const { data: updated, error } = await this.supabase
+      .from('client_subscriptions')
+      .update({ cutsUsedThisMonth: 0, lastResetDate: now })
+      .eq('id', subscription.id)
+      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth)')
       .single();
 
     if (error) throw error;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { MoreVertical, Check, X, UserX } from 'lucide-react';
 import { ConfirmModal } from '@/components/ui';
 import type { Appointment } from '@/types';
@@ -21,6 +21,8 @@ export function AppointmentActions({
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const btnRef = useRef<HTMLButtonElement>(null);
 
   const canModify = appointment.status === 'SCHEDULED';
 
@@ -57,7 +59,14 @@ export function AppointmentActions({
     <>
       <div className="relative">
         <button
-          onClick={() => setIsOpen(!isOpen)}
+          ref={btnRef}
+          onClick={() => {
+            if (!isOpen && btnRef.current) {
+              const rect = btnRef.current.getBoundingClientRect();
+              setMenuPos({ top: rect.bottom + 4, left: rect.right - 192 });
+            }
+            setIsOpen(!isOpen);
+          }}
           disabled={disabled || isLoading}
           className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Ações do agendamento"
@@ -74,7 +83,10 @@ export function AppointmentActions({
             />
 
             {/* Dropdown */}
-            <div className="absolute right-0 z-20 mt-1 w-48 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-1 shadow-lg">
+            <div
+              className="fixed z-20 w-48 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-1 shadow-lg"
+              style={{ top: menuPos.top, left: menuPos.left }}
+            >
               <button
                 onClick={() => handleAction(() => onAttend(appointment.id))}
                 disabled={isLoading}

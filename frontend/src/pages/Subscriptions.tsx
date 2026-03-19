@@ -8,6 +8,8 @@ import {
   useDeletePlan,
   useSubscribeClient,
   useCancelSubscription,
+  useUseCut,
+  useResetCuts,
   useClients,
   getApiErrorMessage,
 } from '@/hooks';
@@ -53,6 +55,8 @@ export function Subscriptions() {
   const deletePlan = useDeletePlan();
   const subscribeClient = useSubscribeClient();
   const cancelSubscription = useCancelSubscription();
+  const useCut = useUseCut();
+  const resetCuts = useResetCuts();
   const toast = useToast();
 
   // Plan handlers
@@ -138,6 +142,24 @@ export function Subscriptions() {
       await cancelSubscription.mutateAsync(cancelingSubscription.id);
       setCancelingSubscription(null);
       toast.success('Assinatura cancelada', 'A assinatura foi cancelada com sucesso.');
+    } catch (err) {
+      toast.error('Erro', getApiErrorMessage(err));
+    }
+  };
+
+  const handleUseCut = async (subscription: ClientSubscription) => {
+    try {
+      await useCut.mutateAsync(subscription.id);
+      toast.success('Corte registrado', `Corte registrado para ${subscription.client?.name || 'cliente'}.`);
+    } catch (err) {
+      toast.error('Erro', getApiErrorMessage(err));
+    }
+  };
+
+  const handleResetCuts = async (subscription: ClientSubscription) => {
+    try {
+      await resetCuts.mutateAsync(subscription.id);
+      toast.success('Cortes renovados', `Cortes de ${subscription.client?.name || 'cliente'} foram zerados (pagamento confirmado).`);
     } catch (err) {
       toast.error('Erro', getApiErrorMessage(err));
     }
@@ -250,7 +272,9 @@ export function Subscriptions() {
             <ClientSubscriptionTable
               subscriptions={subscriptions || []}
               onCancel={setCancelingSubscription}
-              isLoading={cancelSubscription.isPending}
+              onUseCut={handleUseCut}
+              onResetCuts={handleResetCuts}
+              isLoading={cancelSubscription.isPending || useCut.isPending || resetCuts.isPending}
               onNewSubscription={handleOpenSubscribeModal}
             />
           )}

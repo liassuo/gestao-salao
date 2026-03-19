@@ -11,12 +11,17 @@ export class PaymentMethodConfigService {
   constructor(private readonly supabase: SupabaseService) {}
 
   async create(dto: CreatePaymentMethodConfigDto) {
+    const now = new Date().toISOString();
     const { data: config, error } = await this.supabase
       .from('payment_method_configs')
       .insert({
+        id: crypto.randomUUID(),
         name: dto.name,
         type: dto.type,
         scope: dto.scope,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
       })
       .select('*')
       .single();

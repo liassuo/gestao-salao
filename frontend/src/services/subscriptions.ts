@@ -73,6 +73,11 @@ export const subscriptionsService = {
     return response.data;
   },
 
+  async resetCuts(id: string): Promise<ClientSubscription> {
+    const response = await api.post<ClientSubscription>(`/subscriptions/${id}/reset-cuts`);
+    return response.data;
+  },
+
   async getRemainingCuts(id: string): Promise<RemainingCuts> {
     const response = await api.get<RemainingCuts>(`/subscriptions/${id}/remaining-cuts`);
     return response.data;

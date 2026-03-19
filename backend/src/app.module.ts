@@ -14,7 +14,6 @@ import { CashRegisterModule } from './cash-register/cash-register.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { ReportsModule } from './reports/reports.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
-import { BankAccountsModule } from './bank-accounts/bank-accounts.module';
 import { BranchesModule } from './branches/branches.module';
 import { CommissionsModule } from './commissions/commissions.module';
 import { PaymentMethodConfigModule } from './payment-method-config/payment-method-config.module';
@@ -45,7 +44,6 @@ import { SettingsModule } from './settings/settings.module';
     DashboardModule,
     ReportsModule,
     SubscriptionsModule,
-    BankAccountsModule,
     BranchesModule,
     CommissionsModule,
     PaymentMethodConfigModule,

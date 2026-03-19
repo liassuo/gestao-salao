@@ -1,15 +1,48 @@
-import { useState } from 'react';
-import { ClipboardList, Plus, AlertCircle, Eye, Trash2, CreditCard, XCircle, ShoppingCart, X, Package, Scissors, Banknote, Smartphone, CircleDollarSign } from 'lucide-react';
-import { useOrders, useCreateOrder, usePayOrder, useCancelOrder, useDeleteOrder, useAddOrderItem, useRemoveOrderItem, useClients, useProducts, useServices, getApiErrorMessage } from '@/hooks';
+import { useState, useMemo } from 'react';
+import { ClipboardList, Plus, AlertCircle, Eye, Trash2, CreditCard, XCircle, ShoppingCart, X, Package, Scissors, Banknote, Smartphone, CircleDollarSign, Tag, Minus } from 'lucide-react';
+import { useOrders, useCreateOrder, usePayOrder, useCancelOrder, useDeleteOrder, useAddOrderItem, useRemoveOrderItem, useClients, useProducts, useServices, useActivePromotions, getApiErrorMessage } from '@/hooks';
 import { ordersService } from '@/services/orders';
 import { Modal, ConfirmModal, useToast } from '@/components/ui';
-import type { Order, OrderStatus, AddOrderItemPayload, OrderItemType } from '@/types';
+import type { Order, OrderStatus, CreateOrderPayload, AddOrderItemPayload, OrderItemType, Promotion } from '@/types';
 import { orderStatusLabels, orderStatusColors } from '@/types';
 
 type PaymentMethod = 'CASH' | 'PIX' | 'CARD';
 
+interface CartItem {
+  id: string; // productId or serviceId
+  name: string;
+  itemType: OrderItemType;
+  originalPrice: number;
+  unitPrice: number;
+  quantity: number;
+  hasPromo: boolean;
+  promoName?: string;
+}
+
 function formatCents(cents: number): string {
   return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function getProductDiscount(productId: string, promotions: Promotion[]): { percent: number; name: string } | null {
+  for (const promo of promotions) {
+    if (promo.products?.some((p) => p.id === productId)) {
+      return { percent: promo.discountPercent, name: promo.name };
+    }
+  }
+  return null;
+}
+
+function getServiceDiscount(serviceId: string, promotions: Promotion[]): { percent: number; name: string } | null {
+  for (const promo of promotions) {
+    if (promo.services?.some((s) => s.id === serviceId)) {
+      return { percent: promo.discountPercent, name: promo.name };
+    }
+  }
+  return null;
+}
+
+function applyDiscount(price: number, percent: number): number {
+  return Math.round(price * (100 - percent) / 100);
 }
 
 export function Orders() {
@@ -24,6 +57,8 @@ export function Orders() {
   // Create form state
   const [createClientId, setCreateClientId] = useState('');
   const [createNotes, setCreateNotes] = useState('');
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [createItemTab, setCreateItemTab] = useState<OrderItemType>('PRODUCT');
 
   // Add item form state
   const [itemType, setItemType] = useState<OrderItemType>('PRODUCT');
@@ -35,6 +70,7 @@ export function Orders() {
   const { data: clients } = useClients();
   const { data: products } = useProducts();
   const { data: services } = useServices();
+  const { data: activePromotions } = useActivePromotions();
   const createOrder = useCreateOrder();
   const payOrder = usePayOrder();
   const cancelOrder = useCancelOrder();
@@ -43,16 +79,58 @@ export function Orders() {
   const removeOrderItem = useRemoveOrderItem();
   const toast = useToast();
 
+  const cartTotal = useMemo(() => cartItems.reduce((acc, item) => acc + item.unitPrice * item.quantity, 0), [cartItems]);
+
+  const addToCart = (id: string, name: string, itemType: OrderItemType, originalPrice: number) => {
+    setCartItems((prev) => {
+      const existing = prev.find((i) => i.id === id && i.itemType === itemType);
+      if (existing) {
+        return prev.map((i) => i.id === id && i.itemType === itemType ? { ...i, quantity: i.quantity + 1 } : i);
+      }
+      const promos = activePromotions || [];
+      const discount = itemType === 'PRODUCT' ? getProductDiscount(id, promos) : getServiceDiscount(id, promos);
+      const unitPrice = discount ? applyDiscount(originalPrice, discount.percent) : originalPrice;
+      return [...prev, { id, name, itemType, originalPrice, unitPrice, quantity: 1, hasPromo: !!discount, promoName: discount?.name }];
+    });
+  };
+
+  const removeFromCart = (id: string, itemType: OrderItemType) => {
+    setCartItems((prev) => prev.filter((i) => !(i.id === id && i.itemType === itemType)));
+  };
+
+  const updateCartQty = (id: string, itemType: OrderItemType, delta: number) => {
+    setCartItems((prev) => prev.map((i) => {
+      if (i.id === id && i.itemType === itemType) {
+        const newQty = Math.max(1, i.quantity + delta);
+        return { ...i, quantity: newQty };
+      }
+      return i;
+    }));
+  };
+
   const handleCreate = async () => {
     try {
-      const payload: { clientId?: string; notes?: string } = {};
+      const payload: CreateOrderPayload = {};
       if (createClientId) payload.clientId = createClientId;
       if (createNotes.trim()) payload.notes = createNotes.trim();
+
+      if (cartItems.length > 0) {
+        payload.items = cartItems.map((item) => ({
+          productId: item.itemType === 'PRODUCT' ? item.id : undefined,
+          serviceId: item.itemType === 'SERVICE' ? item.id : undefined,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          itemType: item.itemType,
+        }));
+      }
+
       await createOrder.mutateAsync(payload);
       toast.success('Comanda criada com sucesso');
       setIsCreateModalOpen(false);
       setCreateClientId('');
       setCreateNotes('');
+      setCartItems([]);
+      setCreateItemTab('PRODUCT');
     } catch (err) {
       toast.error('Erro', getApiErrorMessage(err));
     }
@@ -94,14 +172,19 @@ export function Orders() {
     if (!viewingOrder) return;
     try {
       let payload: AddOrderItemPayload;
+      const promos = activePromotions || [];
       if (itemType === 'PRODUCT') {
         const product = products?.find((p) => p.id === selectedProductId);
         if (!product) return;
-        payload = { productId: product.id, quantity: itemQuantity, unitPrice: product.salePrice, itemType: 'PRODUCT' };
+        const discount = getProductDiscount(product.id, promos);
+        const price = discount ? applyDiscount(product.salePrice, discount.percent) : product.salePrice;
+        payload = { productId: product.id, quantity: itemQuantity, unitPrice: price, itemType: 'PRODUCT' };
       } else {
         const service = services?.find((s) => s.id === selectedServiceId);
         if (!service) return;
-        payload = { serviceId: service.id, quantity: itemQuantity, unitPrice: service.price, itemType: 'SERVICE' };
+        const discount = getServiceDiscount(service.id, promos);
+        const price = discount ? applyDiscount(service.price, discount.percent) : service.price;
+        payload = { serviceId: service.id, quantity: itemQuantity, unitPrice: price, itemType: 'SERVICE' };
       }
       const updated = await addOrderItem.mutateAsync({ orderId: viewingOrder.id, payload });
       toast.success('Item adicionado');
@@ -155,7 +238,7 @@ export function Orders() {
             <option value="PAID">Pago</option>
             <option value="CANCELED">Cancelado</option>
           </select>
-          <button onClick={() => { setCreateClientId(''); setCreateNotes(''); setIsCreateModalOpen(true); }} className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-4 py-2.5 font-medium text-white transition-colors hover:bg-[#725510]">
+          <button onClick={() => { setCreateClientId(''); setCreateNotes(''); setCartItems([]); setCreateItemTab('PRODUCT'); setIsCreateModalOpen(true); }} className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-4 py-2.5 font-medium text-white transition-colors hover:bg-[#725510]">
             <Plus className="h-4 w-4" /> Nova Comanda
           </button>
         </div>
@@ -215,8 +298,8 @@ export function Orders() {
         )}
       </div>
 
-      {/* Create Modal - with client selector */}
-      <Modal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} title="Nova Comanda">
+      {/* Create Modal */}
+      <Modal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} title="Nova Comanda" size="lg">
         <div className="space-y-4">
           <div>
             <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">Cliente (opcional)</label>
@@ -231,6 +314,143 @@ export function Orders() {
               ))}
             </select>
           </div>
+
+          {/* Adicionar itens */}
+          <div className="border-t border-[var(--card-border)] pt-4">
+            <label className="mb-2 block text-sm font-medium text-[var(--text-secondary)]">Itens da Comanda</label>
+            <div className="flex gap-2 mb-3">
+              <button
+                onClick={() => setCreateItemTab('PRODUCT')}
+                className={`flex-1 flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-colors ${createItemTab === 'PRODUCT' ? 'border-purple-500 bg-purple-500/20 text-purple-400' : 'border-[var(--card-border)] text-[var(--text-muted)] hover:bg-[var(--hover-bg)]'}`}
+              >
+                <Package className="h-4 w-4" /> Produtos
+              </button>
+              <button
+                onClick={() => setCreateItemTab('SERVICE')}
+                className={`flex-1 flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-colors ${createItemTab === 'SERVICE' ? 'border-[#C8923A] bg-[#C8923A]/20 text-[#D4A85C]' : 'border-[var(--card-border)] text-[var(--text-muted)] hover:bg-[var(--hover-bg)]'}`}
+              >
+                <Scissors className="h-4 w-4" /> Servicos
+              </button>
+            </div>
+
+            {/* Lista de produtos/servicos para adicionar */}
+            <div className="max-h-40 overflow-y-auto rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] divide-y divide-[var(--card-border)]">
+              {createItemTab === 'PRODUCT' ? (
+                products?.filter((p) => p.isActive !== false).length ? (
+                  products.filter((p) => p.isActive !== false).map((p) => {
+                    const discount = getProductDiscount(p.id, activePromotions || []);
+                    const finalPrice = discount ? applyDiscount(p.salePrice, discount.percent) : p.salePrice;
+                    const inCart = cartItems.find((i) => i.id === p.id && i.itemType === 'PRODUCT');
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => addToCart(p.id, p.name, 'PRODUCT', p.salePrice)}
+                        className={`flex w-full items-center justify-between px-3 py-2.5 text-sm transition-colors hover:bg-[var(--card-bg)] ${inCart ? 'bg-[var(--card-bg)]' : ''}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Package className="h-3.5 w-3.5 text-purple-400 flex-shrink-0" />
+                          <span className="text-[var(--text-primary)]">{p.name}</span>
+                          {inCart && <span className="text-xs text-[#C8923A] font-medium">x{inCart.quantity}</span>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {discount ? (
+                            <>
+                              <span className="flex items-center gap-1 text-xs text-green-400">
+                                <Tag className="h-3 w-3" />-{discount.percent}%
+                              </span>
+                              <span className="text-xs text-[var(--text-muted)] line-through">{formatCents(p.salePrice)}</span>
+                              <span className="font-medium text-green-400">{formatCents(finalPrice)}</span>
+                            </>
+                          ) : (
+                            <span className="text-[var(--text-muted)]">{formatCents(p.salePrice)}</span>
+                          )}
+                          <Plus className="h-4 w-4 text-[#C8923A]" />
+                        </div>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <p className="px-3 py-4 text-center text-sm text-[var(--text-muted)]">Nenhum produto</p>
+                )
+              ) : (
+                services?.filter((s) => s.isActive !== false).length ? (
+                  services.filter((s) => s.isActive !== false).map((s) => {
+                    const discount = getServiceDiscount(s.id, activePromotions || []);
+                    const finalPrice = discount ? applyDiscount(s.price, discount.percent) : s.price;
+                    const inCart = cartItems.find((i) => i.id === s.id && i.itemType === 'SERVICE');
+                    return (
+                      <button
+                        key={s.id}
+                        onClick={() => addToCart(s.id, s.name, 'SERVICE', s.price)}
+                        className={`flex w-full items-center justify-between px-3 py-2.5 text-sm transition-colors hover:bg-[var(--card-bg)] ${inCart ? 'bg-[var(--card-bg)]' : ''}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Scissors className="h-3.5 w-3.5 text-[#D4A85C] flex-shrink-0" />
+                          <span className="text-[var(--text-primary)]">{s.name}</span>
+                          {inCart && <span className="text-xs text-[#C8923A] font-medium">x{inCart.quantity}</span>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {discount ? (
+                            <>
+                              <span className="flex items-center gap-1 text-xs text-green-400">
+                                <Tag className="h-3 w-3" />-{discount.percent}%
+                              </span>
+                              <span className="text-xs text-[var(--text-muted)] line-through">{formatCents(s.price)}</span>
+                              <span className="font-medium text-green-400">{formatCents(finalPrice)}</span>
+                            </>
+                          ) : (
+                            <span className="text-[var(--text-muted)]">{formatCents(s.price)}</span>
+                          )}
+                          <Plus className="h-4 w-4 text-[#C8923A]" />
+                        </div>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <p className="px-3 py-4 text-center text-sm text-[var(--text-muted)]">Nenhum servico</p>
+                )
+              )}
+            </div>
+          </div>
+
+          {/* Carrinho */}
+          {cartItems.length > 0 && (
+            <div className="border-t border-[var(--card-border)] pt-4">
+              <label className="mb-2 block text-sm font-medium text-[var(--text-secondary)]">Itens selecionados ({cartItems.length})</label>
+              <div className="space-y-2">
+                {cartItems.map((item) => (
+                  <div key={`${item.itemType}-${item.id}`} className="flex items-center justify-between rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      {item.itemType === 'PRODUCT' ? <Package className="h-4 w-4 text-purple-400" /> : <Scissors className="h-4 w-4 text-[#D4A85C]" />}
+                      <div>
+                        <p className="text-sm font-medium text-[var(--text-primary)]">{item.name}</p>
+                        <div className="flex items-center gap-1.5">
+                          {item.hasPromo && (
+                            <span className="text-[10px] text-green-400 flex items-center gap-0.5"><Tag className="h-2.5 w-2.5" />{item.promoName}</span>
+                          )}
+                          <span className="text-xs text-[var(--text-muted)]">{formatCents(item.unitPrice)} un.</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1 rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)]">
+                        <button onClick={() => updateCartQty(item.id, item.itemType, -1)} className="px-2 py-1 text-[var(--text-muted)] hover:text-[var(--text-primary)]"><Minus className="h-3 w-3" /></button>
+                        <span className="text-sm font-medium text-[var(--text-primary)] min-w-[20px] text-center">{item.quantity}</span>
+                        <button onClick={() => updateCartQty(item.id, item.itemType, 1)} className="px-2 py-1 text-[var(--text-muted)] hover:text-[var(--text-primary)]"><Plus className="h-3 w-3" /></button>
+                      </div>
+                      <span className="text-sm font-medium text-[var(--text-primary)] min-w-[70px] text-right">{formatCents(item.unitPrice * item.quantity)}</span>
+                      <button onClick={() => removeFromCart(item.id, item.itemType)} className="rounded-lg p-1 text-[var(--text-muted)] hover:bg-red-500/20 hover:text-[#C45050]"><X className="h-4 w-4" /></button>
+                    </div>
+                  </div>
+                ))}
+                <div className="flex justify-between rounded-xl bg-[#C8923A]/10 px-3 py-2">
+                  <span className="text-sm font-medium text-[var(--text-secondary)]">Total</span>
+                  <span className="text-sm font-bold text-[var(--text-primary)]">{formatCents(cartTotal)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">Observacoes (opcional)</label>
             <textarea
@@ -241,6 +461,7 @@ export function Orders() {
               className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[#C8923A] focus:outline-none"
             />
           </div>
+
           <div className="flex justify-end gap-3 pt-2">
             <button onClick={() => setIsCreateModalOpen(false)} className="rounded-xl border border-[var(--card-border)] px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]">Cancelar</button>
             <button onClick={handleCreate} disabled={createOrder.isPending} className="rounded-xl bg-[#8B6914] px-4 py-2 text-sm font-medium text-white hover:bg-[#725510] disabled:opacity-50">

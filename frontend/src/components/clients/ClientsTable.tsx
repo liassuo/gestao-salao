@@ -1,5 +1,5 @@
 import { Users, Phone, Mail, MoreVertical, Edit2, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { EmptyState } from '@/components/ui';
 import type { Client } from '@/types';
 
@@ -46,6 +46,8 @@ export function ClientsTable({
   onNewClient,
 }: ClientsTableProps) {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const menuBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   if (clients.length === 0) {
     return (
@@ -72,9 +74,6 @@ export function ClientsTable({
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 CPF
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                Status
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Cadastro
@@ -124,25 +123,6 @@ export function ClientsTable({
                 <td className="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-secondary)]">
                   {client.cpf ? formatCpf(client.cpf) : '-'}
                 </td>
-                <td className="whitespace-nowrap px-4 py-3">
-                  <div className="flex flex-col gap-1">
-                    {client.hasDebts && (
-                      <span className="inline-flex w-fit rounded-full bg-red-500/20 px-2 py-0.5 text-xs font-medium text-[#A63030]">
-                        Com divida
-                      </span>
-                    )}
-                    {!client.isActive && (
-                      <span className="inline-flex w-fit rounded-full bg-zinc-500/20 px-2 py-0.5 text-xs font-medium text-zinc-400">
-                        Inativo
-                      </span>
-                    )}
-                    {client.isActive && !client.hasDebts && (
-                      <span className="inline-flex w-fit rounded-full bg-[#C8923A]/20 px-2 py-0.5 text-xs font-medium text-[#C8923A]">
-                        Ativo
-                      </span>
-                    )}
-                  </div>
-                </td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-muted)]">
                   {formatDate(client.createdAt)}
                 </td>
@@ -152,7 +132,19 @@ export function ClientsTable({
                 <td className="whitespace-nowrap px-4 py-3 text-center">
                   <div className="relative inline-block">
                     <button
-                      onClick={() => setOpenMenuId(openMenuId === client.id ? null : client.id)}
+                      ref={(el) => { menuBtnRefs.current[client.id] = el; }}
+                      onClick={() => {
+                        if (openMenuId === client.id) {
+                          setOpenMenuId(null);
+                        } else {
+                          const btn = menuBtnRefs.current[client.id];
+                          if (btn) {
+                            const rect = btn.getBoundingClientRect();
+                            setMenuPos({ top: rect.bottom + 4, left: rect.right - 144 });
+                          }
+                          setOpenMenuId(client.id);
+                        }
+                      }}
                       disabled={isLoading}
                       className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] disabled:opacity-50"
                     >
@@ -165,7 +157,10 @@ export function ClientsTable({
                           className="fixed inset-0 z-10"
                           onClick={() => setOpenMenuId(null)}
                         />
-                        <div className="absolute right-0 z-20 mt-1 w-36 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-1 shadow-lg">
+                        <div
+                          className="fixed z-20 w-36 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-1 shadow-lg"
+                          style={{ top: menuPos.top, left: menuPos.left }}
+                        >
                           <button
                             onClick={() => {
                               onEdit(client);

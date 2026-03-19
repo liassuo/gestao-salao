@@ -1,4 +1,4 @@
-import { UserCog, Phone, Mail, MoreVertical, Edit2, Trash2 } from 'lucide-react';
+import { UserCog, MoreVertical, Edit2, Trash2 } from 'lucide-react';
 import { useState, useRef } from 'react';
 import { EmptyState } from '@/components/ui';
 import type { Professional } from '@/types';
@@ -10,17 +10,6 @@ interface ProfessionalsTableProps {
   onDelete: (professional: Professional) => void;
   isLoading?: boolean;
   onNewProfessional?: () => void;
-}
-
-function formatPhone(phone: string): string {
-  const cleaned = phone.replace(/\D/g, '');
-  if (cleaned.length === 11) {
-    return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 7)}-${cleaned.slice(7)}`;
-  }
-  if (cleaned.length === 10) {
-    return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 6)}-${cleaned.slice(6)}`;
-  }
-  return phone;
 }
 
 function formatWorkingDays(workingHours: Professional['workingHours']): string {
@@ -65,9 +54,6 @@ export function ProfessionalsTable({
                 Profissional
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                Contato
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Serviços
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
@@ -100,20 +86,6 @@ export function ProfessionalsTable({
                         </p>
                       )}
                     </div>
-                  </div>
-                </td>
-                <td className="px-4 py-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-1.5 text-sm text-[var(--text-secondary)]">
-                      <Phone className="h-3.5 w-3.5" />
-                      {formatPhone(professional.phone)}
-                    </div>
-                    {professional.email && (
-                      <div className="flex items-center gap-1.5 text-sm text-[var(--text-muted)]">
-                        <Mail className="h-3.5 w-3.5" />
-                        <span className="truncate max-w-[180px]">{professional.email}</span>
-                      </div>
-                    )}
                   </div>
                 </td>
                 <td className="px-4 py-4">

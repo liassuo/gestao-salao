@@ -1,5 +1,5 @@
-import { Users, Scissors, MoreVertical, XCircle, Phone } from 'lucide-react';
-import { useState } from 'react';
+import { Users, Scissors, MoreVertical, XCircle, Phone, Check, RefreshCw } from 'lucide-react';
+import { useState, useRef } from 'react';
 import { EmptyState } from '@/components/ui';
 import type { ClientSubscription } from '@/types';
 import { subscriptionStatusLabels, subscriptionStatusColors } from '@/types';
@@ -7,6 +7,8 @@ import { subscriptionStatusLabels, subscriptionStatusColors } from '@/types';
 interface ClientSubscriptionTableProps {
   subscriptions: ClientSubscription[];
   onCancel: (subscription: ClientSubscription) => void;
+  onUseCut: (subscription: ClientSubscription) => void;
+  onResetCuts: (subscription: ClientSubscription) => void;
   isLoading?: boolean;
   onNewSubscription?: () => void;
 }
@@ -25,10 +27,14 @@ function formatDate(dateString: string): string {
 export function ClientSubscriptionTable({
   subscriptions,
   onCancel,
+  onUseCut,
+  onResetCuts,
   isLoading,
   onNewSubscription,
 }: ClientSubscriptionTableProps) {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const menuBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   if (subscriptions.length === 0) {
     return (
@@ -141,7 +147,19 @@ export function ClientSubscriptionTable({
                     {subscription.status === 'ACTIVE' && (
                       <div className="relative inline-block">
                         <button
-                          onClick={() => setOpenMenuId(openMenuId === subscription.id ? null : subscription.id)}
+                          ref={(el) => { menuBtnRefs.current[subscription.id] = el; }}
+                          onClick={() => {
+                            if (openMenuId === subscription.id) {
+                              setOpenMenuId(null);
+                            } else {
+                              const btn = menuBtnRefs.current[subscription.id];
+                              if (btn) {
+                                const rect = btn.getBoundingClientRect();
+                                setMenuPos({ top: rect.bottom + 4, left: rect.right - 160 });
+                              }
+                              setOpenMenuId(subscription.id);
+                            }
+                          }}
                           disabled={isLoading}
                           className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] disabled:opacity-50"
                         >
@@ -154,7 +172,32 @@ export function ClientSubscriptionTable({
                               className="fixed inset-0 z-10"
                               onClick={() => setOpenMenuId(null)}
                             />
-                            <div className="absolute right-0 z-20 mt-1 w-40 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-1 shadow-lg">
+                            <div
+                              className="fixed z-20 w-48 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-1 shadow-lg"
+                              style={{ top: menuPos.top, left: menuPos.left }}
+                            >
+                              <button
+                                onClick={() => {
+                                  onUseCut(subscription);
+                                  setOpenMenuId(null);
+                                }}
+                                disabled={cutsPerMonth !== 99 && subscription.cutsUsedThisMonth >= cutsPerMonth}
+                                className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--hover-bg)] disabled:opacity-40 disabled:cursor-not-allowed"
+                              >
+                                <Scissors className="h-4 w-4 text-[#C8923A]" />
+                                Registrar Corte
+                              </button>
+                              <button
+                                onClick={() => {
+                                  onResetCuts(subscription);
+                                  setOpenMenuId(null);
+                                }}
+                                className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+                              >
+                                <RefreshCw className="h-4 w-4 text-green-500" />
+                                Renovar Cortes
+                              </button>
+                              <div className="my-1 border-t border-[var(--border-color)]" />
                               <button
                                 onClick={() => {
                                   onCancel(subscription);
@@ -163,7 +206,7 @@ export function ClientSubscriptionTable({
                                 className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[#A63030] hover:bg-red-500/10"
                               >
                                 <XCircle className="h-4 w-4" />
-                                Cancelar
+                                Cancelar Assinatura
                               </button>
                             </div>
                           </>

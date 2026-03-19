@@ -55,16 +55,20 @@ export class PaymentsService {
     }
 
     // 4. Criar o pagamento
+    const now = new Date().toISOString();
     const { data: payment, error: payError } = await this.supabase
       .from('payments')
       .insert({
+        id: crypto.randomUUID(),
         clientId: dto.clientId,
         appointmentId: dto.appointmentId,
         amount: dto.amount,
         method: dto.method,
-        paidAt: dto.paidAt ?? new Date().toISOString(),
+        paidAt: dto.paidAt ?? now,
         registeredBy: dto.registeredBy,
         notes: dto.notes,
+        createdAt: now,
+        updatedAt: now,
       })
       .select('*')
       .single();

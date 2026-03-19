@@ -23,9 +23,11 @@ export class PromotionsService {
 
     const status = this.computeStatus(dto.startDate, dto.endDate, true);
 
+    const now = new Date().toISOString();
     const { data: promotion, error } = await this.supabase
       .from('promotions')
       .insert({
+        id: crypto.randomUUID(),
         name: dto.name,
         discountPercent: dto.discountPercent,
         startDate: dto.startDate,
@@ -35,6 +37,9 @@ export class PromotionsService {
         bannerTitle: dto.bannerTitle || null,
         bannerText: dto.bannerText || null,
         isTemplate: dto.isTemplate || false,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
       })
       .select('*')
       .single();
@@ -228,6 +233,7 @@ export class PromotionsService {
 
     if (productIds.length > 0) {
       const rows = productIds.map((productId) => ({
+        id: crypto.randomUUID(),
         promotionId,
         productId,
       }));
@@ -250,6 +256,7 @@ export class PromotionsService {
     // Insere novos
     if (serviceIds.length > 0) {
       const rows = serviceIds.map((serviceId) => ({
+        id: crypto.randomUUID(),
         promotionId,
         serviceId,
       }));

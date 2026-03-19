@@ -51,15 +51,19 @@ export class CommissionsService {
 
       if (commissionAmount <= 0) continue;
 
+      const comNow = new Date().toISOString();
       const { data: commission, error } = await this.supabase
         .from('commissions')
         .insert({
+          id: crypto.randomUUID(),
           amount: commissionAmount,
           periodStart: startDate.toISOString(),
           periodEnd: endDate.toISOString(),
           status: 'PENDING',
           professionalId: professionalId,
           branchId: professional.branchId,
+          createdAt: comNow,
+          updatedAt: comNow,
         })
         .select('*')
         .single();

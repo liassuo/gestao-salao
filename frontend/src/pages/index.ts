@@ -1,6 +1,5 @@
 export * from './AccessDenied';
 export * from './Appointments';
-export * from './BankAccounts';
 export * from './Branches';
 export * from './CashRegister';
 export * from './Clients';

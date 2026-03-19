@@ -1,5 +1,5 @@
 import { Building2, MoreVertical, Edit2, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { EmptyState } from '@/components/ui';
 import type { Branch } from '@/types';
 
@@ -19,6 +19,8 @@ export function BranchesTable({
   onNewBranch,
 }: BranchesTableProps) {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const menuBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   if (branches.length === 0) {
     return (
@@ -91,7 +93,19 @@ export function BranchesTable({
                 <td className="whitespace-nowrap px-4 py-3 text-center">
                   <div className="relative inline-block">
                     <button
-                      onClick={() => setOpenMenuId(openMenuId === branch.id ? null : branch.id)}
+                      ref={(el) => { menuBtnRefs.current[branch.id] = el; }}
+                      onClick={() => {
+                        if (openMenuId === branch.id) {
+                          setOpenMenuId(null);
+                        } else {
+                          const btn = menuBtnRefs.current[branch.id];
+                          if (btn) {
+                            const rect = btn.getBoundingClientRect();
+                            setMenuPos({ top: rect.bottom + 4, left: rect.right - 144 });
+                          }
+                          setOpenMenuId(branch.id);
+                        }
+                      }}
                       disabled={isLoading}
                       className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] disabled:opacity-50"
                     >
@@ -104,7 +118,10 @@ export function BranchesTable({
                           className="fixed inset-0 z-10"
                           onClick={() => setOpenMenuId(null)}
                         />
-                        <div className="absolute right-0 z-20 mt-1 w-36 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-1 shadow-lg">
+                        <div
+                          className="fixed z-20 w-36 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-1 shadow-lg"
+                          style={{ top: menuPos.top, left: menuPos.left }}
+                        >
                           <button
                             onClick={() => {
                               onEdit(branch);

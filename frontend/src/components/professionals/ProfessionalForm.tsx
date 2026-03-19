@@ -8,8 +8,6 @@ import { weekDayShortLabels } from '@/types';
 
 interface ProfessionalFormData {
   name: string;
-  phone: string;
-  email: string;
   commissionRate: string;
 }
 
@@ -70,8 +68,6 @@ export function ProfessionalForm({ professional, onSubmit, isLoading, error }: P
   } = useForm<ProfessionalFormData>({
     defaultValues: {
       name: professional?.name || '',
-      phone: professional?.phone || '',
-      email: professional?.email || '',
       commissionRate: professional?.commissionRate?.toString() || '',
     },
   });
@@ -103,8 +99,6 @@ export function ProfessionalForm({ professional, onSubmit, isLoading, error }: P
   const handleFormSubmit = async (data: ProfessionalFormData) => {
     await onSubmit({
       name: data.name,
-      phone: data.phone.replace(/\D/g, ''),
-      email: data.email || undefined,
       avatarUrl: avatarUrl || undefined,
       commissionRate: data.commissionRate ? parseFloat(data.commissionRate) : undefined,
       serviceIds: selectedServiceIds.length > 0 ? selectedServiceIds : undefined,
@@ -124,225 +118,178 @@ export function ProfessionalForm({ professional, onSubmit, isLoading, error }: P
         </div>
       )}
 
-      <div>
-        <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
-          Foto de Perfil
-        </label>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          onChange={handleAvatarUpload}
-          className="hidden"
-        />
-        <div
-          onClick={() => !uploading && fileInputRef.current?.click()}
-          className={`flex items-center gap-4 px-4 py-3 rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] transition-all ${
-            uploading ? 'opacity-50' : 'cursor-pointer hover:border-[#C8923A]'
-          }`}
-        >
-          {avatarUrl ? (
-            <img src={avatarUrl} alt="Preview" className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
-          ) : (
-            <div className="w-10 h-10 rounded-full bg-[var(--border-color)] flex items-center justify-center flex-shrink-0">
-              <Camera className="h-4 w-4 text-[var(--text-muted)]" />
-            </div>
-          )}
-          <div className="flex-1 min-w-0">
-            <span className="text-sm text-[var(--text-muted)]">
-              {uploading ? 'Enviando...' : avatarUrl ? 'Clique para trocar a foto' : 'Clique para selecionar uma foto'}
-            </span>
+      {/* Foto + Nome + Comissão */}
+      <div className="flex items-start gap-4">
+        <div className="flex-shrink-0">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleAvatarUpload}
+            className="hidden"
+          />
+          <div
+            onClick={() => !uploading && fileInputRef.current?.click()}
+            className={`relative w-16 h-16 rounded-full border-2 border-dashed border-[var(--border-color)] flex items-center justify-center overflow-hidden transition-all ${
+              uploading ? 'opacity-50' : 'cursor-pointer hover:border-[#C8923A]'
+            }`}
+          >
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="Preview" className="w-full h-full object-cover" />
+            ) : (
+              <Camera className="h-5 w-5 text-[var(--text-muted)]" />
+            )}
+            {uploading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                <Loader2 className="h-4 w-4 animate-spin text-white" />
+              </div>
+            )}
           </div>
-          {uploading && (
-            <Loader2 className="h-4 w-4 animate-spin text-[var(--text-muted)] flex-shrink-0" />
-          )}
           {avatarUrl && !uploading && (
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); setAvatarUrl(null); }}
-              className="p-1 text-[var(--text-muted)] hover:text-[#A63030] transition-colors flex-shrink-0"
-              title="Remover foto"
+              onClick={() => setAvatarUrl(null)}
+              className="mt-1 w-full text-center text-[10px] text-[var(--text-muted)] hover:text-[#A63030] transition-colors"
             >
-              <X className="h-4 w-4" />
+              Remover
             </button>
           )}
         </div>
-      </div>
 
-      <div>
-        <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
-          Nome *
-        </label>
-        <input
-          type="text"
-          {...register('name', { required: 'Nome é obrigatório' })}
-          placeholder="Nome completo do profissional"
-          className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] ${
-            errors.name ? 'border-[#A63030]' : 'border-[var(--border-color)]'
-          }`}
-        />
-        {errors.name && (
-          <p className="mt-1 text-sm text-[#A63030]">{errors.name.message}</p>
-        )}
-      </div>
-
-      <div>
-        <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
-          Telefone *
-        </label>
-        <input
-          type="tel"
-          {...register('phone', {
-            required: 'Telefone é obrigatório',
-            pattern: {
-              value: /^[\d\s()-]+$/,
-              message: 'Telefone inválido',
-            },
-          })}
-          placeholder="(11) 99999-9999"
-          className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] ${
-            errors.phone ? 'border-[#A63030]' : 'border-[var(--border-color)]'
-          }`}
-        />
-        {errors.phone && (
-          <p className="mt-1 text-sm text-[#A63030]">{errors.phone.message}</p>
-        )}
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
-            E-mail
-          </label>
-          <input
-            type="email"
-            {...register('email', {
-              pattern: {
-                value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-                message: 'E-mail inválido',
-              },
-            })}
-            placeholder="email@exemplo.com"
-            className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] ${
-              errors.email ? 'border-[#A63030]' : 'border-[var(--border-color)]'
-            }`}
-          />
-          {errors.email && (
-            <p className="mt-1 text-sm text-[#A63030]">{errors.email.message}</p>
-          )}
-        </div>
-
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
-            Comissão (%)
-          </label>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            max="100"
-            {...register('commissionRate', {
-              min: { value: 0, message: 'Mínimo 0%' },
-              max: { value: 100, message: 'Máximo 100%' },
-            })}
-            placeholder="Ex: 50"
-            className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] ${
-              errors.commissionRate ? 'border-[#A63030]' : 'border-[var(--border-color)]'
-            }`}
-          />
-          {errors.commissionRate && (
-            <p className="mt-1 text-sm text-[#A63030]">{errors.commissionRate.message}</p>
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        {allServices && allServices.length > 0 && (
+        <div className="flex-1 grid grid-cols-2 gap-3">
           <div>
-            <div className="mb-1.5 flex items-center justify-between">
-              <label className="text-sm font-medium text-[var(--text-secondary)]">
-                Serviços
-              </label>
-              <button
-                type="button"
-                onClick={() => {
-                  const allIds = allServices!.map((s) => s.id);
-                  const allSelected = allIds.every((id) => selectedServiceIds.includes(id));
-                  setSelectedServiceIds(allSelected ? [] : allIds);
-                }}
-                className="text-xs font-medium text-[#C8923A] hover:text-[#8B6914] transition-colors"
-              >
-                {allServices!.every((s) => selectedServiceIds.includes(s.id)) ? 'Desmarcar todos' : 'Selecionar todos'}
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {allServices.map((service) => {
-                const isSelected = selectedServiceIds.includes(service.id);
-                return (
-                  <button
-                    key={service.id}
-                    type="button"
-                    onClick={() => toggleService(service.id)}
-                    className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                      isSelected
-                        ? 'bg-[#C8923A] text-white'
-                        : 'bg-[var(--hover-bg)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[#C8923A]'
-                    }`}
-                  >
-                    {isSelected && <Check className="h-3 w-3" />}
-                    {service.name}
-                  </button>
-                );
-              })}
-            </div>
+            <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">
+              Nome *
+            </label>
+            <input
+              type="text"
+              {...register('name', { required: 'Nome é obrigatório' })}
+              placeholder="Nome do profissional"
+              className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] ${
+                errors.name ? 'border-[#A63030]' : 'border-[var(--border-color)]'
+              }`}
+            />
+            {errors.name && (
+              <p className="mt-1 text-sm text-[#A63030]">{errors.name.message}</p>
+            )}
           </div>
-        )}
+          <div>
+            <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">
+              Comissão (%)
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              max="100"
+              {...register('commissionRate', {
+                min: { value: 0, message: 'Mínimo 0%' },
+                max: { value: 100, message: 'Máximo 100%' },
+              })}
+              placeholder="Ex: 50"
+              className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] ${
+                errors.commissionRate ? 'border-[#A63030]' : 'border-[var(--border-color)]'
+              }`}
+            />
+            {errors.commissionRate && (
+              <p className="mt-1 text-sm text-[#A63030]">{errors.commissionRate.message}</p>
+            )}
+          </div>
+        </div>
+      </div>
 
+      {/* Serviços - largura total */}
+      {allServices && allServices.length > 0 && (
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
-            Dias de Trabalho
-          </label>
-          <div className="space-y-1.5">
-            {ALL_DAYS.map((day) => {
-              const active = isDayActive(day);
-              const wh = workingHours.find((w) => w.dayOfWeek === day);
+          <div className="mb-2 flex items-center justify-between">
+            <label className="text-sm font-medium text-[var(--text-secondary)]">
+              Serviços
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                const allIds = allServices!.map((s) => s.id);
+                const allSelected = allIds.every((id) => selectedServiceIds.includes(id));
+                setSelectedServiceIds(allSelected ? [] : allIds);
+              }}
+              className="text-xs font-medium text-[#C8923A] hover:text-[#8B6914] transition-colors"
+            >
+              {allServices!.every((s) => selectedServiceIds.includes(s.id)) ? 'Desmarcar todos' : 'Selecionar todos'}
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {allServices.map((service) => {
+              const isSelected = selectedServiceIds.includes(service.id);
               return (
-                <div key={day} className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => toggleDay(day)}
-                    className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border transition-colors ${
-                      active ? 'border-[#C8923A] bg-[#C8923A]' : 'border-[var(--border-color)]'
-                    }`}
-                  >
-                    {active && <Check className="h-2.5 w-2.5 text-white" />}
-                  </button>
-                  <span className={`w-8 text-xs font-medium ${active ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
-                    {weekDayShortLabels[day]}
-                  </span>
-                  {active && wh ? (
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="time"
-                        value={wh.startTime}
-                        onChange={(e) => updateDayTime(day, 'startTime', e.target.value)}
-                        className="rounded border border-[var(--border-color)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-[11px] text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[#C8923A] w-[72px]"
-                      />
-                      <span className="text-[10px] text-[var(--text-muted)]">-</span>
-                      <input
-                        type="time"
-                        value={wh.endTime}
-                        onChange={(e) => updateDayTime(day, 'endTime', e.target.value)}
-                        className="rounded border border-[var(--border-color)] bg-[var(--hover-bg)] px-1.5 py-0.5 text-[11px] text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[#C8923A] w-[72px]"
-                      />
-                    </div>
-                  ) : (
-                    <span className="text-[11px] text-[var(--text-muted)]">Folga</span>
-                  )}
-                </div>
+                <button
+                  key={service.id}
+                  type="button"
+                  onClick={() => toggleService(service.id)}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                    isSelected
+                      ? 'bg-[#C8923A] text-white'
+                      : 'bg-[var(--hover-bg)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[#C8923A]'
+                  }`}
+                >
+                  {isSelected && <Check className="h-3 w-3" />}
+                  {service.name}
+                </button>
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* Dias de Trabalho - grade compacta */}
+      <div>
+        <label className="mb-2 block text-sm font-medium text-[var(--text-secondary)]">
+          Dias de Trabalho
+        </label>
+        <div className="rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] overflow-hidden">
+          {ALL_DAYS.map((day, idx) => {
+            const active = isDayActive(day);
+            const wh = workingHours.find((w) => w.dayOfWeek === day);
+            return (
+              <div
+                key={day}
+                className={`flex items-center gap-3 px-3 py-2 ${
+                  idx < ALL_DAYS.length - 1 ? 'border-b border-[var(--border-color)]' : ''
+                } ${active ? '' : 'opacity-50'}`}
+              >
+                <button
+                  type="button"
+                  onClick={() => toggleDay(day)}
+                  className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border transition-colors ${
+                    active ? 'border-[#C8923A] bg-[#C8923A]' : 'border-[var(--border-color)] hover:border-[#C8923A]'
+                  }`}
+                >
+                  {active && <Check className="h-3 w-3 text-white" />}
+                </button>
+                <span className={`w-10 text-sm font-medium ${active ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
+                  {weekDayShortLabels[day]}
+                </span>
+                {active && wh ? (
+                  <div className="flex items-center gap-1.5 ml-auto">
+                    <input
+                      type="time"
+                      value={wh.startTime}
+                      onChange={(e) => updateDayTime(day, 'startTime', e.target.value)}
+                      className="rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] px-2 py-1 text-xs text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[#C8923A] w-[80px]"
+                    />
+                    <span className="text-xs text-[var(--text-muted)]">-</span>
+                    <input
+                      type="time"
+                      value={wh.endTime}
+                      onChange={(e) => updateDayTime(day, 'endTime', e.target.value)}
+                      className="rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] px-2 py-1 text-xs text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[#C8923A] w-[80px]"
+                    />
+                  </div>
+                ) : (
+                  <span className="ml-auto text-xs text-[var(--text-muted)]">Folga</span>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 

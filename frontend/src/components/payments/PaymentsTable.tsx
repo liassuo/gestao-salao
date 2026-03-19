@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { CreditCard, MoreVertical, Pencil, Trash2 } from 'lucide-react';
 import type { Payment } from '@/types';
 import { paymentMethodLabels, paymentMethodColors } from '@/types';
@@ -157,10 +157,22 @@ function PaymentActions({
   onDelete,
   disabled,
 }: PaymentActionsProps) {
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+
+  const handleToggle = () => {
+    if (!isOpen && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setMenuPos({ top: rect.bottom + 4, left: rect.right - 160 });
+    }
+    onToggle();
+  };
+
   return (
     <div className="relative inline-block">
       <button
-        onClick={onToggle}
+        ref={btnRef}
+        onClick={handleToggle}
         disabled={disabled}
         className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] disabled:cursor-not-allowed disabled:opacity-50"
       >
@@ -170,7 +182,10 @@ function PaymentActions({
       {isOpen && (
         <>
           <div className="fixed inset-0 z-10" onClick={onClose} />
-          <div className="absolute right-0 z-20 mt-1 w-40 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-1 shadow-lg">
+          <div
+            className="fixed z-20 w-40 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-1 shadow-lg"
+            style={{ top: menuPos.top, left: menuPos.left }}
+          >
             <button
               onClick={onEdit}
               className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"

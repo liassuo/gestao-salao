@@ -18,14 +18,31 @@ export class CashRegisterService {
   }
 
   async openRegister(dto: OpenCashRegisterDto) {
-    const { data: user } = await this.supabase
-      .from('users')
-      .select('id')
-      .eq('id', dto.openedBy)
-      .single();
+    let openedBy = dto.openedBy;
 
-    if (!user) {
-      throw new NotFoundException('Usuário não encontrado');
+    if (!openedBy) {
+      // Buscar primeiro admin disponível
+      const { data: admin } = await this.supabase
+        .from('users')
+        .select('id')
+        .eq('role', 'ADMIN')
+        .limit(1)
+        .single();
+
+      if (!admin) {
+        throw new NotFoundException('Nenhum administrador encontrado');
+      }
+      openedBy = admin.id;
+    } else {
+      const { data: user } = await this.supabase
+        .from('users')
+        .select('id')
+        .eq('id', openedBy)
+        .single();
+
+      if (!user) {
+        throw new NotFoundException('Usuário não encontrado');
+      }
     }
 
     const normalizedDate = this.normalizeDate(dto.date ?? new Date());
@@ -50,15 +67,19 @@ export class CashRegisterService {
       throw new BadRequestException('Existe um caixa aberto que precisa ser fechado primeiro');
     }
 
+    const now = new Date().toISOString();
     const { data: register, error } = await this.supabase
       .from('cash_registers')
       .insert({
+        id: crypto.randomUUID(),
         date: normalizedDate.toISOString(),
-        openedAt: new Date().toISOString(),
+        openedAt: now,
         openingBalance: dto.openingBalance,
-        openedBy: dto.openedBy,
+        openedBy: openedBy,
         isOpen: true,
         notes: dto.notes,
+        createdAt: now,
+        updatedAt: now,
       })
       .select('*')
       .single();

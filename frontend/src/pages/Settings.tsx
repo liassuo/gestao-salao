@@ -36,25 +36,8 @@ interface NotificationSettings {
   reminderHoursBefore: number;
 }
 
-const ACCENT_COLORS = [
-  { name: 'Dourado', value: '#8B6914', ring: 'ring-[#8B6914]' },
-  { name: 'Vermelho', value: '#8B2020', ring: 'ring-[#8B2020]' },
-  { name: 'Azul', value: '#1D4ED8', ring: 'ring-[#1D4ED8]' },
-  { name: 'Verde', value: '#047857', ring: 'ring-[#047857]' },
-  { name: 'Roxo', value: '#7C3AED', ring: 'ring-[#7C3AED]' },
-];
-
 function AppearanceTab() {
   const { theme, setTheme } = useTheme();
-  const [accentColor, setAccentColor] = useState(() => {
-    return localStorage.getItem('accentColor') || '#8B6914';
-  });
-
-  const handleSetAccent = (color: string) => {
-    setAccentColor(color);
-    localStorage.setItem('accentColor', color);
-    document.documentElement.style.setProperty('--accent-color', color);
-  };
 
   const themes = [
     { id: 'light' as const, label: 'Claro', icon: Sun, preview: 'bg-white border border-zinc-200' },
@@ -91,32 +74,6 @@ function AppearanceTab() {
           </div>
         </div>
 
-        <div>
-          <h3 className="mb-4 font-medium text-[var(--text-primary)]">Cor Principal</h3>
-          <div className="flex gap-3">
-            {ACCENT_COLORS.map((item) => (
-              <button
-                key={item.value}
-                onClick={() => handleSetAccent(item.value)}
-                className={`h-10 w-10 rounded-full transition-all ${
-                  accentColor === item.value
-                    ? `ring-2 ring-offset-2 ${item.ring} ring-offset-[var(--bg-primary)]`
-                    : 'hover:scale-110'
-                }`}
-                style={{ backgroundColor: item.value }}
-                title={item.name}
-              />
-            ))}
-          </div>
-          {accentColor !== '#8B6914' && (
-            <button
-              onClick={() => handleSetAccent('#8B6914')}
-              className="mt-2 text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
-            >
-              Restaurar cor padrao
-            </button>
-          )}
-        </div>
       </div>
     </div>
   );

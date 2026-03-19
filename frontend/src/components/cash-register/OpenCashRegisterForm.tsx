@@ -22,7 +22,7 @@ export function OpenCashRegisterForm({
   isLoading,
   error,
 }: OpenCashRegisterFormProps) {
-  const [openingBalanceReais, setOpeningBalanceReais] = useState('');
+  const [openingBalanceCents, setOpeningBalanceCents] = useState(0);
   const [notes, setNotes] = useState('');
   const [showNotes, setShowNotes] = useState(false);
 
@@ -38,11 +38,18 @@ export function OpenCashRegisterForm({
     minute: '2-digit',
   });
 
+  const displayValue = (openingBalanceCents / 100).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+  const handleMoneyInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const digits = e.target.value.replace(/\D/g, '');
+    setOpeningBalanceCents(parseInt(digits) || 0);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const openingBalanceCents = openingBalanceReais
-      ? Math.round(parseFloat(openingBalanceReais.replace(',', '.')) * 100)
-      : 0;
     await onSubmit({
       openingBalance: openingBalanceCents,
       notes: notes || undefined,
@@ -135,11 +142,9 @@ export function OpenCashRegisterForm({
                 <input
                   type="text"
                   id="openingBalance"
-                  value={openingBalanceReais}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/[^\d,\.]/g, '');
-                    setOpeningBalanceReais(value);
-                  }}
+                  inputMode="numeric"
+                  value={displayValue}
+                  onChange={handleMoneyInput}
                   placeholder="0,00"
                   className="w-full rounded-xl border-2 border-[var(--border-color)] bg-[var(--hover-bg)] py-4 pl-14 pr-4 text-2xl font-bold text-[var(--text-primary)] placeholder:text-[var(--text-muted)]/40 focus:border-[#C8923A] focus:outline-none transition-colors"
                   autoFocus

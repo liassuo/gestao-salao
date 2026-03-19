@@ -41,9 +41,11 @@ export class ClientsService {
   ) {}
 
   async create(dto: CreateClientDto) {
+    const now = new Date().toISOString();
     const { data: client, error } = await this.supabase
       .from('clients')
       .insert({
+        id: crypto.randomUUID(),
         name: dto.name,
         phone: dto.phone,
         email: dto.email || null,
@@ -57,6 +59,10 @@ export class ClientsService {
         city: dto.city || null,
         state: dto.state || null,
         notes: dto.notes,
+        hasDebts: false,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
       })
       .select('*')
       .single();

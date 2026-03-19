@@ -86,14 +86,19 @@ export class AuthService {
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
 
+    const regNow = new Date().toISOString();
     const { data: client, error } = await this.supabase
       .from('clients')
       .insert({
+        id: crypto.randomUUID(),
         name: dto.name,
         email: dto.email,
         password: hashedPassword,
         phone: dto.phone || '',
         isActive: true,
+        hasDebts: false,
+        createdAt: regNow,
+        updatedAt: regNow,
       })
       .select()
       .single();
@@ -239,14 +244,19 @@ export class AuthService {
         throw new UnauthorizedException('Conta desativada');
       }
     } else {
+      const googleNow = new Date().toISOString();
       const { data: newClient, error } = await this.supabase
         .from('clients')
         .insert({
+          id: crypto.randomUUID(),
           name: name || email.split('@')[0],
           email,
           googleId,
           phone: '',
           isActive: true,
+          hasDebts: false,
+          createdAt: googleNow,
+          updatedAt: googleNow,
         })
         .select()
         .single();

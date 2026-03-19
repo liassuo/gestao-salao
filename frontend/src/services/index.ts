@@ -10,7 +10,6 @@ export { reportsService } from './reports';
 export { servicesService } from './services';
 export { subscriptionsService } from './subscriptions';
 export { branchesService } from './branches';
-export { bankAccountsService } from './bankAccounts';
 export { paymentMethodConfigService } from './paymentMethodConfig';
 export { commissionsService } from './commissions';
 export { asaasService } from './asaas';

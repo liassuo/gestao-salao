@@ -4,8 +4,6 @@ import { PrivateRoute, RoleRoute } from '@/components/auth';
 import {
   AccessDenied,
   Appointments,
-  BankAccounts,
-
   Branches,
   CashRegister,
   Clients,
@@ -132,10 +130,6 @@ export const router = createBrowserRouter([
       {
         path: 'financeiro/filiais',
         element: withRoleProtection('/financeiro/filiais', <Branches />),
-      },
-      {
-        path: 'financeiro/contas-bancarias',
-        element: withRoleProtection('/financeiro/contas-bancarias', <BankAccounts />),
       },
       {
         path: 'financeiro/formas-pagamento',

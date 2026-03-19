@@ -7,15 +7,18 @@ export class ProfessionalsService {
   constructor(private readonly supabase: SupabaseService) {}
 
   async create(dto: CreateProfessionalDto) {
+    const now = new Date().toISOString();
     const { data: professional, error } = await this.supabase
       .from('professionals')
       .insert({
+        id: crypto.randomUUID(),
         name: dto.name,
-        phone: dto.phone,
-        email: dto.email,
         avatarUrl: dto.avatarUrl || null,
         commissionRate: dto.commissionRate,
         workingHours: dto.workingHours || [],
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
       })
       .select('*')
       .single();
@@ -26,6 +29,7 @@ export class ProfessionalsService {
     if (dto.serviceIds?.length) {
       for (const serviceId of dto.serviceIds) {
         await this.supabase.from('professional_services').insert({
+          id: crypto.randomUUID(),
           professionalId: professional.id,
           serviceId: serviceId,
         });
@@ -202,8 +206,6 @@ export class ProfessionalsService {
 
     const updateData: any = {};
     if (data.name !== undefined) updateData.name = data.name;
-    if (data.phone !== undefined) updateData.phone = data.phone;
-    if (data.email !== undefined) updateData.email = data.email;
     if (data.avatarUrl !== undefined) updateData.avatarUrl = data.avatarUrl;
     if (data.commissionRate !== undefined) updateData.commissionRate = data.commissionRate;
     if (data.workingHours !== undefined) updateData.workingHours = data.workingHours;
@@ -229,6 +231,7 @@ export class ProfessionalsService {
       if (serviceIds.length > 0) {
         for (const svcId of serviceIds) {
           await this.supabase.from('professional_services').insert({
+            id: crypto.randomUUID(),
             professionalId: id,
             serviceId: svcId,
           });

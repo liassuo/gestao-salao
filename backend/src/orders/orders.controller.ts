@@ -1,6 +1,6 @@
 import {
   Controller, Get, Post, Patch, Delete, Body, Param, Query,
-  ParseUUIDPipe, HttpCode, HttpStatus,
+  ParseUUIDPipe, HttpCode, HttpStatus, Logger,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
@@ -9,6 +9,7 @@ import { CreateOrderDto, UpdateOrderDto, AddOrderItemDto, QueryOrderDto, PayOrde
 @ApiTags('Orders')
 @Controller('orders')
 export class OrdersController {
+  private readonly logger = new Logger(OrdersController.name);
   constructor(private readonly ordersService: OrdersService) {}
 
   @Get()
@@ -24,6 +25,7 @@ export class OrdersController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() dto: CreateOrderDto) {
+    this.logger.log(`POST /orders - items: ${dto.items?.length ?? 0}, body keys: ${Object.keys(dto)}`);
     return this.ordersService.create(dto);
   }
 

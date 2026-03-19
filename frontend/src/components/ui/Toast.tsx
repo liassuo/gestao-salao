@@ -25,29 +25,25 @@ const icons = {
 
 const styles = {
   success: {
-    bg: 'bg-[#C8923A]/20',
-    border: 'border-[#C8923A]/30',
+    bg: 'bg-[#1C1408] border-[#C8923A]/40',
     icon: 'text-[#C8923A]',
     title: 'text-[#C8923A]',
     message: 'text-[#D4A85C]',
   },
   error: {
-    bg: 'bg-red-500/20',
-    border: 'border-[#A63030]/30',
+    bg: 'bg-[#1A0A0A] border-[#A63030]/40',
     icon: 'text-[#A63030]',
     title: 'text-[#A63030]',
     message: 'text-[#C45050]',
   },
   warning: {
-    bg: 'bg-red-500/20',
-    border: 'border-[#A63030]/30',
+    bg: 'bg-[#1A0A0A] border-[#A63030]/40',
     icon: 'text-[#A63030]',
     title: 'text-[#A63030]',
     message: 'text-[#C45050]',
   },
   info: {
-    bg: 'bg-[#C8923A]/20',
-    border: 'border-[#C8923A]/30',
+    bg: 'bg-[#1C1408] border-[#C8923A]/40',
     icon: 'text-[#C8923A]',
     title: 'text-[#C8923A]',
     message: 'text-[#D4A85C]',
@@ -77,7 +73,7 @@ function Toast({ toast, onRemove }: ToastProps) {
     <div
       className={`pointer-events-auto flex w-full max-w-sm overflow-hidden rounded-xl border shadow-lg transition-all duration-200 ${
         style.bg
-      } ${style.border} ${
+      } ${
         isVisible ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'
       }`}
       role="alert"
@@ -110,7 +106,7 @@ export function ToastContainer({ toasts, onRemove }: ToastContainerProps) {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="pointer-events-none fixed right-4 top-4 z-50 flex flex-col gap-2">
+    <div className="pointer-events-none fixed bottom-4 right-4 z-50 flex flex-col-reverse gap-2">
       {toasts.map((toast) => (
         <Toast key={toast.id} toast={toast} onRemove={onRemove} />
       ))}

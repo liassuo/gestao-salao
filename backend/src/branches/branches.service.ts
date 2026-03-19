@@ -7,12 +7,17 @@ export class BranchesService {
   constructor(private readonly supabase: SupabaseService) {}
 
   async create(dto: CreateBranchDto) {
+    const now = new Date().toISOString();
     const { data: branch, error } = await this.supabase
       .from('branches')
       .insert({
+        id: crypto.randomUUID(),
         name: dto.name,
         address: dto.address,
         phone: dto.phone,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
       })
       .select('*')
       .single();

@@ -16,8 +16,9 @@ export class OpenCashRegisterDto {
   @Min(0, { message: 'Saldo de abertura não pode ser negativo' })
   openingBalance: number;
 
+  @IsOptional()
   @IsUUID()
-  openedBy: string;
+  openedBy?: string;
 
   @IsOptional()
   @IsString()

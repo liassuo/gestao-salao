@@ -23,9 +23,11 @@ export class DebtsService {
     }
 
     // 2. Criar dívida
+    const now = new Date().toISOString();
     const { data: debt, error } = await this.supabase
       .from('debts')
       .insert({
+        id: crypto.randomUUID(),
         clientId: dto.clientId,
         appointmentId: dto.appointmentId,
         amount: dto.amount,
@@ -34,6 +36,8 @@ export class DebtsService {
         description: dto.description,
         dueDate: dto.dueDate,
         isSettled: false,
+        createdAt: now,
+        updatedAt: now,
       })
       .select('*')
       .single();

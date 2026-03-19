@@ -23,7 +23,7 @@ interface FormData {
 
 function toLocalDateString(dateStr: string) {
   if (!dateStr) return '';
-  return new Date(dateStr).toISOString().slice(0, 16);
+  return new Date(dateStr).toISOString().slice(0, 10);
 }
 
 export function PromotionForm({ promotion, onSubmit, isLoading, error }: PromotionFormProps) {
@@ -122,8 +122,8 @@ export function PromotionForm({ promotion, onSubmit, isLoading, error }: Promoti
     const payload: CreatePromotionPayload = {
       name: data.name,
       discountPercent: data.discountPercent,
-      startDate: new Date(data.startDate).toISOString(),
-      endDate: new Date(data.endDate).toISOString(),
+      startDate: new Date(data.startDate + 'T00:00:00').toISOString(),
+      endDate: new Date(data.endDate + 'T23:59:59').toISOString(),
       isTemplate: data.isTemplate,
       serviceIds: selectedServiceIds.length > 0 ? selectedServiceIds : undefined,
       productIds: selectedProductIds.length > 0 ? selectedProductIds : undefined,
@@ -195,7 +195,7 @@ export function PromotionForm({ promotion, onSubmit, isLoading, error }: Promoti
             Data Inicio *
           </label>
           <input
-            type="datetime-local"
+            type="date"
             {...register('startDate', { required: 'Data inicio e obrigatoria' })}
             className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] px-4 py-2.5 text-sm text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none focus:ring-1 focus:ring-[#C8923A]"
           />
@@ -208,7 +208,7 @@ export function PromotionForm({ promotion, onSubmit, isLoading, error }: Promoti
             Data Fim *
           </label>
           <input
-            type="datetime-local"
+            type="date"
             {...register('endDate', { required: 'Data fim e obrigatoria' })}
             className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] px-4 py-2.5 text-sm text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none focus:ring-1 focus:ring-[#C8923A]"
           />

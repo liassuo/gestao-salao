@@ -30,33 +30,6 @@ export interface UpdateBranchPayload {
 }
 
 // =============================================
-// BankAccount (Conta Bancaria)
-// =============================================
-
-export interface BankAccount {
-  id: string;
-  name: string;
-  bank?: string | null;
-  accountType?: string | null;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface CreateBankAccountPayload {
-  name: string;
-  bank?: string;
-  accountType?: string;
-}
-
-export interface UpdateBankAccountPayload {
-  name?: string;
-  bank?: string;
-  accountType?: string;
-  isActive?: boolean;
-}
-
-// =============================================
 // PaymentMethodConfig (Forma de Pagamento)
 // =============================================
 

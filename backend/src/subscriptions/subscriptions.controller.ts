@@ -135,6 +135,15 @@ export class SubscriptionsController {
   }
 
   /**
+   * POST /subscriptions/:id/reset-cuts
+   * Resets cuts counter (after payment confirmed)
+   */
+  @Post(':id/reset-cuts')
+  async resetCuts(@Param('id', ParseUUIDPipe) id: string) {
+    return this.subscriptionsService.resetCuts(id);
+  }
+
+  /**
    * GET /subscriptions/:id/remaining-cuts
    * Gets remaining cuts for a subscription
    */

@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { SupabaseService } from '../supabase/supabase.service';
 import { AsaasService } from '../asaas/asaas.service';
+import { StockService } from '../stock/stock.service';
 import { AsaasBillingType } from '../asaas/asaas.types';
 import { CreateOrderDto, UpdateOrderDto, AddOrderItemDto, QueryOrderDto, PayOrderDto } from './dto';
 
@@ -11,9 +12,12 @@ export class OrdersService {
   constructor(
     private readonly supabase: SupabaseService,
     private readonly asaasService: AsaasService,
+    private readonly stockService: StockService,
   ) {}
 
   async create(dto: CreateOrderDto) {
+    this.logger.log(`Creating order with ${dto.items?.length ?? 0} items`);
+
     let totalAmount = 0;
 
     for (const item of dto.items || []) {
@@ -21,15 +25,19 @@ export class OrdersService {
       totalAmount += lineTotal;
     }
 
+    const now = new Date().toISOString();
     const { data: order, error } = await this.supabase
       .from('orders')
       .insert({
+        id: crypto.randomUUID(),
         clientId: dto.clientId,
         professionalId: dto.professionalId,
         branchId: dto.branchId,
         notes: dto.notes,
         totalAmount: totalAmount,
         status: 'PENDING',
+        createdAt: now,
+        updatedAt: now,
       })
       .select('*')
       .single();
@@ -37,17 +45,23 @@ export class OrdersService {
     if (error) throw error;
 
     for (const item of dto.items || []) {
-      await this.supabase.from('order_items').insert({
+      const { error: itemError } = await this.supabase.from('order_items').insert({
+        id: crypto.randomUUID(),
         orderId: order.id,
-        productId: item.productId,
-        serviceId: item.serviceId,
+        productId: item.productId || null,
+        serviceId: item.serviceId || null,
         quantity: item.quantity || 1,
         unitPrice: item.unitPrice,
         itemType: item.itemType,
       });
+
+      if (itemError) {
+        this.logger.error(`Error inserting order item: ${JSON.stringify(itemError)}`);
+        throw itemError;
+      }
     }
 
-    return order;
+    return this.findOne(order.id);
   }
 
   async findAll(query: QueryOrderDto) {
@@ -110,14 +124,20 @@ export class OrdersService {
 
     const lineTotal = dto.unitPrice * (dto.quantity || 1);
 
-    await this.supabase.from('order_items').insert({
+    const { error: insertError } = await this.supabase.from('order_items').insert({
+      id: crypto.randomUUID(),
       orderId: orderId,
-      productId: dto.productId,
-      serviceId: dto.serviceId,
+      productId: dto.productId || null,
+      serviceId: dto.serviceId || null,
       quantity: dto.quantity || 1,
       unitPrice: dto.unitPrice,
       itemType: dto.itemType,
     });
+
+    if (insertError) {
+      this.logger.error(`Error inserting order item: ${JSON.stringify(insertError)}`);
+      throw insertError;
+    }
 
     await this.supabase
       .from('orders')
@@ -203,14 +223,20 @@ export class OrdersService {
     // ============================
 
     // Baixa no estoque para produtos
+    const payNow = new Date().toISOString();
     const productItems = (order.items || []).filter((i: any) => i.itemType === 'PRODUCT' && i.productId);
     for (const item of productItems) {
-      await this.supabase.from('stock_movements').insert({
-        productId: item.productId,
-        type: 'EXIT',
-        quantity: item.quantity,
-        reason: `Venda via comanda #${order.id.slice(0, 8)}`,
-      });
+      try {
+        await this.stockService.create({
+          productId: item.productId,
+          type: 'EXIT',
+          quantity: item.quantity,
+          reason: `Venda via comanda #${order.id.slice(0, 8)}`,
+        });
+      } catch (err) {
+        this.logger.error(`Erro ao dar baixa no estoque do produto ${item.productId}: ${err.message}`);
+        throw new BadRequestException(`Erro ao dar baixa no estoque: ${err.message}`);
+      }
     }
 
     // Criar pagamento se método informado
@@ -219,12 +245,15 @@ export class OrdersService {
       const { data: payment } = await this.supabase
         .from('payments')
         .insert({
+          id: crypto.randomUUID(),
           clientId: order.clientId,
           amount: order.totalAmount,
           method: dto.paymentMethod,
-          paidAt: new Date().toISOString(),
+          paidAt: payNow,
           registeredBy: dto.registeredBy || order.clientId,
           notes: `Pagamento comanda #${order.id.slice(0, 8)}`,
+          createdAt: payNow,
+          updatedAt: payNow,
         })
         .select('id')
         .single();
@@ -311,13 +340,15 @@ export class OrdersService {
       CREDIT_CARD: 'CARD',
     };
 
+    const asaasNow = new Date().toISOString();
     const { data: payment } = await this.supabase
       .from('payments')
       .insert({
+        id: crypto.randomUUID(),
         clientId: order.clientId,
         amount: order.totalAmount,
         method: paymentMethodMap[dto.billingType!] || 'PIX',
-        paidAt: new Date().toISOString(),
+        paidAt: asaasNow,
         registeredBy: dto.registeredBy || order.clientId,
         notes: `Cobrança Asaas #${asaasCharge.id} - Comanda #${order.id.slice(0, 8)}`,
         asaasPaymentId: asaasCharge.id,
@@ -325,6 +356,8 @@ export class OrdersService {
         billingType: dto.billingType,
         invoiceUrl: asaasCharge.invoiceUrl || null,
         bankSlipUrl: asaasCharge.bankSlipUrl || null,
+        createdAt: asaasNow,
+        updatedAt: asaasNow,
       })
       .select('id')
       .single();
@@ -355,12 +388,16 @@ export class OrdersService {
     // Baixa no estoque
     const productItems = (order.items || []).filter((i: any) => i.itemType === 'PRODUCT' && i.productId);
     for (const item of productItems) {
-      await this.supabase.from('stock_movements').insert({
-        productId: item.productId,
-        type: 'EXIT',
-        quantity: item.quantity,
-        reason: `Venda via comanda #${order.id.slice(0, 8)} (Asaas)`,
-      });
+      try {
+        await this.stockService.create({
+          productId: item.productId,
+          type: 'EXIT',
+          quantity: item.quantity,
+          reason: `Venda via comanda #${order.id.slice(0, 8)} (Asaas)`,
+        });
+      } catch (err) {
+        this.logger.error(`Erro ao dar baixa no estoque do produto ${item.productId}: ${err.message}`);
+      }
     }
 
     return {

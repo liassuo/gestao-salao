@@ -7,13 +7,18 @@ export class ServicesService {
   constructor(private readonly supabase: SupabaseService) {}
 
   async create(dto: CreateServiceDto) {
+    const now = new Date().toISOString();
     const { data: service, error } = await this.supabase
       .from('services')
       .insert({
+        id: crypto.randomUUID(),
         name: dto.name,
         description: dto.description,
         price: dto.price,
         duration: dto.duration,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
       })
       .select('id, name, description, price, duration, isActive, createdAt')
       .single();

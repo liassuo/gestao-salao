@@ -32,14 +32,17 @@ export class StockService {
       }
     }
 
+    const now = new Date().toISOString();
     const { data: movement, error } = await this.supabase
       .from('stock_movements')
       .insert({
+        id: crypto.randomUUID(),
         productId: dto.productId,
         type: dto.type,
         quantity: dto.quantity,
         reason: dto.reason,
         branchId: dto.branchId,
+        createdAt: now,
       })
       .select('*')
       .single();

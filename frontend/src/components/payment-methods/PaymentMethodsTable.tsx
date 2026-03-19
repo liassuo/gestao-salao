@@ -1,5 +1,5 @@
 import { CreditCard, MoreVertical, Edit2, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { EmptyState } from '@/components/ui';
 import type { PaymentMethodConfig } from '@/types';
 import { paymentConditionLabels, paymentMethodScopeLabels } from '@/types';
@@ -20,6 +20,8 @@ export function PaymentMethodsTable({
   onNewPaymentMethod,
 }: PaymentMethodsTableProps) {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const menuBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   if (paymentMethods.length === 0) {
     return (
@@ -90,7 +92,19 @@ export function PaymentMethodsTable({
                 <td className="whitespace-nowrap px-4 py-3 text-center">
                   <div className="relative inline-block">
                     <button
-                      onClick={() => setOpenMenuId(openMenuId === method.id ? null : method.id)}
+                      ref={(el) => { menuBtnRefs.current[method.id] = el; }}
+                      onClick={() => {
+                        if (openMenuId === method.id) {
+                          setOpenMenuId(null);
+                        } else {
+                          const btn = menuBtnRefs.current[method.id];
+                          if (btn) {
+                            const rect = btn.getBoundingClientRect();
+                            setMenuPos({ top: rect.bottom + 4, left: rect.right - 144 });
+                          }
+                          setOpenMenuId(method.id);
+                        }
+                      }}
                       disabled={isLoading}
                       className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] disabled:opacity-50"
                     >
@@ -103,7 +117,10 @@ export function PaymentMethodsTable({
                           className="fixed inset-0 z-10"
                           onClick={() => setOpenMenuId(null)}
                         />
-                        <div className="absolute right-0 z-20 mt-1 w-36 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-1 shadow-lg">
+                        <div
+                          className="fixed z-20 w-36 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-1 shadow-lg"
+                          style={{ top: menuPos.top, left: menuPos.left }}
+                        >
                           <button
                             onClick={() => {
                               onEdit(method);
