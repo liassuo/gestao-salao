@@ -47,9 +47,9 @@ export class AuthController {
 
   @Post('client/init-setup-password')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Iniciar fluxo de criação de senha para cliente pré-cadastrado' })
-  async clientInitSetupPassword(@Body() body: { email: string }) {
-    return this.authService.clientInitSetupPassword(body.email);
+  @ApiOperation({ summary: 'Criar senha para cliente pré-cadastrado (sem auth)' })
+  async clientInitSetupPassword(@Body() body: { email: string; password: string }) {
+    return this.authService.clientInitSetupPassword(body.email, body.password);
   }
 
   @Post('client/login')

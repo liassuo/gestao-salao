@@ -195,7 +195,7 @@ export class AuthService {
     };
   }
 
-  async clientInitSetupPassword(email: string): Promise<AuthResponseDto & { mustChangePassword: true }> {
+  async clientInitSetupPassword(email: string, newPassword: string): Promise<AuthResponseDto> {
     const { data: client } = await this.supabase
       .from('clients')
       .select('*')
@@ -211,19 +211,33 @@ export class AuthService {
     }
 
     if (client.password && !client.mustChangePassword) {
-      throw new UnauthorizedException('Conta já possui senha');
+      throw new UnauthorizedException('Conta já possui senha. Faça login normalmente.');
     }
+
+    if (newPassword.length < 6) {
+      throw new UnauthorizedException('A senha deve ter pelo menos 6 caracteres');
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await this.supabase
+      .from('clients')
+      .update({
+        password: hashedPassword,
+        mustChangePassword: false,
+        updatedAt: new Date().toISOString(),
+      })
+      .eq('id', client.id);
 
     const payload: JwtPayload = {
       sub: client.id,
       email: client.email,
       role: UserRole.CLIENT,
     };
-    const tempToken = this.jwtService.sign(payload, { expiresIn: '30m' });
+    const accessToken = this.jwtService.sign(payload);
 
     return {
-      accessToken: tempToken,
-      mustChangePassword: true,
+      accessToken,
       user: {
         id: client.id,
         email: client.email,

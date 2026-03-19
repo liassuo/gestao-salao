@@ -61,8 +61,8 @@ export const clientAuthApi = {
     const response = await clientApi.post<CheckEmailResponse>('/auth/client/check-email', { email });
     return response.data;
   },
-  initSetupPassword: async (email: string): Promise<ClientLoginResponse> => {
-    const response = await clientApi.post<ClientLoginResponse>('/auth/client/init-setup-password', { email });
+  initSetupPassword: async (email: string, password: string): Promise<ClientLoginResponse> => {
+    const response = await clientApi.post<ClientLoginResponse>('/auth/client/init-setup-password', { email, password });
     return response.data;
   },
   login: async (email: string, password: string): Promise<ClientLoginResponse> => {

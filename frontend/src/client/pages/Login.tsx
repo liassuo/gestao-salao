@@ -153,12 +153,11 @@ export function ClientLogin() {
     setError(null);
 
     try {
-      // Obter token temporário para o cliente pré-cadastrado (sem exigir senha)
-      const initResponse = await clientAuthApi.initSetupPassword(email.trim());
-      // Configurar o token temporário para a chamada de setupPassword
-      storage.setToken(initResponse.accessToken);
-      // Definir a senha definitiva
-      await setupPassword(password);
+      // Criar senha e obter token definitivo em uma única chamada (sem auth)
+      const response = await clientAuthApi.initSetupPassword(email.trim(), password);
+      // Salvar dados no storage e context
+      storage.setToken(response.accessToken);
+      storage.setUser(response.user);
       navigate(from, { replace: true });
     } catch (err: any) {
       const msg = err.response?.data?.message || 'Erro ao definir senha. Tente novamente.';
