@@ -2,6 +2,7 @@ export interface CalendarProfessional {
   id: string;
   name: string;
   phone: string;
+  avatarUrl?: string | null;
   workingHours: { dayOfWeek: number; startTime: string; endTime: string }[] | null;
   appointments: CalendarAppointment[];
   timeBlocks: CalendarTimeBlock[];
