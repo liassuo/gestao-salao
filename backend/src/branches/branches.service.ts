@@ -96,7 +96,7 @@ export class BranchesService {
 
     const { error } = await this.supabase
       .from('branches')
-      .update({ isActive: false })
+      .delete()
       .eq('id', id);
 
     if (error) throw error;

@@ -125,7 +125,7 @@ export class SubscriptionsService {
 
     const { error } = await this.supabase
       .from('subscription_plans')
-      .update({ isActive: false })
+      .delete()
       .eq('id', id);
 
     if (error) throw error;

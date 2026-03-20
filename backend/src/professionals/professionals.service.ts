@@ -297,7 +297,7 @@ export class ProfessionalsService {
 
     const { error } = await this.supabase
       .from('professionals')
-      .update({ isActive: false })
+      .delete()
       .eq('id', id);
 
     if (error) throw error;

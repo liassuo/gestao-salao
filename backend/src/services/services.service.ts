@@ -134,7 +134,7 @@ export class ServicesService {
 
     const { error } = await this.supabase
       .from('services')
-      .update({ isActive: false })
+      .delete()
       .eq('id', id);
 
     if (error) throw error;

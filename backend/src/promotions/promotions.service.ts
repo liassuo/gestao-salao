@@ -172,7 +172,7 @@ export class PromotionsService {
 
     const { error } = await this.supabase
       .from('promotions')
-      .update({ isActive: false })
+      .delete()
       .eq('id', id);
 
     if (error) throw error;

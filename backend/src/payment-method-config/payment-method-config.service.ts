@@ -118,7 +118,7 @@ export class PaymentMethodConfigService {
 
     const { error } = await this.supabase
       .from('payment_method_configs')
-      .update({ isActive: false })
+      .delete()
       .eq('id', id);
 
     if (error) throw error;
