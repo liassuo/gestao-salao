@@ -27,13 +27,15 @@ export class ServicesService {
     return service;
   }
 
-  async findAll(activeOnly: boolean = true) {
+  async findAll(activeOnly: boolean = true, isActive?: boolean) {
     let query = this.supabase
       .from('services')
       .select('id, name, description, price, duration, isActive')
       .order('name', { ascending: true });
 
-    if (activeOnly) {
+    if (isActive !== undefined) {
+      query = query.eq('isActive', isActive);
+    } else if (activeOnly) {
       query = query.eq('isActive', true);
     }
 
@@ -122,6 +124,25 @@ export class ServicesService {
   }
 
   async remove(id: string) {
+    const { data: service, error: findError } = await this.supabase
+      .from('services')
+      .select('id')
+      .eq('id', id)
+      .single();
+
+    if (findError || !service) {
+      throw new NotFoundException('Serviço não encontrado');
+    }
+
+    const { error } = await this.supabase
+      .from('services')
+      .update({ isActive: false })
+      .eq('id', id);
+
+    if (error) throw error;
+  }
+
+  async hardDelete(id: string) {
     const { data: service, error: findError } = await this.supabase
       .from('services')
       .select('id')

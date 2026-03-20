@@ -30,4 +30,8 @@ export const clientsService = {
   async delete(id: string): Promise<void> {
     await api.delete(`/clients/${id}`);
   },
+
+  async permanentDelete(id: string): Promise<void> {
+    await api.delete(`/clients/${id}/permanent`);
+  },
 };

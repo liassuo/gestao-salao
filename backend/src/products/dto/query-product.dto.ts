@@ -12,4 +12,8 @@ export class QueryProductDto {
   @IsOptional()
   @IsString()
   search?: string;
+
+  @IsOptional()
+  @IsString()
+  isActive?: string; // 'true' or 'false'
 }

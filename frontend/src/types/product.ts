@@ -69,6 +69,7 @@ export interface ProductFilters {
   branchId?: string;
   all?: string;
   search?: string;
+  isActive?: string;
 }
 
 export interface StockMovementFilters {

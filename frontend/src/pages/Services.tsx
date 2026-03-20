@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Scissors, AlertCircle, Plus, Search } from 'lucide-react';
 import {
   useServices,
@@ -10,15 +11,19 @@ import {
 import { ServicesTable, ServiceForm, ConfirmDeleteModal } from '@/components/services';
 import { Modal, SkeletonTable, useToast } from '@/components/ui';
 import type { Service, CreateServicePayload, UpdateServicePayload } from '@/types';
+import { servicesService } from '@/services/services';
 
 export function Services() {
+  const [tab, setTab] = useState<'active' | 'inactive'>('active');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [deletingService, setDeletingService] = useState<Service | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  const { data: services, isLoading, isError, error } = useServices();
+  const { data: services, isLoading, isError, error } = useServices({
+    isActive: tab === 'active' ? 'true' : 'false',
+  });
 
   const filteredServices = useMemo(() => {
     if (!services || !searchTerm) return services || [];
@@ -28,6 +33,7 @@ export function Services() {
       s.description?.toLowerCase().includes(term)
     );
   }, [services, searchTerm]);
+  const queryClient = useQueryClient();
   const createService = useCreateService();
   const updateService = useUpdateService();
   const deleteService = useDeleteService();
@@ -79,9 +85,16 @@ export function Services() {
   const handleDeleteService = async () => {
     if (!deletingService) return;
     try {
-      await deleteService.mutateAsync(deletingService.id);
-      setDeletingService(null);
-      toast.success('Serviço excluído', 'O serviço foi desativado com sucesso.');
+      if (tab === 'inactive') {
+        await servicesService.permanentDelete(deletingService.id);
+        queryClient.invalidateQueries({ queryKey: ['services'] });
+        setDeletingService(null);
+        toast.success('Serviço excluído', 'Serviço excluído permanentemente.');
+      } else {
+        await deleteService.mutateAsync(deletingService.id);
+        setDeletingService(null);
+        toast.success('Serviço desativado', 'O serviço foi desativado com sucesso.');
+      }
     } catch {
       toast.error('Erro', 'Não foi possível excluir o serviço.');
     }
@@ -103,12 +116,24 @@ export function Services() {
           </div>
         </div>
 
-        <button
-          onClick={handleOpenCreateModal}
-          className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-4 py-2.5 font-medium text-white transition-colors hover:bg-[#725510] focus:outline-none focus:ring-2 focus:ring-[#C8923A] focus:ring-offset-2 focus:ring-offset-[var(--bg-primary)]"
-        >
-          <Plus className="h-5 w-5" />
-          Novo Serviço
+        {tab === 'active' && (
+          <button
+            onClick={handleOpenCreateModal}
+            className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-4 py-2.5 font-medium text-white transition-colors hover:bg-[#725510] focus:outline-none focus:ring-2 focus:ring-[#C8923A] focus:ring-offset-2 focus:ring-offset-[var(--bg-primary)]"
+          >
+            <Plus className="h-5 w-5" />
+            Novo Serviço
+          </button>
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] p-1 w-fit">
+        <button onClick={() => setTab('active')} className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${tab === 'active' ? 'bg-[#8B6914] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
+          Ativos
+        </button>
+        <button onClick={() => setTab('inactive')} className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${tab === 'inactive' ? 'bg-[#8B6914] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
+          Inativos
         </button>
       </div>
 
@@ -141,13 +166,19 @@ export function Services() {
             </div>
           </div>
         </div>
+      ) : tab === 'inactive' && (!filteredServices || filteredServices.length === 0) ? (
+        <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-12 text-center">
+          <Scissors className="mx-auto h-12 w-12 text-[var(--text-muted)] opacity-50" />
+          <h3 className="mt-4 text-lg font-medium text-[var(--text-primary)]">Nenhum registro inativo</h3>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">Não há serviços inativos no momento.</p>
+        </div>
       ) : (
         <ServicesTable
           services={filteredServices}
           onEdit={handleOpenEditModal}
           onDelete={setDeletingService}
           isLoading={deleteService.isPending}
-          onNewService={handleOpenCreateModal}
+          onNewService={tab === 'active' ? handleOpenCreateModal : undefined}
         />
       )}
 

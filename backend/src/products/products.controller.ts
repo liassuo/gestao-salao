@@ -47,4 +47,10 @@ export class ProductsController {
   async remove(@Param('id', ParseUUIDPipe) id: string) {
     await this.productsService.remove(id);
   }
+
+  @Delete(':id/permanent')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async hardDelete(@Param('id', ParseUUIDPipe) id: string) {
+    await this.productsService.hardDelete(id);
+  }
 }

@@ -29,8 +29,12 @@ export class ProfessionalsController {
    * Can filter by serviceId
    */
   @Get()
-  async findAll(@Query('serviceId') serviceId?: string) {
-    return this.professionalsService.findAll(serviceId);
+  async findAll(
+    @Query('serviceId') serviceId?: string,
+    @Query('isActive') isActive?: string,
+  ) {
+    const isActiveValue = isActive !== undefined ? isActive === 'true' : undefined;
+    return this.professionalsService.findAll(serviceId, isActiveValue);
   }
 
   /**
@@ -126,5 +130,15 @@ export class ProfessionalsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param('id', ParseUUIDPipe) id: string) {
     await this.professionalsService.remove(id);
+  }
+
+  /**
+   * DELETE /professionals/:id/permanent
+   * Permanently deletes a professional
+   */
+  @Delete(':id/permanent')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async hardDelete(@Param('id', ParseUUIDPipe) id: string) {
+    await this.professionalsService.hardDelete(id);
   }
 }

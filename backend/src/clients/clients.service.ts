@@ -99,6 +99,8 @@ export class ClientsService {
 
     if (filters?.isActive !== undefined) {
       query = query.eq('isActive', filters.isActive);
+    } else {
+      query = query.eq('isActive', true);
     }
 
     if (filters?.hasDebts !== undefined) {
@@ -197,6 +199,25 @@ export class ClientsService {
   }
 
   async remove(id: string) {
+    const { data: client, error: findError } = await this.supabase
+      .from('clients')
+      .select('id')
+      .eq('id', id)
+      .single();
+
+    if (findError || !client) {
+      throw new NotFoundException('Cliente não encontrado');
+    }
+
+    const { error } = await this.supabase
+      .from('clients')
+      .update({ isActive: false })
+      .eq('id', id);
+
+    if (error) throw error;
+  }
+
+  async hardDelete(id: string) {
     const { data: client, error: findError } = await this.supabase
       .from('clients')
       .select('id')

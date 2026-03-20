@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { UserCog, AlertCircle, Plus, Search } from 'lucide-react';
 import {
   useProfessionals,
@@ -13,13 +14,17 @@ import type { Professional, CreateProfessionalPayload, UpdateProfessionalPayload
 import { professionalsService } from '@/services/professionals';
 
 export function Professionals() {
+  const [tab, setTab] = useState<'active' | 'inactive'>('active');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingProfessional, setEditingProfessional] = useState<Professional | null>(null);
   const [deletingProfessional, setDeletingProfessional] = useState<Professional | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  const { data: professionals, isLoading, isError, error } = useProfessionals();
+  const { data: professionals, isLoading, isError, error } = useProfessionals(
+    undefined,
+    tab === 'active' ? 'true' : 'false',
+  );
 
   const filteredProfessionals = useMemo(() => {
     if (!professionals || !searchTerm) return professionals || [];
@@ -28,6 +33,7 @@ export function Professionals() {
       p.name.toLowerCase().includes(term)
     );
   }, [professionals, searchTerm]);
+  const queryClient = useQueryClient();
   const createProfessional = useCreateProfessional();
   const updateProfessional = useUpdateProfessional();
   const deleteProfessional = useDeleteProfessional();
@@ -79,9 +85,16 @@ export function Professionals() {
   const handleDeleteProfessional = async () => {
     if (!deletingProfessional) return;
     try {
-      await deleteProfessional.mutateAsync(deletingProfessional.id);
-      setDeletingProfessional(null);
-      toast.success('Profissional excluído', 'O profissional foi desativado com sucesso.');
+      if (tab === 'inactive') {
+        await professionalsService.permanentDelete(deletingProfessional.id);
+        queryClient.invalidateQueries({ queryKey: ['professionals'] });
+        setDeletingProfessional(null);
+        toast.success('Profissional excluído', 'Profissional excluído permanentemente.');
+      } else {
+        await deleteProfessional.mutateAsync(deletingProfessional.id);
+        setDeletingProfessional(null);
+        toast.success('Profissional desativado', 'O profissional foi desativado com sucesso.');
+      }
     } catch {
       toast.error('Erro', 'Não foi possível excluir o profissional.');
     }
@@ -115,12 +128,24 @@ export function Professionals() {
           </div>
         </div>
 
-        <button
-          onClick={handleOpenCreateModal}
-          className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-4 py-2.5 font-medium text-white transition-colors hover:bg-[#725510] focus:outline-none focus:ring-2 focus:ring-[#C8923A] focus:ring-offset-2 focus:ring-offset-[var(--bg-primary)]"
-        >
-          <Plus className="h-5 w-5" />
-          Novo Profissional
+        {tab === 'active' && (
+          <button
+            onClick={handleOpenCreateModal}
+            className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-4 py-2.5 font-medium text-white transition-colors hover:bg-[#725510] focus:outline-none focus:ring-2 focus:ring-[#C8923A] focus:ring-offset-2 focus:ring-offset-[var(--bg-primary)]"
+          >
+            <Plus className="h-5 w-5" />
+            Novo Profissional
+          </button>
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] p-1 w-fit">
+        <button onClick={() => setTab('active')} className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${tab === 'active' ? 'bg-[#8B6914] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
+          Ativos
+        </button>
+        <button onClick={() => setTab('inactive')} className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${tab === 'inactive' ? 'bg-[#8B6914] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
+          Inativos
         </button>
       </div>
 
@@ -153,14 +178,20 @@ export function Professionals() {
             </div>
           </div>
         </div>
+      ) : tab === 'inactive' && (!filteredProfessionals || filteredProfessionals.length === 0) ? (
+        <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-12 text-center">
+          <UserCog className="mx-auto h-12 w-12 text-[var(--text-muted)] opacity-50" />
+          <h3 className="mt-4 text-lg font-medium text-[var(--text-primary)]">Nenhum registro inativo</h3>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">Não há profissionais inativos no momento.</p>
+        </div>
       ) : (
         <ProfessionalsTable
           professionals={filteredProfessionals}
           onEdit={handleOpenEditModal}
           onDelete={setDeletingProfessional}
-          onResetPassword={handleResetPassword}
+          onResetPassword={tab === 'active' ? handleResetPassword : undefined}
           isLoading={deleteProfessional.isPending}
-          onNewProfessional={handleOpenCreateModal}
+          onNewProfessional={tab === 'active' ? handleOpenCreateModal : undefined}
         />
       )}
 

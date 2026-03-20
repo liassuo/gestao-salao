@@ -2,9 +2,11 @@ import { api } from './api';
 import type { Professional, CreateProfessionalPayload, UpdateProfessionalPayload } from '@/types';
 
 export const professionalsService = {
-  async list(serviceId?: string): Promise<Professional[]> {
-    const params = serviceId ? { serviceId } : undefined;
-    const response = await api.get<Professional[]>('/professionals', { params });
+  async list(serviceId?: string, isActive?: string): Promise<Professional[]> {
+    const params: Record<string, string> = {};
+    if (serviceId) params.serviceId = serviceId;
+    if (isActive !== undefined) params.isActive = isActive;
+    const response = await api.get<Professional[]>('/professionals', { params: Object.keys(params).length ? params : undefined });
     return response.data;
   },
 
@@ -25,6 +27,10 @@ export const professionalsService = {
 
   async delete(id: string): Promise<void> {
     await api.delete(`/professionals/${id}`);
+  },
+
+  async permanentDelete(id: string): Promise<void> {
+    await api.delete(`/professionals/${id}/permanent`);
   },
 
   async resetPassword(professionalId: string): Promise<{ message: string }> {

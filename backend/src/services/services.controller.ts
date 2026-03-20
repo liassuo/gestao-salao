@@ -25,7 +25,13 @@ export class ServicesController {
    * Returns all active services (public - used by mobile app)
    */
   @Get()
-  async findAll(@Query('all') all?: string) {
+  async findAll(
+    @Query('all') all?: string,
+    @Query('isActive') isActive?: string,
+  ) {
+    if (isActive !== undefined) {
+      return this.servicesService.findAll(true, isActive === 'true');
+    }
     const activeOnly = all !== 'true';
     return this.servicesService.findAll(activeOnly);
   }
@@ -96,5 +102,15 @@ export class ServicesController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param('id', ParseUUIDPipe) id: string) {
     await this.servicesService.remove(id);
+  }
+
+  /**
+   * DELETE /services/:id/permanent
+   * Permanently deletes a service
+   */
+  @Delete(':id/permanent')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async hardDelete(@Param('id', ParseUUIDPipe) id: string) {
+    await this.servicesService.hardDelete(id);
   }
 }

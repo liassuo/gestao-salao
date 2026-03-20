@@ -8,7 +8,7 @@ interface ProfessionalsTableProps {
   professionals: Professional[];
   onEdit: (professional: Professional) => void;
   onDelete: (professional: Professional) => void;
-  onResetPassword: (professional: Professional) => void;
+  onResetPassword?: (professional: Professional) => void;
   isLoading?: boolean;
   onNewProfessional?: () => void;
 }
@@ -156,16 +156,18 @@ export function ProfessionalsTable({
                             <Edit2 className="h-4 w-4" />
                             Editar
                           </button>
-                          <button
-                            onClick={() => {
-                              onResetPassword(professional);
-                              setOpenMenuId(null);
-                            }}
-                            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[#C8923A] hover:bg-[#C8923A]/10"
-                          >
-                            <KeyRound className="h-4 w-4" />
-                            Resetar Senha
-                          </button>
+                          {onResetPassword && (
+                            <button
+                              onClick={() => {
+                                onResetPassword(professional);
+                                setOpenMenuId(null);
+                              }}
+                              className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[#C8923A] hover:bg-[#C8923A]/10"
+                            >
+                              <KeyRound className="h-4 w-4" />
+                              Resetar Senha
+                            </button>
+                          )}
                           <button
                             onClick={() => {
                               onDelete(professional);

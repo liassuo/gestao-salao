@@ -10,8 +10,8 @@ function transformService(data: any): Service {
 }
 
 export const servicesService = {
-  async list(): Promise<Service[]> {
-    const response = await api.get<Service[]>('/services');
+  async list(params?: { all?: string; isActive?: string }): Promise<Service[]> {
+    const response = await api.get<Service[]>('/services', { params });
     return response.data.map(transformService);
   },
 
@@ -32,5 +32,9 @@ export const servicesService = {
 
   async delete(id: string): Promise<void> {
     await api.delete(`/services/${id}`);
+  },
+
+  async permanentDelete(id: string): Promise<void> {
+    await api.delete(`/services/${id}/permanent`);
   },
 };

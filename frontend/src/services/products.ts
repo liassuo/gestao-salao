@@ -10,6 +10,7 @@ export const productsService = {
     if (filters?.branchId) params.append('branchId', filters.branchId);
     if (filters?.all) params.append('all', filters.all);
     if (filters?.search) params.append('search', filters.search);
+    if (filters?.isActive !== undefined) params.append('isActive', filters.isActive);
     const response = await api.get<Product[]>('/products', { params });
     return response.data;
   },
@@ -45,5 +46,9 @@ export const productsService = {
 
   async delete(id: string): Promise<void> {
     await api.delete(`/products/${id}`);
+  },
+
+  async permanentDelete(id: string): Promise<void> {
+    await api.delete(`/products/${id}/permanent`);
   },
 };

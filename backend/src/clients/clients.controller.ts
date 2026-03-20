@@ -90,4 +90,14 @@ export class ClientsController {
   async remove(@Param('id', ParseUUIDPipe) id: string) {
     await this.clientsService.remove(id);
   }
+
+  /**
+   * DELETE /clients/:id/permanent
+   * Permanently deletes a client
+   */
+  @Delete(':id/permanent')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async hardDelete(@Param('id', ParseUUIDPipe) id: string) {
+    await this.clientsService.hardDelete(id);
+  }
 }

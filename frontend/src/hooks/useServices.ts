@@ -4,10 +4,10 @@ import type { CreateServicePayload, UpdateServicePayload } from '@/types';
 
 const SERVICES_KEY = ['services'];
 
-export function useServices() {
+export function useServices(params?: { all?: string; isActive?: string }) {
   return useQuery({
-    queryKey: SERVICES_KEY,
-    queryFn: servicesService.list,
+    queryKey: [...SERVICES_KEY, params],
+    queryFn: () => servicesService.list(params),
     staleTime: 5 * 60 * 1000,
   });
 }

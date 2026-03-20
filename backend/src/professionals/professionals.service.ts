@@ -76,12 +76,18 @@ export class ProfessionalsService {
     return professional;
   }
 
-  async findAll(serviceId?: string) {
-    const { data: professionals, error } = await this.supabase
+  async findAll(serviceId?: string, isActive?: boolean) {
+    let query = this.supabase
       .from('professionals')
-      .select('*, appointment_count:appointments(count), professional_services(serviceId, service:services(id, name))')
-      .eq('isActive', true)
-      .order('name', { ascending: true });
+      .select('*, appointment_count:appointments(count), professional_services(serviceId, service:services(id, name))');
+
+    if (isActive !== undefined) {
+      query = query.eq('isActive', isActive);
+    } else {
+      query = query.eq('isActive', true);
+    }
+
+    const { data: professionals, error } = await query.order('name', { ascending: true });
 
     if (error) throw error;
 
@@ -285,6 +291,25 @@ export class ProfessionalsService {
   }
 
   async remove(id: string) {
+    const { data: professional, error: findError } = await this.supabase
+      .from('professionals')
+      .select('id')
+      .eq('id', id)
+      .single();
+
+    if (findError || !professional) {
+      throw new NotFoundException('Profissional não encontrado');
+    }
+
+    const { error } = await this.supabase
+      .from('professionals')
+      .update({ isActive: false })
+      .eq('id', id);
+
+    if (error) throw error;
+  }
+
+  async hardDelete(id: string) {
     const { data: professional, error: findError } = await this.supabase
       .from('professionals')
       .select('id')

@@ -32,7 +32,9 @@ export class ProductsService {
   async findAll(query: QueryProductDto) {
     let queryBuilder = this.supabase.from('products').select('*');
 
-    if (query.all !== 'true') {
+    if (query.isActive !== undefined) {
+      queryBuilder = queryBuilder.eq('isActive', query.isActive === 'true');
+    } else if (query.all !== 'true') {
       queryBuilder = queryBuilder.eq('isActive', true);
     }
 
@@ -141,6 +143,25 @@ export class ProductsService {
   }
 
   async remove(id: string) {
+    const { data: product, error: findError } = await this.supabase
+      .from('products')
+      .select('id')
+      .eq('id', id)
+      .single();
+
+    if (findError || !product) {
+      throw new NotFoundException('Produto não encontrado');
+    }
+
+    const { error } = await this.supabase
+      .from('products')
+      .update({ isActive: false })
+      .eq('id', id);
+
+    if (error) throw error;
+  }
+
+  async hardDelete(id: string) {
     const { data: product, error: findError } = await this.supabase
       .from('products')
       .select('id')

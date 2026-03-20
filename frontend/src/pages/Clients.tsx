@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Users, AlertCircle, Plus, Search } from 'lucide-react';
 import {
   useClients,
@@ -10,8 +11,10 @@ import {
 import { ClientsTable, ClientForm, ConfirmDeleteModal } from '@/components/clients';
 import { Modal, SkeletonTable, useToast } from '@/components/ui';
 import type { Client, ClientFilters, CreateClientPayload, UpdateClientPayload } from '@/types';
+import { clientsService } from '@/services/clients';
 
 export function Clients() {
+  const [tab, setTab] = useState<'active' | 'inactive'>('active');
   const [filters, setFilters] = useState<ClientFilters>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -19,7 +22,12 @@ export function Clients() {
   const [deletingClient, setDeletingClient] = useState<Client | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const { data: clients, isLoading, isError, error } = useClients(filters);
+  const queryFilters: ClientFilters = {
+    ...filters,
+    isActive: tab === 'active' ? true : false,
+  };
+  const { data: clients, isLoading, isError, error } = useClients(queryFilters);
+  const queryClient = useQueryClient();
   const createClient = useCreateClient();
   const updateClient = useUpdateClient();
   const deleteClient = useDeleteClient();
@@ -82,9 +90,16 @@ export function Clients() {
   const handleDeleteClient = async () => {
     if (!deletingClient) return;
     try {
-      await deleteClient.mutateAsync(deletingClient.id);
-      setDeletingClient(null);
-      toast.success('Cliente excluído', 'O cliente foi desativado com sucesso.');
+      if (tab === 'inactive') {
+        await clientsService.permanentDelete(deletingClient.id);
+        queryClient.invalidateQueries({ queryKey: ['clients'] });
+        setDeletingClient(null);
+        toast.success('Cliente excluído', 'Cliente excluído permanentemente.');
+      } else {
+        await deleteClient.mutateAsync(deletingClient.id);
+        setDeletingClient(null);
+        toast.success('Cliente desativado', 'O cliente foi desativado com sucesso.');
+      }
     } catch {
       toast.error('Erro', 'Não foi possível excluir o cliente.');
     }
@@ -106,12 +121,24 @@ export function Clients() {
           </div>
         </div>
 
-        <button
-          onClick={handleOpenCreateModal}
-          className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-4 py-2.5 font-medium text-white transition-colors hover:bg-[#725510] focus:outline-none focus:ring-2 focus:ring-[#C8923A] focus:ring-offset-2 focus:ring-offset-[var(--bg-primary)]"
-        >
-          <Plus className="h-5 w-5" />
-          Novo Cliente
+        {tab === 'active' && (
+          <button
+            onClick={handleOpenCreateModal}
+            className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-4 py-2.5 font-medium text-white transition-colors hover:bg-[#725510] focus:outline-none focus:ring-2 focus:ring-[#C8923A] focus:ring-offset-2 focus:ring-offset-[var(--bg-primary)]"
+          >
+            <Plus className="h-5 w-5" />
+            Novo Cliente
+          </button>
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] p-1 w-fit">
+        <button onClick={() => setTab('active')} className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${tab === 'active' ? 'bg-[#8B6914] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
+          Ativos
+        </button>
+        <button onClick={() => setTab('inactive')} className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${tab === 'inactive' ? 'bg-[#8B6914] text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
+          Inativos
         </button>
       </div>
 
@@ -159,13 +186,19 @@ export function Clients() {
             </div>
           </div>
         </div>
+      ) : tab === 'inactive' && (!filteredClients || filteredClients.length === 0) ? (
+        <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-12 text-center">
+          <Users className="mx-auto h-12 w-12 text-[var(--text-muted)] opacity-50" />
+          <h3 className="mt-4 text-lg font-medium text-[var(--text-primary)]">Nenhum registro inativo</h3>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">Não há clientes inativos no momento.</p>
+        </div>
       ) : (
         <ClientsTable
           clients={filteredClients || []}
           onEdit={handleOpenEditModal}
           onDelete={setDeletingClient}
           isLoading={deleteClient.isPending}
-          onNewClient={handleOpenCreateModal}
+          onNewClient={tab === 'active' ? handleOpenCreateModal : undefined}
         />
       )}
 

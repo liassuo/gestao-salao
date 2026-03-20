@@ -4,10 +4,10 @@ import type { CreateProfessionalPayload, UpdateProfessionalPayload } from '@/typ
 
 const PROFESSIONALS_KEY = ['professionals'];
 
-export function useProfessionals(serviceId?: string) {
+export function useProfessionals(serviceId?: string, isActive?: string) {
   return useQuery({
-    queryKey: [...PROFESSIONALS_KEY, serviceId],
-    queryFn: () => professionalsService.list(serviceId),
+    queryKey: [...PROFESSIONALS_KEY, serviceId, isActive],
+    queryFn: () => professionalsService.list(serviceId, isActive),
     staleTime: 5 * 60 * 1000,
   });
 }
