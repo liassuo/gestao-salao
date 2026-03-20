@@ -3,7 +3,7 @@ import { AlertCircle, Loader2, Calendar, Receipt } from 'lucide-react';
 import { useClients } from '@/hooks';
 import { appointmentsService } from '@/services/appointments';
 import { ordersService } from '@/services/orders';
-import type { CreateDebtPayload, Appointment, Order } from '@/types';
+import type { CreateDebtPayload } from '@/types';
 
 interface DebtFormProps {
   onSubmit: (payload: CreateDebtPayload) => Promise<void>;
