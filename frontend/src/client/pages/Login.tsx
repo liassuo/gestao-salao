@@ -23,7 +23,7 @@ export function ClientLogin() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { login, loginWithGoogle, register, setupPassword } = useClientAuth();
+  const { login, loginWithGoogle, register } = useClientAuth();
   const navigate = useNavigate();
   const location = useLocation();
 

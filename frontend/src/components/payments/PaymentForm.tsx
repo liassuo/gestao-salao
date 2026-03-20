@@ -66,8 +66,6 @@ export function PaymentForm({ onSubmit, isLoading, error }: PaymentFormProps) {
   });
 
   const watchedClientId = watch('clientId');
-  const watchedAmount = watch('amount');
-
   // Atualiza selectedClientId quando o cliente muda
   useEffect(() => {
     if (watchedClientId !== selectedClientId) {

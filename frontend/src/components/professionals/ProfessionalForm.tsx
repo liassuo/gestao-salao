@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
-import { AlertCircle, Loader2, Camera, X, Check } from 'lucide-react';
+import { AlertCircle, Loader2, Camera, Check } from 'lucide-react';
 import { api } from '@/services/api';
 import { useServices } from '@/hooks';
 import type { Professional, CreateProfessionalPayload, WorkingHours } from '@/types';

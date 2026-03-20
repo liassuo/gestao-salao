@@ -1,6 +1,7 @@
-import { Users, Scissors, MoreVertical, XCircle, Phone, Check, RefreshCw } from 'lucide-react';
+import { Users, Scissors, MoreVertical, XCircle, Phone, RefreshCw } from 'lucide-react';
 import { useState, useRef } from 'react';
 import { EmptyState } from '@/components/ui';
+import { formatPhone } from '@/utils/format';
 import type { ClientSubscription } from '@/types';
 import { subscriptionStatusLabels, subscriptionStatusColors } from '@/types';
 
@@ -94,7 +95,7 @@ export function ClientSubscriptionTable({
                         </p>
                         <p className="flex items-center gap-1 text-sm text-[var(--text-muted)]">
                           <Phone className="h-3 w-3" />
-                          {subscription.client?.phone || '-'}
+                          {formatPhone(subscription.client?.phone) || '-'}
                         </p>
                       </div>
                     </div>
