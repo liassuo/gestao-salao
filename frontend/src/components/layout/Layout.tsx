@@ -22,10 +22,10 @@ export function Layout() {
       <Header />
       <main
         className={`pt-16 transition-all duration-300 ${
-          isCollapsed ? 'ml-20' : 'ml-64'
+          isCollapsed ? 'lg:ml-20' : 'lg:ml-64'
         }`}
       >
-        <div className="p-6">
+        <div className="p-4 lg:p-6">
           <Outlet />
         </div>
       </main>
