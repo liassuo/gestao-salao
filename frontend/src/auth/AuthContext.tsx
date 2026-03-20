@@ -37,7 +37,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const interceptor = api.interceptors.response.use(
       (response) => response,
       (error) => {
-        if (error.response?.status === 401) {
+        // Não limpar auth em rotas de setup-password (token temporário)
+        const url = error.config?.url || '';
+        if (error.response?.status === 401 && !url.includes('setup-password')) {
           setUser(null);
           setAccessToken(null);
           localStorage.removeItem(STORAGE_KEY_TOKEN);

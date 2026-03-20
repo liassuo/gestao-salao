@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -93,11 +93,7 @@ export class AuthService {
       .single();
 
     if (!user) {
-      throw new UnauthorizedException('Usuário não encontrado');
-    }
-
-    if (!user.mustChangePassword) {
-      throw new UnauthorizedException('Senha já foi definida. Use a tela de login.');
+      throw new NotFoundException('Usuário não encontrado');
     }
 
     if (newPassword.length < 6) {

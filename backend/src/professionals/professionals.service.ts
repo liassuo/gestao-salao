@@ -37,13 +37,14 @@ export class ProfessionalsService {
 
     if (error) throw error;
 
-    // Auto-criar conta de usuário para o profissional fazer login
-    const tempPassword = crypto.randomUUID(); // senha temporária (nunca será usada)
-    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+    // Auto-criar conta de usuário para o profissional fazer login (senha padrão: 123456)
+    const defaultPassword = '123456';
+    const hashedPassword = await bcrypt.hash(defaultPassword, 10);
 
-    await this.supabase
+    const { error: userError } = await this.supabase
       .from('users')
       .insert({
+        id: crypto.randomUUID(),
         email: dto.email,
         name: dto.name,
         password: hashedPassword,
@@ -51,8 +52,15 @@ export class ProfessionalsService {
         professionalId: professional.id,
         isActive: true,
         mustChangePassword: true,
+        createdAt: now,
         updatedAt: now,
-      });
+      })
+      .select('id')
+      .single();
+
+    if (userError) {
+      console.error('Erro ao criar conta de login para profissional:', JSON.stringify(userError));
+    }
 
     // Connect services if provided
     if (dto.serviceIds?.length) {

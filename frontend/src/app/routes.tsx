@@ -1,6 +1,7 @@
-import { createBrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { Layout } from '@/components/layout';
 import { PrivateRoute, RoleRoute } from '@/components/auth';
+import { useAuth } from '@/auth';
 import {
   AccessDenied,
   Appointments,
@@ -37,6 +38,15 @@ import {
   ClientSetPassword,
 } from '@/client';
 
+// Redireciona profissionais para /agendamentos, admin para Dashboard
+function RoleBasedHome() {
+  const { user } = useAuth();
+  if (user?.role === 'PROFESSIONAL') {
+    return <Navigate to="/agendamentos" replace />;
+  }
+  return <Dashboard />;
+}
+
 // Helper para criar rota protegida por role
 function withRoleProtection(path: string, element: React.ReactNode) {
   const roles = getRolesForPath(path);
@@ -67,7 +77,7 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <Dashboard />,
+        element: <RoleBasedHome />,
       },
       {
         path: 'acesso-negado',

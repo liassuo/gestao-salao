@@ -35,7 +35,7 @@ export const menuItems: MenuItem[] = [
     icon: LayoutDashboard,
     label: 'Dashboard',
     path: '/',
-    roles: ['ADMIN', 'PROFESSIONAL'],
+    roles: ['ADMIN'],
   },
   {
     icon: Calendar,
@@ -47,7 +47,7 @@ export const menuItems: MenuItem[] = [
     icon: Users,
     label: 'Clientes',
     path: '/clientes',
-    roles: ['ADMIN', 'PROFESSIONAL'],
+    roles: ['ADMIN'],
   },
   {
     icon: Scissors,

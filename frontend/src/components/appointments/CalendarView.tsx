@@ -355,9 +355,13 @@ export function CalendarView() {
                 key={prof.id}
                 className="flex min-w-[180px] flex-1 items-center justify-center gap-2 border-r border-[var(--card-border)] bg-[var(--bg-primary)] px-3 py-3 last:border-r-0"
               >
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#C8923A]/20 text-xs font-bold text-[#D4A85C]">
-                  {prof.name.charAt(0).toUpperCase()}
-                </div>
+                {prof.avatarUrl ? (
+                  <img src={prof.avatarUrl} alt={prof.name} className="h-7 w-7 rounded-full object-cover" />
+                ) : (
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#C8923A]/20 text-xs font-bold text-[#D4A85C]">
+                    {prof.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold text-[var(--text-primary)]">
                     {prof.name}
