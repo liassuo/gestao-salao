@@ -50,10 +50,10 @@ export function SubscriptionPlanTable({
                 Plano
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                Cortes/Mes
+                Cortes/Mês
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                Preco
+                Preço
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Assinantes
@@ -62,7 +62,7 @@ export function SubscriptionPlanTable({
                 Status
               </th>
               <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                Acoes
+                Ações
               </th>
             </tr>
           </thead>
@@ -94,7 +94,7 @@ export function SubscriptionPlanTable({
                   <span className="text-lg font-semibold text-[var(--text-primary)]">
                     {formatCurrency(plan.price)}
                   </span>
-                  <span className="text-sm text-[var(--text-muted)]">/mes</span>
+                  <span className="text-sm text-[var(--text-muted)]">/mês</span>
                 </td>
                 <td className="whitespace-nowrap px-4 py-4">
                   <div className="flex items-center gap-1.5 text-sm text-[var(--text-secondary)]">

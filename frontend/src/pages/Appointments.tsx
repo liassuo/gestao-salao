@@ -5,6 +5,7 @@ import {
   useAppointmentActions,
   useProfessionals,
   useCreateAppointment,
+  useCreateDebt,
   getApiErrorMessage,
 } from '@/hooks';
 import {
@@ -13,8 +14,9 @@ import {
   AppointmentsTable,
   CalendarView,
 } from '@/components/appointments';
+import { DebtForm } from '@/components/debts';
 import { Modal, SkeletonTable, useToast } from '@/components/ui';
-import type { AppointmentFilters, CreateAppointmentPayload } from '@/types';
+import type { Appointment, AppointmentFilters, CreateAppointmentPayload, CreateDebtPayload } from '@/types';
 
 type ViewMode = 'calendar' | 'table';
 
@@ -26,10 +28,15 @@ export function Appointments() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  // Gerar Dívida state
+  const [debtModalAppointment, setDebtModalAppointment] = useState<Appointment | null>(null);
+  const [debtFormError, setDebtFormError] = useState<string | null>(null);
+
   const { data: appointments, isLoading, isError, error } = useAppointments(filters);
   const { data: professionals = [] } = useProfessionals();
   const { attend, cancel, noShow, isLoading: isActionLoading } = useAppointmentActions();
   const createAppointment = useCreateAppointment();
+  const createDebt = useCreateDebt();
   const toast = useToast();
 
   const handleClearFilters = () => {
@@ -84,6 +91,36 @@ export function Appointments() {
     }
   };
 
+  const handleGenerateDebt = (appointment: Appointment) => {
+    setDebtFormError(null);
+    setDebtModalAppointment(appointment);
+  };
+
+  const handleCloseDebtModal = () => {
+    setDebtModalAppointment(null);
+    setDebtFormError(null);
+  };
+
+  const handleCreateDebt = async (payload: CreateDebtPayload) => {
+    setDebtFormError(null);
+    try {
+      await createDebt.mutateAsync(payload);
+      handleCloseDebtModal();
+      toast.success('Dívida registrada', 'A dívida foi gerada a partir do agendamento.');
+    } catch (err) {
+      setDebtFormError(getApiErrorMessage(err));
+    }
+  };
+
+  const debtPrefill = debtModalAppointment
+    ? {
+        clientId: debtModalAppointment.client?.id || '',
+        appointmentId: debtModalAppointment.id,
+        amount: debtModalAppointment.totalPrice,
+        description: `Agendamento: ${(debtModalAppointment.services || []).map((s) => s.service?.name || 'Serviço').join(', ')}`,
+      }
+    : undefined;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -112,7 +149,7 @@ export function Appointments() {
               }`}
             >
               <Calendar className="h-4 w-4" />
-              Calendario
+              Calendário
             </button>
             <button
               onClick={() => setActiveView('table')}
@@ -137,7 +174,7 @@ export function Appointments() {
         </div>
       </div>
 
-      {/* Modal de criacao */}
+      {/* Modal de criação */}
       <Modal
         isOpen={isModalOpen}
         onClose={handleCloseModal}
@@ -148,6 +185,21 @@ export function Appointments() {
           onSubmit={handleCreateAppointment}
           isLoading={createAppointment.isPending}
           error={formError}
+        />
+      </Modal>
+
+      {/* Modal de Gerar Dívida */}
+      <Modal
+        isOpen={!!debtModalAppointment}
+        onClose={handleCloseDebtModal}
+        title="Gerar Dívida"
+        size="lg"
+      >
+        <DebtForm
+          onSubmit={handleCreateDebt}
+          isLoading={createDebt.isPending}
+          error={debtFormError}
+          prefill={debtPrefill}
         />
       </Modal>
 
@@ -185,6 +237,7 @@ export function Appointments() {
               onAttend={handleAttend}
               onCancel={handleCancel}
               onNoShow={handleNoShow}
+              onGenerateDebt={handleGenerateDebt}
               isLoading={isActionLoading}
               onNewAppointment={handleOpenModal}
             />

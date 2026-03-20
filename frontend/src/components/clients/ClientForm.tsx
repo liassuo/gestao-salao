@@ -1,5 +1,6 @@
 import { useForm } from 'react-hook-form';
 import { AlertCircle, Loader2 } from 'lucide-react';
+import { formatPhoneInput } from '@/utils/format';
 import type { Client, CreateClientPayload } from '@/types';
 
 const UF_OPTIONS = [
@@ -36,12 +37,6 @@ function formatCpfInput(value: string): string {
   return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
 }
 
-function formatPhoneInput(value: string): string {
-  const digits = value.replace(/\D/g, '').slice(0, 11);
-  if (digits.length <= 2) return digits;
-  if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
-  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
-}
 
 const inputClass = (hasError: boolean) =>
   `w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] ${
@@ -112,7 +107,7 @@ export function ClientForm({ client, onSubmit, isLoading, error }: ClientFormPro
           </label>
           <input
             type="text"
-            {...register('name', { required: 'Nome e obrigatorio' })}
+            {...register('name', { required: 'Nome é obrigatório' })}
             placeholder="Nome completo"
             className={inputClass(!!errors.name)}
           />
@@ -128,7 +123,7 @@ export function ClientForm({ client, onSubmit, isLoading, error }: ClientFormPro
             {...register('cpf', {
               pattern: {
                 value: /^(\d{3}\.?\d{3}\.?\d{3}-?\d{2})?$/,
-                message: 'CPF invalido',
+                message: 'CPF inválido',
               },
               onChange: (e) => {
                 setValue('cpf', formatCpfInput(e.target.value));
@@ -149,10 +144,10 @@ export function ClientForm({ client, onSubmit, isLoading, error }: ClientFormPro
           <input
             type="tel"
             {...register('phone', {
-              required: 'Telefone e obrigatorio',
+              required: 'Telefone é obrigatório',
               pattern: {
                 value: /^[\d\s()-]+$/,
-                message: 'Telefone invalido',
+                message: 'Telefone inválido',
               },
               onChange: (e) => {
                 setValue('phone', formatPhoneInput(e.target.value));
@@ -173,7 +168,7 @@ export function ClientForm({ client, onSubmit, isLoading, error }: ClientFormPro
             {...register('email', {
               pattern: {
                 value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-                message: 'E-mail invalido',
+                message: 'E-mail inválido',
               },
             })}
             placeholder="email@exemplo.com"
@@ -196,9 +191,9 @@ export function ClientForm({ client, onSubmit, isLoading, error }: ClientFormPro
         </div>
       </div>
 
-      {/* Endereco */}
+      {/* Endereço */}
       <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] pt-2">
-        Endereco
+        Endereço
       </p>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -216,7 +211,7 @@ export function ClientForm({ client, onSubmit, isLoading, error }: ClientFormPro
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
-            Numero
+            Número
           </label>
           <input
             type="text"
@@ -268,15 +263,15 @@ export function ClientForm({ client, onSubmit, isLoading, error }: ClientFormPro
         </div>
       </div>
 
-      {/* Observacoes */}
+      {/* Observações */}
       <div>
         <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
-          Observacoes
+          Observações
         </label>
         <textarea
           {...register('notes')}
           rows={3}
-          placeholder="Informacoes adicionais sobre o cliente"
+          placeholder="Informações adicionais sobre o cliente"
           className="w-full resize-none rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A]"
         />
       </div>

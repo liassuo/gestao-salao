@@ -26,7 +26,7 @@ export function TemplateSelector({ onSelect, onClose }: TemplateSelectorProps) {
         <Tag className="mx-auto mb-3 h-10 w-10 text-[var(--text-muted)]" />
         <p className="text-sm text-[var(--text-muted)]">Nenhum template salvo ainda.</p>
         <p className="mt-1 text-xs text-[var(--text-muted)]">
-          Crie uma promocao e marque como template para reutilizar.
+          Crie uma promoção e marque como template para reutilizar.
         </p>
         <button
           onClick={onClose}
@@ -41,7 +41,7 @@ export function TemplateSelector({ onSelect, onClose }: TemplateSelectorProps) {
   return (
     <div className="space-y-2">
       <p className="text-sm text-[var(--text-muted)] mb-3">
-        Selecione um template para iniciar a promocao:
+        Selecione um template para iniciar a promoção:
       </p>
       {templates.map((tpl) => (
         <button
@@ -59,7 +59,7 @@ export function TemplateSelector({ onSelect, onClose }: TemplateSelectorProps) {
           <div className="flex-1 min-w-0">
             <p className="font-medium text-[var(--text-primary)] truncate">{tpl.name}</p>
             <p className="text-xs text-[var(--text-muted)]">
-              {tpl.discountPercent}% off - {tpl.services.length} servico(s)
+              {tpl.discountPercent}% off - {tpl.services.length} serviço(s)
             </p>
           </div>
           <Copy className="h-4 w-4 flex-shrink-0 text-[var(--text-muted)]" />

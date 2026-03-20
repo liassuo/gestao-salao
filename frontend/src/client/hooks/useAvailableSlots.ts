@@ -14,7 +14,7 @@ export function useAvailableSlots() {
       const data = await appointmentsApi.getAvailableSlots(professionalId, date, duration);
       setSlots(data);
     } catch (err) {
-      const message = 'Nao foi possivel carregar os horarios disponiveis';
+      const message = 'Não foi possível carregar os horários disponíveis';
       setError(message);
       setSlots([]);
     } finally {

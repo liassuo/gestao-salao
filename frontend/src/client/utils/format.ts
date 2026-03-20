@@ -1,5 +1,5 @@
 /**
- * Formata preco de centavos para BRL
+ * Formata preço de centavos para BRL
  */
 export function formatPrice(priceInCents: number): string {
   return (priceInCents / 100).toLocaleString('pt-BR', {
@@ -56,7 +56,7 @@ export function formatTime(isoDate: string): string {
 }
 
 /**
- * Calcula hora de termino baseado em duracao
+ * Calcula hora de término baseado em duração
  */
 export function formatEndTime(isoDate: string, durationMinutes: number): string {
   const date = new Date(isoDate);
@@ -108,7 +108,7 @@ export function hoursUntil(isoDate: string): number {
 }
 
 /**
- * Formata duracao em minutos para texto
+ * Formata duração em minutos para texto
  */
 export function formatDuration(minutes: number): string {
   if (minutes < 60) {

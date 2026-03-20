@@ -14,7 +14,7 @@ export function useClientAppointments() {
       const data = await appointmentsApi.getMyAppointments();
       setAppointments(data);
     } catch (err) {
-      const message = 'Nao foi possivel carregar seus agendamentos';
+      const message = 'Não foi possível carregar seus agendamentos';
       setError(message);
     } finally {
       setIsLoading(false);

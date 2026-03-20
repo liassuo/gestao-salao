@@ -118,7 +118,7 @@ export function Promotions() {
     try {
       await createPromotion.mutateAsync(payload);
       handleCloseCreate();
-      toast.success('Promocao criada', 'A promocao foi criada com sucesso.');
+      toast.success('Promoção criada', 'A promoção foi criada com sucesso.');
     } catch (err) {
       setFormError(getApiErrorMessage(err));
     }
@@ -130,7 +130,7 @@ export function Promotions() {
     try {
       await updatePromotion.mutateAsync({ id: editingPromotion.id, payload });
       handleCloseEdit();
-      toast.success('Promocao atualizada', 'Os dados da promocao foram atualizados.');
+      toast.success('Promoção atualizada', 'Os dados da promoção foram atualizados.');
     } catch (err) {
       setFormError(getApiErrorMessage(err));
     }
@@ -141,9 +141,9 @@ export function Promotions() {
     try {
       await deletePromotion.mutateAsync(deletingPromotion.id);
       setDeletingPromotion(null);
-      toast.success('Promocao excluida', 'A promocao foi desativada com sucesso.');
+      toast.success('Promoção excluída', 'A promoção foi desativada com sucesso.');
     } catch {
-      toast.error('Erro', 'Nao foi possivel excluir a promocao.');
+      toast.error('Erro', 'Não foi possível excluir a promoção.');
     }
   };
 
@@ -155,11 +155,11 @@ export function Promotions() {
         payload: { isActive: newActive },
       });
       toast.success(
-        newActive ? 'Promocao ativada' : 'Promocao desativada',
-        newActive ? 'A promocao esta ativa novamente.' : 'A promocao foi desativada.',
+        newActive ? 'Promoção ativada' : 'Promoção desativada',
+        newActive ? 'A promoção está ativa novamente.' : 'A promoção foi desativada.',
       );
     } catch {
-      toast.error('Erro', 'Nao foi possivel alterar o status da promocao.');
+      toast.error('Erro', 'Não foi possível alterar o status da promoção.');
     }
   };
 
@@ -167,11 +167,11 @@ export function Promotions() {
     try {
       await clonePromotion.mutateAsync({
         templateId: promotion.id,
-        overrides: { name: `${promotion.name} (copia)` },
+        overrides: { name: `${promotion.name} (cópia)` },
       });
-      toast.success('Promocao duplicada', 'Uma copia da promocao foi criada.');
+      toast.success('Promoção duplicada', 'Uma cópia da promoção foi criada.');
     } catch {
-      toast.error('Erro', 'Nao foi possivel duplicar a promocao.');
+      toast.error('Erro', 'Não foi possível duplicar a promoção.');
     }
   };
 
@@ -184,9 +184,9 @@ export function Promotions() {
             <Tag className="h-5 w-5 text-[#C8923A]" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-[var(--text-primary)]">Promocoes</h1>
+            <h1 className="text-2xl font-bold text-[var(--text-primary)]">Promoções</h1>
             <p className="text-sm text-[var(--text-muted)]">
-              Gerencie promocoes e descontos para seus servicos
+              Gerencie promoções e descontos para seus serviços
             </p>
           </div>
         </div>
@@ -204,7 +204,7 @@ export function Promotions() {
             className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-4 py-2.5 font-medium text-white transition-colors hover:bg-[#725510] focus:outline-none focus:ring-2 focus:ring-[#C8923A] focus:ring-offset-2 focus:ring-offset-[var(--bg-primary)]"
           >
             <Plus className="h-5 w-5" />
-            Nova Promocao
+            Nova Promoção
           </button>
         </div>
       </div>
@@ -249,7 +249,7 @@ export function Promotions() {
           type="text"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Buscar por nome ou servico..."
+          placeholder="Buscar por nome ou serviço..."
           className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-2 pl-10 pr-4 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[#C8923A] focus:outline-none focus:ring-1 focus:ring-[#C8923A] transition-colors"
         />
       </div>
@@ -300,7 +300,7 @@ export function Promotions() {
       <Modal
         isOpen={isCreateModalOpen}
         onClose={handleCloseCreate}
-        title="Nova Promocao"
+        title="Nova Promoção"
         size="lg"
       >
         <PromotionForm
@@ -315,7 +315,7 @@ export function Promotions() {
       <Modal
         isOpen={!!editingPromotion}
         onClose={handleCloseEdit}
-        title="Editar Promocao"
+        title="Editar Promoção"
         size="lg"
       >
         <PromotionForm

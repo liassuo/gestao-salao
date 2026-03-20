@@ -1,5 +1,5 @@
 import { AlertTriangle } from 'lucide-react';
-import { formatCurrency } from '@/utils/format';
+import { formatCurrency, formatPhone } from '@/utils/format';
 import type { UnpaidClient } from '@/types/dashboard';
 
 interface UnpaidClientsCardProps {
@@ -27,7 +27,7 @@ export function UnpaidClientsCard({ clients }: UnpaidClientsCardProps) {
             >
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-[var(--text-primary)]">{client.name}</p>
-                <p className="text-xs text-[var(--text-muted)]">{client.phone}</p>
+                <p className="text-xs text-[var(--text-muted)]">{formatPhone(client.phone)}</p>
               </div>
               <div className="text-right shrink-0">
                 <p className="text-sm font-semibold text-[#C45050]">

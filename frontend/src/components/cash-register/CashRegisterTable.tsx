@@ -154,7 +154,7 @@ export function CashRegisterTable({ cashRegisters }: CashRegisterTableProps) {
                   <div className="flex items-center gap-2 rounded-lg bg-[var(--card-bg)] p-3">
                     <CreditCard className="h-4 w-4 text-blue-500" />
                     <div>
-                      <p className="text-[10px] text-[var(--text-muted)]">Cartao</p>
+                      <p className="text-[10px] text-[var(--text-muted)]">Cartão</p>
                       <p className="text-sm font-bold text-[var(--text-primary)]">
                         {formatCurrency(cr.totalCard)}
                       </p>
@@ -206,7 +206,7 @@ export function CashRegisterTable({ cashRegisters }: CashRegisterTableProps) {
                 {/* Notas */}
                 {cr.notes && (
                   <div className="rounded-lg bg-[var(--card-bg)] p-3">
-                    <p className="text-xs text-[var(--text-muted)] mb-1">Observacoes</p>
+                    <p className="text-xs text-[var(--text-muted)] mb-1">Observações</p>
                     <p className="text-sm text-[var(--text-secondary)]">{cr.notes}</p>
                   </div>
                 )}

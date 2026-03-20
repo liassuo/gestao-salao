@@ -28,6 +28,7 @@ export interface CreateDebtPayload {
 
 export interface PartialPaymentPayload {
   amount: number; // centavos
+  method?: 'CASH' | 'PIX' | 'CARD' | 'BOLETO';
   notes?: string;
 }
 

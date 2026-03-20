@@ -64,13 +64,13 @@ export function ClientSubscriptionTable({
                 Cortes Usados
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                Inicio
+                Início
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Status
               </th>
               <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                Acoes
+                Ações
               </th>
             </tr>
           </thead>
@@ -106,7 +106,7 @@ export function ClientSubscriptionTable({
                         {plan?.name || 'Plano'}
                       </p>
                       <p className="text-sm text-[var(--text-muted)]">
-                        {formatCurrency(plan?.price ?? 0)}/mes
+                        {formatCurrency(plan?.price ?? 0)}/mês
                       </p>
                     </div>
                   </td>

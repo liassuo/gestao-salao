@@ -67,7 +67,7 @@ export function CashRegisterSummary({
       valueColor: 'text-[var(--text-primary)]',
     },
     {
-      label: 'Cartao',
+      label: 'Cartão',
       value: formatCurrency(summary.totalCard),
       icon: CreditCard,
       iconBg: 'bg-blue-500/10',

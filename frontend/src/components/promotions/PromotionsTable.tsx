@@ -40,9 +40,9 @@ export function PromotionsTable({
     return (
       <EmptyState
         icon={Tag}
-        title="Nenhuma promocao encontrada"
-        description="Crie sua primeira promocao para atrair mais clientes."
-        action={{ label: 'Nova Promocao', onClick: onNewPromotion }}
+        title="Nenhuma promoção encontrada"
+        description="Crie sua primeira promoção para atrair mais clientes."
+        action={{ label: 'Nova Promoção', onClick: onNewPromotion }}
       />
     );
   }
@@ -53,13 +53,13 @@ export function PromotionsTable({
         <thead>
           <tr className="border-b border-[var(--border-color)] bg-[var(--hover-bg)]">
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
-              Promocao
+              Promoção
             </th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
               Desconto
             </th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
-              Periodo
+              Período
             </th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
               Itens
@@ -68,7 +68,7 @@ export function PromotionsTable({
               Status
             </th>
             <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
-              Acoes
+              Ações
             </th>
           </tr>
         </thead>
@@ -143,7 +143,7 @@ export function PromotionsTable({
                     <button
                       onClick={() => onToggleActive(promo)}
                       disabled={isLoading}
-                      title={isOn ? 'Desativar promocao' : 'Ativar promocao'}
+                      title={isOn ? 'Desativar promoção' : 'Ativar promoção'}
                       className="rounded-lg p-2 text-[var(--text-muted)] transition-colors hover:bg-[var(--hover-bg)]"
                     >
                       <div
@@ -160,7 +160,7 @@ export function PromotionsTable({
                     </button>
                     <button
                       onClick={() => onClone(promo)}
-                      title="Duplicar promocao"
+                      title="Duplicar promoção"
                       className="rounded-lg p-2 text-[var(--text-muted)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
                     >
                       <Copy className="h-4 w-4" />

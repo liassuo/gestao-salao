@@ -21,8 +21,8 @@ export function ConfirmDeleteModal({
       isOpen={isOpen}
       onClose={onClose}
       onConfirm={onConfirm}
-      title="Excluir Promocao"
-      message={`Tem certeza que deseja excluir a promocao "${promotion?.name}"? Esta acao nao pode ser desfeita.`}
+      title="Excluir Promoção"
+      message={`Tem certeza que deseja excluir a promoção "${promotion?.name}"? Esta ação não pode ser desfeita.`}
       confirmLabel="Excluir"
       isLoading={isLoading}
       variant="danger"

@@ -138,7 +138,7 @@ export function CloseCashRegisterModal({
               </div>
               <div className="text-center rounded-lg bg-[var(--card-bg)] p-3">
                 <CreditCard className="h-4 w-4 mx-auto text-blue-500 mb-1" />
-                <p className="text-xs text-[var(--text-muted)]">Cartao</p>
+                <p className="text-xs text-[var(--text-muted)]">Cartão</p>
                 <p className="text-sm font-bold text-[var(--text-primary)]">
                   {formatCurrency(cashRegister.totalCard)}
                 </p>
@@ -153,10 +153,10 @@ export function CloseCashRegisterModal({
             </div>
           </div>
 
-          {/* Calculo do caixa fisico */}
+          {/* Cálculo do caixa físico */}
           <div className="rounded-xl border border-[var(--border-color)] p-4 space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">
-              Caixa fisico (dinheiro)
+              Caixa físico (dinheiro)
             </p>
             <div className="flex items-center justify-between text-sm">
               <span className="text-[var(--text-secondary)]">Saldo inicial</span>
@@ -203,7 +203,7 @@ export function CloseCashRegisterModal({
               />
             </div>
             <p className="mt-1.5 text-xs text-[var(--text-muted)]">
-              Conte todo o dinheiro fisico no caixa
+              Conte todo o dinheiro físico no caixa
             </p>
           </div>
 
@@ -268,7 +268,7 @@ export function CloseCashRegisterModal({
               htmlFor="closeNotes"
               className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]"
             >
-              Observacoes do fechamento
+              Observações do fechamento
             </label>
             <textarea
               id="closeNotes"

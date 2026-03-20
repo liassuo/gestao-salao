@@ -92,7 +92,7 @@ export function OpenCashRegisterForm({
               <Clock className="h-4 w-4 text-[#C8923A]" />
             </div>
             <div>
-              <p className="text-xs text-[var(--text-muted)]">Horario</p>
+              <p className="text-xs text-[var(--text-muted)]">Horário</p>
               <p className="text-sm font-medium text-[var(--text-primary)]">{timeStr}</p>
             </div>
           </div>
@@ -151,11 +151,11 @@ export function OpenCashRegisterForm({
                 />
               </div>
               <p className="mt-1.5 text-xs text-[var(--text-muted)]">
-                Conte o dinheiro fisico no caixa antes de abrir
+                Conte o dinheiro físico no caixa antes de abrir
               </p>
             </div>
 
-            {/* Toggle observacoes */}
+            {/* Toggle observações */}
             {!showNotes ? (
               <button
                 type="button"
@@ -163,7 +163,7 @@ export function OpenCashRegisterForm({
                 className="flex items-center gap-2 text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
               >
                 <StickyNote className="h-4 w-4" />
-                Adicionar observacao
+                Adicionar observação
               </button>
             ) : (
               <div>
@@ -171,7 +171,7 @@ export function OpenCashRegisterForm({
                   htmlFor="notes"
                   className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]"
                 >
-                  Observacoes
+                  Observações
                 </label>
                 <textarea
                   id="notes"
@@ -184,7 +184,7 @@ export function OpenCashRegisterForm({
               </div>
             )}
 
-            {/* Botao */}
+            {/* Botão */}
             <button
               type="submit"
               disabled={isLoading}

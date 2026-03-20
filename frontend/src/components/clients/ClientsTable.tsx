@@ -1,6 +1,7 @@
 import { Users, Phone, Mail, MoreVertical, Edit2, Trash2 } from 'lucide-react';
 import { useState, useRef } from 'react';
 import { EmptyState } from '@/components/ui';
+import { formatPhone } from '@/utils/format';
 import type { Client } from '@/types';
 
 interface ClientsTableProps {
@@ -19,16 +20,6 @@ function formatDate(date: string): string {
   }).format(new Date(date));
 }
 
-function formatPhone(phone: string): string {
-  const cleaned = phone.replace(/\D/g, '');
-  if (cleaned.length === 11) {
-    return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 7)}-${cleaned.slice(7)}`;
-  }
-  if (cleaned.length === 10) {
-    return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 6)}-${cleaned.slice(6)}`;
-  }
-  return phone;
-}
 
 function formatCpf(cpf: string): string {
   const cleaned = cpf.replace(/\D/g, '');
@@ -54,7 +45,7 @@ export function ClientsTable({
       <EmptyState
         icon={Users}
         title="Nenhum cliente cadastrado"
-        description="Cadastre seu primeiro cliente para comecar a gerenciar os agendamentos."
+        description="Cadastre seu primeiro cliente para começar a gerenciar os agendamentos."
         action={onNewClient ? { label: 'Novo Cliente', onClick: onNewClient } : undefined}
       />
     );
@@ -79,10 +70,10 @@ export function ClientsTable({
                 Cadastro
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                Ultima Visita
+                Última Visita
               </th>
               <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                Acoes
+                Ações
               </th>
             </tr>
           </thead>
@@ -101,7 +92,7 @@ export function ClientsTable({
                         <p className="font-medium text-[var(--text-primary)]">{client.name}</p>
                         {client.hasDebts && (
                           <span className="inline-flex items-center rounded-md bg-[#A63030]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[#A63030] ring-1 ring-inset ring-[#A63030]/20">
-                            DIVIDA
+                            DÍVIDA
                           </span>
                         )}
                       </div>

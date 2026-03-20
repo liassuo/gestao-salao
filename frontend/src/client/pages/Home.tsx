@@ -82,7 +82,7 @@ export function ClientHome() {
         </button>
       </div>
 
-      {/* Banners de Promocoes */}
+      {/* Banners de Promoções */}
       <PromotionBanners />
 
       {/* Content */}
@@ -91,7 +91,7 @@ export function ClientHome() {
           <EmptyState
             icon="calendar"
             title="Nenhum agendamento"
-            subtitle="Agende seu primeiro horario tocando no botao abaixo!"
+            subtitle="Agende seu primeiro horário tocando no botão abaixo!"
           />
         ) : (
           <div className="space-y-6">
@@ -112,7 +112,7 @@ export function ClientHome() {
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <h2 className="text-base font-semibold text-[var(--text-primary)]">
-                    Proximos agendamentos
+                    Próximos agendamentos
                   </h2>
                   <span className="bg-[#C8923A]/20 text-[#C8923A] text-xs font-semibold px-2 py-0.5 rounded-full">
                     {otherUpcoming.length}
@@ -136,7 +136,7 @@ export function ClientHome() {
               <div className="mt-6">
                 <div className="flex items-center gap-2 mb-3">
                   <h2 className="text-base font-semibold text-[var(--text-primary)]">
-                    Historico
+                    Histórico
                   </h2>
                   <span className="bg-[var(--hover-bg)] text-[var(--text-muted)] text-xs font-semibold px-2 py-0.5 rounded-full">
                     {pastAppointments.length}

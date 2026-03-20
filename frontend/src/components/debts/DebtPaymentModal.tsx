@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AlertCircle, Loader2, X } from 'lucide-react';
 import type { Debt, PartialPaymentPayload } from '@/types';
+import { paymentMethodLabels } from '@/types';
 
 interface DebtPaymentModalProps {
   isOpen: boolean;
@@ -18,6 +19,23 @@ function formatCurrency(cents: number): string {
   }).format(cents / 100);
 }
 
+function formatCurrencyInput(value: string): string {
+  const numbers = value.replace(/\D/g, '');
+  if (!numbers) return '';
+  const cents = parseInt(numbers, 10);
+  return (cents / 100).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function parseCurrencyInput(value: string): number {
+  const numbers = value.replace(/\D/g, '');
+  return parseInt(numbers, 10) || 0;
+}
+
+const methodOptions = ['CASH', 'PIX', 'CARD'] as const;
+
 export function DebtPaymentModal({
   isOpen,
   onClose,
@@ -27,6 +45,7 @@ export function DebtPaymentModal({
   error,
 }: DebtPaymentModalProps) {
   const [amountReais, setAmountReais] = useState('');
+  const [method, setMethod] = useState<string>('CASH');
   const [notes, setNotes] = useState('');
 
   if (!isOpen || !debt) return null;
@@ -36,23 +55,20 @@ export function DebtPaymentModal({
 
     if (!amountReais) return;
 
-    // Converte reais para centavos
-    const amountCents = Math.round(parseFloat(amountReais.replace(',', '.')) * 100);
+    const amountCents = parseCurrencyInput(amountReais);
 
     await onSubmit({
       amount: amountCents,
+      method: method as PartialPaymentPayload['method'],
       notes: notes || undefined,
     });
 
-    // Limpa o formulário após sucesso
     setAmountReais('');
+    setMethod('CASH');
     setNotes('');
   };
 
-  const amountCents = amountReais
-    ? Math.round(parseFloat(amountReais.replace(',', '.')) * 100)
-    : 0;
-
+  const amountCents = parseCurrencyInput(amountReais);
   const isValidAmount = amountCents > 0 && amountCents <= debt.remainingBalance;
 
   return (
@@ -124,8 +140,7 @@ export function DebtPaymentModal({
                 id="paymentAmount"
                 value={amountReais}
                 onChange={(e) => {
-                  const value = e.target.value.replace(/[^\d,\.]/g, '');
-                  setAmountReais(value);
+                  setAmountReais(formatCurrencyInput(e.target.value));
                 }}
                 placeholder="0,00"
                 className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] py-2.5 pl-10 pr-3 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[#C8923A] focus:outline-none focus:ring-1 focus:ring-[#C8923A]"
@@ -138,6 +153,29 @@ export function DebtPaymentModal({
                 O valor não pode exceder o saldo restante
               </p>
             )}
+          </div>
+
+          {/* Método de Pagamento */}
+          <div className="mb-4">
+            <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
+              Forma de Pagamento *
+            </label>
+            <div className="flex gap-2">
+              {methodOptions.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setMethod(m)}
+                  className={`flex-1 rounded-xl border px-3 py-2 text-sm font-medium transition-colors ${
+                    method === m
+                      ? 'border-[#C8923A] bg-[#C8923A]/20 text-[#C8923A]'
+                      : 'border-[var(--border-color)] text-[var(--text-muted)] hover:bg-[var(--hover-bg)]'
+                  }`}
+                >
+                  {paymentMethodLabels[m]}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Observações */}

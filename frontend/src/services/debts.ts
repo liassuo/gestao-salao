@@ -48,8 +48,8 @@ export const debtsService = {
     return response.data;
   },
 
-  async settle(id: string): Promise<Debt> {
-    const response = await api.patch<Debt>(`/debts/${id}/settle`);
+  async settle(id: string, method?: string): Promise<Debt> {
+    const response = await api.patch<Debt>(`/debts/${id}/settle`, { method });
     return response.data;
   },
 

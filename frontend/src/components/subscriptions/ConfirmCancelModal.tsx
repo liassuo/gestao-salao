@@ -75,22 +75,22 @@ export function ConfirmCancelModal({
             </p>
             <p className="text-sm text-[var(--text-secondary)]">
               <span className="font-medium">Valor:</span>{' '}
-              {formatCurrency(subscription.plan?.price ?? 0)}/mes
+              {formatCurrency(subscription.plan?.price ?? 0)}/mês
             </p>
             <p className="text-sm text-[var(--text-secondary)]">
-              <span className="font-medium">Inicio:</span>{' '}
+              <span className="font-medium">Início:</span>{' '}
               {formatDate(subscription.startDate)}
             </p>
             <p className="text-sm text-[var(--text-secondary)]">
-              <span className="font-medium">Cortes usados este mes:</span>{' '}
+              <span className="font-medium">Cortes usados este mês:</span>{' '}
               {subscription.cutsUsedThisMonth} / {(subscription.plan?.cutsPerMonth ?? 0) === 99 ? '∞' : subscription.plan?.cutsPerMonth ?? 0}
             </p>
           </div>
 
           <div className="mb-6 rounded-xl bg-red-500/10 p-3">
             <p className="text-sm text-[#A63030]">
-              <span className="font-medium">Atencao:</span> Esta acao nao pode ser desfeita.
-              O cliente perdera acesso aos beneficios do plano imediatamente.
+              <span className="font-medium">Atenção:</span> Esta ação não pode ser desfeita.
+              O cliente perderá acesso aos benefícios do plano imediatamente.
             </p>
           </div>
 

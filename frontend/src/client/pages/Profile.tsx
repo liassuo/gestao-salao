@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useClientAuth } from '../auth';
 import { clientApi } from '../services/api';
+import { formatPhone } from '@/utils/format';
 
 interface ClientProfile {
   id: string;
@@ -19,12 +20,6 @@ interface ClientProfile {
   lastVisitAt?: string | null;
 }
 
-function formatPhone(phone: string): string {
-  const cleaned = phone.replace(/\D/g, '');
-  if (cleaned.length === 11) return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 7)}-${cleaned.slice(7)}`;
-  if (cleaned.length === 10) return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 6)}-${cleaned.slice(6)}`;
-  return phone;
-}
 
 function formatCpf(cpf: string): string {
   const cleaned = cpf.replace(/\D/g, '');
@@ -188,20 +183,20 @@ export function ClientProfile() {
           )}
         </div>
 
-        {/* Endereco */}
+        {/* Endereço */}
         {fullAddress && (
           <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-4 mb-4">
             <p className="text-xs font-semibold text-[var(--text-muted)] uppercase mb-3">
-              Endereco
+              Endereço
             </p>
-            <InfoRow icon={<MapIcon />} label="Endereco" value={fullAddress} />
+            <InfoRow icon={<MapIcon />} label="Endereço" value={fullAddress} />
           </div>
         )}
 
-        {/* Informacoes */}
+        {/* Informações */}
         <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-4 mb-4">
           <p className="text-xs font-semibold text-[var(--text-muted)] uppercase mb-3">
-            Informacoes
+            Informações
           </p>
           <InfoRow
             icon={<CalendarIcon />}
@@ -213,14 +208,14 @@ export function ClientProfile() {
               <Divider />
               <InfoRow
                 icon={<CalendarIcon />}
-                label="Ultima visita"
+                label="Última visita"
                 value={formatDate(profile.lastVisitAt)}
               />
             </>
           )}
         </div>
 
-        {/* Acoes */}
+        {/* Ações */}
         <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-4">
           <button
             onClick={handleLogout}
@@ -242,7 +237,7 @@ export function ClientProfile() {
         </div>
 
         <p className="text-center text-[var(--text-muted)] text-xs mt-6">
-          Versao 1.0.0
+          Versão 1.0.0
         </p>
       </div>
     </div>

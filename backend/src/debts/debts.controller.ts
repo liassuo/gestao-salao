@@ -72,8 +72,11 @@ export class DebtsController {
   }
 
   @Patch(':id/settle')
-  async settle(@Param('id', ParseUUIDPipe) id: string) {
-    return this.debtsService.settleDebt(id);
+  async settle(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body?: { method?: string },
+  ) {
+    return this.debtsService.settleDebt(id, body?.method);
   }
 
   @Patch(':id')

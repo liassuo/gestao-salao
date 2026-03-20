@@ -1,5 +1,6 @@
 import { useForm } from 'react-hook-form';
 import { AlertCircle, Loader2 } from 'lucide-react';
+import { formatPhoneInput } from '@/utils/format';
 import type { Branch, CreateBranchPayload } from '@/types';
 
 interface BranchFormData {
@@ -85,8 +86,10 @@ export function BranchForm({ branch, onSubmit, isLoading, error }: BranchFormPro
         </label>
         <input
           type="tel"
-          {...register('phone')}
-          placeholder="(11) 99999-9999 (opcional)"
+          {...register('phone', {
+            onChange: (e) => { e.target.value = formatPhoneInput(e.target.value); },
+          })}
+          placeholder="(62) 99999-9999 (opcional)"
           className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A]"
         />
       </div>

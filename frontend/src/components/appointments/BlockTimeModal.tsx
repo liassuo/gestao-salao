@@ -58,12 +58,12 @@ export function BlockTimeModal({
     }
 
     if (!startTime || !endTime) {
-      setFormError('Preencha os horarios de inicio e fim.');
+      setFormError('Preencha os horários de início e fim.');
       return;
     }
 
     if (startTime >= endTime) {
-      setFormError('O horario de inicio deve ser anterior ao horario de fim.');
+      setFormError('O horário de início deve ser anterior ao horário de fim.');
       return;
     }
 
@@ -103,7 +103,7 @@ export function BlockTimeModal({
           <div className="flex items-center gap-2">
             <Lock className="h-5 w-5 text-[#C45050]" />
             <h2 className="text-lg font-semibold text-[var(--text-primary)]">
-              Bloquear Horario
+              Bloquear Horário
             </h2>
           </div>
           <button
@@ -158,7 +158,7 @@ export function BlockTimeModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
-                Inicio
+                Início
               </label>
               <input
                 type="time"

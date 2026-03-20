@@ -135,7 +135,7 @@ export function ClientSetPassword() {
               </div>
             </div>
 
-            {/* Botao */}
+            {/* Botão */}
             <button
               type="submit"
               disabled={isSubmitting}
@@ -164,7 +164,7 @@ export function ClientSetPassword() {
           </div>
 
           <p className="text-center text-xs text-[#6B5D4F]">
-            Apos criar sua senha, voce podera acessar o portal normalmente.
+            Após criar sua senha, você poderá acessar o portal normalmente.
           </p>
         </div>
       </div>

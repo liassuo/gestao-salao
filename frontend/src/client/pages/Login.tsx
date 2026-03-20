@@ -31,7 +31,7 @@ export function ClientLogin() {
 
   const validatePassword = (pw: string): string | null => {
     if (pw.length < 6) return 'A senha deve ter pelo menos 6 caracteres';
-    if (!/\d/.test(pw)) return 'A senha deve conter pelo menos um numero';
+    if (!/\d/.test(pw)) return 'A senha deve conter pelo menos um número';
     return null;
   };
 
@@ -61,7 +61,7 @@ export function ClientLogin() {
           setStep('setup_password');
           break;
         case 'google':
-          setError(`Esta conta usa login com Google. Use o botao "Continuar com Google" acima.`);
+          setError(`Esta conta usa login com Google. Use o botão "Continuar com Google" acima.`);
           break;
       }
     } catch {
@@ -119,7 +119,7 @@ export function ClientLogin() {
     }
 
     if (password !== confirmPassword) {
-      setError('As senhas nao coincidem');
+      setError('As senhas não coincidem');
       return;
     }
 
@@ -147,7 +147,7 @@ export function ClientLogin() {
     }
 
     if (password !== confirmPassword) {
-      setError('As senhas nao coincidem');
+      setError('As senhas não coincidem');
       return;
     }
 
@@ -519,7 +519,7 @@ export function ClientLogin() {
           </div>
 
           <p className="text-center text-xs text-[#6B5D4F]">
-            Agende seus horarios e acompanhe seus atendimentos
+            Agende seus horários e acompanhe seus atendimentos
           </p>
         </div>
       </div>

@@ -51,7 +51,7 @@ export const menuItems: MenuItem[] = [
   },
   {
     icon: Scissors,
-    label: 'Servicos',
+    label: 'Serviços',
     path: '/servicos',
     roles: ['ADMIN'],
   },
@@ -93,7 +93,7 @@ export const menuItems: MenuItem[] = [
   },
   {
     icon: Tag,
-    label: 'Promocoes',
+    label: 'Promoções',
     path: '/promocoes',
     roles: ['ADMIN'],
   },
@@ -127,7 +127,7 @@ export const menuItems: MenuItem[] = [
   },
   {
     icon: DollarSign,
-    label: 'Comissoes',
+    label: 'Comissões',
     path: '/financeiro/comissoes',
     roles: ['ADMIN'],
   },

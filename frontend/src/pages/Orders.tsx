@@ -264,7 +264,7 @@ export function Orders() {
                   <th className="px-4 py-3 text-left text-sm font-medium text-[var(--text-muted)]">Total</th>
                   <th className="px-4 py-3 text-left text-sm font-medium text-[var(--text-muted)]">Status</th>
                   <th className="px-4 py-3 text-left text-sm font-medium text-[var(--text-muted)]">Criado em</th>
-                  <th className="px-4 py-3 text-right text-sm font-medium text-[var(--text-muted)]">Acoes</th>
+                  <th className="px-4 py-3 text-right text-sm font-medium text-[var(--text-muted)]">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -329,11 +329,11 @@ export function Orders() {
                 onClick={() => setCreateItemTab('SERVICE')}
                 className={`flex-1 flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-colors ${createItemTab === 'SERVICE' ? 'border-[#C8923A] bg-[#C8923A]/20 text-[#D4A85C]' : 'border-[var(--card-border)] text-[var(--text-muted)] hover:bg-[var(--hover-bg)]'}`}
               >
-                <Scissors className="h-4 w-4" /> Servicos
+                <Scissors className="h-4 w-4" /> Serviços
               </button>
             </div>
 
-            {/* Lista de produtos/servicos para adicionar */}
+            {/* Lista de produtos/serviços para adicionar */}
             <div className="max-h-40 overflow-y-auto rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] divide-y divide-[var(--card-border)]">
               {createItemTab === 'PRODUCT' ? (
                 products?.filter((p) => p.isActive !== false).length ? (
@@ -407,7 +407,7 @@ export function Orders() {
                     );
                   })
                 ) : (
-                  <p className="px-3 py-4 text-center text-sm text-[var(--text-muted)]">Nenhum servico</p>
+                  <p className="px-3 py-4 text-center text-sm text-[var(--text-muted)]">Nenhum serviço</p>
                 )
               )}
             </div>
@@ -452,12 +452,12 @@ export function Orders() {
           )}
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">Observacoes (opcional)</label>
+            <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">Observações (opcional)</label>
             <textarea
               value={createNotes}
               onChange={(e) => setCreateNotes(e.target.value)}
               rows={2}
-              placeholder="Observacoes sobre a comanda..."
+              placeholder="Observações sobre a comanda..."
               className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-2 focus:ring-[#C8923A] focus:outline-none"
             />
           </div>
@@ -501,7 +501,7 @@ export function Orders() {
                   <ShoppingCart className="h-10 w-10 mb-2 opacity-50" />
                   <p className="text-sm">Nenhum item na comanda</p>
                   {viewingOrder.status === 'PENDING' && (
-                    <p className="text-xs mt-1">Clique em "Adicionar Item" para comecar</p>
+                    <p className="text-xs mt-1">Clique em "Adicionar Item" para começar</p>
                   )}
                 </div>
               ) : (
@@ -514,7 +514,7 @@ export function Orders() {
                         </div>
                         <div>
                           <p className="font-medium text-[var(--text-primary)]">{item.product?.name || item.service?.name || '-'}</p>
-                          <p className="text-xs text-[var(--text-muted)]">{item.itemType === 'PRODUCT' ? 'Produto' : 'Servico'} &middot; {item.quantity}x {formatCents(item.unitPrice)}</p>
+                          <p className="text-xs text-[var(--text-muted)]">{item.itemType === 'PRODUCT' ? 'Produto' : 'Serviço'} &middot; {item.quantity}x {formatCents(item.unitPrice)}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -572,7 +572,7 @@ export function Orders() {
                 onClick={() => { setItemType('SERVICE'); setSelectedProductId(''); }}
                 className={`flex-1 flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors ${itemType === 'SERVICE' ? 'border-[#C8923A] bg-[#C8923A]/20 text-[#D4A85C]' : 'border-[var(--card-border)] text-[var(--text-muted)] hover:bg-[var(--hover-bg)]'}`}
               >
-                <Scissors className="h-4 w-4" /> Servico
+                <Scissors className="h-4 w-4" /> Serviço
               </button>
             </div>
           </div>
@@ -594,13 +594,13 @@ export function Orders() {
             </div>
           ) : (
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">Servico</label>
+              <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">Serviço</label>
               <select
                 value={selectedServiceId}
                 onChange={(e) => setSelectedServiceId(e.target.value)}
                 className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[#C8923A] focus:outline-none"
               >
-                <option value="">Selecione um servico</option>
+                <option value="">Selecione um serviço</option>
                 {services?.filter((s) => s.isActive !== false).map((s) => (
                   <option key={s.id} value={s.id}>{s.name} - {formatCents(s.price)}</option>
                 ))}
@@ -668,7 +668,7 @@ export function Orders() {
               className={`flex flex-col items-center gap-2 rounded-xl border p-4 transition-colors ${paymentMethod === 'CARD' ? 'border-purple-500 bg-purple-500/20 text-purple-400' : 'border-[var(--card-border)] text-[var(--text-muted)] hover:bg-[var(--hover-bg)]'}`}
             >
               <CircleDollarSign className="h-6 w-6" />
-              <span className="text-xs font-medium">Cartao</span>
+              <span className="text-xs font-medium">Cartão</span>
             </button>
           </div>
           <div className="flex justify-end gap-3 pt-2">

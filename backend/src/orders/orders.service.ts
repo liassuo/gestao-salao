@@ -239,18 +239,21 @@ export class OrdersService {
       }
     }
 
-    // Criar pagamento se método informado
+    // Criar registro de pagamento para contabilizar no caixa
     let paymentId: string | undefined;
-    if (dto?.paymentMethod && order.clientId) {
+    const paymentMethod = dto?.paymentMethod || 'CASH';
+    const registeredBy = dto?.registeredBy || order.clientId;
+
+    if (order.clientId) {
       const { data: payment } = await this.supabase
         .from('payments')
         .insert({
           id: crypto.randomUUID(),
           clientId: order.clientId,
           amount: order.totalAmount,
-          method: dto.paymentMethod,
+          method: paymentMethod,
           paidAt: payNow,
-          registeredBy: dto.registeredBy || order.clientId,
+          registeredBy: registeredBy,
           notes: `Pagamento comanda #${order.id.slice(0, 8)}`,
           createdAt: payNow,
           updatedAt: payNow,

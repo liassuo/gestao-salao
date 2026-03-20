@@ -154,13 +154,13 @@ export function PromotionForm({ promotion, onSubmit, isLoading, error }: Promoti
       {/* Nome */}
       <div>
         <label className="mb-1.5 block text-sm font-medium text-[var(--text-primary)]">
-          Nome da Promocao *
+          Nome da Promoção *
         </label>
         <input
           type="text"
-          {...register('name', { required: 'Nome e obrigatorio' })}
+          {...register('name', { required: 'Nome é obrigatório' })}
           className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] px-4 py-2.5 text-sm text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none focus:ring-1 focus:ring-[#C8923A]"
-          placeholder="Ex: Promocao de Verao"
+          placeholder="Ex: Promoção de Verão"
         />
         {errors.name && (
           <p className="mt-1 text-xs text-[#C45050]">{errors.name.message}</p>
@@ -175,9 +175,9 @@ export function PromotionForm({ promotion, onSubmit, isLoading, error }: Promoti
         <input
           type="number"
           {...register('discountPercent', {
-            required: 'Desconto e obrigatorio',
-            min: { value: 1, message: 'Minimo 1%' },
-            max: { value: 100, message: 'Maximo 100%' },
+            required: 'Desconto é obrigatório',
+            min: { value: 1, message: 'Mínimo 1%' },
+            max: { value: 100, message: 'Máximo 100%' },
             valueAsNumber: true,
           })}
           className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] px-4 py-2.5 text-sm text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none focus:ring-1 focus:ring-[#C8923A]"
@@ -188,15 +188,15 @@ export function PromotionForm({ promotion, onSubmit, isLoading, error }: Promoti
         )}
       </div>
 
-      {/* Periodo */}
+      {/* Período */}
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="mb-1.5 block text-sm font-medium text-[var(--text-primary)]">
-            Data Inicio *
+            Data Início *
           </label>
           <input
             type="date"
-            {...register('startDate', { required: 'Data inicio e obrigatoria' })}
+            {...register('startDate', { required: 'Data início é obrigatória' })}
             className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] px-4 py-2.5 text-sm text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none focus:ring-1 focus:ring-[#C8923A]"
           />
           {errors.startDate && (
@@ -209,7 +209,7 @@ export function PromotionForm({ promotion, onSubmit, isLoading, error }: Promoti
           </label>
           <input
             type="date"
-            {...register('endDate', { required: 'Data fim e obrigatoria' })}
+            {...register('endDate', { required: 'Data fim é obrigatória' })}
             className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] px-4 py-2.5 text-sm text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none focus:ring-1 focus:ring-[#C8923A]"
           />
           {errors.endDate && (
@@ -224,7 +224,7 @@ export function PromotionForm({ promotion, onSubmit, isLoading, error }: Promoti
           Itens com Desconto *
         </label>
         {selectedServiceIds.length === 0 && selectedProductIds.length === 0 && (
-          <p className="mb-2 text-xs text-[#C45050]">Selecione pelo menos um servico ou produto</p>
+          <p className="mb-2 text-xs text-[#C45050]">Selecione pelo menos um serviço ou produto</p>
         )}
 
         {/* Tabs */}
@@ -238,7 +238,7 @@ export function PromotionForm({ promotion, onSubmit, isLoading, error }: Promoti
                 : 'bg-[var(--card-bg)] text-[var(--text-muted)] hover:bg-[var(--hover-bg)]'
             }`}
           >
-            Servicos
+            Serviços
             {selectedServiceIds.length > 0 && (
               <span className={`ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs font-semibold ${
                 itemTab === 'services' ? 'bg-white/20 text-white' : 'bg-[#C8923A]/20 text-[#C8923A]'
@@ -288,7 +288,7 @@ export function PromotionForm({ promotion, onSubmit, isLoading, error }: Promoti
                 </button>
               );
             }) : (
-              <p className="px-3 py-4 text-center text-sm text-[var(--text-muted)]">Nenhum servico cadastrado</p>
+              <p className="px-3 py-4 text-center text-sm text-[var(--text-muted)]">Nenhum serviço cadastrado</p>
             )}
           </div>
         )}
@@ -323,7 +323,7 @@ export function PromotionForm({ promotion, onSubmit, isLoading, error }: Promoti
       {/* Banner Mode Toggle */}
       <div>
         <label className="mb-1.5 block text-sm font-medium text-[var(--text-primary)]">
-          Banner da Promocao
+          Banner da Promoção
         </label>
         <div className="flex gap-2 mb-3">
           <button
@@ -426,7 +426,7 @@ export function PromotionForm({ promotion, onSubmit, isLoading, error }: Promoti
           disabled={isLoading || (selectedServiceIds.length === 0 && selectedProductIds.length === 0)}
           className="rounded-xl bg-[#8B6914] px-6 py-2.5 font-medium text-white transition-colors hover:bg-[#725510] disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-[#C8923A] focus:ring-offset-2 focus:ring-offset-[var(--bg-primary)]"
         >
-          {isLoading ? 'Salvando...' : promotion ? 'Atualizar' : 'Criar Promocao'}
+          {isLoading ? 'Salvando...' : promotion ? 'Atualizar' : 'Criar Promoção'}
         </button>
       </div>
     </form>

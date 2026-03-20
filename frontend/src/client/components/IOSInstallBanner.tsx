@@ -56,7 +56,7 @@ export function IOSInstallBanner() {
                 <span className="font-medium text-[#C8923A]">Compartilhar</span>
               </span>
               {' '}e depois em{' '}
-              <span className="font-medium text-[#C8923A]">"Adicionar a Tela de Inicio"</span>
+              <span className="font-medium text-[#C8923A]">"Adicionar a Tela de Início"</span>
             </p>
           </div>
 

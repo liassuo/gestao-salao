@@ -112,7 +112,7 @@ export function CashRegisterStatus({ cashRegister, onClose }: CashRegisterStatus
             </div>
             <div className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-sm text-green-100">
               <Clock className="h-3.5 w-3.5" />
-              <span>Aberto ha {elapsed}</span>
+              <span>Aberto há {elapsed}</span>
               <span className="text-green-300">({formatTime(cashRegister.openedAt)})</span>
             </div>
           </div>
@@ -137,7 +137,7 @@ export function CashRegisterStatus({ cashRegister, onClose }: CashRegisterStatus
         />
         <PaymentMethodCard
           icon={CreditCard}
-          label="Cartao"
+          label="Cartão"
           value={cashRegister.totalCard}
           percentage={cardPct}
           color="blue"
@@ -148,7 +148,7 @@ export function CashRegisterStatus({ cashRegister, onClose }: CashRegisterStatus
       {total > 0 && (
         <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-4">
           <p className="mb-3 text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
-            Distribuicao por metodo
+            Distribuição por método
           </p>
           <div className="flex h-3 overflow-hidden rounded-full">
             {cashPct > 0 && (
@@ -189,7 +189,7 @@ export function CashRegisterStatus({ cashRegister, onClose }: CashRegisterStatus
             {cardPct > 0 && (
               <div className="flex items-center gap-1.5">
                 <div className="h-2 w-2 rounded-full bg-blue-500" />
-                Cartao {cardPct.toFixed(0)}%
+                Cartão {cardPct.toFixed(0)}%
               </div>
             )}
           </div>
@@ -201,7 +201,7 @@ export function CashRegisterStatus({ cashRegister, onClose }: CashRegisterStatus
         <div className="flex items-center gap-2 mb-4">
           <Wallet className="h-4 w-4 text-[var(--text-muted)]" />
           <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-            Resumo do Caixa Fisico
+            Resumo do Caixa Físico
           </h3>
         </div>
         <div className="space-y-3">

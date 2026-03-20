@@ -1,6 +1,7 @@
 import { Building2, MoreVertical, Edit2, Trash2 } from 'lucide-react';
 import { useState, useRef } from 'react';
 import { EmptyState } from '@/components/ui';
+import { formatPhone } from '@/utils/format';
 import type { Branch } from '@/types';
 
 interface BranchesTableProps {
@@ -74,7 +75,7 @@ export function BranchesTable({
                   {branch.address || '-'}
                 </td>
                 <td className="px-4 py-3 text-sm text-[var(--text-secondary)]">
-                  {branch.phone || '-'}
+                  {formatPhone(branch.phone) || '-'}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-secondary)]">
                   {branch._count?.professionals || 0}

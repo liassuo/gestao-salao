@@ -23,8 +23,8 @@ export function CommissionsTable({ commissions, onMarkAsPaid, onDelete, isLoadin
     return (
       <EmptyState
         icon={Percent}
-        title="Nenhuma comissao encontrada"
-        description="Nao ha comissoes registradas. Utilize os filtros acima e clique em 'Gerar Comissoes' para calcular."
+        title="Nenhuma comissão encontrada"
+        description="Não há comissões registradas. Utilize os filtros acima e clique em 'Gerar Comissões' para calcular."
       />
     );
   }
@@ -39,7 +39,7 @@ export function CommissionsTable({ commissions, onMarkAsPaid, onDelete, isLoadin
                 Profissional
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                Periodo
+                Período
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Valor
@@ -48,7 +48,7 @@ export function CommissionsTable({ commissions, onMarkAsPaid, onDelete, isLoadin
                 Status
               </th>
               <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                Acoes
+                Ações
               </th>
             </tr>
           </thead>

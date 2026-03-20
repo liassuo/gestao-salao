@@ -281,7 +281,7 @@ export function Subscriptions() {
         </>
       )}
 
-      {/* Modal de criacao de plano */}
+      {/* Modal de criação de plano */}
       <Modal
         isOpen={isCreatePlanModalOpen}
         onClose={handleCloseCreatePlanModal}
@@ -308,7 +308,7 @@ export function Subscriptions() {
         />
       </Modal>
 
-      {/* Modal de confirmacao de desativacao de plano */}
+      {/* Modal de confirmação de desativação de plano */}
       {deletingPlan && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setDeletingPlan(null)} />
@@ -316,7 +316,7 @@ export function Subscriptions() {
             <h3 className="mb-4 text-lg font-semibold text-[var(--text-primary)]">Desativar Plano</h3>
             <p className="mb-6 text-[var(--text-secondary)]">
               Tem certeza que deseja desativar o plano <strong>{deletingPlan.name}</strong>?
-              Clientes existentes nao serao afetados.
+              Clientes existentes não serão afetados.
             </p>
             <div className="flex justify-end gap-3">
               <button

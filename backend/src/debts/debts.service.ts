@@ -10,6 +10,11 @@ import { CreateDebtDto, UpdateDebtDto, PayDebtDto } from './dto';
 export class DebtsService {
   constructor(private readonly supabase: SupabaseService) {}
 
+  private readonly DEBT_SELECT = `
+    *,
+    client:clients(id, name, phone)
+  `;
+
   async createDebt(dto: CreateDebtDto) {
     // 1. Verificar se cliente existe
     const { data: client, error: clientError } = await this.supabase
@@ -39,7 +44,7 @@ export class DebtsService {
         createdAt: now,
         updatedAt: now,
       })
-      .select('*')
+      .select(this.DEBT_SELECT)
       .single();
 
     if (error) throw error;
@@ -82,19 +87,32 @@ export class DebtsService {
     const newRemainingBalance = debt.remainingBalance - dto.amount;
     const isNowSettled = newRemainingBalance === 0;
 
+    const d = new Date();
+    const now = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+
     const { data: updatedDebt, error: updateError } = await this.supabase
       .from('debts')
       .update({
         amountPaid: newAmountPaid,
         remainingBalance: newRemainingBalance,
         isSettled: isNowSettled,
-        paidAt: isNowSettled ? new Date().toISOString() : null,
+        paidAt: isNowSettled ? now : null,
       })
       .eq('id', debtId)
-      .select('*')
+      .select(this.DEBT_SELECT)
       .single();
 
     if (updateError) throw updateError;
+
+    // Criar registro de pagamento para o caixa contabilizar
+    await this.createPaymentRecord(
+      debt.clientId,
+      dto.amount,
+      dto.method || 'CASH',
+      dto.registeredBy,
+      `Pagamento de dívida${debt.description ? ': ' + debt.description : ''}`,
+      now,
+    );
 
     // Se quitou, verificar se cliente ainda tem outras dívidas
     if (isNowSettled) {
@@ -104,7 +122,7 @@ export class DebtsService {
     return updatedDebt;
   }
 
-  async settleDebt(id: string) {
+  async settleDebt(id: string, method?: string) {
     const { data: debt, error } = await this.supabase
       .from('debts')
       .select('*')
@@ -119,17 +137,34 @@ export class DebtsService {
       throw new BadRequestException('Esta dívida já está quitada');
     }
 
+    const d = new Date();
+    const now = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+
     const { data: updatedDebt, error: updateError } = await this.supabase
       .from('debts')
       .update({
+        amountPaid: debt.amount,
+        remainingBalance: 0,
         isSettled: true,
-        paidAt: new Date().toISOString(),
+        paidAt: now,
       })
       .eq('id', id)
-      .select('*')
+      .select(this.DEBT_SELECT)
       .single();
 
     if (updateError) throw updateError;
+
+    // Registrar o valor restante como pagamento no caixa
+    if (debt.remainingBalance > 0) {
+      await this.createPaymentRecord(
+        debt.clientId,
+        debt.remainingBalance,
+        method || 'CASH',
+        undefined,
+        `Quitação de dívida${debt.description ? ': ' + debt.description : ''}`,
+        now,
+      );
+    }
 
     await this.updateClientHasDebtsFlag(debt.clientId);
 
@@ -139,7 +174,7 @@ export class DebtsService {
   async findOne(id: string) {
     const { data: debt, error } = await this.supabase
       .from('debts')
-      .select('*')
+      .select(this.DEBT_SELECT)
       .eq('id', id)
       .single();
 
@@ -153,7 +188,7 @@ export class DebtsService {
   async findAll() {
     const { data: debts, error } = await this.supabase
       .from('debts')
-      .select('*')
+      .select(this.DEBT_SELECT)
       .order('createdAt', { ascending: false });
 
     if (error) throw error;
@@ -163,7 +198,7 @@ export class DebtsService {
   async findOutstanding() {
     const { data: debts, error } = await this.supabase
       .from('debts')
-      .select('*')
+      .select(this.DEBT_SELECT)
       .eq('isSettled', false)
       .order('createdAt', { ascending: false });
 
@@ -174,7 +209,7 @@ export class DebtsService {
   async findByClient(clientId: string) {
     const { data: debts, error } = await this.supabase
       .from('debts')
-      .select('*')
+      .select(this.DEBT_SELECT)
       .eq('clientId', clientId)
       .order('createdAt', { ascending: false });
 
@@ -185,7 +220,7 @@ export class DebtsService {
   async findOutstandingByClient(clientId: string) {
     const { data: debts, error } = await this.supabase
       .from('debts')
-      .select('*')
+      .select(this.DEBT_SELECT)
       .eq('clientId', clientId)
       .eq('isSettled', false)
       .order('createdAt', { ascending: false });
@@ -228,7 +263,7 @@ export class DebtsService {
         dueDate: dto.dueDate,
       })
       .eq('id', id)
-      .select('*')
+      .select(this.DEBT_SELECT)
       .single();
 
     if (error) throw error;
@@ -251,6 +286,60 @@ export class DebtsService {
     if (error) throw error;
 
     await this.updateClientHasDebtsFlag(debt.clientId);
+  }
+
+  /**
+   * Cria um registro na tabela payments para que o caixa contabilize o valor.
+   */
+  private async createPaymentRecord(
+    clientId: string,
+    amount: number,
+    method: string,
+    registeredBy?: string,
+    notes?: string,
+    paidAt?: string,
+  ): Promise<void> {
+    // Se não tem registeredBy, buscar primeiro admin
+    let userId = registeredBy;
+    if (!userId) {
+      const { data: admin } = await this.supabase
+        .from('users')
+        .select('id')
+        .eq('role', 'ADMIN')
+        .limit(1)
+        .single();
+      userId = admin?.id;
+    }
+
+    if (!userId) return;
+
+    const now = paidAt || new Date().toISOString();
+    const paymentId = crypto.randomUUID();
+    await this.supabase.from('payments').insert({
+      id: paymentId,
+      clientId,
+      amount,
+      method,
+      paidAt: now,
+      registeredBy: userId,
+      notes,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // Vincular ao caixa aberto
+    const { data: openRegister } = await this.supabase
+      .from('cash_registers')
+      .select('id')
+      .eq('isOpen', true)
+      .single();
+
+    if (openRegister) {
+      await this.supabase
+        .from('payments')
+        .update({ cashRegisterId: openRegister.id })
+        .eq('id', paymentId);
+    }
   }
 
   private async updateClientHasDebtsFlag(clientId: string): Promise<void> {

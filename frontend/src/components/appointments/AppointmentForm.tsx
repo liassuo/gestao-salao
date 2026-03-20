@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { useClients, useProfessionals, useServices } from '@/hooks';
+import { formatPhone } from '@/utils/format';
 import { AppointmentSummary } from './AppointmentSummary';
 import type { Service } from '@/types';
 
@@ -125,7 +126,7 @@ export function AppointmentForm({ onSubmit, isLoading, error }: AppointmentFormP
           <option value="">Selecione um cliente</option>
           {clients.map((client) => (
             <option key={client.id} value={client.id}>
-              {client.name} - {client.phone}
+              {client.name} - {formatPhone(client.phone)}
             </option>
           ))}
         </select>

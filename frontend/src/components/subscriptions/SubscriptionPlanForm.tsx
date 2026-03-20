@@ -110,12 +110,12 @@ export function SubscriptionPlanForm({ plan, onSubmit, isLoading, error }: Subsc
 
       <div>
         <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
-          Descricao
+          Descrição
         </label>
         <textarea
           {...register('description')}
           rows={2}
-          placeholder="Descricao do plano (opcional)"
+          placeholder="Descrição do plano (opcional)"
           className="w-full resize-none rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A]"
         />
       </div>
@@ -123,7 +123,7 @@ export function SubscriptionPlanForm({ plan, onSubmit, isLoading, error }: Subsc
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
-            Preco Mensal *
+            Preço Mensal *
           </label>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]">
@@ -138,7 +138,7 @@ export function SubscriptionPlanForm({ plan, onSubmit, isLoading, error }: Subsc
                 errors.price ? 'border-[#A63030]' : 'border-[var(--border-color)]'
               }`}
             />
-            <input type="hidden" {...register('price', { required: 'Preco é obrigatório' })} />
+            <input type="hidden" {...register('price', { required: 'Preço é obrigatório' })} />
           </div>
           {errors.price && (
             <p className="mt-1 text-sm text-[#A63030]">{errors.price.message}</p>
@@ -147,7 +147,7 @@ export function SubscriptionPlanForm({ plan, onSubmit, isLoading, error }: Subsc
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
-            Cortes por Mes *
+            Cortes por Mês *
           </label>
           <select
             {...register('cutsPerMonth', { required: 'Quantidade é obrigatória', valueAsNumber: true })}

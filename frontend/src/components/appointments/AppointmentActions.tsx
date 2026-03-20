@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { MoreVertical, Check, X, UserX } from 'lucide-react';
+import { MoreVertical, Check, X, UserX, Receipt } from 'lucide-react';
 import { ConfirmModal } from '@/components/ui';
 import type { Appointment } from '@/types';
 
@@ -8,6 +8,7 @@ interface AppointmentActionsProps {
   onAttend: (id: string) => Promise<unknown>;
   onCancel: (id: string) => Promise<unknown>;
   onNoShow: (id: string) => Promise<unknown>;
+  onGenerateDebt?: (appointment: Appointment) => void;
   disabled?: boolean;
 }
 
@@ -16,6 +17,7 @@ export function AppointmentActions({
   onAttend,
   onCancel,
   onNoShow,
+  onGenerateDebt,
   disabled,
 }: AppointmentActionsProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -25,6 +27,7 @@ export function AppointmentActions({
   const btnRef = useRef<HTMLButtonElement>(null);
 
   const canModify = appointment.status === 'SCHEDULED';
+  const canGenerateDebt = !appointment.isPaid && appointment.status !== 'CANCELED';
 
   const handleAction = async (action: () => Promise<unknown>) => {
     setIsLoading(true);
@@ -51,7 +54,7 @@ export function AppointmentActions({
     }
   };
 
-  if (!canModify) {
+  if (!canModify && !canGenerateDebt) {
     return <span className="text-sm text-[var(--text-muted)]">-</span>;
   }
 
@@ -87,32 +90,50 @@ export function AppointmentActions({
               className="fixed z-20 w-48 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-1 shadow-lg"
               style={{ top: menuPos.top, left: menuPos.left }}
             >
-              <button
-                onClick={() => handleAction(() => onAttend(appointment.id))}
-                disabled={isLoading}
-                className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] disabled:opacity-50"
-              >
-                <Check className="h-4 w-4 text-[#C8923A]" />
-                Marcar Atendido
-              </button>
+              {canModify && (
+                <>
+                  <button
+                    onClick={() => handleAction(() => onAttend(appointment.id))}
+                    disabled={isLoading}
+                    className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] disabled:opacity-50"
+                  >
+                    <Check className="h-4 w-4 text-[#C8923A]" />
+                    Marcar Atendido
+                  </button>
 
-              <button
-                onClick={() => handleAction(() => onNoShow(appointment.id))}
-                disabled={isLoading}
-                className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] disabled:opacity-50"
-              >
-                <UserX className="h-4 w-4 text-[#A63030]" />
-                Não Compareceu
-              </button>
+                  <button
+                    onClick={() => handleAction(() => onNoShow(appointment.id))}
+                    disabled={isLoading}
+                    className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] disabled:opacity-50"
+                  >
+                    <UserX className="h-4 w-4 text-[#A63030]" />
+                    Não Compareceu
+                  </button>
 
-              <button
-                onClick={handleCancelClick}
-                disabled={isLoading}
-                className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[#A63030] hover:bg-red-500/10 disabled:opacity-50"
-              >
-                <X className="h-4 w-4" />
-                Cancelar
-              </button>
+                  <button
+                    onClick={handleCancelClick}
+                    disabled={isLoading}
+                    className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[#A63030] hover:bg-red-500/10 disabled:opacity-50"
+                  >
+                    <X className="h-4 w-4" />
+                    Cancelar
+                  </button>
+                </>
+              )}
+
+              {canGenerateDebt && onGenerateDebt && (
+                <button
+                  onClick={() => {
+                    setIsOpen(false);
+                    onGenerateDebt(appointment);
+                  }}
+                  disabled={isLoading}
+                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] disabled:opacity-50"
+                >
+                  <Receipt className="h-4 w-4 text-[#A63030]" />
+                  Gerar Dívida
+                </button>
+              )}
             </div>
           </>
         )}

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { AlertCircle, Loader2, X, Search } from 'lucide-react';
+import { formatPhone } from '@/utils/format';
 import type { Client, SubscriptionPlan, SubscribeClientPayload } from '@/types';
 
 interface SubscribeClientModalProps {
@@ -112,7 +113,7 @@ export function SubscribeClientModal({
               <option value="">Selecione um cliente</option>
               {filteredClients.map((client) => (
                 <option key={client.id} value={client.id}>
-                  {client.name} - {client.phone}
+                  {client.name} - {formatPhone(client.phone)}
                 </option>
               ))}
             </select>
@@ -132,7 +133,7 @@ export function SubscribeClientModal({
               <option value="">Selecione um plano</option>
               {activePlans.map((plan) => (
                 <option key={plan.id} value={plan.id}>
-                  {plan.name} - {formatCurrency(plan.price)}/mes ({plan.cutsPerMonth === 99 ? 'Ilimitado' : `${plan.cutsPerMonth} cortes`})
+                  {plan.name} - {formatCurrency(plan.price)}/mês ({plan.cutsPerMonth === 99 ? 'Ilimitado' : `${plan.cutsPerMonth} cortes`})
                 </option>
               ))}
             </select>
@@ -146,10 +147,10 @@ export function SubscribeClientModal({
               </h3>
               <div className="space-y-1 text-sm text-[var(--text-secondary)]">
                 <p><span className="font-medium">Plano:</span> {selectedPlan.name}</p>
-                <p><span className="font-medium">Valor:</span> {formatCurrency(selectedPlan.price)}/mes</p>
-                <p><span className="font-medium">Cortes:</span> {selectedPlan.cutsPerMonth === 99 ? 'Ilimitados' : `${selectedPlan.cutsPerMonth} por mes`}</p>
+                <p><span className="font-medium">Valor:</span> {formatCurrency(selectedPlan.price)}/mês</p>
+                <p><span className="font-medium">Cortes:</span> {selectedPlan.cutsPerMonth === 99 ? 'Ilimitados' : `${selectedPlan.cutsPerMonth} por mês`}</p>
                 {selectedPlan.description && (
-                  <p><span className="font-medium">Descricao:</span> {selectedPlan.description}</p>
+                  <p><span className="font-medium">Descrição:</span> {selectedPlan.description}</p>
                 )}
               </div>
             </div>

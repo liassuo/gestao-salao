@@ -66,7 +66,7 @@ export interface PaymentMethodConfigFilters {
 }
 
 // =============================================
-// Commission (Comissao)
+// Commission (Comissão)
 // =============================================
 
 export type CommissionStatus = 'PENDING' | 'PAID';

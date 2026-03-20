@@ -14,7 +14,7 @@ export function useClientProfessionals() {
       const data = await professionalsApi.getAll();
       setProfessionals(data);
     } catch (err) {
-      const message = 'Nao foi possivel carregar os profissionais';
+      const message = 'Não foi possível carregar os profissionais';
       setError(message);
     } finally {
       setIsLoading(false);
@@ -28,7 +28,7 @@ export function useClientProfessionals() {
       const data = await professionalsApi.getAvailableForBooking(serviceIds, date);
       setProfessionals(data);
     } catch (err) {
-      const message = 'Nao foi possivel carregar os profissionais';
+      const message = 'Não foi possível carregar os profissionais';
       setError(message);
     } finally {
       setIsLoading(false);

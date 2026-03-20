@@ -135,7 +135,7 @@ export function SetPassword() {
               </div>
             </div>
 
-            {/* Botao */}
+            {/* Botão */}
             <button
               type="submit"
               disabled={isSubmitting}
@@ -164,7 +164,7 @@ export function SetPassword() {
           </div>
 
           <p className="text-center text-xs text-[#6B5D4F]">
-            Apos criar sua senha, voce podera acessar o painel normalmente.
+            Após criar sua senha, você poderá acessar o painel normalmente.
           </p>
         </div>
       </div>

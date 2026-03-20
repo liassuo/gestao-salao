@@ -25,7 +25,7 @@ export function Commissions() {
 
   const handleGenerate = async () => {
     if (!filters.startDate || !filters.endDate) {
-      toast.error('Erro', 'Selecione a data inicial e final para gerar comissoes.');
+      toast.error('Erro', 'Selecione a data inicial e final para gerar comissões.');
       return;
     }
     try {
@@ -34,7 +34,7 @@ export function Commissions() {
         periodEnd: filters.endDate,
         branchId: filters.branchId,
       });
-      toast.success('Comissoes geradas', 'As comissoes foram calculadas com sucesso.');
+      toast.success('Comissões geradas', 'As comissões foram calculadas com sucesso.');
     } catch (err) {
       toast.error('Erro', getApiErrorMessage(err));
     }
@@ -45,7 +45,7 @@ export function Commissions() {
     try {
       await markAsPaid.mutateAsync(payingCommission.id);
       setPayingCommission(null);
-      toast.success('Comissao paga', 'A comissao foi marcada como paga.');
+      toast.success('Comissão paga', 'A comissão foi marcada como paga.');
     } catch (err) {
       toast.error('Erro', getApiErrorMessage(err));
     }
@@ -56,7 +56,7 @@ export function Commissions() {
     try {
       await deleteCommission.mutateAsync(deletingCommission.id);
       setDeletingCommission(null);
-      toast.success('Comissao excluida', 'A comissao foi excluida com sucesso.');
+      toast.success('Comissão excluída', 'A comissão foi excluída com sucesso.');
     } catch (err) {
       toast.error('Erro', getApiErrorMessage(err));
     }
@@ -70,9 +70,9 @@ export function Commissions() {
           <Percent className="h-5 w-5 text-[#C8923A]" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">Comissoes</h1>
+          <h1 className="text-2xl font-bold text-[var(--text-primary)]">Comissões</h1>
           <p className="text-sm text-[var(--text-muted)]">
-            Gerencie as comissoes dos profissionais
+            Gerencie as comissões dos profissionais
           </p>
         </div>
       </div>
@@ -103,19 +103,19 @@ export function Commissions() {
         onClose={() => setPayingCommission(null)}
         onConfirm={handleMarkAsPaid}
         title="Confirmar Pagamento"
-        message={`Deseja marcar a comissao de "${payingCommission?.professional?.name || 'Profissional'}" como paga?`}
+        message={`Deseja marcar a comissão de "${payingCommission?.professional?.name || 'Profissional'}" como paga?`}
         confirmLabel="Pagar"
         variant="info"
         isLoading={markAsPaid.isPending}
       />
 
-      {/* Modal Confirmar Exclusao */}
+      {/* Modal Confirmar Exclusão */}
       <ConfirmModal
         isOpen={!!deletingCommission}
         onClose={() => setDeletingCommission(null)}
         onConfirm={handleDelete}
-        title="Excluir Comissao"
-        message={`Tem certeza que deseja excluir a comissao de "${deletingCommission?.professional.name}"? Esta acao nao pode ser desfeita.`}
+        title="Excluir Comissão"
+        message={`Tem certeza que deseja excluir a comissão de "${deletingCommission?.professional.name}"? Esta ação não pode ser desfeita.`}
         confirmLabel="Excluir"
         variant="danger"
         isLoading={deleteCommission.isPending}

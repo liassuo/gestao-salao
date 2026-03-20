@@ -3,6 +3,7 @@ import { Save, Building2, Clock, Bell, Shield, Palette, Sun, Moon, Monitor, Mess
 import { useToast } from '../components/ui/ToastContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { api } from '../services/api';
+import { formatPhoneInput } from '@/utils/format';
 
 function formatWhatsAppInput(value: string): string {
   const digits = value.replace(/\D/g, '').slice(0, 13);
@@ -47,7 +48,7 @@ function AppearanceTab() {
 
   return (
     <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6">
-      <h2 className="mb-6 text-lg font-semibold text-[var(--text-primary)]">Configuracoes de Aparencia</h2>
+      <h2 className="mb-6 text-lg font-semibold text-[var(--text-primary)]">Configurações de Aparência</h2>
 
       <div className="space-y-6">
         <div>
@@ -135,9 +136,9 @@ export function Settings() {
     setSavingBusiness(true);
     try {
       await api.patch('/settings', businessSettings);
-      showToast('success', 'Configuracoes salvas com sucesso!');
+      showToast('success', 'Configurações salvas com sucesso!');
     } catch {
-      showToast('error', 'Erro ao salvar configuracoes');
+      showToast('error', 'Erro ao salvar configurações');
     } finally {
       setSavingBusiness(false);
     }
@@ -147,9 +148,9 @@ export function Settings() {
     setSavingNotifications(true);
     try {
       await api.patch('/settings', notificationSettings);
-      showToast('success', 'Configuracoes de notificacao salvas!');
+      showToast('success', 'Configurações de notificação salvas!');
     } catch {
-      showToast('error', 'Erro ao salvar configuracoes');
+      showToast('error', 'Erro ao salvar configurações');
     } finally {
       setSavingNotifications(false);
     }
@@ -161,7 +162,7 @@ export function Settings() {
       return;
     }
     if (newPassword !== confirmPassword) {
-      showToast('error', 'As senhas nao conferem');
+      showToast('error', 'As senhas não conferem');
       return;
     }
     if (newPassword.length < 6) {
@@ -185,14 +186,14 @@ export function Settings() {
 
   const tabs = [
     { id: 'business' as const, label: 'Empresa', icon: Building2 },
-    { id: 'notifications' as const, label: 'Notificacoes', icon: Bell },
-    { id: 'security' as const, label: 'Seguranca', icon: Shield },
-    { id: 'appearance' as const, label: 'Aparencia', icon: Palette },
+    { id: 'notifications' as const, label: 'Notificações', icon: Bell },
+    { id: 'security' as const, label: 'Segurança', icon: Shield },
+    { id: 'appearance' as const, label: 'Aparência', icon: Palette },
   ];
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-bold text-[var(--text-primary)]">Configuracoes</h1>
+      <h1 className="mb-6 text-2xl font-bold text-[var(--text-primary)]">Configurações</h1>
 
       {/* Tabs */}
       <div className="mb-6 flex gap-2 border-b border-[var(--border-color)]">
@@ -215,7 +216,7 @@ export function Settings() {
       {/* Business Settings */}
       {activeTab === 'business' && (
         <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6">
-          <h2 className="mb-6 text-lg font-semibold text-[var(--text-primary)]">Informacoes da Empresa</h2>
+          <h2 className="mb-6 text-lg font-semibold text-[var(--text-primary)]">Informações da Empresa</h2>
 
           <div className="grid gap-6 md:grid-cols-2">
             <div>
@@ -235,9 +236,10 @@ export function Settings() {
                 Telefone
               </label>
               <input
-                type="text"
+                type="tel"
                 value={businessSettings.phone}
-                onChange={(e) => setBusinessSettings({ ...businessSettings, phone: e.target.value })}
+                onChange={(e) => setBusinessSettings({ ...businessSettings, phone: formatPhoneInput(e.target.value) })}
+                placeholder="(62) 99999-9999"
                 className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-4 py-2 text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none"
               />
             </div>
@@ -264,7 +266,7 @@ export function Settings() {
 
             <div className="md:col-span-2">
               <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">
-                Endereco
+                Endereço
               </label>
               <input
                 type="text"
@@ -277,13 +279,13 @@ export function Settings() {
 
           <h3 className="mb-4 mt-8 text-md font-semibold text-[var(--text-primary)] flex items-center gap-2">
             <Clock className="h-5 w-5" />
-            Horario de Funcionamento
+            Horário de Funcionamento
           </h3>
 
           <div className="grid gap-6 md:grid-cols-3">
             <div>
               <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">
-                Horario de Abertura
+                Horário de Abertura
               </label>
               <input
                 type="time"
@@ -295,7 +297,7 @@ export function Settings() {
 
             <div>
               <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">
-                Horario de Fechamento
+                Horário de Fechamento
               </label>
               <input
                 type="time"
@@ -307,7 +309,7 @@ export function Settings() {
 
             <div>
               <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">
-                Duracao do Slot (min)
+                Duração do Slot (min)
               </label>
               <select
                 value={businessSettings.slotDuration}
@@ -329,7 +331,7 @@ export function Settings() {
               className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-6 py-2 text-sm font-medium text-white hover:bg-[#725510] disabled:opacity-60"
             >
               {savingBusiness ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {savingBusiness ? 'Salvando...' : 'Salvar Alteracoes'}
+              {savingBusiness ? 'Salvando...' : 'Salvar Alterações'}
             </button>
           </div>
         </div>
@@ -338,13 +340,13 @@ export function Settings() {
       {/* Notification Settings */}
       {activeTab === 'notifications' && (
         <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6">
-          <h2 className="mb-6 text-lg font-semibold text-[var(--text-primary)]">Configuracoes de Notificacoes</h2>
+          <h2 className="mb-6 text-lg font-semibold text-[var(--text-primary)]">Configurações de Notificações</h2>
 
           <div className="space-y-6">
             <div className="flex items-center justify-between rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-4">
               <div>
-                <p className="font-medium text-[var(--text-primary)]">Notificacoes por E-mail</p>
-                <p className="text-sm text-[var(--text-muted)]">Receber notificacoes por e-mail</p>
+                <p className="font-medium text-[var(--text-primary)]">Notificações por E-mail</p>
+                <p className="text-sm text-[var(--text-muted)]">Receber notificações por e-mail</p>
               </div>
               <label className="relative inline-flex cursor-pointer items-center">
                 <input
@@ -359,8 +361,8 @@ export function Settings() {
 
             <div className="flex items-center justify-between rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-4">
               <div>
-                <p className="font-medium text-[var(--text-primary)]">Notificacoes por SMS</p>
-                <p className="text-sm text-[var(--text-muted)]">Receber notificacoes por SMS</p>
+                <p className="font-medium text-[var(--text-primary)]">Notificações por SMS</p>
+                <p className="text-sm text-[var(--text-muted)]">Receber notificações por SMS</p>
               </div>
               <label className="relative inline-flex cursor-pointer items-center">
                 <input
@@ -392,7 +394,7 @@ export function Settings() {
             {notificationSettings.appointmentReminders && (
               <div className="ml-4 rounded-xl border border-[#C8923A]/30 bg-[#C8923A]/10 p-4">
                 <label className="mb-2 block text-sm font-medium text-[var(--text-secondary)]">
-                  Enviar lembrete com antecedencia de
+                  Enviar lembrete com antecedência de
                 </label>
                 <select
                   value={notificationSettings.reminderHoursBefore}
@@ -417,7 +419,7 @@ export function Settings() {
               className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-6 py-2 text-sm font-medium text-white hover:bg-[#725510] disabled:opacity-60"
             >
               {savingNotifications ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {savingNotifications ? 'Salvando...' : 'Salvar Alteracoes'}
+              {savingNotifications ? 'Salvando...' : 'Salvar Alterações'}
             </button>
           </div>
         </div>
@@ -426,7 +428,7 @@ export function Settings() {
       {/* Security Settings */}
       {activeTab === 'security' && (
         <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6">
-          <h2 className="mb-6 text-lg font-semibold text-[var(--text-primary)]">Configuracoes de Seguranca</h2>
+          <h2 className="mb-6 text-lg font-semibold text-[var(--text-primary)]">Configurações de Segurança</h2>
 
           <div className="space-y-6">
             <div className="rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-4">
@@ -466,7 +468,7 @@ export function Settings() {
                     className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] px-4 py-2 text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none"
                   />
                   {confirmPassword && newPassword !== confirmPassword && (
-                    <p className="mt-1 text-xs text-[#A63030]">As senhas nao conferem</p>
+                    <p className="mt-1 text-xs text-[#A63030]">As senhas não conferem</p>
                   )}
                 </div>
               </div>
@@ -483,13 +485,13 @@ export function Settings() {
             </div>
 
             <div className="rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-4">
-              <h3 className="mb-2 font-medium text-[var(--text-primary)]">Sessoes Ativas</h3>
-              <p className="mb-4 text-sm text-[var(--text-muted)]">Gerencie onde voce esta conectado</p>
+              <h3 className="mb-2 font-medium text-[var(--text-primary)]">Sessões Ativas</h3>
+              <p className="mb-4 text-sm text-[var(--text-muted)]">Gerencie onde você está conectado</p>
               <div className="space-y-2">
                 <div className="flex items-center justify-between rounded-xl bg-[var(--bg-secondary)] p-3">
                   <div>
                     <p className="font-medium text-[var(--text-primary)]">Este dispositivo</p>
-                    <p className="text-sm text-[var(--text-muted)]">Sessao atual</p>
+                    <p className="text-sm text-[var(--text-muted)]">Sessão atual</p>
                   </div>
                   <span className="rounded-full bg-[#C8923A]/20 px-3 py-1 text-xs font-medium text-[#C8923A]">
                     Ativa

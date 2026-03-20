@@ -84,7 +84,7 @@ function AppointmentBlock({ appointment }: AppointmentBlockProps) {
   const top = getTopPosition(time);
   const height = getBlockHeight(appointment.totalDuration);
   const colors = statusColors[appointment.status] || statusColors.SCHEDULED;
-  const serviceNames = (appointment.services || []).map((s) => s.service?.name || 'Servico').join(', ');
+  const serviceNames = (appointment.services || []).map((s) => s.service?.name || 'Serviço').join(', ');
   const endMinutes = timeToMinutes(time) + appointment.totalDuration;
   const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
 
@@ -144,7 +144,7 @@ function TimeBlockItem({ block, onDelete, isDeleting }: TimeBlockItemProps) {
         backgroundImage:
           'repeating-linear-gradient(135deg, transparent, transparent 4px, rgba(239, 68, 68, 0.08) 4px, rgba(239, 68, 68, 0.08) 8px)',
       }}
-      title={block.reason || 'Horario bloqueado'}
+      title={block.reason || 'Horário bloqueado'}
     >
       <div className="flex h-full items-start justify-between">
         <div className="flex min-w-0 flex-col overflow-hidden">
@@ -304,7 +304,7 @@ export function CalendarView() {
             <button
               onClick={handleNextDay}
               className="rounded-lg p-2 text-[var(--text-muted)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
-              title="Proximo dia"
+              title="Próximo dia"
             >
               <ChevronRight className="h-5 w-5" />
             </button>
@@ -329,7 +329,7 @@ export function CalendarView() {
           className="flex items-center gap-2 rounded-lg border border-[#A63030]/30 px-3 py-1.5 text-sm font-medium text-[#C45050] transition-colors hover:bg-red-500/10"
         >
           <Lock className="h-4 w-4" />
-          Bloquear Horario
+          Bloquear Horário
         </button>
       </div>
 

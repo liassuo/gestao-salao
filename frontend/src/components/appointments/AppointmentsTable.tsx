@@ -2,6 +2,7 @@ import { Calendar } from 'lucide-react';
 import type { Appointment } from '@/types';
 import { appointmentStatusLabels, appointmentStatusColors } from '@/types';
 import { EmptyState } from '@/components/ui';
+import { formatPhone } from '@/utils/format';
 import { AppointmentActions } from './AppointmentActions';
 
 interface AppointmentsTableProps {
@@ -9,6 +10,7 @@ interface AppointmentsTableProps {
   onAttend: (id: string) => Promise<unknown>;
   onCancel: (id: string) => Promise<unknown>;
   onNoShow: (id: string) => Promise<unknown>;
+  onGenerateDebt?: (appointment: Appointment) => void;
   isLoading?: boolean;
   onNewAppointment?: () => void;
 }
@@ -36,6 +38,7 @@ export function AppointmentsTable({
   onAttend,
   onCancel,
   onNoShow,
+  onGenerateDebt,
   isLoading,
   onNewAppointment,
 }: AppointmentsTableProps) {
@@ -94,7 +97,7 @@ export function AppointmentsTable({
                       {appointment.client?.name || 'Cliente'}
                     </p>
                     <p className="text-xs text-[var(--text-muted)]">
-                      {appointment.client?.phone || '-'}
+                      {formatPhone(appointment.client?.phone) || '-'}
                     </p>
                   </div>
                 </td>
@@ -108,7 +111,7 @@ export function AppointmentsTable({
                         key={s.id}
                         className="inline-block rounded bg-zinc-500/20 px-2 py-0.5 text-xs text-[var(--text-secondary)]"
                       >
-                        {s.service?.name || 'Servico'}
+                        {s.service?.name || 'Serviço'}
                       </span>
                     ))}
                   </div>
@@ -142,6 +145,7 @@ export function AppointmentsTable({
                     onAttend={onAttend}
                     onCancel={onCancel}
                     onNoShow={onNoShow}
+                    onGenerateDebt={onGenerateDebt}
                     disabled={isLoading}
                   />
                 </td>

@@ -21,9 +21,9 @@ async function getWhatsapp(): Promise<string> {
 
 const STATUS_CONFIG: Record<AppointmentStatus, { label: string; bgColor: string; textColor: string }> = {
   SCHEDULED: { label: 'Agendado', bgColor: 'bg-[#C8923A]/20', textColor: 'text-[#C8923A]' },
-  ATTENDED: { label: 'Concluido', bgColor: 'bg-green-100 dark:bg-green-900/30', textColor: 'text-green-700 dark:text-green-400' },
+  ATTENDED: { label: 'Concluído', bgColor: 'bg-green-100 dark:bg-green-900/30', textColor: 'text-green-700 dark:text-green-400' },
   CANCELED: { label: 'Cancelado', bgColor: 'bg-[#8B2020]/20', textColor: 'text-[#A63030]' },
-  NO_SHOW: { label: 'Nao compareceu', bgColor: 'bg-orange-100 dark:bg-orange-900/30', textColor: 'text-orange-700 dark:text-orange-400' },
+  NO_SHOW: { label: 'Não compareceu', bgColor: 'bg-orange-100 dark:bg-orange-900/30', textColor: 'text-orange-700 dark:text-orange-400' },
 };
 
 interface AppointmentCardProps {
@@ -56,10 +56,10 @@ export function AppointmentCard({
 
   const handleContact = () => {
     if (!whatsapp) {
-      alert('Numero de WhatsApp da barbearia nao configurado. Entre em contato por telefone.');
+      alert('Número de WhatsApp da barbearia não configurado. Entre em contato por telefone.');
       return;
     }
-    const services = (appointment.services || []).map((s) => s.service?.name || 'Servico').join(', ');
+    const services = (appointment.services || []).map((s) => s.service?.name || 'Serviço').join(', ');
     const time = formatTime(appointment.scheduledAt);
     const message = `Olá! Gostaria de cancelar meu agendamento de ${services} às ${time}. Poderia me ajudar?`;
     window.open(`https://wa.me/${whatsapp}?text=${encodeURIComponent(message)}`, '_blank');
@@ -78,7 +78,7 @@ export function AppointmentCard({
           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          Proximo
+          Próximo
         </div>
       )}
 
@@ -101,7 +101,7 @@ export function AppointmentCard({
           <svg className="w-4 h-4 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0-5.758a3 3 0 10-4.243-4.243 3 3 0 004.243 4.243z" />
           </svg>
-          <span className="text-sm">{(appointment.services || []).map((s) => s.service?.name || 'Servico').join(', ')}</span>
+          <span className="text-sm">{(appointment.services || []).map((s) => s.service?.name || 'Serviço').join(', ')}</span>
         </div>
         <div className="flex items-center gap-2 text-[var(--text-secondary)]">
           <svg className="w-4 h-4 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">

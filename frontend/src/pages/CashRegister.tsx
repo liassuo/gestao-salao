@@ -81,7 +81,7 @@ function ClosedTodaySummary({ cashRegister }: { cashRegister: CashRegisterType }
               <CheckCircle2 className="h-5 w-5" />
               <span className="text-lg font-bold">Caixa Fechado</span>
             </div>
-            <p className="mt-1 text-sm text-zinc-300">O caixa de hoje ja foi encerrado</p>
+            <p className="mt-1 text-sm text-zinc-300">O caixa de hoje já foi encerrado</p>
           </div>
           <div className="text-right">
             <p className="text-xs text-zinc-400 uppercase">Receita do dia</p>
@@ -136,7 +136,7 @@ function ClosedTodaySummary({ cashRegister }: { cashRegister: CashRegisterType }
               <CreditCard className="h-5 w-5 text-blue-500" />
             </div>
             <div>
-              <p className="text-xs text-[var(--text-muted)]">Cartao</p>
+              <p className="text-xs text-[var(--text-muted)]">Cartão</p>
               <p className="text-lg font-bold text-[var(--text-primary)]">
                 {formatCurrency(totalCard)}
               </p>
@@ -228,7 +228,7 @@ export function CashRegister() {
 
   const tabs = [
     { id: 'today' as const, label: 'Caixa de Hoje', icon: Wallet },
-    { id: 'history' as const, label: 'Historico', icon: History },
+    { id: 'history' as const, label: 'Histórico', icon: History },
   ];
 
   return (

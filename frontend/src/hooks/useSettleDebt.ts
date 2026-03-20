@@ -5,7 +5,7 @@ export function useSettleDebt() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => debtsService.settle(id),
+    mutationFn: ({ id, method }: { id: string; method?: string }) => debtsService.settle(id, method),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['debts'] });
     },

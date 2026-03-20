@@ -234,19 +234,19 @@ export function Reports() {
             <p className="text-2xl font-bold text-[var(--text-primary)]">{totalCount}</p>
           </div>
           <div className="rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-4">
-            <p className="text-sm text-[var(--text-muted)]">Ticket Medio por Servico</p>
+            <p className="text-sm text-[var(--text-muted)]">Ticket Médio por Serviço</p>
             <p className="text-2xl font-bold text-[var(--text-primary)]">{totalCount > 0 ? formatCurrency(Math.round(totalRevenue / totalCount)) : formatCurrency(0)}</p>
           </div>
         </div>
 
         {/* Tabela */}
         <div className="rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-4">
-          <h4 className="mb-4 font-semibold text-[var(--text-primary)]">Servicos Mais Realizados</h4>
+          <h4 className="mb-4 font-semibold text-[var(--text-primary)]">Serviços Mais Realizados</h4>
           <table className="min-w-full text-sm">
             <thead className="border-b border-[var(--border-color)]">
               <tr className="text-[var(--text-muted)]">
-                <th className="pb-2 text-left">Servico</th>
-                <th className="pb-2 text-right">Preco</th>
+                <th className="pb-2 text-left">Serviço</th>
+                <th className="pb-2 text-right">Preço</th>
                 <th className="pb-2 text-right">Quantidade</th>
                 <th className="pb-2 text-right">Receita</th>
                 <th className="pb-2 text-right">%</th>

@@ -14,7 +14,7 @@ export function useClientServices() {
       const data = await servicesApi.getAll();
       setServices(data);
     } catch (err) {
-      const message = 'Nao foi possivel carregar os servicos';
+      const message = 'Não foi possível carregar os serviços';
       setError(message);
     } finally {
       setIsLoading(false);

@@ -29,8 +29,8 @@ type Step = 'service' | 'schedule' | 'confirm';
 
 const STEPS: Step[] = ['service', 'schedule', 'confirm'];
 const STEP_TITLES: Record<Step, string> = {
-  service: 'Escolha o servico',
-  schedule: 'Escolha data e horario',
+  service: 'Escolha o serviço',
+  schedule: 'Escolha data e horário',
   confirm: 'Confirmar agendamento',
 };
 
@@ -198,11 +198,11 @@ export function ClientBooking() {
   // Step 1: Services
   const renderServiceStep = () => {
     if (servicesLoading) {
-      return <LoadingState message="Carregando servicos..." />;
+      return <LoadingState message="Carregando serviços..." />;
     }
 
     if (services.length === 0) {
-      return <EmptyState icon="scissors" title="Nenhum servico disponivel" subtitle="Tente novamente mais tarde" />;
+      return <EmptyState icon="scissors" title="Nenhum serviço disponível" subtitle="Tente novamente mais tarde" />;
     }
 
     return (
@@ -280,7 +280,7 @@ export function ClientBooking() {
             <p className="font-semibold text-[var(--text-primary)]">{label}</p>
             <div className="flex-1 h-px bg-[var(--border-color)]" />
             <span className="text-xs text-[var(--text-muted)] bg-[var(--hover-bg)] px-2 py-0.5 rounded-full">
-              {groupSlots.length} {groupSlots.length === 1 ? 'horario' : 'horarios'}
+              {groupSlots.length} {groupSlots.length === 1 ? 'horário' : 'horários'}
             </span>
           </div>
           <div className="grid grid-cols-3 gap-2.5">
@@ -379,7 +379,7 @@ export function ClientBooking() {
         {professionalsLoading ? (
           <LoadingState message="Carregando profissionais..." />
         ) : professionals.length === 0 ? (
-          <EmptyState icon="users" title="Nenhum profissional disponivel" subtitle="Nenhum profissional realiza todos os servicos selecionados" />
+          <EmptyState icon="users" title="Nenhum profissional disponível" subtitle="Nenhum profissional realiza todos os serviços selecionados" />
         ) : (
           <div className="flex gap-4 overflow-x-auto pb-3 -mx-5 px-5 scrollbar-hide">
             {professionals.map((professional) => {
@@ -425,14 +425,14 @@ export function ClientBooking() {
         {/* Time Slots */}
         {selectedProfessional && (
           <div>
-            <p className="font-semibold text-[var(--text-primary)] text-lg mb-1">Horarios disponiveis</p>
+            <p className="font-semibold text-[var(--text-primary)] text-lg mb-1">Horários disponíveis</p>
             {slotsLoading ? (
-              <LoadingState message="Carregando horarios..." />
+              <LoadingState message="Carregando horários..." />
             ) : slots.filter((s) => s.available).length === 0 ? (
-              <EmptyState icon="clock" title="Nenhum horario disponivel" subtitle="Escolha outra data ou profissional" />
+              <EmptyState icon="clock" title="Nenhum horário disponível" subtitle="Escolha outra data ou profissional" />
             ) : (
               <div>
-                {renderSlotGroup('Manha', grouped.manha)}
+                {renderSlotGroup('Manhã', grouped.manha)}
                 {renderSlotGroup('Tarde', grouped.tarde)}
                 {renderSlotGroup('Noite', grouped.noite)}
               </div>
@@ -454,7 +454,7 @@ export function ClientBooking() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0-5.758a3 3 0 10-4.243-4.243 3 3 0 004.243 4.243z" />
           </svg>
           <div>
-            <p className="text-xs text-[var(--text-muted)]">Servicos</p>
+            <p className="text-xs text-[var(--text-muted)]">Serviços</p>
             {selectedServices.map((s) => {
               const disc = getServiceDiscount(s.id, activePromotions);
               return (
@@ -489,7 +489,7 @@ export function ClientBooking() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
           <div>
-            <p className="text-xs text-[var(--text-muted)]">Data e horario</p>
+            <p className="text-xs text-[var(--text-muted)]">Data e horário</p>
             <p className="text-[var(--text-primary)] font-medium">
               {selectedDate && formatDateLong(formatDateISO(selectedDate))} as {selectedTime?.slice(0, 5)}
             </p>
@@ -501,7 +501,7 @@ export function ClientBooking() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <div>
-            <p className="text-xs text-[var(--text-muted)]">Duracao estimada</p>
+            <p className="text-xs text-[var(--text-muted)]">Duração estimada</p>
             <p className="text-[var(--text-primary)] font-medium">{formatDuration(totalDuration)}</p>
           </div>
         </div>

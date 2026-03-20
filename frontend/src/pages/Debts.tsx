@@ -87,10 +87,10 @@ export function Debts() {
     setSettleDebt(null);
   };
 
-  const handleSettleDebt = async () => {
+  const handleSettleDebt = async (method: string) => {
     if (!settleDebt) return;
     try {
-      await settleDebtMutation.mutateAsync(settleDebt.id);
+      await settleDebtMutation.mutateAsync({ id: settleDebt.id, method });
       handleCloseSettleModal();
       toast.success('Dívida quitada', 'A dívida foi marcada como quitada.');
     } catch {

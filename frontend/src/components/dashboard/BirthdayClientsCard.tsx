@@ -22,7 +22,7 @@ export function BirthdayClientsCard({ clients = [] }: BirthdayClientsCardProps) 
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-pink-600 to-pink-500 shadow-lg shadow-pink-500/20">
           <Cake className="h-4 w-4 text-white" />
         </div>
-        <h3 className="text-lg font-semibold text-[var(--text-primary)]">Aniversariantes do Mes</h3>
+        <h3 className="text-lg font-semibold text-[var(--text-primary)]">Aniversariantes do Mês</h3>
       </div>
 
       {upcoming.length === 0 ? (
