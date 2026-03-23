@@ -39,4 +39,8 @@ export class CreateProfessionalDto {
   @Min(0)
   @Max(100)
   commissionRate?: number;
+
+  @IsOptional()
+  @IsString()
+  branchId?: string;
 }

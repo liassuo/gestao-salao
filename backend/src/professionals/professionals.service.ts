@@ -20,14 +20,17 @@ export class ProfessionalsService {
     }
 
     const now = new Date().toISOString();
+    const professionalId = crypto.randomUUID();
+
     const { data: professional, error } = await this.supabase
       .from('professionals')
       .insert({
-        id: crypto.randomUUID(),
+        id: professionalId,
         name: dto.name,
         avatarUrl: dto.avatarUrl || null,
         commissionRate: dto.commissionRate,
         workingHours: dto.workingHours || [],
+        branchId: dto.branchId || null,
         isActive: true,
         createdAt: now,
         updatedAt: now,
@@ -39,27 +42,32 @@ export class ProfessionalsService {
 
     // Auto-criar conta de usuário para o profissional fazer login (senha padrão: 123456)
     const defaultPassword = '123456';
-    const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+    const hashedPassword = await bcrypt.hash(defaultPassword, 8);
 
+    const userId = crypto.randomUUID();
     const { error: userError } = await this.supabase
       .from('users')
       .insert({
-        id: crypto.randomUUID(),
+        id: userId,
         email: dto.email,
         name: dto.name,
         password: hashedPassword,
         role: 'PROFESSIONAL',
-        professionalId: professional.id,
+        professionalId: professionalId,
         isActive: true,
         mustChangePassword: true,
         createdAt: now,
         updatedAt: now,
-      })
-      .select('id')
-      .single();
+      });
 
     if (userError) {
       console.error('Erro ao criar conta de login para profissional:', JSON.stringify(userError));
+    } else {
+      // Atualizar o profissional com o userId criado
+      await this.supabase
+        .from('professionals')
+        .update({ userId })
+        .eq('id', professionalId);
     }
 
     // Connect services if provided
@@ -79,7 +87,7 @@ export class ProfessionalsService {
   async findAll(serviceId?: string, isActive?: boolean) {
     let query = this.supabase
       .from('professionals')
-      .select('*, appointment_count:appointments(count), professional_services(serviceId, service:services(id, name))');
+      .select('*, user:users(email), appointment_count:appointments(count), professional_services(serviceId, service:services(id, name))');
 
     if (isActive !== undefined) {
       query = query.eq('isActive', isActive);
@@ -91,8 +99,9 @@ export class ProfessionalsService {
 
     if (error) throw error;
 
-    return (professionals || []).map(({ appointment_count, professional_services, ...prof }: any) => ({
+    return (professionals || []).map(({ appointment_count, professional_services, user, ...prof }: any) => ({
       ...prof,
+      email: user?.email || null,
       services: (professional_services || []).map((ps: any) => ({
         id: ps.service?.id || ps.serviceId,
         name: ps.service?.name,
@@ -121,7 +130,7 @@ export class ProfessionalsService {
   async findOne(id: string) {
     const { data: professional, error } = await this.supabase
       .from('professionals')
-      .select('*')
+      .select('*, user:users(email), professional_services(serviceId, service:services(id, name))')
       .eq('id', id)
       .single();
 
@@ -129,7 +138,15 @@ export class ProfessionalsService {
       throw new NotFoundException('Profissional não encontrado');
     }
 
-    return professional;
+    const { professional_services, user, ...prof } = professional as any;
+    return {
+      ...prof,
+      email: user?.email || null,
+      services: (professional_services || []).map((ps: any) => ({
+        id: ps.service?.id || ps.serviceId,
+        name: ps.service?.name,
+      })),
+    };
   }
 
   async findByService(serviceId: string) {
