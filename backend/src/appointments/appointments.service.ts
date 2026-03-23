@@ -632,8 +632,22 @@ export class AppointmentsService {
     // Gerar slots e verificar disponibilidade
     const slots: { time: string; available: boolean }[] = [];
     const now = new Date();
-    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    const isToday = date === todayStr;
+
+    // Usar fuso horário do Brasil (America/Sao_Paulo) para comparar data/hora atual
+    const brazilDateStr = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(now); // formato "YYYY-MM-DD"
+
+    const brazilTimeStr = new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    }).format(now); // formato "HH:mm"
+
+    const isToday = date === brazilDateStr;
+    const [nowH, nowM] = brazilTimeStr.split(':').map(Number);
+    const nowMinutesBrazil = nowH * 60 + nowM;
+
     const workStart = startHour * 60 + startMinute;
     const workEnd = endHour * 60 + endMinute;
 
@@ -642,10 +656,9 @@ export class AppointmentsService {
       const minutes = slotMinutes % 60;
       const slotTime = `${hour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
 
-      // Verificar se já passou (se for hoje)
+      // Verificar se já passou (se for hoje) — comparação em horário de Brasília
       if (isToday) {
-        const nowMinutes = now.getHours() * 60 + now.getMinutes();
-        if (slotMinutes <= nowMinutes) {
+        if (slotMinutes <= nowMinutesBrazil) {
           slots.push({ time: slotTime, available: false });
           continue;
         }
