@@ -4,7 +4,10 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider } from '@/auth';
 import { ToastProvider } from '@/components/ui';
 import { ThemeProvider, SidebarProvider } from '@/contexts';
-import { router } from './routes';
+import { router, clientRouter } from './routes';
+import { IS_CLIENT_DOMAIN } from '@/client/utils/paths';
+
+const activeRouter = IS_CLIENT_DOMAIN ? clientRouter : router;
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -24,7 +27,7 @@ export function Providers() {
       <SidebarProvider>
         <AuthProvider>
           <ToastProvider>
-            <RouterProvider router={router} />
+            <RouterProvider router={activeRouter} />
           </ToastProvider>
         </AuthProvider>
       </SidebarProvider>

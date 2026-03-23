@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { CLIENT_PATHS } from '../utils/paths';
 import { useClientServices, useClientProfessionals, useAvailableSlots, useClientAppointments } from '../hooks';
 import { LoadingState, EmptyState } from '../components/ui';
 import { formatPrice, formatDuration, formatDateISO, formatDateLong } from '../utils/format';
@@ -149,7 +150,7 @@ export function ClientBooking() {
     if (currentIndex > 0) {
       setCurrentStep(STEPS[currentIndex - 1]);
     } else {
-      navigate('/cliente');
+      navigate(CLIENT_PATHS.home);
     }
   };
 
@@ -168,7 +169,7 @@ export function ClientBooking() {
 
     if (appointment) {
       alert('Agendamento realizado com sucesso!');
-      navigate('/cliente');
+      navigate(CLIENT_PATHS.home);
     } else {
       alert('Erro ao criar agendamento. Tente novamente.');
     }
@@ -544,7 +545,7 @@ export function ClientBooking() {
         <h1 className="flex-1 text-center text-lg font-semibold text-[var(--text-primary)]">
           {STEP_TITLES[currentStep]}
         </h1>
-        <button onClick={() => navigate('/cliente')} className="p-2">
+        <button onClick={() => navigate(CLIENT_PATHS.home)} className="p-2">
           <svg className="w-6 h-6 text-[var(--text-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>

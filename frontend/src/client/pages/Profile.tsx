@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useClientAuth } from '../auth';
+import { CLIENT_PATHS } from '../utils/paths';
 import { clientApi } from '../services/api';
 import { formatPhone } from '@/utils/format';
 
@@ -103,7 +104,7 @@ export function ClientProfile() {
   const handleLogout = () => {
     if (window.confirm('Tem certeza que deseja sair da sua conta?')) {
       logout();
-      navigate('/cliente/login');
+      navigate(CLIENT_PATHS.login);
     }
   };
 
@@ -113,7 +114,7 @@ export function ClientProfile() {
         <div className="text-center">
           <p className="text-[var(--text-primary)] font-medium">Erro ao carregar perfil</p>
           <p className="text-sm text-[var(--text-muted)] mt-1">Tente novamente mais tarde</p>
-          <button onClick={() => navigate('/cliente')} className="mt-4 text-sm text-[#C8923A]">Voltar</button>
+          <button onClick={() => navigate(CLIENT_PATHS.home)} className="mt-4 text-sm text-[#C8923A]">Voltar</button>
         </div>
       </div>
     );
@@ -129,7 +130,7 @@ export function ClientProfile() {
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
       <div className="flex items-center px-2 py-3">
-        <button onClick={() => navigate('/cliente')} className="p-2">
+        <button onClick={() => navigate(CLIENT_PATHS.home)} className="p-2">
           <svg className="w-6 h-6 text-[var(--text-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>

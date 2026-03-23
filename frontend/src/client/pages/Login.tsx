@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { CLIENT_PATHS } from '../utils/paths';
 import { GoogleLogin } from '@react-oauth/google';
 import type { CredentialResponse } from '@react-oauth/google';
 import { Mail, Lock, ArrowRight, ArrowLeft, User, Phone, CalendarDays } from 'lucide-react';
@@ -27,7 +28,7 @@ export function ClientLogin() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const from = (location.state as any)?.from?.pathname || '/cliente';
+  const from = (location.state as any)?.from?.pathname || CLIENT_PATHS.home;
 
   const validatePassword = (pw: string): string | null => {
     if (pw.length < 6) return 'A senha deve ter pelo menos 6 caracteres';
@@ -84,7 +85,7 @@ export function ClientLogin() {
     try {
       const result = await login(email.trim(), password);
       if (result.mustChangePassword) {
-        navigate('/cliente/criar-senha', { replace: true });
+        navigate(CLIENT_PATHS.criarSenha, { replace: true });
       } else {
         navigate(from, { replace: true });
       }

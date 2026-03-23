@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, ShieldCheck } from 'lucide-react';
 import { useClientAuth } from '../auth';
+import { CLIENT_PATHS } from '../utils/paths';
 
 export function ClientSetPassword() {
   const [password, setPassword] = useState('');
@@ -35,7 +36,7 @@ export function ClientSetPassword() {
 
     try {
       await setupPassword(password);
-      navigate('/cliente', { replace: true });
+      navigate(CLIENT_PATHS.home, { replace: true });
     } catch (err: any) {
       const msg = err.response?.data?.message || 'Erro ao definir senha. Tente novamente.';
       setError(msg);

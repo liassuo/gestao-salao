@@ -158,9 +158,55 @@ export const router = createBrowserRouter([
     ],
   },
 
-  // Rotas do portal do cliente
+  // Rotas do portal do cliente (acesso via /cliente em localhost/admin)
   {
     path: '/cliente',
+    element: (
+      <ClientAuthProvider>
+        <ClientLayout />
+      </ClientAuthProvider>
+    ),
+    children: [
+      {
+        path: 'login',
+        element: <ClientLogin />,
+      },
+      {
+        path: 'criar-senha',
+        element: <ClientSetPassword />,
+      },
+      {
+        index: true,
+        element: (
+          <ClientPrivateRoute>
+            <ClientHome />
+          </ClientPrivateRoute>
+        ),
+      },
+      {
+        path: 'agendar',
+        element: (
+          <ClientPrivateRoute>
+            <ClientBooking />
+          </ClientPrivateRoute>
+        ),
+      },
+      {
+        path: 'perfil',
+        element: (
+          <ClientPrivateRoute>
+            <ClientProfile />
+          </ClientPrivateRoute>
+        ),
+      },
+    ],
+  },
+]);
+
+// Router do portal do cliente para barbeariaamerica.com.br (rotas na raiz)
+export const clientRouter = createBrowserRouter([
+  {
+    path: '/',
     element: (
       <ClientAuthProvider>
         <ClientLayout />

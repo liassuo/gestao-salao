@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useClientAuth } from '../auth';
+import { CLIENT_PATHS } from '../utils/paths';
 import { useClientAppointments } from '../hooks';
 import { subscribeToPushNotifications } from '../services/notifications';
 import { AppointmentCard } from '../components/AppointmentCard';
@@ -73,7 +74,7 @@ export function ClientHome() {
           </h1>
         </div>
         <button
-          onClick={() => navigate('/cliente/perfil')}
+          onClick={() => navigate(CLIENT_PATHS.perfil)}
           className="w-11 h-11 rounded-full bg-[#C8923A]/20 flex items-center justify-center"
         >
           <svg className="w-5 h-5 text-[#C8923A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -158,7 +159,7 @@ export function ClientHome() {
 
       {/* FAB */}
       <button
-        onClick={() => navigate('/cliente/agendar')}
+        onClick={() => navigate(CLIENT_PATHS.agendar)}
         className="fixed right-5 bottom-5 w-14 h-14 bg-[#8B6914] hover:bg-[#725510] text-white rounded-full shadow-lg flex items-center justify-center transition-colors"
       >
         <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">

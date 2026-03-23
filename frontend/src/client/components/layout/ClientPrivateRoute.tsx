@@ -1,5 +1,6 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useClientAuth } from '../../auth';
+import { CLIENT_PATHS } from '../../utils/paths';
 
 interface ClientPrivateRouteProps {
   children: React.ReactNode;
@@ -18,7 +19,7 @@ export function ClientPrivateRoute({ children }: ClientPrivateRouteProps) {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/cliente/login" state={{ from: location }} replace />;
+    return <Navigate to={CLIENT_PATHS.login} state={{ from: location }} replace />;
   }
 
   return <>{children}</>;
