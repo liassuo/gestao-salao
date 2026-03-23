@@ -19,6 +19,10 @@ export class UpdateProfessionalDto {
 
   @IsOptional()
   @IsString()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
   avatarUrl?: string;
 
   @IsOptional()
