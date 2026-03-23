@@ -87,7 +87,7 @@ export class ProfessionalsService {
   async findAll(serviceId?: string, isActive?: boolean) {
     let query = this.supabase
       .from('professionals')
-      .select('*, user:users(email), appointment_count:appointments(count), professional_services(serviceId, service:services(id, name))');
+      .select('*, appointment_count:appointments(count), professional_services(serviceId, service:services(id, name))');
 
     if (isActive !== undefined) {
       query = query.eq('isActive', isActive);
@@ -99,9 +99,24 @@ export class ProfessionalsService {
 
     if (error) throw error;
 
-    return (professionals || []).map(({ appointment_count, professional_services, user, ...prof }: any) => ({
+    const profList = professionals || [];
+
+    // Buscar emails dos users vinculados (via professionalId)
+    const profIds = profList.map((p: any) => p.id);
+    const emailMap: Record<string, string> = {};
+    if (profIds.length > 0) {
+      const { data: users } = await this.supabase
+        .from('users')
+        .select('professionalId, email')
+        .in('professionalId', profIds);
+      for (const u of users || []) {
+        if (u.professionalId) emailMap[u.professionalId] = u.email;
+      }
+    }
+
+    return profList.map(({ appointment_count, professional_services, ...prof }: any) => ({
       ...prof,
-      email: user?.email || null,
+      email: emailMap[prof.id] || null,
       services: (professional_services || []).map((ps: any) => ({
         id: ps.service?.id || ps.serviceId,
         name: ps.service?.name,
@@ -130,7 +145,7 @@ export class ProfessionalsService {
   async findOne(id: string) {
     const { data: professional, error } = await this.supabase
       .from('professionals')
-      .select('*, user:users(email), professional_services(serviceId, service:services(id, name))')
+      .select('*, professional_services(serviceId, service:services(id, name))')
       .eq('id', id)
       .single();
 
@@ -138,7 +153,14 @@ export class ProfessionalsService {
       throw new NotFoundException('Profissional não encontrado');
     }
 
-    const { professional_services, user, ...prof } = professional as any;
+    // Buscar email do user vinculado
+    const { data: user } = await this.supabase
+      .from('users')
+      .select('email')
+      .eq('professionalId', id)
+      .single();
+
+    const { professional_services, ...prof } = professional as any;
     return {
       ...prof,
       email: user?.email || null,
