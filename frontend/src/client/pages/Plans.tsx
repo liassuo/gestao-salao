@@ -443,7 +443,7 @@ export function ClientPlans() {
         )}
 
         {/* Lista de Planos */}
-        {!mySubscription && (
+        {(!mySubscription || mySubscription.status === 'CANCELED') && (
           <>
             <div>
               <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-1">

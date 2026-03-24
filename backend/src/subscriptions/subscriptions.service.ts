@@ -381,7 +381,6 @@ export class SubscriptionsService {
       .from('client_subscriptions')
       .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth)')
       .eq('clientId', clientId)
-      .neq('status', 'CANCELED')
       .order('createdAt', { ascending: false })
       .limit(1);
 
