@@ -66,8 +66,6 @@ export function ClientPlans() {
       setMySubscription(res.data.subscription);
       if (res.data.pixData) {
         setPixModal(res.data.pixData);
-      } else {
-        alert('Assinatura criada! O pagamento será processado em breve.');
       }
     } catch (e: any) {
       alert(e.response?.data?.message || 'Erro ao assinar plano. Tente novamente.');
@@ -124,7 +122,7 @@ export function ClientPlans() {
 
       <div className="px-5 pb-10 space-y-6">
         {/* Assinatura Ativa */}
-        {mySubscription && (
+        {mySubscription && mySubscription.status === 'ACTIVE' && (
           <div className="bg-gradient-to-br from-[#8B6914] to-[#C8923A] rounded-2xl p-5 text-white">
             <div className="flex items-start justify-between mb-3">
               <div>
@@ -168,6 +166,50 @@ export function ClientPlans() {
               onClick={handleCancel}
               disabled={isCancelling}
               className="mt-4 w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              {isCancelling ? 'Cancelando...' : 'Cancelar assinatura'}
+            </button>
+          </div>
+        )}
+
+        {/* Assinatura Aguardando Pagamento */}
+        {mySubscription && mySubscription.status === 'PENDING_PAYMENT' && (
+          <div className="bg-[var(--card-bg)] border border-amber-500/30 rounded-2xl p-5">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/20">
+                <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <p className="font-semibold text-[var(--text-primary)]">{mySubscription.plan.name}</p>
+                <p className="text-sm text-amber-400 font-medium">Aguardando pagamento</p>
+              </div>
+              <span className="ml-auto text-sm font-bold text-[var(--text-primary)]">
+                {formatPrice(mySubscription.plan.price)}/mês
+              </span>
+            </div>
+
+            <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-4 mb-4">
+              <p className="text-sm text-[var(--text-secondary)]">
+                Sua assinatura foi criada, mas ainda não recebemos a confirmação do pagamento.
+                Após o pagamento PIX ser confirmado, seus créditos serão liberados automaticamente.
+              </p>
+            </div>
+
+            {pixModal && (
+              <button
+                onClick={() => {}}
+                className="w-full py-2.5 rounded-xl bg-amber-500/20 text-amber-400 text-sm font-medium mb-3"
+              >
+                Ver QR Code PIX
+              </button>
+            )}
+
+            <button
+              onClick={handleCancel}
+              disabled={isCancelling}
+              className="w-full py-2.5 rounded-xl border border-[var(--card-border)] text-[var(--text-secondary)] text-sm font-medium transition-colors hover:bg-[var(--hover-bg)] disabled:opacity-50"
             >
               {isCancelling ? 'Cancelando...' : 'Cancelar assinatura'}
             </button>
@@ -244,7 +286,7 @@ export function ClientPlans() {
         )}
 
         {/* Plano atual + upgrade/info */}
-        {mySubscription && plans.length > 0 && (
+        {mySubscription && mySubscription.status === 'ACTIVE' && plans.length > 0 && (
           <div>
             <h2 className="text-base font-semibold text-[var(--text-primary)] mb-3">Planos disponíveis</h2>
             <div className="space-y-3">

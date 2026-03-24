@@ -157,22 +157,25 @@ export class SubscriptionsService {
       throw new NotFoundException('Plano não encontrado ou inativo');
     }
 
-    // Verificar se já tem assinatura ativa
+    // Verificar se já tem assinatura ativa ou aguardando pagamento
     const { data: existingSubscription } = await this.supabase
       .from('client_subscriptions')
       .select('id')
       .eq('clientId', dto.clientId)
-      .eq('status', 'ACTIVE')
+      .in('status', ['ACTIVE', 'PENDING_PAYMENT'])
       .single();
 
     if (existingSubscription) {
-      throw new BadRequestException('Cliente já possui uma assinatura ativa');
+      throw new BadRequestException('Cliente já possui uma assinatura ativa ou aguardando pagamento');
     }
 
     // Criar assinatura
     const startDate = dto.startDate ? new Date(dto.startDate) : new Date();
     const endDate = new Date(startDate);
     endDate.setMonth(endDate.getMonth() + 1);
+
+    // Se Asaas está configurado, aguarda confirmação de pagamento antes de ativar
+    const initialStatus = this.asaasService.configured ? 'PENDING_PAYMENT' : 'ACTIVE';
 
     const subNow = new Date().toISOString();
     const { data: insertedSub, error } = await this.supabase
@@ -184,7 +187,7 @@ export class SubscriptionsService {
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
         cutsUsedThisMonth: 0,
-        status: 'ACTIVE',
+        status: initialStatus,
         createdAt: subNow,
         updatedAt: subNow,
       })
@@ -308,7 +311,9 @@ export class SubscriptionsService {
       .from('client_subscriptions')
       .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth)')
       .eq('clientId', clientId)
-      .eq('status', 'ACTIVE')
+      .in('status', ['ACTIVE', 'PENDING_PAYMENT'])
+      .order('createdAt', { ascending: false })
+      .limit(1)
       .single();
 
     return subscription;
@@ -325,8 +330,8 @@ export class SubscriptionsService {
       throw new NotFoundException('Assinatura não encontrada');
     }
 
-    if (subscription.status !== 'ACTIVE') {
-      throw new BadRequestException('Assinatura não está ativa');
+    if (subscription.status !== 'ACTIVE' && subscription.status !== 'PENDING_PAYMENT') {
+      throw new BadRequestException('Assinatura não pode ser cancelada pois não está ativa');
     }
 
     const { data: updated, error } = await this.supabase

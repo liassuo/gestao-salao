@@ -143,12 +143,13 @@ export class AsaasWebhookController {
         .eq('id', localPayment.id);
     }
 
-    // Se vinculado a assinatura, resetar contador de cortes (Renovação)
+    // Se vinculado a assinatura, ativar (se pendente) e resetar contador de cortes
     if (localPayment.subscriptionId) {
       const now = new Date().toISOString();
       await this.supabase
         .from('client_subscriptions')
         .update({
+          status: 'ACTIVE',
           cutsUsedThisMonth: 0,
           lastResetDate: now,
           updatedAt: now,
@@ -156,7 +157,7 @@ export class AsaasWebhookController {
         .eq('id', localPayment.subscriptionId);
 
       this.logger.log(
-        `Assinatura ${localPayment.subscriptionId} renovada (cortes resetados)`,
+        `Assinatura ${localPayment.subscriptionId} ativada/renovada (pagamento confirmado)`,
       );
     }
 
