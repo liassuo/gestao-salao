@@ -385,7 +385,21 @@ export class SubscriptionsService {
       .order('createdAt', { ascending: false })
       .limit(1);
 
-    const subscription = results?.[0] ?? null;
+    const subscription: any = results?.[0] ?? null;
+
+    if (subscription) {
+      // Buscar última cobrança vinculada a esta assinatura
+      const { data: latestPayments } = await this.supabase
+        .from('payments')
+        .select('*')
+        .eq('subscriptionId', subscription.id)
+        .order('createdAt', { ascending: false })
+        .limit(1);
+      
+      if (latestPayments?.[0]) {
+        subscription.latestPayment = latestPayments[0];
+      }
+    }
 
     // Auto-suspender se endDate venceu e ainda está ACTIVE
     if (subscription && subscription.status === 'ACTIVE') {

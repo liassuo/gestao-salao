@@ -20,6 +20,10 @@ interface ClientSubscription {
   cutsUsedThisMonth: number;
   startDate: string;
   plan: SubscriptionPlan;
+  latestPayment?: {
+    invoiceUrl?: string;
+    asaasStatus?: string;
+  };
 }
 
 interface PixData {
