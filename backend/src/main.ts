@@ -17,12 +17,12 @@ async function bootstrap() {
   );
 
   app.use(compression());
-  app.setGlobalPrefix('api');
+  app.setGlobalPrefix('api', { exclude: ['health'] });
   app.enableCors();
 
   // Health check — usado por serviços de keep-alive para evitar cold start
   const httpAdapter = app.getHttpAdapter();
-  httpAdapter.get('/health', (_req, res) => res.send({ status: 'ok' }));
+  httpAdapter.get('/health', (_req: any, res: any) => res.json({ status: 'ok' }));
 
   // Swagger — apenas em desenvolvimento (evita custo de CPU/memória no boot em produção)
   if (process.env.NODE_ENV !== 'production') {
@@ -90,12 +90,14 @@ Esta API fornece endpoints para gerenciar:
       },
       customSiteTitle: 'API Gestão Salão - Documentação',
     });
-    console.log(`Swagger docs available at: ${await app.getUrl()}/api/docs`);
   }
 
   const port = process.env.PORT || 3000;
   await app.listen(port);
   console.log(`Application is running on: ${await app.getUrl()}`);
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`Swagger docs available at: ${await app.getUrl()}/api/docs`);
+  }
 }
 
 bootstrap();
