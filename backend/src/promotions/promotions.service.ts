@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
 import { CreatePromotionDto, UpdatePromotionDto } from './dto';
 
@@ -27,7 +28,7 @@ export class PromotionsService {
     const { data: promotion, error } = await this.supabase
       .from('promotions')
       .insert({
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         name: dto.name,
         discountPercent: dto.discountPercent,
         startDate: dto.startDate,
@@ -117,7 +118,8 @@ export class PromotionsService {
     return this.formatPromotion(promotion);
   }
 
-  async update(id: string, dto: UpdatePromotionDto) {
+  async update(id: string, updateDto: UpdatePromotionDto) {
+    const dto = updateDto as any; // Temporary cast to fix PartialType resolution issue in this environment
     const existing = await this.findOne(id);
 
     if (dto.endDate && dto.startDate && new Date(dto.endDate) <= new Date(dto.startDate)) {
@@ -233,7 +235,7 @@ export class PromotionsService {
 
     if (productIds.length > 0) {
       const rows = productIds.map((productId) => ({
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         promotionId,
         productId,
       }));
@@ -256,7 +258,7 @@ export class PromotionsService {
     // Insere novos
     if (serviceIds.length > 0) {
       const rows = serviceIds.map((serviceId) => ({
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         promotionId,
         serviceId,
       }));

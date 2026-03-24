@@ -44,13 +44,32 @@ export interface TimeSlot {
   available: boolean;
 }
 
+export type AppointmentBillingType = 'PIX' | 'CREDIT_CARD';
+
 export interface CreateAppointmentData {
   serviceIds: string[];
   professionalId: string;
   date: string;
   startTime: string;
   useSubscriptionCut?: boolean;
+  billingType?: AppointmentBillingType;
 }
+
+/** Resposta de POST /appointments/client quando o Asaas gera cobrança */
+export type AppointmentPaymentPayload = {
+  id: string;
+  billingType?: string;
+  invoiceUrl?: string | null;
+  pixData?: {
+    encodedImage: string;
+    payload: string;
+    expirationDate?: string;
+  } | null;
+};
+
+export type CreatedAppointmentResponse = Appointment & {
+  payment?: AppointmentPaymentPayload | null;
+};
 
 export interface ClientUser {
   id: string;

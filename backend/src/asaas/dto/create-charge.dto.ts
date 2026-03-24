@@ -1,6 +1,6 @@
 import {
   IsString,
-  IsEnum,
+  IsIn,
   IsNumber,
   IsOptional,
   IsUUID,
@@ -9,7 +9,6 @@ import {
   Min,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { AsaasBillingType } from '../asaas.types';
 
 export class CreateChargeDto {
   @ApiProperty({ description: 'ID do cliente local (UUID)' })
@@ -18,13 +17,13 @@ export class CreateChargeDto {
 
   @ApiProperty({
     description: 'Tipo de cobrança',
-    enum: AsaasBillingType,
+    enum: ['PIX', 'CREDIT_CARD'],
     example: 'PIX',
   })
-  @IsEnum(AsaasBillingType, {
-    message: 'billingType deve ser BOLETO, CREDIT_CARD, PIX ou UNDEFINED',
+  @IsIn(['PIX', 'CREDIT_CARD'], {
+    message: 'billingType deve ser PIX ou CREDIT_CARD',
   })
-  billingType: AsaasBillingType;
+  billingType: 'PIX' | 'CREDIT_CARD';
 
   @ApiProperty({
     description: 'Valor em centavos (ex: 5000 = R$ 50,00)',

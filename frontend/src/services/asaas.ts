@@ -8,7 +8,7 @@ import type {
 
 export const asaasService = {
   /**
-   * Criar cobrança no Asaas (PIX, Boleto ou Cartão)
+   * Criar cobrança no Asaas (PIX ou cartão)
    */
   async createCharge(payload: CreateChargePayload): Promise<AsaasChargeResponse> {
     const response = await api.post<AsaasChargeResponse>('/asaas/charges', payload);

@@ -1,4 +1,4 @@
-export type PaymentMethod = 'CASH' | 'PIX' | 'CARD' | 'BOLETO';
+export type PaymentMethod = 'CASH' | 'PIX' | 'CARD';
 
 export interface Payment {
   id: string;
@@ -65,14 +65,12 @@ export const paymentMethodLabels: Record<PaymentMethod, string> = {
   CASH: 'Dinheiro',
   PIX: 'PIX',
   CARD: 'Cartão',
-  BOLETO: 'Boleto',
 };
 
 export const paymentMethodColors: Record<PaymentMethod, string> = {
   CASH: 'bg-zinc-500/20 text-zinc-400',
   PIX: 'bg-blue-500/20 text-blue-500',
   CARD: 'bg-blue-600/20 text-blue-400',
-  BOLETO: 'bg-amber-500/20 text-amber-400',
 };
 
 // Asaas charge status labels

@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { SupabaseService } from '../supabase/supabase.service';
 import { CreateProfessionalDto, UpdateProfessionalDto } from './dto';
@@ -20,7 +21,7 @@ export class ProfessionalsService {
     }
 
     const now = new Date().toISOString();
-    const professionalId = crypto.randomUUID();
+    const professionalId = randomUUID();
 
     const { data: professional, error } = await this.supabase
       .from('professionals')
@@ -44,7 +45,7 @@ export class ProfessionalsService {
     const defaultPassword = '123456';
     const hashedPassword = await bcrypt.hash(defaultPassword, 6);
 
-    const userId = crypto.randomUUID();
+    const userId = randomUUID();
     const { error: userError } = await this.supabase
       .from('users')
       .insert({
@@ -74,7 +75,7 @@ export class ProfessionalsService {
     if (dto.serviceIds?.length) {
       for (const serviceId of dto.serviceIds) {
         await this.supabase.from('professional_services').insert({
-          id: crypto.randomUUID(),
+          id: randomUUID(),
           professionalId: professional.id,
           serviceId: serviceId,
         });
@@ -318,7 +319,7 @@ export class ProfessionalsService {
       if (serviceIds.length > 0) {
         for (const svcId of serviceIds) {
           await this.supabase.from('professional_services').insert({
-            id: crypto.randomUUID(),
+            id: randomUUID(),
             professionalId: id,
             serviceId: svcId,
           });

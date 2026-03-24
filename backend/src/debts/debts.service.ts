@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
 import { CreateDebtDto, UpdateDebtDto, PayDebtDto } from './dto';
 
@@ -32,7 +33,7 @@ export class DebtsService {
     const { data: debt, error } = await this.supabase
       .from('debts')
       .insert({
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         clientId: dto.clientId,
         appointmentId: dto.appointmentId,
         amount: dto.amount,
@@ -314,7 +315,7 @@ export class DebtsService {
     if (!userId) return;
 
     const now = paidAt || new Date().toISOString();
-    const paymentId = crypto.randomUUID();
+    const paymentId = randomUUID();
     await this.supabase.from('payments').insert({
       id: paymentId,
       clientId,

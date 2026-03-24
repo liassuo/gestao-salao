@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
 import { CreateStockMovementDto, QueryStockMovementDto } from './dto';
 
@@ -36,7 +37,7 @@ export class StockService {
     const { data: movement, error } = await this.supabase
       .from('stock_movements')
       .insert({
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         productId: dto.productId,
         type: dto.type,
         quantity: dto.quantity,

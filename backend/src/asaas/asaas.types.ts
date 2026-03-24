@@ -9,6 +9,37 @@ export enum AsaasBillingType {
   UNDEFINED = 'UNDEFINED',
 }
 
+/** Aceita enum ou string vinda do app (ex.: CREDIT_CARD, CARD). */
+export function parseAsaasBillingType(
+  value: unknown,
+  fallback: AsaasBillingType = AsaasBillingType.PIX,
+): AsaasBillingType {
+  if (
+    value === AsaasBillingType.PIX ||
+    value === AsaasBillingType.CREDIT_CARD ||
+    value === AsaasBillingType.UNDEFINED
+  ) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const u = value.toUpperCase();
+    if (u === 'PIX') return AsaasBillingType.PIX;
+    if (u === 'CREDIT_CARD' || u === 'CARD') return AsaasBillingType.CREDIT_CARD;
+  }
+  return fallback;
+}
+
+export function asaasBillingToLocalPaymentMethod(bt: AsaasBillingType): string {
+  switch (bt) {
+    case AsaasBillingType.CREDIT_CARD:
+      return 'CARD';
+    case AsaasBillingType.BOLETO:
+      return 'BOLETO';
+    default:
+      return 'PIX';
+  }
+}
+
 export enum AsaasChargeStatus {
   PENDING = 'PENDING',
   RECEIVED = 'RECEIVED',

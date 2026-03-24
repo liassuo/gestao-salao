@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
 import { AsaasService } from '../asaas/asaas.service';
 import { StockService } from '../stock/stock.service';
@@ -29,7 +30,7 @@ export class OrdersService {
     const { data: order, error } = await this.supabase
       .from('orders')
       .insert({
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         clientId: dto.clientId,
         professionalId: dto.professionalId,
         branchId: dto.branchId,
@@ -46,7 +47,7 @@ export class OrdersService {
 
     for (const item of dto.items || []) {
       const { error: itemError } = await this.supabase.from('order_items').insert({
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         orderId: order.id,
         productId: item.productId || null,
         serviceId: item.serviceId || null,
@@ -125,7 +126,7 @@ export class OrdersService {
     const lineTotal = dto.unitPrice * (dto.quantity || 1);
 
     const { error: insertError } = await this.supabase.from('order_items').insert({
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       orderId: orderId,
       productId: dto.productId || null,
       serviceId: dto.serviceId || null,
@@ -248,7 +249,7 @@ export class OrdersService {
       const { data: payment } = await this.supabase
         .from('payments')
         .insert({
-          id: crypto.randomUUID(),
+          id: randomUUID(),
           clientId: order.clientId,
           amount: order.totalAmount,
           method: paymentMethod,
@@ -339,7 +340,6 @@ export class OrdersService {
     // Criar registro de pagamento local (pendente)
     const paymentMethodMap: Record<string, string> = {
       PIX: 'PIX',
-      BOLETO: 'BOLETO',
       CREDIT_CARD: 'CARD',
     };
 
@@ -347,7 +347,7 @@ export class OrdersService {
     const { data: payment } = await this.supabase
       .from('payments')
       .insert({
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         clientId: order.clientId,
         amount: order.totalAmount,
         method: paymentMethodMap[dto.billingType!] || 'PIX',

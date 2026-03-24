@@ -5,7 +5,7 @@ import { useClientServices, useClientProfessionals, useAvailableSlots, useClient
 import { LoadingState, EmptyState } from '../components/ui';
 import { formatPrice, formatDuration, formatDateISO, formatDateLong } from '../utils/format';
 import { clientApi } from '../services/api';
-import type { Service, Professional, TimeSlot } from '../types';
+import type { Service, Professional, TimeSlot, AppointmentBillingType } from '../types';
 
 interface ActivePromotion {
   id: string;
@@ -90,6 +90,7 @@ interface SubscriptionPlan {
 interface PixData {
   encodedImage: string;
   payload: string;
+  expirationDate?: string;
 }
 
 export function ClientBooking() {
@@ -106,6 +107,10 @@ export function ClientBooking() {
   const [subscribingPlanId, setSubscribingPlanId] = useState<string | null>(null);
   const [pixModal, setPixModal] = useState<PixData | null>(null);
   const [pixCopied, setPixCopied] = useState(false);
+  const [appointmentBillingType, setAppointmentBillingType] =
+    useState<AppointmentBillingType>('PIX');
+  const [subscribePlanModal, setSubscribePlanModal] = useState<string | null>(null);
+  const [leaveAfterPixClose, setLeaveAfterPixClose] = useState(false);
 
   const navigate = useNavigate();
   const [activePromotions, setActivePromotions] = useState<ActivePromotion[]>([]);
@@ -144,22 +149,28 @@ export function ClientBooking() {
       .catch(() => {});
   }, [fetchServices]);
 
-  const handleSubscribePlan = async (planId: string) => {
+  const subscribeFromBooking = async (planId: string, billing: AppointmentBillingType) => {
     setSubscribingPlanId(planId);
+    setSubscribePlanModal(null);
     try {
-      const res = await clientApi.post<{ subscription: MySubscription; pixData: PixData | null }>(
-        '/subscriptions/me/subscribe',
-        { planId },
-      );
+      const res = await clientApi.post<{
+        subscription: MySubscription;
+        pixData: PixData | null;
+        invoiceUrl?: string | null;
+      }>('/subscriptions/me/subscribe', { planId, billingType: billing });
       setMySubscription(res.data.subscription);
       const remaining = res.data.subscription.plan.cutsPerMonth === 99
         ? 99
         : Math.max(res.data.subscription.plan.cutsPerMonth - res.data.subscription.cutsUsedThisMonth, 0);
       setUseSubscriptionCut(remaining > 0);
       if (res.data.pixData) {
+        setLeaveAfterPixClose(false);
         setPixModal(res.data.pixData);
+      } else if (res.data.invoiceUrl) {
+        window.open(res.data.invoiceUrl, '_blank', 'noopener,noreferrer');
+        alert('Abra a nova aba para concluir o pagamento com cartão. Os créditos serão liberados após a confirmação.');
       } else {
-        alert('Plano assinado! Seus créditos serão liberados após o pagamento.');
+        alert('Assinatura criada. Conclua o pagamento conforme as instruções enviadas (e-mail ou link).');
       }
     } catch (e: any) {
       alert(e.response?.data?.message || 'Erro ao assinar plano. Tente novamente.');
@@ -228,22 +239,35 @@ export function ClientBooking() {
   const handleConfirm = async () => {
     if (!selectedProfessional || !selectedDate || !selectedTime) return;
 
+    const paysOnline = totalPrice > 0 && !(useSubscriptionCut && mySubscription);
+
     setIsSubmitting(true);
-    const appointment = await createAppointment({
-      serviceIds: selectedServices.map((s) => s.id),
-      professionalId: selectedProfessional.id,
-      date: formatDateISO(selectedDate),
-      startTime: selectedTime,
-      useSubscriptionCut: useSubscriptionCut && !!mySubscription,
-    });
+    try {
+      const result = await createAppointment({
+        serviceIds: selectedServices.map((s) => s.id),
+        professionalId: selectedProfessional.id,
+        date: formatDateISO(selectedDate),
+        startTime: selectedTime,
+        useSubscriptionCut: useSubscriptionCut && !!mySubscription,
+        billingType: paysOnline ? appointmentBillingType : undefined,
+      });
 
-    setIsSubmitting(false);
-
-    if (appointment) {
-      alert('Agendamento realizado com sucesso!');
-      navigate(CLIENT_PATHS.home);
-    } else {
-      alert('Erro ao criar agendamento. Tente novamente.');
+      if (result.payment?.pixData) {
+        setLeaveAfterPixClose(true);
+        setPixModal(result.payment.pixData);
+      } else if (result.payment?.invoiceUrl) {
+        window.open(result.payment.invoiceUrl, '_blank', 'noopener,noreferrer');
+        alert('Agendamento criado. Conclua o pagamento com cartão na nova aba.');
+        navigate(CLIENT_PATHS.home);
+      } else {
+        alert('Agendamento realizado com sucesso!');
+        navigate(CLIENT_PATHS.home);
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erro ao criar agendamento. Tente novamente.';
+      alert(msg);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -429,7 +453,7 @@ export function ClientBooking() {
                       {plan.cutsPerMonth === 99 ? 'Cortes ilimitados' : `${plan.cutsPerMonth} corte${plan.cutsPerMonth > 1 ? 's' : ''}/mês`}
                     </p>
                     <button
-                      onClick={() => handleSubscribePlan(plan.id)}
+                      onClick={() => setSubscribePlanModal(plan.id)}
                       disabled={subscribingPlanId === plan.id}
                       className="w-full py-2 bg-[#8B6914] hover:bg-[#725510] text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center"
                     >
@@ -687,6 +711,41 @@ export function ClientBooking() {
 
         <div className="border-t border-[var(--border-color)] my-4"></div>
 
+        {totalPrice > 0 && !(useSubscriptionCut && mySubscription) && (
+          <div className="mb-4">
+            <p className="text-sm font-medium text-[var(--text-primary)] mb-2">Forma de pagamento</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setAppointmentBillingType('PIX')}
+                className={`rounded-xl border py-3 px-2 text-sm font-semibold transition-colors ${
+                  appointmentBillingType === 'PIX'
+                    ? 'border-[#C8923A] bg-[#C8923A]/15 text-[#C8923A]'
+                    : 'border-[var(--card-border)] bg-[var(--card-bg)] text-[var(--text-secondary)]'
+                }`}
+              >
+                PIX
+              </button>
+              <button
+                type="button"
+                onClick={() => setAppointmentBillingType('CREDIT_CARD')}
+                className={`rounded-xl border py-3 px-2 text-sm font-semibold transition-colors ${
+                  appointmentBillingType === 'CREDIT_CARD'
+                    ? 'border-[#C8923A] bg-[#C8923A]/15 text-[#C8923A]'
+                    : 'border-[var(--card-border)] bg-[var(--card-bg)] text-[var(--text-secondary)]'
+                }`}
+              >
+                Cartão
+              </button>
+            </div>
+            <p className="text-xs text-[var(--text-muted)] mt-2">
+              {appointmentBillingType === 'PIX'
+                ? 'Você verá o QR Code após confirmar.'
+                : 'Abriremos o link seguro do Asaas para pagar com cartão.'}
+            </p>
+          </div>
+        )}
+
         {/* Opção de usar crédito do plano */}
         {mySubscription && (() => {
           const remaining = mySubscription.plan.cutsPerMonth === 99
@@ -797,7 +856,16 @@ export function ClientBooking() {
           <div className="bg-[var(--bg-primary)] rounded-2xl w-full max-w-sm p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-[var(--text-primary)]">Pagar com PIX</h3>
-              <button onClick={() => setPixModal(null)} className="p-1 text-[var(--text-muted)]">
+              <button
+                onClick={() => {
+                  setPixModal(null);
+                  if (leaveAfterPixClose) {
+                    setLeaveAfterPixClose(false);
+                    navigate(CLIENT_PATHS.home);
+                  }
+                }}
+                className="p-1 text-[var(--text-muted)]"
+              >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -838,6 +906,43 @@ export function ClientBooking() {
             <p className="text-xs text-center text-[var(--text-muted)] mt-3">
               Após o pagamento, seus créditos são liberados automaticamente
             </p>
+          </div>
+        </div>
+      )}
+
+      {subscribePlanModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="bg-[var(--bg-primary)] rounded-2xl w-full max-w-sm p-6 border border-[var(--card-border)] shadow-xl">
+            <h3 className="text-lg font-bold text-[var(--text-primary)] mb-2">Forma de pagamento</h3>
+            <p className="text-sm text-[var(--text-muted)] mb-4">
+              Como deseja pagar a assinatura mensal?
+            </p>
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => subscribeFromBooking(subscribePlanModal, 'PIX')}
+                disabled={!!subscribingPlanId}
+                className="w-full py-3 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] text-[var(--text-primary)] font-semibold hover:border-[#C8923A] disabled:opacity-50"
+              >
+                PIX
+              </button>
+              <button
+                type="button"
+                onClick={() => subscribeFromBooking(subscribePlanModal, 'CREDIT_CARD')}
+                disabled={!!subscribingPlanId}
+                className="w-full py-3 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] text-[var(--text-primary)] font-semibold hover:border-[#C8923A] disabled:opacity-50"
+              >
+                Cartão de crédito
+              </button>
+              <button
+                type="button"
+                onClick={() => setSubscribePlanModal(null)}
+                disabled={!!subscribingPlanId}
+                className="w-full py-2.5 text-sm text-[var(--text-muted)] font-medium"
+              >
+                Cancelar
+              </button>
+            </div>
           </div>
         </div>
       )}

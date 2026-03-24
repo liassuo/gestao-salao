@@ -2,7 +2,13 @@
 // Asaas Types (Frontend)
 // ============================================
 
-export type AsaasBillingType = 'BOLETO' | 'CREDIT_CARD' | 'PIX' | 'UNDEFINED';
+export const AsaasBillingType = {
+  CREDIT_CARD: 'CREDIT_CARD',
+  PIX: 'PIX',
+  UNDEFINED: 'UNDEFINED',
+} as const;
+
+export type AsaasBillingType = (typeof AsaasBillingType)[keyof typeof AsaasBillingType];
 
 export type AsaasChargeStatus =
   | 'PENDING'
@@ -29,7 +35,8 @@ export interface AsaasCharge {
   dueDate: string;
   value: number;
   netValue?: number;
-  billingType: AsaasBillingType;
+  /** Resposta Asaas pode incluir valores legados (ex.: BOLETO) */
+  billingType: string;
   status: AsaasChargeStatus;
   description?: string;
   externalReference?: string;

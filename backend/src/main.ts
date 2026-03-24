@@ -41,7 +41,7 @@ Esta API fornece endpoints para gerenciar:
 - **Serviços**: Catálogo de serviços oferecidos
 - **Agendamentos**: Marcação e gestão de horários
 - **Pagamentos**: Registro de pagamentos (manual e digital via Asaas)
-- **Asaas**: Integração com gateway de pagamento (PIX, Boleto, Cartão)
+- **Asaas**: Integração com gateway de pagamento (PIX e cartão)
 - **Dívidas**: Controle de fiado/crédito de clientes
 - **Caixa**: Abertura e fechamento de caixa diário
 - **Dashboard**: Estatísticas e métricas

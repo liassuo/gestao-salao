@@ -6,7 +6,7 @@ export class PayDebtDto {
   amount: number;
 
   @IsOptional()
-  @IsIn(['CASH', 'PIX', 'CARD', 'BOLETO'])
+  @IsIn(['CASH', 'PIX', 'CARD'])
   method?: string;
 
   @IsOptional()

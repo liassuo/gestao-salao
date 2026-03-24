@@ -14,7 +14,6 @@ export enum PaymentMethod {
   CASH = 'CASH',
   PIX = 'PIX',
   CARD = 'CARD',
-  BOLETO = 'BOLETO',
 }
 
 export enum SubscriptionStatus {

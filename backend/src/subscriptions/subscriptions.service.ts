@@ -4,9 +4,15 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
 import { AsaasService } from '../asaas/asaas.service';
-import { AsaasBillingType, AsaasSubscriptionCycle } from '../asaas/asaas.types';
+import {
+  AsaasBillingType,
+  AsaasSubscriptionCycle,
+  asaasBillingToLocalPaymentMethod,
+  parseAsaasBillingType,
+} from '../asaas/asaas.types';
 import { CreatePlanDto, UpdatePlanDto, SubscribeClientDto } from './dto';
 
 @Injectable()
@@ -36,7 +42,7 @@ export class SubscriptionsService {
     const { data: plan, error } = await this.supabase
       .from('subscription_plans')
       .insert({
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         name: dto.name,
         description: dto.description,
         price: dto.price,
@@ -206,7 +212,7 @@ export class SubscriptionsService {
     const { data: insertedSub, error } = await this.supabase
       .from('client_subscriptions')
       .insert({
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         clientId: dto.clientId,
         planId: dto.planId,
         startDate: startDate.toISOString(),
@@ -254,9 +260,14 @@ export class SubscriptionsService {
         }
 
         if (asaasCustomerId) {
+          const parsed = parseAsaasBillingType(dto.billingType);
+          const billingType =
+            parsed === AsaasBillingType.CREDIT_CARD
+              ? AsaasBillingType.CREDIT_CARD
+              : AsaasBillingType.PIX;
           const asaasSub = await this.asaasService.createSubscription({
             customer: asaasCustomerId,
-            billingType: AsaasBillingType.PIX,
+            billingType,
             value: this.asaasService.centavosToReais(plan.price ?? 0),
             nextDueDate: startDate.toISOString().split('T')[0],
             cycle: AsaasSubscriptionCycle.MONTHLY,
@@ -465,37 +476,58 @@ export class SubscriptionsService {
     return this.findClientSubscription(clientId);
   }
 
-  async subscribeByClientId(clientId: string, planId: string) {
-    const subscription = await this.subscribeClient({ clientId, planId });
+  async subscribeByClientId(clientId: string, planId: string, billingType?: any) {
+    const parsed = parseAsaasBillingType(billingType);
+    const effectiveBilling =
+      parsed === AsaasBillingType.CREDIT_CARD
+        ? AsaasBillingType.CREDIT_CARD
+        : AsaasBillingType.PIX;
+    const subscription = await this.subscribeClient({
+      clientId,
+      planId,
+      billingType: effectiveBilling === AsaasBillingType.CREDIT_CARD ? 'CREDIT_CARD' : 'PIX',
+    });
 
     let pixData: any = null;
+    let invoiceUrl: string | null = null;
     const freshSub = await this.findClientSubscription(clientId);
     if (this.asaasService.configured && freshSub?.asaasSubscriptionId) {
       try {
         const charges = await this.asaasService.getSubscriptionPayments(freshSub.asaasSubscriptionId);
-        const pending = charges.find((c: any) => c.status === 'PENDING') ?? charges[0];
+        const pending =
+          charges.find((c: any) => c.status === 'PENDING') ??
+          charges.find((c: any) => c.status === 'AWAITING_RISK_ANALYSIS') ??
+          charges[0];
         if (pending) {
-          pixData = await this.asaasService.getPixQrCode(pending.id);
           const now = new Date().toISOString();
+          const localMethod = asaasBillingToLocalPaymentMethod(effectiveBilling);
+          invoiceUrl = pending.invoiceUrl || null;
+
+          if (effectiveBilling === AsaasBillingType.PIX) {
+            pixData = await this.asaasService.getPixQrCode(pending.id);
+          }
+
           await this.supabase.from('payments').insert({
-            id: crypto.randomUUID(),
+            id: randomUUID(),
             clientId,
             subscriptionId: freshSub.id,
             amount: freshSub.plan?.price ?? 0,
-            method: 'PIX',
+            method: localMethod,
             asaasPaymentId: pending.id,
             asaasStatus: pending.status,
             paidAt: null,
+            invoiceUrl,
+            bankSlipUrl: pending.bankSlipUrl || null,
             createdAt: now,
             updatedAt: now,
           });
         }
       } catch (e) {
-        this.logger.warn(`Falha ao obter QR Code PIX da assinatura: ${e}`);
+        this.logger.warn(`Falha ao sincronizar cobrança inicial da assinatura: ${e}`);
       }
     }
 
-    return { subscription: freshSub ?? subscription, pixData };
+    return { subscription: freshSub ?? subscription, pixData, invoiceUrl };
   }
 
   async cancelMySubscription(clientId: string) {
@@ -533,7 +565,12 @@ export class SubscriptionsService {
     return updated;
   }
 
-  async reactivateMySubscription(clientId: string) {
+  async reactivateMySubscription(clientId: string, billingTypeRaw?: any) {
+    const parsed = parseAsaasBillingType(billingTypeRaw);
+    const billingType =
+      parsed === AsaasBillingType.CREDIT_CARD
+        ? AsaasBillingType.CREDIT_CARD
+        : AsaasBillingType.PIX;
     // Buscar assinatura suspensa
     const { data: results } = await this.supabase
       .from('client_subscriptions')
@@ -565,8 +602,9 @@ export class SubscriptionsService {
       })
       .eq('id', subscription.id);
 
-    // Gerar cobrança PIX via Asaas (se configurado)
+    // Gerar cobrança via Asaas (se configurado)
     let pixData: any = null;
+    let invoiceUrl: string | null = null;
     if (this.asaasService.configured) {
       try {
         let asaasCustomerId = subscription.client?.asaasCustomerId;
@@ -595,28 +633,34 @@ export class SubscriptionsService {
           const today = now.toISOString().split('T')[0];
           const charge = await this.asaasService.createCharge({
             customer: asaasCustomerId,
-            billingType: AsaasBillingType.PIX,
+            billingType,
             value: this.asaasService.centavosToReais(subscription.plan?.price ?? 0),
             dueDate: today,
             description: `Reativação: Plano ${subscription.plan?.name}`,
             externalReference: subscription.id,
           });
 
-          // Salvar pagamento local vinculado à assinatura
+          const localMethod = asaasBillingToLocalPaymentMethod(billingType);
           await this.supabase.from('payments').insert({
-            id: crypto.randomUUID(),
+            id: randomUUID(),
             clientId,
             subscriptionId: subscription.id,
             amount: subscription.plan?.price ?? 0,
-            method: 'PIX',
+            method: localMethod,
             asaasPaymentId: charge.id,
             asaasStatus: charge.status,
             paidAt: null,
+            invoiceUrl: charge.invoiceUrl || null,
+            bankSlipUrl: charge.bankSlipUrl || null,
             createdAt: now.toISOString(),
             updatedAt: now.toISOString(),
           });
 
-          pixData = await this.asaasService.getPixQrCode(charge.id);
+          if (billingType === AsaasBillingType.PIX) {
+            pixData = await this.asaasService.getPixQrCode(charge.id);
+          } else {
+            invoiceUrl = charge.invoiceUrl || null;
+          }
         }
       } catch (e) {
         this.logger.warn(`Falha ao gerar cobrança de reativação: ${e}`);
@@ -630,7 +674,7 @@ export class SubscriptionsService {
       .eq('id', subscription.id)
       .single();
 
-    return { subscription: updated ?? subscription, pixData };
+    return { subscription: updated ?? subscription, pixData, invoiceUrl };
   }
 
   async forceCharge(subscriptionId: string) {
@@ -688,7 +732,7 @@ export class SubscriptionsService {
     const { data: payment, error } = await this.supabase
       .from('payments')
       .insert({
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         clientId: subscription.clientId,
         subscriptionId: subscriptionId,
         amount: plan.price,

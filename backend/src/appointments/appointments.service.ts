@@ -9,7 +9,11 @@ import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
 import { CreateAppointmentDto, CreateTimeBlockDto, UpdateAppointmentDto } from './dto';
 import { AsaasService } from '../asaas/asaas.service';
-import { AsaasBillingType } from '../asaas/asaas.types';
+import {
+  AsaasBillingType,
+  asaasBillingToLocalPaymentMethod,
+  parseAsaasBillingType,
+} from '../asaas/asaas.types';
 
 @Injectable()
 export class AppointmentsService {
@@ -187,11 +191,13 @@ export class AppointmentsService {
       }
     }
 
-    // 6. Criar cobrança no Asaas (se configurado e valor > 0)
+    // 6. Criar cobrança no Asaas (se configurado, valor > 0 e não for pago só com crédito do plano)
     let pixData = null;
     let asaasCharge = null;
+    const billingType = parseAsaasBillingType(dto.billingType);
+    const skipAsaasForSubscriptionCut = !!dto.useSubscriptionCut;
 
-    if (this.asaasService.configured && totalPrice > 0) {
+    if (this.asaasService.configured && totalPrice > 0 && !skipAsaasForSubscriptionCut) {
       try {
         // Buscar/Criar cliente no Asaas
         const { data: clientData } = await this.supabase
@@ -216,31 +222,33 @@ export class AppointmentsService {
         }
 
         if (asaasCustomerId) {
-          // Criar cobrança
           asaasCharge = await this.asaasService.createCharge({
             customer: asaasCustomerId,
-            billingType: AsaasBillingType.PIX,
+            billingType,
             value: this.asaasService.centavosToReais(totalPrice),
             dueDate: String(dto.scheduledAt).substring(0, 10),
             description: `Agendamento: ${appointment.id}`,
             externalReference: appointment.id,
           });
 
-          // Registrar pagamento pendente
+          const localMethod = asaasBillingToLocalPaymentMethod(billingType);
           await this.supabase.from('payments').insert({
             id: randomUUID(),
             clientId: dto.clientId,
             appointmentId: appointment.id,
             amount: totalPrice,
-            method: 'PIX',
+            method: localMethod,
             asaasPaymentId: asaasCharge.id,
             asaasStatus: asaasCharge.status,
+            invoiceUrl: asaasCharge.invoiceUrl || null,
+            bankSlipUrl: asaasCharge.bankSlipUrl || null,
             createdAt: now,
             updatedAt: now,
           });
 
-          // Obter QR Code PIX
-          pixData = await this.asaasService.getPixQrCode(asaasCharge.id);
+          if (billingType === AsaasBillingType.PIX) {
+            pixData = await this.asaasService.getPixQrCode(asaasCharge.id);
+          }
         }
       } catch (error) {
         this.logger.error(`Erro ao criar cobrança Asaas para agendamento ${appointment.id}: ${error}`);
@@ -249,11 +257,14 @@ export class AppointmentsService {
 
     return {
       ...appointment,
-      payment: asaasCharge ? {
-        id: asaasCharge.id,
-        invoiceUrl: asaasCharge.invoiceUrl,
-        pixData
-      } : null
+      payment: asaasCharge
+        ? {
+            id: asaasCharge.id,
+            billingType,
+            invoiceUrl: asaasCharge.invoiceUrl,
+            pixData,
+          }
+        : null,
     };
   }
 

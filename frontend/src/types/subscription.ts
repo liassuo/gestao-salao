@@ -1,4 +1,6 @@
-export type SubscriptionStatus = 'ACTIVE' | 'CANCELED' | 'EXPIRED' | 'SUSPENDED';
+import { AsaasBillingType } from './asaas';
+
+export type SubscriptionStatus = 'ACTIVE' | 'CANCELED' | 'EXPIRED' | 'SUSPENDED' | 'PENDING_PAYMENT';
 
 export interface SubscriptionPlan {
   id: string;
@@ -53,6 +55,7 @@ export interface UpdatePlanPayload {
 export interface SubscribeClientPayload {
   clientId: string;
   planId: string;
+  billingType?: AsaasBillingType;
 }
 
 export interface RemainingCuts {
@@ -68,6 +71,7 @@ export const subscriptionStatusLabels: Record<SubscriptionStatus, string> = {
   CANCELED: 'Cancelada',
   EXPIRED: 'Expirada',
   SUSPENDED: 'Suspensa',
+  PENDING_PAYMENT: 'Aguardando Pagamento',
 };
 
 export const subscriptionStatusColors: Record<SubscriptionStatus, string> = {
@@ -75,4 +79,5 @@ export const subscriptionStatusColors: Record<SubscriptionStatus, string> = {
   CANCELED: 'bg-red-500/20 text-red-500',
   EXPIRED: 'bg-red-500/20 text-red-500',
   SUSPENDED: 'bg-zinc-500/20 text-zinc-500',
+  PENDING_PAYMENT: 'bg-orange-500/20 text-orange-500',
 };

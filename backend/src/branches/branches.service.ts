@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
 import { CreateBranchDto, UpdateBranchDto } from './dto';
 
@@ -11,7 +12,7 @@ export class BranchesService {
     const { data: branch, error } = await this.supabase
       .from('branches')
       .insert({
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         name: dto.name,
         address: dto.address,
         phone: dto.phone,

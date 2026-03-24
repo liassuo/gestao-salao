@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { AlertCircle, Loader2, X, Search } from 'lucide-react';
+import { AlertCircle, Loader2, X, Search, CreditCard, QrCode } from 'lucide-react';
 import { formatPhone } from '@/utils/format';
+import { AsaasBillingType } from '@/types';
 import type { Client, SubscriptionPlan, SubscribeClientPayload } from '@/types';
 
 interface SubscribeClientModalProps {
@@ -31,6 +32,7 @@ export function SubscribeClientModal({
 }: SubscribeClientModalProps) {
   const [selectedClientId, setSelectedClientId] = useState('');
   const [selectedPlanId, setSelectedPlanId] = useState('');
+  const [billingType, setBillingType] = useState<AsaasBillingType>(AsaasBillingType.PIX);
   const [clientSearch, setClientSearch] = useState('');
 
   if (!isOpen) return null;
@@ -52,11 +54,13 @@ export function SubscribeClientModal({
     await onSubmit({
       clientId: selectedClientId,
       planId: selectedPlanId,
+      billingType,
     });
 
     // Reset form
     setSelectedClientId('');
     setSelectedPlanId('');
+    setBillingType(AsaasBillingType.PIX);
     setClientSearch('');
   };
 
@@ -120,7 +124,7 @@ export function SubscribeClientModal({
           </div>
 
           {/* Plano */}
-          <div className="mb-4">
+          <div className="mb-6">
             <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
               Plano *
             </label>
@@ -139,19 +143,50 @@ export function SubscribeClientModal({
             </select>
           </div>
 
+          {/* Forma de Pagamento */}
+          <div className="mb-6">
+            <label className="mb-3 block text-sm font-medium text-[var(--text-secondary)]">
+              Forma de Pagamento *
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setBillingType(AsaasBillingType.PIX)}
+                className={`flex items-center justify-center gap-3 rounded-xl border p-4 transition-all ${
+                  billingType === AsaasBillingType.PIX
+                    ? 'border-[#C8923A] bg-[#C8923A]/10 text-[#C8923A]'
+                    : 'border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                }`}
+              >
+                <QrCode className="h-5 w-5" />
+                <span className="font-medium text-sm">PIX</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setBillingType(AsaasBillingType.CREDIT_CARD)}
+                className={`flex items-center justify-center gap-3 rounded-xl border p-4 transition-all ${
+                  billingType === AsaasBillingType.CREDIT_CARD
+                    ? 'border-[#C8923A] bg-[#C8923A]/10 text-[#C8923A]'
+                    : 'border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                }`}
+              >
+                <CreditCard className="h-5 w-5" />
+                <span className="font-medium text-sm">Cartão</span>
+              </button>
+            </div>
+          </div>
+
           {/* Resumo do Plano */}
           {selectedPlan && (
             <div className="mb-6 rounded-xl bg-[var(--hover-bg)] p-4">
-              <h3 className="mb-2 font-medium text-[var(--text-primary)]">
+              <h3 className="mb-2 font-medium text-[var(--text-primary)] text-sm">
                 Resumo do Plano
               </h3>
               <div className="space-y-1 text-sm text-[var(--text-secondary)]">
                 <p><span className="font-medium">Plano:</span> {selectedPlan.name}</p>
                 <p><span className="font-medium">Valor:</span> {formatCurrency(selectedPlan.price)}/mês</p>
                 <p><span className="font-medium">Cortes:</span> {selectedPlan.cutsPerMonth === 99 ? 'Ilimitados' : `${selectedPlan.cutsPerMonth} por mês`}</p>
-                {selectedPlan.description && (
-                  <p><span className="font-medium">Descrição:</span> {selectedPlan.description}</p>
-                )}
+                <p><span className="font-medium">Pagamento:</span> {billingType === AsaasBillingType.PIX ? 'PIX' : 'Cartão de Crédito'}</p>
               </div>
             </div>
           )}

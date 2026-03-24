@@ -1,4 +1,4 @@
-import { IsString, IsOptional } from 'class-validator';
+import { IsString, IsOptional, IsIn } from 'class-validator';
 
 export class SubscribeClientDto {
   @IsString()
@@ -10,4 +10,8 @@ export class SubscribeClientDto {
   @IsOptional()
   @IsString()
   startDate?: string;
+
+  @IsOptional()
+  @IsIn(['PIX', 'CREDIT_CARD'])
+  billingType?: 'PIX' | 'CREDIT_CARD';
 }

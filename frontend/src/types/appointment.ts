@@ -42,6 +42,8 @@ export interface CreateAppointmentPayload {
   serviceIds: string[];
   scheduledAt: string;
   notes?: string;
+  /** Cobrança digital Asaas quando o valor total > 0 */
+  billingType?: 'PIX' | 'CREDIT_CARD';
 }
 
 // Labels para exibição

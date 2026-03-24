@@ -24,7 +24,7 @@ export class AsaasController {
   ) {}
 
   @Post('charges')
-  @ApiOperation({ summary: 'Criar cobrança no Asaas (PIX, Boleto ou Cartão)' })
+  @ApiOperation({ summary: 'Criar cobrança no Asaas (PIX ou cartão)' })
   @ApiResponse({ status: 201, description: 'Cobrança criada com sucesso' })
   @HttpCode(HttpStatus.CREATED)
   async createCharge(@Body() dto: CreateChargeDto) {
@@ -64,7 +64,7 @@ export class AsaasController {
     // Criar cobrança no Asaas
     const asaasCharge = await this.asaasService.createCharge({
       customer: asaasCustomerId,
-      billingType: dto.billingType,
+      billingType: dto.billingType as AsaasBillingType,
       value: this.asaasService.centavosToReais(dto.value),
       dueDate: dto.dueDate,
       description: dto.description,
@@ -75,7 +75,7 @@ export class AsaasController {
     const paymentData: Record<string, any> = {
       clientId: dto.clientId,
       amount: dto.value,
-      method: this.billingTypeToPaymentMethod(dto.billingType),
+      method: this.billingTypeToPaymentMethod(dto.billingType as AsaasBillingType),
       paidAt: new Date().toISOString(),
       registeredBy: dto.clientId, // auto-gerado
       notes: `Cobrança Asaas #${asaasCharge.id} - ${dto.description || ''}`,

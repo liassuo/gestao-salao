@@ -38,6 +38,7 @@ export function ClientPlans() {
   const [isReactivating, setIsReactivating] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [pixModal, setPixModal] = useState<PixData | null>(null);
+  const [paymentMethodModal, setPaymentMethodModal] = useState<string | null>(null); // planId
   const [copied, setCopied] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -58,16 +59,23 @@ export function ClientPlans() {
     loadData();
   }, [loadData]);
 
-  const handleSubscribe = async (planId: string) => {
+  const handleSubscribe = async (planId: string, billingType: string = 'PIX') => {
     setSubscribingId(planId);
+    setPaymentMethodModal(null);
     try {
-      const res = await clientApi.post<{ subscription: ClientSubscription; pixData: PixData | null }>(
-        '/subscriptions/me/subscribe',
-        { planId },
-      );
+      const res = await clientApi.post<{
+        subscription: ClientSubscription;
+        pixData: PixData | null;
+        invoiceUrl?: string | null;
+      }>('/subscriptions/me/subscribe', { planId, billingType });
       setMySubscription(res.data.subscription);
       if (res.data.pixData) {
         setPixModal(res.data.pixData);
+      } else if (res.data.invoiceUrl) {
+        window.open(res.data.invoiceUrl, '_blank', 'noopener,noreferrer');
+        alert('Abra a nova aba para pagar com cartão. Os créditos serão liberados após a confirmação.');
+      } else if (billingType === 'CREDIT_CARD') {
+        alert('Assinatura criada! Verifique seu e-mail ou a área do Asaas para concluir o cadastro do cartão.');
       }
     } catch (e: any) {
       alert(e.response?.data?.message || 'Erro ao assinar plano. Tente novamente.');
@@ -89,17 +97,23 @@ export function ClientPlans() {
     }
   };
 
-  const handleReactivate = async () => {
+  const handleReactivate = async (billingType: string = 'PIX') => {
     setIsReactivating(true);
+    setPaymentMethodModal(null);
     try {
-      const res = await clientApi.post<{ subscription: ClientSubscription; pixData: PixData | null }>(
-        '/subscriptions/me/reactivate',
-      );
+      const res = await clientApi.post<{
+        subscription: ClientSubscription;
+        pixData: PixData | null;
+        invoiceUrl?: string | null;
+      }>('/subscriptions/me/reactivate', { billingType });
       setMySubscription(res.data.subscription);
       if (res.data.pixData) {
         setPixModal(res.data.pixData);
+      } else if (res.data.invoiceUrl) {
+        window.open(res.data.invoiceUrl, '_blank', 'noopener,noreferrer');
+        alert('Abra a nova aba para pagar com cartão e reativar seus créditos.');
       } else {
-        alert('Assinatura reativada! Realize o pagamento para liberar seus créditos.');
+        alert('Assinatura reativada! Conclua o pagamento para liberar seus créditos.');
       }
     } catch (e: any) {
       alert(e.response?.data?.message || 'Erro ao reativar assinatura. Tente novamente.');
@@ -240,7 +254,7 @@ export function ClientPlans() {
             </div>
 
             <button
-              onClick={handleReactivate}
+              onClick={() => setPaymentMethodModal('REACTIVATE')}
               disabled={isReactivating}
               className="w-full py-3 bg-[#8B6914] hover:bg-[#725510] text-white font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             >
@@ -310,7 +324,7 @@ export function ClientPlans() {
             <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-4 mb-4">
               <p className="text-sm text-[var(--text-secondary)]">
                 Sua assinatura foi criada, mas ainda não recebemos a confirmação do pagamento.
-                Após o pagamento PIX ser confirmado, seus créditos serão liberados automaticamente.
+                Após o PIX ou o cartão serem confirmados pelo Asaas, seus créditos serão liberados automaticamente.
               </p>
             </div>
 
@@ -408,7 +422,7 @@ export function ClientPlans() {
                     </div>
 
                     <button
-                      onClick={() => handleSubscribe(plan.id)}
+                      onClick={() => setPaymentMethodModal(plan.id)}
                       disabled={subscribingId === plan.id}
                       className="w-full py-3 bg-[#8B6914] hover:bg-[#725510] text-white font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center"
                     >
@@ -514,6 +528,76 @@ export function ClientPlans() {
 
             <p className="text-xs text-center text-[var(--text-muted)] mt-3">
               Após o pagamento, seus créditos serão liberados automaticamente
+            </p>
+          </div>
+        </div>
+      )}
+      {/* Modal Escolha Pagamento */}
+      {paymentMethodModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="bg-[var(--bg-primary)] rounded-2xl w-full max-w-sm p-6 shadow-2xl border border-[var(--card-border)]">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-[var(--text-primary)]">Forma de Pagamento</h3>
+              <button
+                onClick={() => setPaymentMethodModal(null)}
+                className="p-1 text-[var(--text-muted)]"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <p className="text-sm text-[var(--text-muted)] mb-5">
+              Escolha como deseja pagar sua assinatura mensal:
+            </p>
+
+            <div className="space-y-3">
+              <button
+                onClick={() => {
+                  if (paymentMethodModal === 'REACTIVATE') {
+                    handleReactivate('PIX');
+                  } else {
+                    handleSubscribe(paymentMethodModal, 'PIX');
+                  }
+                }}
+                className="w-full p-4 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] hover:border-[#C8923A] transition-all flex items-center gap-4 group"
+              >
+                <div className="w-10 h-10 rounded-lg bg-[#C8923A]/10 flex items-center justify-center text-[#C8923A] group-hover:bg-[#C8923A] group-hover:text-white transition-colors">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h-2m-6 0H9m11-4V7a2 2 0 00-2-2h-3m-1 0H7a2 2 0 00-2 2v10a2 2 0 002 2h3" />
+                  </svg>
+                </div>
+                <div className="text-left">
+                  <p className="font-bold text-[var(--text-primary)]">PIX</p>
+                  <p className="text-xs text-[var(--text-muted)]">Liberação imediata dos créditos</p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => {
+                  if (paymentMethodModal === 'REACTIVATE') {
+                    handleReactivate('CREDIT_CARD');
+                  } else {
+                    handleSubscribe(paymentMethodModal, 'CREDIT_CARD');
+                  }
+                }}
+                className="w-full p-4 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] hover:border-[#C8923A] transition-all flex items-center gap-4 group"
+              >
+                <div className="w-10 h-10 rounded-lg bg-[#C8923A]/10 flex items-center justify-center text-[#C8923A] group-hover:bg-[#C8923A] group-hover:text-white transition-colors">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                  </svg>
+                </div>
+                <div className="text-left">
+                  <p className="font-bold text-[var(--text-primary)]">Cartão de Crédito</p>
+                  <p className="text-xs text-[var(--text-muted)]">Cobrança automática mensal</p>
+                </div>
+              </button>
+            </div>
+
+            <p className="text-[10px] text-center text-[var(--text-muted)] mt-5">
+              Ao assinar, você concorda com nossos termos de uso e política de cancelamento.
             </p>
           </div>
         </div>

@@ -1,5 +1,10 @@
 import { clientApi } from './api';
-import type { Appointment, CreateAppointmentData, TimeSlot } from '../types';
+import type {
+  Appointment,
+  CreateAppointmentData,
+  CreatedAppointmentResponse,
+  TimeSlot,
+} from '../types';
 
 export const appointmentsApi = {
   getMyAppointments: async (): Promise<Appointment[]> => {
@@ -18,8 +23,8 @@ export const appointmentsApi = {
     return response.data;
   },
 
-  create: async (data: CreateAppointmentData): Promise<Appointment> => {
-    const response = await clientApi.post<Appointment>('/appointments/client', data);
+  create: async (data: CreateAppointmentData): Promise<CreatedAppointmentResponse> => {
+    const response = await clientApi.post<CreatedAppointmentResponse>('/appointments/client', data);
     return response.data;
   },
 

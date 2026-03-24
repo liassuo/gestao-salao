@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
 import {
   CreatePaymentMethodConfigDto,
@@ -15,7 +16,7 @@ export class PaymentMethodConfigService {
     const { data: config, error } = await this.supabase
       .from('payment_method_configs')
       .insert({
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         name: dto.name,
         type: dto.type,
         scope: dto.scope,

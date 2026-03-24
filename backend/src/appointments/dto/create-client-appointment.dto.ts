@@ -6,6 +6,7 @@ import {
   IsUUID,
   IsString,
   ArrayMinSize,
+  IsIn,
 } from 'class-validator';
 
 /**
@@ -34,4 +35,8 @@ export class CreateClientAppointmentDto {
   @IsOptional()
   @IsBoolean()
   useSubscriptionCut?: boolean;
+
+  @IsOptional()
+  @IsIn(['PIX', 'CREDIT_CARD'])
+  billingType?: 'PIX' | 'CREDIT_CARD';
 }

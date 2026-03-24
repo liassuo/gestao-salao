@@ -37,8 +37,7 @@ export function useClientAppointments() {
 
   const createAppointment = useCallback(async (data: CreateAppointmentData) => {
     try {
-      const appointment = await appointmentsApi.create(data);
-      return appointment;
+      return await appointmentsApi.create(data);
     } catch (err: any) {
       const msg = err.response?.data?.message || 'Erro ao criar agendamento';
       throw new Error(msg);

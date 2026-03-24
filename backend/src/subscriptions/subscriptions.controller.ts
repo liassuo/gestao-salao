@@ -55,9 +55,9 @@ export class SubscriptionsController {
   @HttpCode(HttpStatus.CREATED)
   async subscribeMe(
     @Req() req: RequestWithUser,
-    @Body() body: { planId: string },
+    @Body() body: { planId: string, billingType?: any },
   ) {
-    return this.subscriptionsService.subscribeByClientId(req.user.id, body.planId);
+    return this.subscriptionsService.subscribeByClientId(req.user.id, body.planId, body.billingType);
   }
 
   /**
@@ -76,8 +76,11 @@ export class SubscriptionsController {
    */
   @UseGuards(JwtAuthGuard)
   @Post('me/reactivate')
-  async reactivateMySubscription(@Req() req: RequestWithUser) {
-    return this.subscriptionsService.reactivateMySubscription(req.user.id);
+  async reactivateMySubscription(
+    @Req() req: RequestWithUser,
+    @Body() body: { billingType?: any },
+  ) {
+    return this.subscriptionsService.reactivateMySubscription(req.user.id, body.billingType);
   }
 
   // ============================================

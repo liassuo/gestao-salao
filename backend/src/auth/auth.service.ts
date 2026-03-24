@@ -1,4 +1,5 @@
 import { Injectable, UnauthorizedException, NotFoundException } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -175,7 +176,7 @@ export class AuthService {
     const { data: client, error } = await this.supabase
       .from('clients')
       .insert({
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         name: dto.name,
         email: dto.email,
         password: hashedPassword,
@@ -462,7 +463,7 @@ export class AuthService {
     }
 
     // Resetar senha com valor temporário e forçar troca no próximo login
-    const tempPassword = crypto.randomUUID();
+    const tempPassword = randomUUID();
     const hashedPassword = await bcrypt.hash(tempPassword, 6);
 
     await this.supabase
@@ -530,7 +531,7 @@ export class AuthService {
       const { data: newClient, error } = await this.supabase
         .from('clients')
         .insert({
-          id: crypto.randomUUID(),
+          id: randomUUID(),
           name: name || email.split('@')[0],
           email,
           googleId,

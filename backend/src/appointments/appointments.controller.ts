@@ -124,6 +124,8 @@ export class AppointmentsController {
       serviceIds: dto.serviceIds,
       scheduledAt: scheduledAt as any,
       notes: dto.notes,
+      billingType: dto.billingType,
+      useSubscriptionCut: dto.useSubscriptionCut === true,
     });
 
     // Usar crédito de assinatura se solicitado

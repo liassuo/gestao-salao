@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
 import { AsaasService } from '../asaas/asaas.service';
 import { CreateClientDto, UpdateClientDto } from './dto';
@@ -45,7 +46,7 @@ export class ClientsService {
     const { data: client, error } = await this.supabase
       .from('clients')
       .insert({
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         name: dto.name,
         phone: dto.phone,
         email: dto.email || null,

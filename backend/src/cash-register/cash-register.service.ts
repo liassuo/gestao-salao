@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
 import { OpenCashRegisterDto, CloseCashRegisterDto } from './dto';
 
@@ -84,7 +85,7 @@ export class CashRegisterService {
     const { data: register, error } = await this.supabase
       .from('cash_registers')
       .insert({
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         date: `${dateStr}T00:00:00`,
         openedAt: now,
         openingBalance: dto.openingBalance,

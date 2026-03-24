@@ -72,13 +72,18 @@ export function Appointments() {
       handleCloseModal();
       toast.success('Agendamento criado', 'O agendamento foi criado com sucesso.');
 
-      // Se houver dados de pagamento, abre o modal do PIX
       if (response?.payment?.pixData) {
         setPixModalData({
           pixData: response.payment.pixData,
           amount: response.totalPrice,
-          description: `Agendamento: ${response.id}`
+          description: `Agendamento: ${response.id}`,
         });
+      } else if (response?.payment?.invoiceUrl) {
+        window.open(response.payment.invoiceUrl, '_blank', 'noopener,noreferrer');
+        toast.success(
+          'Link de pagamento',
+          'Abra a nova aba para o cliente pagar com cartão no Asaas.',
+        );
       }
     } catch (err) {
       setFormError(getApiErrorMessage(err));

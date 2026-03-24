@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
 import { GenerateCommissionDto, QueryCommissionDto } from './dto';
 
@@ -56,7 +57,7 @@ export class CommissionsService {
       const { data: commission, error } = await this.supabase
         .from('commissions')
         .insert({
-          id: crypto.randomUUID(),
+          id: randomUUID(),
           amount: commissionAmount,
           periodStart: startStr,
           periodEnd: endStr,
