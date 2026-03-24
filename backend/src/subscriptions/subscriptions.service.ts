@@ -657,6 +657,7 @@ export class SubscriptionsService {
           if (effectiveBilling === AsaasBillingType.PIX) {
             pixData = await this.asaasService.getPixQrCode(pending.id);
           }
+          invoiceUrl = pending.invoiceUrl || null;
 
           await this.supabase.from('payments').insert({
             id: randomUUID(),
@@ -817,9 +818,8 @@ export class SubscriptionsService {
 
           if (billingType === AsaasBillingType.PIX) {
             pixData = await this.asaasService.getPixQrCode(charge.id);
-          } else {
-            invoiceUrl = charge.invoiceUrl || null;
           }
+          invoiceUrl = charge.invoiceUrl || null;
         }
       } catch (e) {
         this.logger.warn(`Falha ao gerar cobrança de reativação: ${e}`);

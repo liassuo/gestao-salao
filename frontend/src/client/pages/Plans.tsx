@@ -118,12 +118,15 @@ export function ClientPlans() {
       
       setMySubscription(res.data.subscription);
       
+      if (res.data.invoiceUrl) {
+        window.open(res.data.invoiceUrl, '_blank', 'noopener,noreferrer');
+      }
+
       if (res.data.pixData) {
         setPixModal(res.data.pixData);
       } else if (billingType === 'CREDIT_CARD') {
         alert('Assinatura com cartão processada com sucesso!');
       } else if (res.data.invoiceUrl) {
-        window.open(res.data.invoiceUrl, '_blank', 'noopener,noreferrer');
         alert('Abra a nova aba para concluir o pagamento.');
       }
     } catch (e: unknown) {
@@ -173,13 +176,16 @@ export function ClientPlans() {
       
       setMySubscription(res.data.subscription);
       
+      if (res.data.invoiceUrl) {
+        window.open(res.data.invoiceUrl, '_blank', 'noopener,noreferrer');
+      }
+
       if (res.data.pixData) {
         setPixModal(res.data.pixData);
       } else if (billingType === 'CREDIT_CARD') {
         alert('Assinatura reativada com cartão!');
       } else if (res.data.invoiceUrl) {
-        window.open(res.data.invoiceUrl, '_blank', 'noopener,noreferrer');
-        alert('Abra a nova aba para pagar com cartão.');
+        alert('Abra a nova aba para pagar.');
       }
     } catch (e: unknown) {
       const error = e as { response?: { data?: { message?: string } } };
