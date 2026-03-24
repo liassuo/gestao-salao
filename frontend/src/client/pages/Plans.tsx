@@ -119,7 +119,8 @@ export function ClientPlans() {
       setMySubscription(res.data.subscription);
       
       if (res.data.invoiceUrl) {
-        window.open(res.data.invoiceUrl, '_blank', 'noopener,noreferrer');
+        window.location.href = res.data.invoiceUrl;
+        return;
       }
 
       if (res.data.pixData) {
@@ -177,7 +178,8 @@ export function ClientPlans() {
       setMySubscription(res.data.subscription);
       
       if (res.data.invoiceUrl) {
-        window.open(res.data.invoiceUrl, '_blank', 'noopener,noreferrer');
+        window.location.href = res.data.invoiceUrl;
+        return;
       }
 
       if (res.data.pixData) {
