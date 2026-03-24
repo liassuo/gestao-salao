@@ -27,6 +27,7 @@ export function Appointments() {
   const [filters, setFilters] = useState<AppointmentFilters>(initialFilters);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [appointmentPrefill, setAppointmentPrefill] = useState<{ professionalId?: string; date?: string; time?: string } | undefined>();
 
   // Gerar Dívida state
   const [debtModalAppointment, setDebtModalAppointment] = useState<Appointment | null>(null);
@@ -44,6 +45,13 @@ export function Appointments() {
   };
 
   const handleOpenModal = () => {
+    setAppointmentPrefill(undefined);
+    setFormError(null);
+    setIsModalOpen(true);
+  };
+
+  const handleOpenModalFromSlot = (prefill: { professionalId: string; date: string; time: string }) => {
+    setAppointmentPrefill(prefill);
     setFormError(null);
     setIsModalOpen(true);
   };
@@ -51,6 +59,7 @@ export function Appointments() {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setFormError(null);
+    setAppointmentPrefill(undefined);
   };
 
   const handleCreateAppointment = async (payload: CreateAppointmentPayload) => {
@@ -182,9 +191,11 @@ export function Appointments() {
         size="lg"
       >
         <AppointmentForm
+          key={appointmentPrefill ? `${appointmentPrefill.professionalId}-${appointmentPrefill.date}-${appointmentPrefill.time}` : 'default'}
           onSubmit={handleCreateAppointment}
           isLoading={createAppointment.isPending}
           error={formError}
+          prefill={appointmentPrefill}
         />
       </Modal>
 
@@ -205,7 +216,7 @@ export function Appointments() {
 
       {/* Content based on active view */}
       {activeView === 'calendar' ? (
-        <CalendarView />
+        <CalendarView onNewAppointment={handleOpenModalFromSlot} />
       ) : (
         <>
           {/* Filtros */}

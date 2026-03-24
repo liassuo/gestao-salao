@@ -9,8 +9,11 @@ import { LoadingState, EmptyState } from '../components/ui';
 import { PromotionBanners } from '../components/PromotionBanners';
 import type { Appointment } from '../types';
 
+const PLANS_POPUP_KEY = 'hasSeenPlansPopup';
+
 export function ClientHome() {
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [showPlansPopup, setShowPlansPopup] = useState(false);
   const navigate = useNavigate();
   const { user } = useClientAuth();
 
@@ -31,6 +34,23 @@ export function ClientHome() {
       subscribeToPushNotifications();
     }
   }, [user]);
+
+  // Popup de planos no primeiro acesso
+  useEffect(() => {
+    const seen = localStorage.getItem(PLANS_POPUP_KEY);
+    if (!seen) {
+      const timer = setTimeout(() => setShowPlansPopup(true), 1500);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  const handleClosePlansPopup = (goToPlans: boolean) => {
+    localStorage.setItem(PLANS_POPUP_KEY, 'true');
+    setShowPlansPopup(false);
+    if (goToPlans) {
+      navigate(CLIENT_PATHS.planos);
+    }
+  };
 
   useEffect(() => {
     fetchAppointments();
@@ -73,14 +93,25 @@ export function ClientHome() {
             Meus Agendamentos
           </h1>
         </div>
-        <button
-          onClick={() => navigate(CLIENT_PATHS.perfil)}
-          className="w-11 h-11 rounded-full bg-[#C8923A]/20 flex items-center justify-center"
-        >
-          <svg className="w-5 h-5 text-[#C8923A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate(CLIENT_PATHS.planos)}
+            className="w-11 h-11 rounded-full bg-[#C8923A]/20 flex items-center justify-center"
+            title="Planos"
+          >
+            <svg className="w-5 h-5 text-[#C8923A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+          </button>
+          <button
+            onClick={() => navigate(CLIENT_PATHS.perfil)}
+            className="w-11 h-11 rounded-full bg-[#C8923A]/20 flex items-center justify-center"
+          >
+            <svg className="w-5 h-5 text-[#C8923A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Banners de Promoções */}
@@ -166,6 +197,39 @@ export function ClientHome() {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
         </svg>
       </button>
+
+      {/* Popup primeiro acesso - Planos */}
+      {showPlansPopup && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-4">
+          <div className="bg-[var(--bg-primary)] rounded-2xl w-full max-w-sm p-6 animate-in slide-in-from-bottom">
+            <div className="w-12 h-12 bg-[#C8923A]/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-6 h-6 text-[#C8923A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-bold text-[var(--text-primary)] text-center mb-2">
+              Conhece nossos planos?
+            </h3>
+            <p className="text-sm text-[var(--text-muted)] text-center mb-6">
+              Assine um plano mensal e garanta seus créditos de corte todo mês com muito mais praticidade!
+            </p>
+            <div className="space-y-3">
+              <button
+                onClick={() => handleClosePlansPopup(true)}
+                className="w-full py-3 bg-[#8B6914] hover:bg-[#725510] text-white font-semibold rounded-xl transition-colors"
+              >
+                Ver planos
+              </button>
+              <button
+                onClick={() => handleClosePlansPopup(false)}
+                className="w-full py-2.5 text-[var(--text-muted)] text-sm font-medium"
+              >
+                Agora não
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

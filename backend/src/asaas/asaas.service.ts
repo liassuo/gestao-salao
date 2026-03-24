@@ -228,6 +228,18 @@ export class AsaasService implements OnModuleInit {
     }
   }
 
+  async getSubscriptionPayments(asaasSubscriptionId: string): Promise<AsaasCharge[]> {
+    this.ensureConfigured();
+    try {
+      const { data } = await this.httpClient.get(
+        `/subscriptions/${asaasSubscriptionId}/payments`,
+      );
+      return data.data || [];
+    } catch (error) {
+      this.handleApiError(error, 'Erro ao buscar pagamentos da assinatura no Asaas');
+    }
+  }
+
   // ============================================
   // HELPERS
   // ============================================

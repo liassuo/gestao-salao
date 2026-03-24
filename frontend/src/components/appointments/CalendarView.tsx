@@ -1,7 +1,9 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Clock, Lock, Trash2, AlertCircle, Loader2, User } from 'lucide-react';
-import { useCalendarData, useDeleteTimeBlock } from '@/hooks';
+import { ChevronLeft, ChevronRight, Clock, Lock, Trash2, AlertCircle, Loader2, User, CalendarPlus } from 'lucide-react';
+import { useCalendarData, useDeleteTimeBlock, useAppointmentActions, useUpdateAppointment } from '@/hooks';
+import { useToast } from '@/components/ui';
 import { BlockTimeModal } from './BlockTimeModal';
+import { AppointmentDetailModal } from './AppointmentDetailModal';
 import type { CalendarAppointment, CalendarTimeBlock, CalendarProfessional } from '@/types';
 
 const SLOT_HEIGHT = 20; // px per 10-min slot
@@ -77,9 +79,10 @@ function generateTimeSlots(): string[] {
 
 interface AppointmentBlockProps {
   appointment: CalendarAppointment;
+  onAppointmentClick: (appointment: CalendarAppointment) => void;
 }
 
-function AppointmentBlock({ appointment }: AppointmentBlockProps) {
+function AppointmentBlock({ appointment, onAppointmentClick }: AppointmentBlockProps) {
   const time = extractTime(appointment.scheduledAt);
   const top = getTopPosition(time);
   const height = getBlockHeight(appointment.totalDuration);
@@ -90,9 +93,13 @@ function AppointmentBlock({ appointment }: AppointmentBlockProps) {
 
   return (
     <div
-      className={`absolute left-1 right-1 overflow-hidden rounded-lg border ${colors.border} ${colors.bg} px-2 py-1 backdrop-blur-sm transition-all duration-150 hover:z-20 hover:shadow-lg`}
+      className={`absolute left-1 right-1 cursor-pointer overflow-hidden rounded-lg border ${colors.border} ${colors.bg} px-2 py-1 backdrop-blur-sm transition-all duration-150 hover:z-20 hover:shadow-lg`}
       style={{ top: `${top}px`, height: `${Math.max(height, SLOT_HEIGHT)}px` }}
       title={`${appointment.client?.name || 'Cliente'} - ${serviceNames} (${time} - ${endTime})`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onAppointmentClick(appointment);
+      }}
     >
       <div className="flex h-full flex-col overflow-hidden">
         <div className={`truncate text-xs font-semibold ${colors.text}`}>
@@ -213,15 +220,28 @@ function CurrentTimeLine({ isToday }: CurrentTimeLineProps) {
   );
 }
 
-export function CalendarView() {
+interface CalendarViewProps {
+  onNewAppointment?: (prefill: { professionalId: string; date: string; time: string }) => void;
+}
+
+export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
   const [selectedDate, setSelectedDate] = useState(getTodayStr);
   const [blockModalOpen, setBlockModalOpen] = useState(false);
   const [blockModalProfessionalId, setBlockModalProfessionalId] = useState<string | null>(null);
   const [blockModalDefaultTime, setBlockModalDefaultTime] = useState<string | null>(null);
+  const [slotChoice, setSlotChoice] = useState<{ professionalId: string; time: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const [detailModal, setDetailModal] = useState<{
+    appointment: CalendarAppointment;
+    professionalName: string;
+  } | null>(null);
 
   const { data: professionals, isLoading, isError, error } = useCalendarData(selectedDate);
   const deleteTimeBlock = useDeleteTimeBlock();
+  const { cancel, attend, noShow } = useAppointmentActions();
+  const updateAppointment = useUpdateAppointment();
+  const toast = useToast();
 
   const isToday = selectedDate === getTodayStr();
   const timeSlots = useMemo(() => generateTimeSlots(), []);
@@ -247,10 +267,66 @@ export function CalendarView() {
     }
   };
 
+  const handleAppointmentClick = (appointment: CalendarAppointment, professionalName: string) => {
+    setDetailModal({ appointment, professionalName });
+  };
+
+  const handleDetailAttend = async (id: string) => {
+    try {
+      await attend(id);
+      toast.success('Status atualizado', 'Agendamento marcado como atendido.');
+    } catch {
+      toast.error('Erro', 'Não foi possível atualizar o status.');
+    }
+  };
+
+  const handleDetailCancel = async (id: string) => {
+    try {
+      await cancel(id);
+      toast.info('Agendamento cancelado', 'O agendamento foi cancelado.');
+    } catch {
+      toast.error('Erro', 'Não foi possível cancelar o agendamento.');
+    }
+  };
+
+  const handleDetailNoShow = async (id: string) => {
+    try {
+      await noShow(id);
+      toast.warning('Não compareceu', 'Agendamento marcado como não compareceu.');
+    } catch {
+      toast.error('Erro', 'Não foi possível atualizar o status.');
+    }
+  };
+
+  const handleDetailUpdate = async (id: string, data: { scheduledAt?: string; notes?: string }) => {
+    try {
+      await updateAppointment.mutateAsync({ id, data });
+      toast.success('Agendamento atualizado', 'As alterações foram salvas.');
+    } catch {
+      toast.error('Erro', 'Não foi possível salvar as alterações.');
+      throw new Error('update failed');
+    }
+  };
+
   const handleSlotClick = (professionalId: string, time: string) => {
-    setBlockModalProfessionalId(professionalId);
-    setBlockModalDefaultTime(time);
+    setSlotChoice({ professionalId, time });
+  };
+
+  const handleSlotChoiceBlock = () => {
+    if (!slotChoice) return;
+    setBlockModalProfessionalId(slotChoice.professionalId);
+    setBlockModalDefaultTime(slotChoice.time);
+    setSlotChoice(null);
     setBlockModalOpen(true);
+  };
+
+  const handleSlotChoiceSchedule = () => {
+    if (!slotChoice) return;
+    const { professionalId, time } = slotChoice;
+    setSlotChoice(null);
+    if (onNewAppointment) {
+      onNewAppointment({ professionalId, date: selectedDate, time });
+    }
   };
 
   const handleOpenBlockModal = () => {
@@ -421,6 +497,7 @@ export function CalendarView() {
                   onDeleteBlock={handleDeleteBlock}
                   isDeletingBlock={deleteTimeBlock.isPending}
                   onSlotClick={handleSlotClick}
+                  onAppointmentClick={handleAppointmentClick}
                 />
               ))}
             </div>
@@ -459,6 +536,47 @@ export function CalendarView() {
         </div>
       )}
 
+      {/* Slot action choice dialog */}
+      {slotChoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setSlotChoice(null)} />
+          <div className="relative z-10 w-80 rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-5 shadow-2xl">
+            <h3 className="mb-1 text-base font-semibold text-[var(--text-primary)]">
+              O que deseja fazer?
+            </h3>
+            <p className="mb-4 text-sm text-[var(--text-muted)]">
+              {slotChoice.time} — escolha uma ação para este horário
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={handleSlotChoiceSchedule}
+                className="flex items-center gap-3 rounded-xl border border-[#C8923A]/30 bg-[#C8923A]/10 px-4 py-3 text-left transition-colors hover:bg-[#C8923A]/20"
+              >
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#C8923A]/20">
+                  <CalendarPlus className="h-4 w-4 text-[#C8923A]" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-[var(--text-primary)]">Novo Agendamento</p>
+                  <p className="text-xs text-[var(--text-muted)]">Agendar um cliente neste horário</p>
+                </div>
+              </button>
+              <button
+                onClick={handleSlotChoiceBlock}
+                className="flex items-center gap-3 rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-4 py-3 text-left transition-colors hover:bg-[var(--card-border)]"
+              >
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--card-border)]">
+                  <Lock className="h-4 w-4 text-[var(--text-muted)]" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-[var(--text-primary)]">Bloquear Horário</p>
+                  <p className="text-xs text-[var(--text-muted)]">Marcar como indisponível</p>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Block time modal */}
       <BlockTimeModal
         isOpen={blockModalOpen}
@@ -467,6 +585,18 @@ export function CalendarView() {
         defaultProfessionalId={blockModalProfessionalId}
         defaultTime={blockModalDefaultTime}
         selectedDate={selectedDate}
+      />
+
+      {/* Appointment detail modal */}
+      <AppointmentDetailModal
+        isOpen={!!detailModal}
+        appointment={detailModal?.appointment ?? null}
+        professionalName={detailModal?.professionalName ?? ''}
+        onClose={() => setDetailModal(null)}
+        onAttend={handleDetailAttend}
+        onCancel={handleDetailCancel}
+        onNoShow={handleDetailNoShow}
+        onUpdate={handleDetailUpdate}
       />
     </div>
   );
@@ -481,6 +611,7 @@ interface ProfessionalColumnProps {
   onDeleteBlock: (id: string) => void;
   isDeletingBlock: boolean;
   onSlotClick: (professionalId: string, time: string) => void;
+  onAppointmentClick: (appointment: CalendarAppointment, professionalName: string) => void;
 }
 
 function ProfessionalColumn({
@@ -492,6 +623,7 @@ function ProfessionalColumn({
   onDeleteBlock,
   isDeletingBlock,
   onSlotClick,
+  onAppointmentClick,
 }: ProfessionalColumnProps) {
   return (
     <div className="relative min-w-[180px] flex-1 border-r border-[var(--card-border)] last:border-r-0">
@@ -530,7 +662,11 @@ function ProfessionalColumn({
 
       {/* Appointments */}
       {(professional.appointments || []).map((apt) => (
-        <AppointmentBlock key={apt.id} appointment={apt} />
+        <AppointmentBlock
+          key={apt.id}
+          appointment={apt}
+          onAppointmentClick={(a) => onAppointmentClick(a, professional.name)}
+        />
       ))}
 
       {/* Time blocks */}

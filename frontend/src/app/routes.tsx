@@ -36,6 +36,7 @@ import {
   ClientBooking,
   ClientProfile,
   ClientSetPassword,
+  ClientPlans,
 } from '@/client';
 
 // Redireciona profissionais para /agendamentos, admin para Dashboard
@@ -199,6 +200,14 @@ export const router = createBrowserRouter([
           </ClientPrivateRoute>
         ),
       },
+      {
+        path: 'planos',
+        element: (
+          <ClientPrivateRoute>
+            <ClientPlans />
+          </ClientPrivateRoute>
+        ),
+      },
     ],
   },
 ]);
@@ -242,6 +251,14 @@ export const clientRouter = createBrowserRouter([
         element: (
           <ClientPrivateRoute>
             <ClientProfile />
+          </ClientPrivateRoute>
+        ),
+      },
+      {
+        path: 'planos',
+        element: (
+          <ClientPrivateRoute>
+            <ClientPlans />
           </ClientPrivateRoute>
         ),
       },

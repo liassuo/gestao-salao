@@ -3,6 +3,7 @@ import { INestApplication, ValidationPipe, NotFoundException, BadRequestExceptio
 import * as request from 'supertest';
 import { AppointmentsController } from './appointments.controller';
 import { AppointmentsService } from './appointments.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ExecutionContext } from '@nestjs/common';
 
@@ -55,7 +56,10 @@ describe('AppointmentsController (integration)', () => {
   beforeAll(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AppointmentsController],
-      providers: [{ provide: AppointmentsService, useValue: mockService }],
+      providers: [
+        { provide: AppointmentsService, useValue: mockService },
+        { provide: NotificationsService, useValue: { notifyNewBooking: jest.fn().mockResolvedValue(undefined), notifyClient: jest.fn().mockResolvedValue(undefined), notifyStaff: jest.fn().mockResolvedValue(undefined) } },
+      ],
     })
       .overrideGuard(JwtAuthGuard)
       .useValue({
@@ -227,7 +231,9 @@ describe('AppointmentsController (integration)', () => {
         .query({ clientId: CLIENT_UUID })
         .expect(200)
         .expect(() => {
-          expect(mockService.findByClient).toHaveBeenCalledWith(CLIENT_UUID);
+          expect(mockService.findAll).toHaveBeenCalledWith(
+            expect.objectContaining({ clientId: CLIENT_UUID }),
+          );
         });
     });
 
@@ -241,10 +247,12 @@ describe('AppointmentsController (integration)', () => {
         })
         .expect(200)
         .expect(() => {
-          expect(mockService.findByProfessionalAndDate).toHaveBeenCalledWith(
-            VALID_UUID_2,
-            expect.any(Date),
-            expect.any(Date),
+          expect(mockService.findAll).toHaveBeenCalledWith(
+            expect.objectContaining({
+              professionalId: VALID_UUID_2,
+              startDate: '2025-01-01',
+              endDate: '2025-01-31',
+            }),
           );
         });
     });
@@ -292,7 +300,7 @@ describe('AppointmentsController (integration)', () => {
         .query({ professionalId: VALID_UUID_2, date: '2025-01-06' })
         .expect(200)
         .expect((res) => {
-          expect(mockService.getAvailableSlots).toHaveBeenCalledWith(VALID_UUID_2, '2025-01-06');
+          expect(mockService.getAvailableSlots).toHaveBeenCalledWith(VALID_UUID_2, '2025-01-06', undefined);
           expect(res.body).toEqual(
             expect.arrayContaining([
               expect.objectContaining({ time: '08:00', available: true }),

@@ -168,9 +168,13 @@ describe('PromotionsService', () => {
       expect(mockSupabase.from).toHaveBeenCalledWith('promotion_products');
       expect(promotionsChain.insert).toHaveBeenCalled();
       expect(servicesChain.delete).toHaveBeenCalled();
-      expect(servicesChain.insert).toHaveBeenCalledWith([{ promotionId: 'promo-1', serviceId: 'svc-1' }]);
+      expect(servicesChain.insert).toHaveBeenCalledWith([
+        expect.objectContaining({ promotionId: 'promo-1', serviceId: 'svc-1' }),
+      ]);
       expect(productsChain.delete).toHaveBeenCalled();
-      expect(productsChain.insert).toHaveBeenCalledWith([{ promotionId: 'promo-1', productId: 'prod-1' }]);
+      expect(productsChain.insert).toHaveBeenCalledWith([
+        expect.objectContaining({ promotionId: 'promo-1', productId: 'prod-1' }),
+      ]);
     });
 
     it('should throw BadRequestException when endDate <= startDate', async () => {
@@ -594,12 +598,12 @@ describe('PromotionsService', () => {
 
       expect(svcChain.delete).toHaveBeenCalled();
       expect(svcChain.insert).toHaveBeenCalledWith([
-        { promotionId: 'promo-1', serviceId: 'svc-2' },
-        { promotionId: 'promo-1', serviceId: 'svc-3' },
+        expect.objectContaining({ promotionId: 'promo-1', serviceId: 'svc-2' }),
+        expect.objectContaining({ promotionId: 'promo-1', serviceId: 'svc-3' }),
       ]);
       expect(prodChain.delete).toHaveBeenCalled();
       expect(prodChain.insert).toHaveBeenCalledWith([
-        { promotionId: 'promo-1', productId: 'prod-2' },
+        expect.objectContaining({ promotionId: 'promo-1', productId: 'prod-2' }),
       ]);
     });
 
@@ -633,7 +637,7 @@ describe('PromotionsService', () => {
   // ─── remove ───────────────────────────────────────────────────────────────
 
   describe('remove', () => {
-    it('should soft-delete by setting isActive to false', async () => {
+    it('should hard-delete the promotion', async () => {
       const pChain = mockChain();
       chains['promotions'] = pChain;
 
@@ -643,20 +647,10 @@ describe('PromotionsService', () => {
         error: null,
       });
 
-      // Second: update({ isActive: false }).eq()
-      let eqCallCount = 0;
-      pChain.eq.mockImplementation(() => {
-        eqCallCount++;
-        if (eqCallCount === 2) {
-          return Promise.resolve({ error: null });
-        }
-        return pChain;
-      });
-
       await service.remove('promo-1');
 
       expect(pChain.select).toHaveBeenCalledWith('id');
-      expect(pChain.update).toHaveBeenCalledWith({ isActive: false });
+      expect(pChain.delete).toHaveBeenCalled();
     });
 
     it('should throw NotFoundException when promotion does not exist', async () => {

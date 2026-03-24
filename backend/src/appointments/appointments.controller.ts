@@ -11,8 +11,10 @@ import {
   HttpStatus,
   ParseUUIDPipe,
   Req,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AppointmentsService } from './appointments.service';
 import {
   CreateAppointmentDto,
@@ -23,6 +25,7 @@ import {
 } from './dto';
 import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 import { NotificationsService } from '../notifications/notifications.service';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 
 interface RequestWithUser extends Request {
   user: AuthenticatedUser;
@@ -34,12 +37,14 @@ export class AppointmentsController {
   constructor(
     private readonly appointmentsService: AppointmentsService,
     private readonly notificationsService: NotificationsService,
+    private readonly subscriptionsService: SubscriptionsService,
   ) {}
 
   /**
    * GET /appointments/me
    * Retorna agendamentos do cliente autenticado (app mobile)
    */
+  @UseGuards(JwtAuthGuard)
   @Get('me')
   async findMyAppointments(@Req() req: RequestWithUser) {
     return this.appointmentsService.findByClient(req.user.id);
@@ -102,6 +107,7 @@ export class AppointmentsController {
    * Cria agendamento pelo app mobile (cliente autenticado)
    * clientId é extraído do token JWT
    */
+  @UseGuards(JwtAuthGuard)
   @Post('client')
   @HttpCode(HttpStatus.CREATED)
   async createAsClient(
@@ -119,6 +125,14 @@ export class AppointmentsController {
       scheduledAt: scheduledAt as any,
       notes: dto.notes,
     });
+
+    // Usar crédito de assinatura se solicitado
+    if (dto.useSubscriptionCut) {
+      const subscription = await this.subscriptionsService.getMySubscription(req.user.id);
+      if (subscription) {
+        await this.subscriptionsService.useCut(subscription.id);
+      }
+    }
 
     // Notificar admin/profissional do novo agendamento (fire-and-forget)
     this.notificationsService.notifyNewBooking(appointment).catch(() => {});
@@ -168,6 +182,7 @@ export class AppointmentsController {
    * PATCH /appointments/:id/rate
    * Cliente avalia um agendamento atendido
    */
+  @UseGuards(JwtAuthGuard)
   @Patch(':id/rate')
   async rate(
     @Param('id', ParseUUIDPipe) id: string,

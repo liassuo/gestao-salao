@@ -81,7 +81,7 @@ test.describe('Client Booking Flow', () => {
   test('should display booking page with services', async ({ page }) => {
     await page.goto('/cliente/agendar');
 
-    await expect(page.getByText('Escolha o servico')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Escolha o serviço')).toBeVisible({ timeout: 10000 });
     await expect(page.getByText('Corte de Cabelo')).toBeVisible();
     await expect(page.getByText('Barba', { exact: true })).toBeVisible();
   });
@@ -105,7 +105,7 @@ test.describe('Client Booking Flow', () => {
     await page.getByText('Corte de Cabelo').click();
     await page.getByRole('button', { name: /continuar/i }).click();
 
-    await expect(page.getByText('Escolha data e horario')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('Escolha data e horário')).toBeVisible({ timeout: 5000 });
   });
 
   test('should show professionals after advancing to schedule step', async ({ page }) => {
@@ -208,7 +208,7 @@ test.describe('Client Booking Flow', () => {
 
     // No service selected - check that selection visual is removed
     // The continue button in the footer should still exist but service should not be highlighted
-    await expect(page.getByText('Escolha o servico')).toBeVisible();
+    await expect(page.getByText('Escolha o serviço')).toBeVisible();
   });
 
   test('should show "no professionals available" when none match', async ({ page }) => {
@@ -233,12 +233,12 @@ test.describe('Client Booking Flow', () => {
     await page.getByText('Corte de Cabelo').click();
     await page.getByRole('button', { name: /continuar/i }).click();
 
-    await expect(page.getByText('Escolha data e horario')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('Escolha data e horário')).toBeVisible({ timeout: 5000 });
 
     // Click the back button (first button in header)
     await page.locator('button').first().click();
 
-    await expect(page.getByText('Escolha o servico')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('Escolha o serviço')).toBeVisible({ timeout: 5000 });
   });
 
   test('should show weekday labels in the schedule step', async ({ page }) => {
@@ -248,7 +248,7 @@ test.describe('Client Booking Flow', () => {
     await page.getByText('Corte de Cabelo').click();
     await page.getByRole('button', { name: /continuar/i }).click();
 
-    await expect(page.getByText('Escolha data e horario')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('Escolha data e horário')).toBeVisible({ timeout: 5000 });
 
     await expect(page.getByText('Seg')).toBeVisible();
     await expect(page.getByText('Ter')).toBeVisible();

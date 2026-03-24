@@ -14,7 +14,7 @@ const mockChain = () => {
   chain.gte = jest.fn().mockReturnValue(chain);
   chain.lte = jest.fn().mockReturnValue(chain);
   chain.order = jest.fn().mockReturnValue(chain);
-  chain.single = jest.fn();
+  chain.single = jest.fn().mockResolvedValue({ data: null, error: null });
   return chain;
 };
 
@@ -87,6 +87,10 @@ describe('PaymentsService', () => {
         error: null,
       });
 
+      // no open cash register
+      chains['cash_registers'] = mockChain();
+      chains['cash_registers'].single.mockResolvedValue({ data: null, error: null });
+
       const result = await service.registerPayment(baseDto);
 
       expect(result).toEqual(expectedPayment);
@@ -129,6 +133,10 @@ describe('PaymentsService', () => {
         data: expectedPayment,
         error: null,
       });
+
+      // no open cash register
+      chains['cash_registers'] = mockChain();
+      chains['cash_registers'].single.mockResolvedValue({ data: null, error: null });
 
       const result = await service.registerPayment(dto);
 

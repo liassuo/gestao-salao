@@ -3,6 +3,10 @@ import { NotFoundException } from '@nestjs/common';
 import { ProfessionalsService } from './professionals.service';
 import { SupabaseService } from '../supabase/supabase.service';
 
+jest.mock('bcrypt', () => ({
+  hash: jest.fn().mockResolvedValue('hashed_password'),
+}));
+
 const chains: Record<string, any> = {};
 
 const mockChain = () => {
@@ -73,10 +77,12 @@ describe('ProfessionalsService', () => {
       chains['professionals'] = mockChain();
       chains['professionals'].single.mockResolvedValue({ data: created, error: null });
 
-      // Mock users table for email check + user creation
+      // Mock users table: email check (not found) + user creation
       chains['users'] = mockChain();
-      chains['users'].single.mockResolvedValue({ data: null, error: null });
-      chains['users'].insert = jest.fn().mockResolvedValue({ data: null, error: null });
+      chains['users'].insert = jest.fn().mockReturnValue(chains['users']);
+      chains['users'].single
+        .mockResolvedValueOnce({ data: null, error: null })     // email check: not found
+        .mockResolvedValueOnce({ data: { id: 'user-1' }, error: null }); // user insert
 
       const result = await service.create(dto);
 
@@ -99,10 +105,12 @@ describe('ProfessionalsService', () => {
 
       const created = { id: 'prof2', name: 'Bruno', phone: '11888888888', avatarUrl: null, commissionRate: 25, workingHours: [] };
 
-      // Mock users table for email check + user creation
+      // Mock users table for email check (returns null = not found) + user creation
       chains['users'] = mockChain();
-      chains['users'].single.mockResolvedValue({ data: null, error: null });
-      chains['users'].insert = jest.fn().mockResolvedValue({ data: null, error: null });
+      chains['users'].insert = jest.fn().mockReturnValue(chains['users']);
+      chains['users'].single
+        .mockResolvedValueOnce({ data: null, error: null })     // email check: not found
+        .mockResolvedValueOnce({ data: { id: 'user-2' }, error: null }); // user insert
 
       chains['professionals'] = mockChain();
       chains['professionals'].single.mockResolvedValue({ data: created, error: null });
@@ -256,22 +264,20 @@ describe('ProfessionalsService', () => {
     const date = '2025-01-06'; // Monday → getUTCDay() = 1
 
     it('should return professionals available for the given services and date', async () => {
-      // _ProfessionalToService: prof1 linked to svc1
-      chains['_ProfessionalToService'] = mockChain();
-      chains['_ProfessionalToService'].in.mockResolvedValue({
-        data: [{ A: 'prof1', B: 'svc1' }],
+      // professional_services: prof1 linked to svc1
+      chains['professional_services'] = mockChain();
+      chains['professional_services'].in = jest.fn().mockResolvedValue({
+        data: [{ professionalId: 'prof1', serviceId: 'svc1' }],
         error: null,
       });
 
       // professionals: prof1 is active, works on Monday (dayOfWeek 1)
       chains['professionals'] = mockChain();
-      chains['professionals'].in.mockResolvedValue({
+      chains['professionals'].in = jest.fn().mockResolvedValue({
         data: [
           {
             id: 'prof1',
             name: 'Ana',
-            phone: '11999',
-            email: 'ana@test.com',
             avatarUrl: 'avatar.jpg',
             workingHours: [{ dayOfWeek: 1, startTime: '09:00', endTime: '18:00' }],
           },
@@ -281,7 +287,7 @@ describe('ProfessionalsService', () => {
 
       // time_blocks: no blocks
       chains['time_blocks'] = mockChain();
-      chains['time_blocks'].gte.mockResolvedValue({ data: [], error: null });
+      chains['time_blocks'].gte = jest.fn().mockResolvedValue({ data: [], error: null });
 
       const result = await service.findAvailableForBooking(['svc1'], date);
 
@@ -289,16 +295,14 @@ describe('ProfessionalsService', () => {
         {
           id: 'prof1',
           name: 'Ana',
-          phone: '11999',
-          email: 'ana@test.com',
           avatarUrl: 'avatar.jpg',
         },
       ]);
     });
 
     it('should return empty when no professionals linked to service', async () => {
-      chains['_ProfessionalToService'] = mockChain();
-      chains['_ProfessionalToService'].in.mockResolvedValue({ data: [], error: null });
+      chains['professional_services'] = mockChain();
+      chains['professional_services'].in = jest.fn().mockResolvedValue({ data: [], error: null });
 
       const result = await service.findAvailableForBooking(['svc1'], date);
 
@@ -308,21 +312,19 @@ describe('ProfessionalsService', () => {
     });
 
     it('should exclude professionals who do not work on the given day', async () => {
-      chains['_ProfessionalToService'] = mockChain();
-      chains['_ProfessionalToService'].in.mockResolvedValue({
-        data: [{ A: 'prof1', B: 'svc1' }],
+      chains['professional_services'] = mockChain();
+      chains['professional_services'].in = jest.fn().mockResolvedValue({
+        data: [{ professionalId: 'prof1', serviceId: 'svc1' }],
         error: null,
       });
 
       // prof1 only works on Tuesday (dayOfWeek 2), not Monday (1)
       chains['professionals'] = mockChain();
-      chains['professionals'].in.mockResolvedValue({
+      chains['professionals'].in = jest.fn().mockResolvedValue({
         data: [
           {
             id: 'prof1',
             name: 'Ana',
-            phone: '11999',
-            email: 'ana@test.com',
             avatarUrl: null,
             workingHours: [{ dayOfWeek: 2, startTime: '09:00', endTime: '18:00' }],
           },
@@ -336,20 +338,18 @@ describe('ProfessionalsService', () => {
     });
 
     it('should exclude professionals with 8h+ time blocks on the date', async () => {
-      chains['_ProfessionalToService'] = mockChain();
-      chains['_ProfessionalToService'].in.mockResolvedValue({
-        data: [{ A: 'prof1', B: 'svc1' }],
+      chains['professional_services'] = mockChain();
+      chains['professional_services'].in = jest.fn().mockResolvedValue({
+        data: [{ professionalId: 'prof1', serviceId: 'svc1' }],
         error: null,
       });
 
       chains['professionals'] = mockChain();
-      chains['professionals'].in.mockResolvedValue({
+      chains['professionals'].in = jest.fn().mockResolvedValue({
         data: [
           {
             id: 'prof1',
             name: 'Ana',
-            phone: '11999',
-            email: 'ana@test.com',
             avatarUrl: null,
             workingHours: [{ dayOfWeek: 1, startTime: '09:00', endTime: '18:00' }],
           },
@@ -359,7 +359,7 @@ describe('ProfessionalsService', () => {
 
       // 8-hour block covering the whole day
       chains['time_blocks'] = mockChain();
-      chains['time_blocks'].gte.mockResolvedValue({
+      chains['time_blocks'].gte = jest.fn().mockResolvedValue({
         data: [
           {
             professionalId: 'prof1',
@@ -376,20 +376,18 @@ describe('ProfessionalsService', () => {
     });
 
     it('should NOT exclude professionals with time blocks shorter than 8h', async () => {
-      chains['_ProfessionalToService'] = mockChain();
-      chains['_ProfessionalToService'].in.mockResolvedValue({
-        data: [{ A: 'prof1', B: 'svc1' }],
+      chains['professional_services'] = mockChain();
+      chains['professional_services'].in = jest.fn().mockResolvedValue({
+        data: [{ professionalId: 'prof1', serviceId: 'svc1' }],
         error: null,
       });
 
       chains['professionals'] = mockChain();
-      chains['professionals'].in.mockResolvedValue({
+      chains['professionals'].in = jest.fn().mockResolvedValue({
         data: [
           {
             id: 'prof1',
             name: 'Ana',
-            phone: '11999',
-            email: 'ana@test.com',
             avatarUrl: null,
             workingHours: [{ dayOfWeek: 1, startTime: '09:00', endTime: '18:00' }],
           },
@@ -399,7 +397,7 @@ describe('ProfessionalsService', () => {
 
       // 2-hour block — should NOT exclude
       chains['time_blocks'] = mockChain();
-      chains['time_blocks'].gte.mockResolvedValue({
+      chains['time_blocks'].gte = jest.fn().mockResolvedValue({
         data: [
           {
             professionalId: 'prof1',
@@ -416,8 +414,6 @@ describe('ProfessionalsService', () => {
         {
           id: 'prof1',
           name: 'Ana',
-          phone: '11999',
-          email: 'ana@test.com',
           avatarUrl: null,
         },
       ]);
@@ -425,19 +421,19 @@ describe('ProfessionalsService', () => {
 
     it('should only return professionals linked to ALL requested services', async () => {
       // prof1 linked to svc1 only, prof2 linked to svc1 and svc2
-      chains['_ProfessionalToService'] = mockChain();
-      chains['_ProfessionalToService'].in.mockResolvedValue({
+      chains['professional_services'] = mockChain();
+      chains['professional_services'].in = jest.fn().mockResolvedValue({
         data: [
-          { A: 'prof1', B: 'svc1' },
-          { A: 'prof2', B: 'svc1' },
-          { A: 'prof2', B: 'svc2' },
+          { professionalId: 'prof1', serviceId: 'svc1' },
+          { professionalId: 'prof2', serviceId: 'svc1' },
+          { professionalId: 'prof2', serviceId: 'svc2' },
         ],
         error: null,
       });
 
       // Only prof2 should be queried (eligible for both svc1 & svc2)
       chains['professionals'] = mockChain();
-      chains['professionals'].in.mockResolvedValue({
+      chains['professionals'].in = jest.fn().mockResolvedValue({
         data: [
           {
             id: 'prof2',
@@ -452,7 +448,7 @@ describe('ProfessionalsService', () => {
       });
 
       chains['time_blocks'] = mockChain();
-      chains['time_blocks'].gte.mockResolvedValue({ data: [], error: null });
+      chains['time_blocks'].gte = jest.fn().mockResolvedValue({ data: [], error: null });
 
       const result = await service.findAvailableForBooking(['svc1', 'svc2'], date);
 

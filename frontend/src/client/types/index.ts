@@ -49,6 +49,7 @@ export interface CreateAppointmentData {
   professionalId: string;
   date: string;
   startTime: string;
+  useSubscriptionCut?: boolean;
 }
 
 export interface ClientUser {

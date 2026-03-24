@@ -400,6 +400,53 @@ export class SubscriptionsService {
    * Força uma cobrança manual no Asaas para uma assinatura específica.
    * Cria um registro de pagamento pendente vinculado à assinatura.
    */
+  // CLIENT-FACING METHODS (JWT auth)
+
+  async getMySubscription(clientId: string) {
+    return this.findClientSubscription(clientId);
+  }
+
+  async subscribeByClientId(clientId: string, planId: string) {
+    const subscription = await this.subscribeClient({ clientId, planId });
+
+    let pixData: any = null;
+    const freshSub = await this.findClientSubscription(clientId);
+    if (this.asaasService.configured && freshSub?.asaasSubscriptionId) {
+      try {
+        const charges = await this.asaasService.getSubscriptionPayments(freshSub.asaasSubscriptionId);
+        const pending = charges.find((c: any) => c.status === 'PENDING') ?? charges[0];
+        if (pending) {
+          pixData = await this.asaasService.getPixQrCode(pending.id);
+          const now = new Date().toISOString();
+          await this.supabase.from('payments').insert({
+            id: crypto.randomUUID(),
+            clientId,
+            subscriptionId: freshSub.id,
+            amount: freshSub.plan?.price ?? 0,
+            method: 'PIX',
+            asaasPaymentId: pending.id,
+            asaasStatus: pending.status,
+            paidAt: null,
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
+      } catch (e) {
+        this.logger.warn(`Falha ao obter QR Code PIX da assinatura: ${e}`);
+      }
+    }
+
+    return { subscription: freshSub ?? subscription, pixData };
+  }
+
+  async cancelMySubscription(clientId: string) {
+    const subscription = await this.findClientSubscription(clientId);
+    if (!subscription) {
+      throw new NotFoundException('Assinatura ativa não encontrada');
+    }
+    return this.cancelSubscription(subscription.id);
+  }
+
   async forceCharge(subscriptionId: string) {
     const subscription = await this.findSubscription(subscriptionId);
     const plan = subscription.plan;

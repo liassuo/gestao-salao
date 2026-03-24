@@ -241,8 +241,8 @@ describe('PaymentsController', () => {
 
       expect(res.body).toEqual([mockPayment]);
       expect(mockService.findByDateRange).toHaveBeenCalledWith(
-        new Date(start),
-        new Date(end),
+        `${start}T00:00:00`,
+        `${end}T23:59:59`,
       );
       expect(mockService.findAll).not.toHaveBeenCalled();
     });
@@ -319,8 +319,8 @@ describe('PaymentsController', () => {
 
       expect(res.body).toEqual(totalsResult);
       expect(mockService.calculateTotalsByMethod).toHaveBeenCalledWith(
-        new Date('2026-01-01'),
-        new Date('2026-01-31'),
+        '2026-01-01T00:00:00',
+        '2026-01-31T23:59:59',
       );
     });
 
@@ -333,8 +333,8 @@ describe('PaymentsController', () => {
 
       expect(res.body).toEqual(totalsResult);
       expect(mockService.calculateTotalsByMethod).toHaveBeenCalledWith(
-        expect.any(Date),
-        expect.any(Date),
+        expect.stringMatching(/T00:00:00$/),
+        expect.stringMatching(/T23:59:59$/),
       );
     });
   });

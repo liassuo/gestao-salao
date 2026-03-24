@@ -13,4 +13,5 @@ export const CLIENT_PATHS = {
   agendar: IS_CLIENT_DOMAIN ? '/agendar' : '/cliente/agendar',
   perfil: IS_CLIENT_DOMAIN ? '/perfil' : '/cliente/perfil',
   criarSenha: IS_CLIENT_DOMAIN ? '/criar-senha' : '/cliente/criar-senha',
+  planos: IS_CLIENT_DOMAIN ? '/planos' : '/cliente/planos',
 };

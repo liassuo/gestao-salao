@@ -24,9 +24,14 @@ interface AppointmentFormProps {
   }) => Promise<void>;
   isLoading: boolean;
   error: string | null;
+  prefill?: {
+    professionalId?: string;
+    date?: string;
+    time?: string;
+  };
 }
 
-export function AppointmentForm({ onSubmit, isLoading, error }: AppointmentFormProps) {
+export function AppointmentForm({ onSubmit, isLoading, error, prefill }: AppointmentFormProps) {
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
 
   const { data: clients = [], isLoading: isLoadingClients } = useClients();
@@ -40,8 +45,9 @@ export function AppointmentForm({ onSubmit, isLoading, error }: AppointmentFormP
     formState: { errors },
   } = useForm<AppointmentFormData>({
     defaultValues: {
-      date: new Date().toISOString().split('T')[0],
-      time: '09:00',
+      date: prefill?.date || new Date().toISOString().split('T')[0],
+      time: prefill?.time || '09:00',
+      professionalId: prefill?.professionalId || '',
     },
   });
 

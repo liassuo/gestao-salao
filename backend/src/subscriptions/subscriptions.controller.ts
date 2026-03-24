@@ -10,15 +10,61 @@ import {
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
+  UseGuards,
+  Req,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 import { SubscriptionsService } from './subscriptions.service';
 import { CreatePlanDto, UpdatePlanDto, SubscribeClientDto } from './dto';
+
+interface RequestWithUser extends Request {
+  user: AuthenticatedUser;
+}
 
 @ApiTags('Subscriptions')
 @Controller('subscriptions')
 export class SubscriptionsController {
   constructor(private readonly subscriptionsService: SubscriptionsService) {}
+
+  // ============================================
+  // CLIENT-FACING ENDPOINTS (JWT auth)
+  // ============================================
+
+  /**
+   * GET /subscriptions/me
+   * Retorna assinatura ativa do cliente autenticado
+   */
+  @UseGuards(JwtAuthGuard)
+  @Get('me')
+  async getMySubscription(@Req() req: RequestWithUser) {
+    return this.subscriptionsService.getMySubscription(req.user.id);
+  }
+
+  /**
+   * POST /subscriptions/me/subscribe
+   * Assina um plano (cliente autenticado)
+   */
+  @UseGuards(JwtAuthGuard)
+  @Post('me/subscribe')
+  @HttpCode(HttpStatus.CREATED)
+  async subscribeMe(
+    @Req() req: RequestWithUser,
+    @Body() body: { planId: string },
+  ) {
+    return this.subscriptionsService.subscribeByClientId(req.user.id, body.planId);
+  }
+
+  /**
+   * POST /subscriptions/me/cancel
+   * Cancela assinatura ativa do cliente autenticado
+   */
+  @UseGuards(JwtAuthGuard)
+  @Post('me/cancel')
+  async cancelMySubscription(@Req() req: RequestWithUser) {
+    return this.subscriptionsService.cancelMySubscription(req.user.id);
+  }
 
   // ============================================
   // SUBSCRIPTION PLANS

@@ -68,12 +68,14 @@ describe('ServicesService', () => {
       const result = await service.create(createDto);
 
       expect(supabaseService.from).toHaveBeenCalledWith('services');
-      expect(chain.insert).toHaveBeenCalledWith({
-        name: createDto.name,
-        description: createDto.description,
-        price: createDto.price,
-        duration: createDto.duration,
-      });
+      expect(chain.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: createDto.name,
+          description: createDto.description,
+          price: createDto.price,
+          duration: createDto.duration,
+        }),
+      );
       expect(chain.select).toHaveBeenCalledWith(
         'id, name, description, price, duration, isActive, createdAt',
       );

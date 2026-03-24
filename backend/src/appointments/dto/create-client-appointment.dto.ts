@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsBoolean,
   IsDateString,
   IsOptional,
   IsUUID,
@@ -29,4 +30,8 @@ export class CreateClientAppointmentDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  useSubscriptionCut?: boolean;
 }

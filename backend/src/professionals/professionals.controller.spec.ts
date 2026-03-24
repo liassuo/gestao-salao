@@ -59,7 +59,7 @@ describe('ProfessionalsController (integration)', () => {
         .expect(200);
 
       expect(res.body).toEqual(expected);
-      expect(mockService.findAll).toHaveBeenCalledWith(undefined);
+      expect(mockService.findAll).toHaveBeenCalledWith(undefined, undefined);
     });
 
     it('should pass serviceId query param to findAll', async () => {
@@ -69,7 +69,7 @@ describe('ProfessionalsController (integration)', () => {
         .get(`/professionals?serviceId=${validUUID}`)
         .expect(200);
 
-      expect(mockService.findAll).toHaveBeenCalledWith(validUUID);
+      expect(mockService.findAll).toHaveBeenCalledWith(validUUID, undefined);
     });
   });
 

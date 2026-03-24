@@ -16,6 +16,7 @@ export function useAppointmentActions() {
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+    queryClient.invalidateQueries({ queryKey: ['appointments-calendar'] });
   };
 
   const cancelMutation = useMutation({
@@ -48,6 +49,18 @@ export function useCalendarData(date: string) {
   return useQuery({
     queryKey: ['appointments-calendar', date],
     queryFn: () => appointmentsService.getCalendar(date),
+  });
+}
+
+export function useUpdateAppointment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { scheduledAt?: string; notes?: string } }) =>
+      appointmentsService.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+      queryClient.invalidateQueries({ queryKey: ['appointments-calendar'] });
+    },
   });
 }
 

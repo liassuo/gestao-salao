@@ -1,4 +1,4 @@
-export { useAppointments, useAppointmentActions, useCalendarData, useCreateTimeBlock, useDeleteTimeBlock } from './useAppointments';
+export { useAppointments, useAppointmentActions, useCalendarData, useCreateTimeBlock, useDeleteTimeBlock, useUpdateAppointment } from './useAppointments';
 export { useCashRegisters } from './useCashRegisters';
 export { useCashRegisterSummary } from './useCashRegisterSummary';
 export { useCashRegisterToday, useCashRegisterOpen, CASH_REGISTER_QUERY_KEY } from './useCashRegisterToday';

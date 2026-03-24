@@ -72,6 +72,13 @@ function groupSlotsByPeriod(slots: TimeSlot[]) {
   return { manha, tarde, noite };
 }
 
+interface MySubscription {
+  id: string;
+  status: string;
+  cutsUsedThisMonth: number;
+  plan: { id: string; name: string; price: number; cutsPerMonth: number };
+}
+
 export function ClientBooking() {
   const [currentStep, setCurrentStep] = useState<Step>('service');
   const [selectedServices, setSelectedServices] = useState<Service[]>([]);
@@ -80,6 +87,8 @@ export function ClientBooking() {
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [mySubscription, setMySubscription] = useState<MySubscription | null>(null);
+  const [useSubscriptionCut, setUseSubscriptionCut] = useState(false);
 
   const navigate = useNavigate();
   const [activePromotions, setActivePromotions] = useState<ActivePromotion[]>([]);
@@ -101,6 +110,17 @@ export function ClientBooking() {
     fetchServices();
     clientApi.get<ActivePromotion[]>('/promotions/active')
       .then((res) => setActivePromotions(res.data))
+      .catch(() => {});
+    clientApi.get<MySubscription | null>('/subscriptions/me')
+      .then((res) => {
+        if (res.data && res.data.status === 'ACTIVE') {
+          setMySubscription(res.data);
+          const remaining = res.data.plan.cutsPerMonth === 99
+            ? 99
+            : Math.max(res.data.plan.cutsPerMonth - res.data.cutsUsedThisMonth, 0);
+          setUseSubscriptionCut(remaining > 0);
+        }
+      })
       .catch(() => {});
   }, [fetchServices]);
 
@@ -163,6 +183,7 @@ export function ClientBooking() {
       professionalId: selectedProfessional.id,
       date: formatDateISO(selectedDate),
       startTime: selectedTime,
+      useSubscriptionCut: useSubscriptionCut && !!mySubscription,
     });
 
     setIsSubmitting(false);
@@ -509,13 +530,57 @@ export function ClientBooking() {
 
         <div className="border-t border-[var(--border-color)] my-4"></div>
 
+        {/* Opção de usar crédito do plano */}
+        {mySubscription && (() => {
+          const remaining = mySubscription.plan.cutsPerMonth === 99
+            ? 99
+            : Math.max(mySubscription.plan.cutsPerMonth - mySubscription.cutsUsedThisMonth, 0);
+          return (
+            <button
+              onClick={() => remaining > 0 && setUseSubscriptionCut((v) => !v)}
+              className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-colors mb-4 ${
+                useSubscriptionCut && remaining > 0
+                  ? 'border-[#C8923A] bg-[#C8923A]/10'
+                  : 'border-[var(--card-border)] bg-[var(--card-bg)]'
+              } ${remaining === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                useSubscriptionCut && remaining > 0
+                  ? 'border-[#C8923A] bg-[#C8923A]'
+                  : 'border-[var(--border-color)]'
+              }`}>
+                {useSubscriptionCut && remaining > 0 && (
+                  <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </div>
+              <div className="flex-1 text-left">
+                <p className="text-sm font-semibold text-[var(--text-primary)]">
+                  Usar crédito do plano
+                </p>
+                <p className="text-xs text-[var(--text-muted)]">
+                  {mySubscription.plan.name} ·{' '}
+                  {remaining === 0
+                    ? 'Sem créditos disponíveis'
+                    : mySubscription.plan.cutsPerMonth === 99
+                    ? 'Ilimitado'
+                    : `${remaining} crédito${remaining > 1 ? 's' : ''} restante${remaining > 1 ? 's' : ''}`}
+                </p>
+              </div>
+            </button>
+          );
+        })()}
+
         <div className="flex items-start gap-3">
           <svg className="w-5 h-5 text-[#C8923A] mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
           </svg>
           <div>
             <p className="text-xs text-[var(--text-muted)]">Total</p>
-            <p className="text-xl font-bold text-[#C8923A]">{formatPrice(totalPrice)}</p>
+            <p className="text-xl font-bold text-[#C8923A]">
+              {useSubscriptionCut && mySubscription ? 'Pelo plano' : formatPrice(totalPrice)}
+            </p>
           </div>
         </div>
       </div>

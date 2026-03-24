@@ -6,7 +6,6 @@
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169e1?logo=postgresql&logoColor=white)
 ![Tailwind](https://img.shields.io/badge/Tailwind_CSS-4.1-06b6d4?logo=tailwindcss&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-7.2-646cff?logo=vite&logoColor=white)
-![Prisma](https://img.shields.io/badge/Prisma-5.0-2d3748?logo=prisma&logoColor=white)
 ![License](https://img.shields.io/badge/Licenca-Privado-red)
 
 Sistema web completo para gestao de barbearias e saloes de beleza, com agendamentos, estoque, comandas, financeiro, caixa diario, dividas (fiado) e dashboard analitico. Monorepo com frontend React e backend NestJS, ambos em TypeScript.
