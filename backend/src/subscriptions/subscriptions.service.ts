@@ -213,23 +213,47 @@ export class SubscriptionsService {
 
     // Se Asaas está configurado, aguarda confirmação de pagamento antes de ativar
     const initialStatus = this.asaasService.configured ? 'PENDING_PAYMENT' : 'ACTIVE';
-
     const subNow = new Date().toISOString();
-    const { data: insertedSub, error } = await this.supabase
+
+    // Tenta encontrar uma assinatura cancelada para reutilizar o registro (devido à restrição UNIQUE no clientId)
+    const { data: existingSub } = await this.supabase
       .from('client_subscriptions')
-      .insert({
-        id: randomUUID(),
-        clientId: dto.clientId,
-        planId: dto.planId,
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString(),
-        cutsUsedThisMonth: 0,
-        status: initialStatus,
-        createdAt: subNow,
-        updatedAt: subNow,
-      })
-      .select('*')
+      .select('id')
+      .eq('clientId', dto.clientId)
+      .limit(1)
       .single();
+
+    let query;
+    if (existingSub) {
+      this.logger.log(`Atualizando assinatura existente ${existingSub.id} para cliente ${dto.clientId}`);
+      query = this.supabase
+        .from('client_subscriptions')
+        .update({
+          planId: dto.planId,
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          cutsUsedThisMonth: 0,
+          status: initialStatus,
+          updatedAt: subNow,
+        })
+        .eq('id', existingSub.id);
+    } else {
+      query = this.supabase
+        .from('client_subscriptions')
+        .insert({
+          id: randomUUID(),
+          clientId: dto.clientId,
+          planId: dto.planId,
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          cutsUsedThisMonth: 0,
+          status: initialStatus,
+          createdAt: subNow,
+          updatedAt: subNow,
+        });
+    }
+
+    const { data: insertedSub, error } = await query.select('*').single();
 
     if (error) {
       this.logger.error(`client_subscriptions insert failed: ${JSON.stringify(error)}`);
