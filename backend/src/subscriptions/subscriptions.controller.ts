@@ -66,6 +66,16 @@ export class SubscriptionsController {
     return this.subscriptionsService.cancelMySubscription(req.user.id);
   }
 
+  /**
+   * POST /subscriptions/me/reactivate
+   * Reativa assinatura suspensa do cliente autenticado, gerando nova cobrança PIX
+   */
+  @UseGuards(JwtAuthGuard)
+  @Post('me/reactivate')
+  async reactivateMySubscription(@Req() req: RequestWithUser) {
+    return this.subscriptionsService.reactivateMySubscription(req.user.id);
+  }
+
   // ============================================
   // SUBSCRIPTION PLANS
   // ============================================

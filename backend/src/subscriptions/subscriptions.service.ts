@@ -311,11 +311,29 @@ export class SubscriptionsService {
       .from('client_subscriptions')
       .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth)')
       .eq('clientId', clientId)
-      .in('status', ['ACTIVE', 'PENDING_PAYMENT'])
+      .in('status', ['ACTIVE', 'PENDING_PAYMENT', 'SUSPENDED'])
       .order('createdAt', { ascending: false })
       .limit(1);
 
-    return results?.[0] ?? null;
+    const subscription = results?.[0] ?? null;
+
+    // Auto-suspender se endDate venceu e ainda está ACTIVE
+    if (subscription && subscription.status === 'ACTIVE') {
+      const endDate = new Date(subscription.endDate);
+      if (new Date() > endDate) {
+        const now = new Date().toISOString();
+        const { data: suspended } = await this.supabase
+          .from('client_subscriptions')
+          .update({ status: 'SUSPENDED', updatedAt: now })
+          .eq('id', subscription.id)
+          .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth)')
+          .single();
+        this.logger.log(`Assinatura ${subscription.id} suspensa automaticamente (endDate ${subscription.endDate} vencido)`);
+        return suspended ?? subscription;
+      }
+    }
+
+    return subscription;
   }
 
   async cancelSubscription(id: string) {
@@ -329,8 +347,8 @@ export class SubscriptionsService {
       throw new NotFoundException('Assinatura não encontrada');
     }
 
-    if (subscription.status !== 'ACTIVE' && subscription.status !== 'PENDING_PAYMENT') {
-      throw new BadRequestException('Assinatura não pode ser cancelada pois não está ativa');
+    if (!['ACTIVE', 'PENDING_PAYMENT', 'SUSPENDED'].includes(subscription.status)) {
+      throw new BadRequestException('Assinatura não pode ser cancelada');
     }
 
     const { data: updated, error } = await this.supabase
@@ -360,6 +378,16 @@ export class SubscriptionsService {
 
     if (subscription.status !== 'ACTIVE') {
       throw new BadRequestException('Assinatura não está ativa');
+    }
+
+    // Segurança: verificar se endDate não venceu
+    if (subscription.endDate && new Date() > new Date(subscription.endDate)) {
+      const now = new Date().toISOString();
+      await this.supabase
+        .from('client_subscriptions')
+        .update({ status: 'SUSPENDED', updatedAt: now })
+        .eq('id', subscription.id);
+      throw new BadRequestException('Assinatura vencida. Realize o pagamento para renovar os créditos.');
     }
 
     const cutsPerMonth = subscription.plan?.cutsPerMonth ?? 0;
@@ -446,9 +474,109 @@ export class SubscriptionsService {
   async cancelMySubscription(clientId: string) {
     const subscription = await this.findClientSubscription(clientId);
     if (!subscription) {
-      throw new NotFoundException('Assinatura ativa não encontrada');
+      throw new NotFoundException('Nenhuma assinatura encontrada');
     }
     return this.cancelSubscription(subscription.id);
+  }
+
+  async reactivateMySubscription(clientId: string) {
+    // Buscar assinatura suspensa
+    const { data: results } = await this.supabase
+      .from('client_subscriptions')
+      .select('*, client:clients(id, name, phone, asaasCustomerId, email), plan:subscription_plans(id, name, price, cutsPerMonth)')
+      .eq('clientId', clientId)
+      .eq('status', 'SUSPENDED')
+      .order('createdAt', { ascending: false })
+      .limit(1);
+
+    const subscription = results?.[0];
+    if (!subscription) {
+      throw new NotFoundException('Assinatura suspensa não encontrada');
+    }
+
+    // Novo ciclo: endDate = hoje + 1 mês
+    const now = new Date();
+    const newEndDate = new Date(now);
+    newEndDate.setMonth(newEndDate.getMonth() + 1);
+
+    // Marcar como aguardando pagamento e atualizar datas
+    await this.supabase
+      .from('client_subscriptions')
+      .update({
+        status: 'PENDING_PAYMENT',
+        startDate: now.toISOString(),
+        endDate: newEndDate.toISOString(),
+        cutsUsedThisMonth: 0,
+        updatedAt: now.toISOString(),
+      })
+      .eq('id', subscription.id);
+
+    // Gerar cobrança PIX via Asaas (se configurado)
+    let pixData: any = null;
+    if (this.asaasService.configured) {
+      try {
+        let asaasCustomerId = subscription.client?.asaasCustomerId;
+        if (!asaasCustomerId) {
+          const { data: clientData } = await this.supabase
+            .from('clients')
+            .select('asaasCustomerId, name, email, phone')
+            .eq('id', clientId)
+            .single();
+
+          if (!clientData?.asaasCustomerId && clientData) {
+            const asaasCustomer = await this.asaasService.createCustomer({
+              name: clientData.name,
+              email: clientData.email || undefined,
+              mobilePhone: clientData.phone || undefined,
+              externalReference: clientId,
+            });
+            asaasCustomerId = asaasCustomer.id;
+            await this.supabase.from('clients').update({ asaasCustomerId }).eq('id', clientId);
+          } else {
+            asaasCustomerId = clientData?.asaasCustomerId;
+          }
+        }
+
+        if (asaasCustomerId) {
+          const today = now.toISOString().split('T')[0];
+          const charge = await this.asaasService.createCharge({
+            customer: asaasCustomerId,
+            billingType: AsaasBillingType.PIX,
+            value: this.asaasService.centavosToReais(subscription.plan?.price ?? 0),
+            dueDate: today,
+            description: `Reativação: Plano ${subscription.plan?.name}`,
+            externalReference: subscription.id,
+          });
+
+          // Salvar pagamento local vinculado à assinatura
+          await this.supabase.from('payments').insert({
+            id: crypto.randomUUID(),
+            clientId,
+            subscriptionId: subscription.id,
+            amount: subscription.plan?.price ?? 0,
+            method: 'PIX',
+            asaasPaymentId: charge.id,
+            asaasStatus: charge.status,
+            paidAt: null,
+            createdAt: now.toISOString(),
+            updatedAt: now.toISOString(),
+          });
+
+          pixData = await this.asaasService.getPixQrCode(charge.id);
+        }
+      } catch (e) {
+        this.logger.warn(`Falha ao gerar cobrança de reativação: ${e}`);
+      }
+    }
+
+    // Re-fetch atualizado
+    const { data: updated } = await this.supabase
+      .from('client_subscriptions')
+      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth)')
+      .eq('id', subscription.id)
+      .single();
+
+    return { subscription: updated ?? subscription, pixData };
   }
 
   async forceCharge(subscriptionId: string) {

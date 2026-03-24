@@ -35,6 +35,7 @@ export function ClientPlans() {
   const [isLoading, setIsLoading] = useState(true);
   const [subscribingId, setSubscribingId] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [isReactivating, setIsReactivating] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [pixModal, setPixModal] = useState<PixData | null>(null);
   const [copied, setCopied] = useState(false);
@@ -85,6 +86,25 @@ export function ClientPlans() {
       alert(e.response?.data?.message || 'Erro ao cancelar assinatura.');
     } finally {
       setIsCancelling(false);
+    }
+  };
+
+  const handleReactivate = async () => {
+    setIsReactivating(true);
+    try {
+      const res = await clientApi.post<{ subscription: ClientSubscription; pixData: PixData | null }>(
+        '/subscriptions/me/reactivate',
+      );
+      setMySubscription(res.data.subscription);
+      if (res.data.pixData) {
+        setPixModal(res.data.pixData);
+      } else {
+        alert('Assinatura reativada! Realize o pagamento para liberar seus créditos.');
+      }
+    } catch (e: any) {
+      alert(e.response?.data?.message || 'Erro ao reativar assinatura. Tente novamente.');
+    } finally {
+      setIsReactivating(false);
     }
   };
 
@@ -191,6 +211,80 @@ export function ClientPlans() {
               >
                 Cancelar assinatura
               </button>
+            )}
+          </div>
+        )}
+
+        {/* Assinatura Suspensa */}
+        {mySubscription && mySubscription.status === 'SUSPENDED' && (
+          <div className="bg-[var(--card-bg)] border border-red-500/30 rounded-2xl p-5">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-500/20">
+                <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <p className="font-semibold text-[var(--text-primary)]">{mySubscription.plan.name}</p>
+                <p className="text-sm text-red-400 font-medium">Assinatura suspensa</p>
+              </div>
+              <span className="text-sm font-bold text-[var(--text-primary)]">
+                {formatPrice(mySubscription.plan.price)}/mês
+              </span>
+            </div>
+
+            <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-4 mb-4">
+              <p className="text-sm text-[var(--text-secondary)]">
+                Sua assinatura foi suspensa por falta de pagamento. Reative para voltar a usar seus créditos mensais.
+              </p>
+            </div>
+
+            <button
+              onClick={handleReactivate}
+              disabled={isReactivating}
+              className="w-full py-3 bg-[#8B6914] hover:bg-[#725510] text-white font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isReactivating ? (
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Reativar assinatura
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={() => setShowCancelConfirm(true)}
+              className="mt-2 w-full py-2 text-[var(--text-muted)] text-sm font-medium"
+            >
+              Cancelar definitivamente
+            </button>
+
+            {showCancelConfirm && (
+              <div className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4">
+                <p className="text-sm text-[var(--text-secondary)] mb-3">
+                  Cancelar a assinatura definitivamente?
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowCancelConfirm(false)}
+                    disabled={isCancelling}
+                    className="flex-1 py-2 rounded-xl border border-[var(--card-border)] text-[var(--text-secondary)] text-sm font-medium disabled:opacity-50"
+                  >
+                    Não
+                  </button>
+                  <button
+                    onClick={handleCancelConfirmed}
+                    disabled={isCancelling}
+                    className="flex-1 py-2 rounded-xl bg-red-500/70 text-white text-sm font-medium disabled:opacity-50"
+                  >
+                    {isCancelling ? 'Cancelando...' : 'Sim, cancelar'}
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         )}

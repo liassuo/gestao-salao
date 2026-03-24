@@ -143,21 +143,36 @@ export class AsaasWebhookController {
         .eq('id', localPayment.id);
     }
 
-    // Se vinculado a assinatura, ativar (se pendente) e resetar contador de cortes
+    // Se vinculado a assinatura, ativar e estender endDate + resetar cortes
     if (localPayment.subscriptionId) {
-      const now = new Date().toISOString();
+      const now = new Date();
+
+      // Buscar endDate atual para estender 1 mês (mantém o dia de cobrança)
+      const { data: currentSub } = await this.supabase
+        .from('client_subscriptions')
+        .select('endDate')
+        .eq('id', localPayment.subscriptionId)
+        .single();
+
+      const currentEnd = currentSub?.endDate ? new Date(currentSub.endDate) : now;
+      // Se endDate já passou, estende a partir de hoje; senão, estende a partir do endDate atual
+      const baseDate = currentEnd < now ? now : currentEnd;
+      const newEndDate = new Date(baseDate);
+      newEndDate.setMonth(newEndDate.getMonth() + 1);
+
       await this.supabase
         .from('client_subscriptions')
         .update({
           status: 'ACTIVE',
           cutsUsedThisMonth: 0,
-          lastResetDate: now,
-          updatedAt: now,
+          lastResetDate: now.toISOString(),
+          endDate: newEndDate.toISOString(),
+          updatedAt: now.toISOString(),
         })
         .eq('id', localPayment.subscriptionId);
 
       this.logger.log(
-        `Assinatura ${localPayment.subscriptionId} ativada/renovada (pagamento confirmado)`,
+        `Assinatura ${localPayment.subscriptionId} ativada/renovada até ${newEndDate.toISOString()}`,
       );
     }
 
@@ -167,7 +182,7 @@ export class AsaasWebhookController {
   }
 
   /**
-   * Pagamento vencido
+   * Pagamento vencido — suspende assinatura vinculada
    */
   private async handlePaymentOverdue(paymentData: any) {
     const asaasPaymentId = paymentData.id;
@@ -178,6 +193,24 @@ export class AsaasWebhookController {
       .from('payments')
       .update({ asaasStatus: AsaasChargeStatus.OVERDUE })
       .eq('asaasPaymentId', asaasPaymentId);
+
+    // Suspender assinatura vinculada
+    const { data: localPayment } = await this.supabase
+      .from('payments')
+      .select('subscriptionId')
+      .eq('asaasPaymentId', asaasPaymentId)
+      .single();
+
+    if (localPayment?.subscriptionId) {
+      const now = new Date().toISOString();
+      await this.supabase
+        .from('client_subscriptions')
+        .update({ status: 'SUSPENDED', updatedAt: now })
+        .eq('id', localPayment.subscriptionId)
+        .in('status', ['ACTIVE', 'PENDING_PAYMENT']);
+
+      this.logger.log(`Assinatura ${localPayment.subscriptionId} suspensa por falta de pagamento`);
+    }
   }
 
   /**
