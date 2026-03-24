@@ -158,14 +158,14 @@ export class SubscriptionsService {
     }
 
     // Verificar se já tem assinatura ativa ou aguardando pagamento
-    const { data: existingSubscription } = await this.supabase
+    const { data: existingSubscriptions } = await this.supabase
       .from('client_subscriptions')
       .select('id')
       .eq('clientId', dto.clientId)
       .in('status', ['ACTIVE', 'PENDING_PAYMENT'])
-      .single();
+      .limit(1);
 
-    if (existingSubscription) {
+    if (existingSubscriptions && existingSubscriptions.length > 0) {
       throw new BadRequestException('Cliente já possui uma assinatura ativa ou aguardando pagamento');
     }
 
@@ -307,16 +307,15 @@ export class SubscriptionsService {
 
 
   async findClientSubscription(clientId: string) {
-    const { data: subscription } = await this.supabase
+    const { data: results } = await this.supabase
       .from('client_subscriptions')
       .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth)')
       .eq('clientId', clientId)
       .in('status', ['ACTIVE', 'PENDING_PAYMENT'])
       .order('createdAt', { ascending: false })
-      .limit(1)
-      .single();
+      .limit(1);
 
-    return subscription;
+    return results?.[0] ?? null;
   }
 
   async cancelSubscription(id: string) {

@@ -35,6 +35,7 @@ export function ClientPlans() {
   const [isLoading, setIsLoading] = useState(true);
   const [subscribingId, setSubscribingId] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [pixModal, setPixModal] = useState<PixData | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -74,13 +75,12 @@ export function ClientPlans() {
     }
   };
 
-  const handleCancel = async () => {
-    if (!window.confirm('Tem certeza que deseja cancelar sua assinatura?')) return;
+  const handleCancelConfirmed = async () => {
     setIsCancelling(true);
     try {
       await clientApi.post('/subscriptions/me/cancel');
       setMySubscription(null);
-      alert('Assinatura cancelada com sucesso.');
+      setShowCancelConfirm(false);
     } catch (e: any) {
       alert(e.response?.data?.message || 'Erro ao cancelar assinatura.');
     } finally {
@@ -162,13 +162,36 @@ export function ClientPlans() {
               )}
             </div>
 
-            <button
-              onClick={handleCancel}
-              disabled={isCancelling}
-              className="mt-4 w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-colors disabled:opacity-50"
-            >
-              {isCancelling ? 'Cancelando...' : 'Cancelar assinatura'}
-            </button>
+            {showCancelConfirm ? (
+              <div className="mt-4 rounded-xl bg-white/10 p-4">
+                <p className="text-sm text-white/90 mb-3">
+                  Cancelar a assinatura? Você perderá acesso aos créditos do mês.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowCancelConfirm(false)}
+                    disabled={isCancelling}
+                    className="flex-1 py-2 rounded-xl bg-white/20 text-white text-sm font-medium disabled:opacity-50"
+                  >
+                    Não
+                  </button>
+                  <button
+                    onClick={handleCancelConfirmed}
+                    disabled={isCancelling}
+                    className="flex-1 py-2 rounded-xl bg-red-500/70 text-white text-sm font-medium disabled:opacity-50"
+                  >
+                    {isCancelling ? 'Cancelando...' : 'Sim, cancelar'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowCancelConfirm(true)}
+                className="mt-4 w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-colors"
+              >
+                Cancelar assinatura
+              </button>
+            )}
           </div>
         )}
 
@@ -199,20 +222,43 @@ export function ClientPlans() {
 
             {pixModal && (
               <button
-                onClick={() => {}}
+                onClick={() => setPixModal(pixModal)}
                 className="w-full py-2.5 rounded-xl bg-amber-500/20 text-amber-400 text-sm font-medium mb-3"
               >
                 Ver QR Code PIX
               </button>
             )}
 
-            <button
-              onClick={handleCancel}
-              disabled={isCancelling}
-              className="w-full py-2.5 rounded-xl border border-[var(--card-border)] text-[var(--text-secondary)] text-sm font-medium transition-colors hover:bg-[var(--hover-bg)] disabled:opacity-50"
-            >
-              {isCancelling ? 'Cancelando...' : 'Cancelar assinatura'}
-            </button>
+            {showCancelConfirm ? (
+              <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
+                <p className="text-sm text-[var(--text-secondary)] mb-3">
+                  Cancelar a assinatura pendente?
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowCancelConfirm(false)}
+                    disabled={isCancelling}
+                    className="flex-1 py-2 rounded-xl border border-[var(--card-border)] text-[var(--text-secondary)] text-sm font-medium disabled:opacity-50"
+                  >
+                    Não
+                  </button>
+                  <button
+                    onClick={handleCancelConfirmed}
+                    disabled={isCancelling}
+                    className="flex-1 py-2 rounded-xl bg-red-500/80 text-white text-sm font-medium disabled:opacity-50"
+                  >
+                    {isCancelling ? 'Cancelando...' : 'Sim, cancelar'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowCancelConfirm(true)}
+                className="w-full py-2.5 rounded-xl border border-[var(--card-border)] text-[var(--text-secondary)] text-sm font-medium transition-colors hover:bg-[var(--hover-bg)]"
+              >
+                Cancelar assinatura
+              </button>
+            )}
           </div>
         )}
 
