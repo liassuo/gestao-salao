@@ -11,3 +11,4 @@ export {
 export { Spinner, LoadingOverlay } from './Spinner';
 export { ToastContainer, type ToastData, type ToastType } from './Toast';
 export { ToastProvider, useToast } from './ToastContext';
+export { PixPaymentModal } from './PixPaymentModal';

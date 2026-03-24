@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { SupabaseService } from '../supabase/supabase.service';
 import { CreateProductDto, UpdateProductDto, QueryProductDto } from './dto';
 
@@ -8,6 +8,18 @@ export class ProductsService {
 
   async create(dto: CreateProductDto) {
     const now = new Date().toISOString();
+    const { data: existing } = await this.supabase
+      .from('products')
+      .select('id')
+      .ilike('name', dto.name)
+      .eq('isActive', true)
+      .eq('branchId', dto.branchId)
+      .maybeSingle();
+
+    if (existing) {
+      throw new BadRequestException('Já existe um produto ativo com este nome nesta filial');
+    }
+
     const { data: product, error } = await this.supabase
       .from('products')
       .insert({
@@ -69,7 +81,17 @@ export class ProductsService {
   async getStock(branchId?: string) {
     let queryBuilder = this.supabase
       .from('products')
-      .select('id, name, costPrice, salePrice, minStock')
+      .select(`
+        id, 
+        name, 
+        costPrice, 
+        salePrice, 
+        minStock,
+        stock_movements (
+          type,
+          quantity
+        )
+      `)
       .eq('isActive', true);
 
     if (branchId) {
@@ -80,18 +102,12 @@ export class ProductsService {
 
     if (error) throw error;
 
-    const stockData = [];
-    for (const product of products || []) {
-      const { data: movements } = await this.supabase
-        .from('stock_movements')
-        .select('type, quantity')
-        .eq('productId', product.id);
-
-      const currentStock = (movements || []).reduce((acc, m) => {
+    return (products || []).map((product: any) => {
+      const currentStock = (product.stock_movements || []).reduce((acc: number, m: any) => {
         return m.type === 'ENTRY' ? acc + m.quantity : acc - m.quantity;
       }, 0);
 
-      stockData.push({
+      return {
         id: product.id,
         name: product.name,
         costPrice: product.costPrice,
@@ -101,10 +117,8 @@ export class ProductsService {
         stockValue: currentStock * product.costPrice,
         potentialSaleValue: currentStock * product.salePrice,
         isLowStock: currentStock <= product.minStock,
-      });
-    }
-
-    return stockData;
+      };
+    });
   }
 
   async getLowStock(branchId?: string) {
@@ -115,7 +129,7 @@ export class ProductsService {
   async update(id: string, dto: UpdateProductDto) {
     const { data: product, error: findError } = await this.supabase
       .from('products')
-      .select('id')
+      .select('id, branchId')
       .eq('id', id)
       .single();
 
@@ -124,7 +138,21 @@ export class ProductsService {
     }
 
     const updateData: any = {};
-    if (dto.name !== undefined) updateData.name = dto.name;
+    if (dto.name !== undefined) {
+      const { data: existing } = await this.supabase
+        .from('products')
+        .select('id')
+        .ilike('name', dto.name)
+        .eq('isActive', true)
+        .eq('branchId', dto.branchId || product.branchId)
+        .neq('id', id)
+        .maybeSingle();
+
+      if (existing) {
+        throw new BadRequestException('Já existe outro produto ativo com este nome nesta filial');
+      }
+      updateData.name = dto.name;
+    }
     if (dto.description !== undefined) updateData.description = dto.description;
     if (dto.costPrice !== undefined) updateData.costPrice = dto.costPrice;
     if (dto.salePrice !== undefined) updateData.salePrice = dto.salePrice;

@@ -9,12 +9,18 @@ import {
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '../common/enums';
 import { BranchesService } from './branches.service';
 import { CreateBranchDto, UpdateBranchDto } from './dto';
 
 @ApiTags('Branches')
+@ApiBearerAuth()
 @Controller('branches')
 export class BranchesController {
   constructor(private readonly branchesService: BranchesService) {}
@@ -23,6 +29,8 @@ export class BranchesController {
    * POST /branches
    * Creates a new branch (admin)
    */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() dto: CreateBranchDto) {
@@ -60,6 +68,8 @@ export class BranchesController {
    * PATCH /branches/:id
    * Updates a branch (admin)
    */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   @Patch(':id')
   async update(
     @Param('id', ParseUUIDPipe) id: string,
@@ -72,6 +82,8 @@ export class BranchesController {
    * DELETE /branches/:id
    * Soft deletes a branch
    */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param('id', ParseUUIDPipe) id: string) {

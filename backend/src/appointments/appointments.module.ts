@@ -4,8 +4,10 @@ import { AppointmentsService } from './appointments.service';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 
+import { AsaasModule } from '../asaas/asaas.module';
+
 @Module({
-  imports: [NotificationsModule, SubscriptionsModule],
+  imports: [NotificationsModule, SubscriptionsModule, AsaasModule],
   controllers: [AppointmentsController],
   providers: [AppointmentsService],
   exports: [AppointmentsService],

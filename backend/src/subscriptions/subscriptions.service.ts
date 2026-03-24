@@ -22,6 +22,17 @@ export class SubscriptionsService {
 
   async createPlan(dto: CreatePlanDto) {
     const now = new Date().toISOString();
+    const { data: existing } = await this.supabase
+      .from('subscription_plans')
+      .select('id')
+      .ilike('name', dto.name)
+      .eq('isActive', true)
+      .maybeSingle();
+
+    if (existing) {
+      throw new BadRequestException('Já existe um plano ativo com este nome');
+    }
+
     const { data: plan, error } = await this.supabase
       .from('subscription_plans')
       .insert({
@@ -87,7 +98,20 @@ export class SubscriptionsService {
     }
 
     const updateData: any = {};
-    if (dto.name !== undefined) updateData.name = dto.name;
+    if (dto.name !== undefined) {
+      const { data: existing } = await this.supabase
+        .from('subscription_plans')
+        .select('id')
+        .ilike('name', dto.name)
+        .eq('isActive', true)
+        .neq('id', id)
+        .maybeSingle();
+
+      if (existing) {
+        throw new BadRequestException('Já existe outro plano ativo com este nome');
+      }
+      updateData.name = dto.name;
+    }
     if (dto.description !== undefined) updateData.description = dto.description;
     if (dto.price !== undefined) updateData.price = dto.price;
     if (dto.cutsPerMonth !== undefined) updateData.cutsPerMonth = dto.cutsPerMonth;

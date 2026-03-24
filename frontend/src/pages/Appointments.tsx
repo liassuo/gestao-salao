@@ -15,7 +15,7 @@ import {
   CalendarView,
 } from '@/components/appointments';
 import { DebtForm } from '@/components/debts';
-import { Modal, SkeletonTable, useToast } from '@/components/ui';
+import { Modal, SkeletonTable, useToast, PixPaymentModal } from '@/components/ui';
 import type { Appointment, AppointmentFilters, CreateAppointmentPayload, CreateDebtPayload } from '@/types';
 
 type ViewMode = 'calendar' | 'table';
@@ -32,6 +32,9 @@ export function Appointments() {
   // Gerar Dívida state
   const [debtModalAppointment, setDebtModalAppointment] = useState<Appointment | null>(null);
   const [debtFormError, setDebtFormError] = useState<string | null>(null);
+  
+  // Pix Payment state
+  const [pixModalData, setPixModalData] = useState<{ pixData: any; amount: number; description?: string } | null>(null);
 
   const { data: appointments, isLoading, isError, error } = useAppointments(filters);
   const { data: professionals = [] } = useProfessionals();
@@ -65,9 +68,18 @@ export function Appointments() {
   const handleCreateAppointment = async (payload: CreateAppointmentPayload) => {
     setFormError(null);
     try {
-      await createAppointment.mutateAsync(payload);
+      const response = await createAppointment.mutateAsync(payload) as any;
       handleCloseModal();
       toast.success('Agendamento criado', 'O agendamento foi criado com sucesso.');
+
+      // Se houver dados de pagamento, abre o modal do PIX
+      if (response?.payment?.pixData) {
+        setPixModalData({
+          pixData: response.payment.pixData,
+          amount: response.totalPrice,
+          description: `Agendamento: ${response.id}`
+        });
+      }
     } catch (err) {
       setFormError(getApiErrorMessage(err));
     }
@@ -255,6 +267,14 @@ export function Appointments() {
           )}
         </>
       )}
+      {/* Modal do PIX */}
+      <PixPaymentModal
+        isOpen={!!pixModalData}
+        onClose={() => setPixModalData(null)}
+        pixData={pixModalData?.pixData}
+        amount={pixModalData?.amount ?? 0}
+        description={pixModalData?.description}
+      />
     </div>
   );
 }

@@ -12,13 +12,19 @@ import {
   HttpStatus,
   UseInterceptors,
   UploadedFile,
+  UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '../common/enums';
 import { ProfessionalsService } from './professionals.service';
 import { CreateProfessionalDto, UpdateProfessionalDto } from './dto';
 
 @ApiTags('Professionals')
+@ApiBearerAuth()
 @Controller('professionals')
 export class ProfessionalsController {
   constructor(private readonly professionalsService: ProfessionalsService) {}
@@ -94,6 +100,8 @@ export class ProfessionalsController {
    * POST /professionals
    * Creates a new professional (admin)
    */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() dto: CreateProfessionalDto) {
@@ -104,6 +112,8 @@ export class ProfessionalsController {
    * POST /professionals/upload-avatar
    * Uploads a professional avatar image
    */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   @Post('upload-avatar')
   @UseInterceptors(FileInterceptor('file'))
   async uploadAvatar(@UploadedFile() file: Express.Multer.File) {
@@ -114,6 +124,8 @@ export class ProfessionalsController {
    * PATCH /professionals/:id
    * Updates a professional (admin)
    */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   @Patch(':id')
   async update(
     @Param('id', ParseUUIDPipe) id: string,
@@ -126,6 +138,8 @@ export class ProfessionalsController {
    * DELETE /professionals/:id
    * Soft deletes a professional
    */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param('id', ParseUUIDPipe) id: string) {
@@ -136,6 +150,8 @@ export class ProfessionalsController {
    * DELETE /professionals/:id/permanent
    * Permanently deletes a professional
    */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   @Delete(':id/permanent')
   @HttpCode(HttpStatus.NO_CONTENT)
   async hardDelete(@Param('id', ParseUUIDPipe) id: string) {

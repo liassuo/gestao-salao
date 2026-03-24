@@ -13,8 +13,11 @@ import {
   UseGuards,
   Req,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '../common/enums';
 import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 import { SubscriptionsService } from './subscriptions.service';
 import { CreatePlanDto, UpdatePlanDto, SubscribeClientDto } from './dto';
@@ -24,6 +27,7 @@ interface RequestWithUser extends Request {
 }
 
 @ApiTags('Subscriptions')
+@ApiBearerAuth()
 @Controller('subscriptions')
 export class SubscriptionsController {
   constructor(private readonly subscriptionsService: SubscriptionsService) {}
@@ -103,6 +107,8 @@ export class SubscriptionsController {
    * POST /subscriptions/plans
    * Creates a new subscription plan (admin)
    */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   @Post('plans')
   @HttpCode(HttpStatus.CREATED)
   async createPlan(@Body() dto: CreatePlanDto) {
@@ -113,6 +119,8 @@ export class SubscriptionsController {
    * PATCH /subscriptions/plans/:id
    * Updates a subscription plan (admin)
    */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   @Patch('plans/:id')
   async updatePlan(
     @Param('id', ParseUUIDPipe) id: string,
@@ -125,6 +133,8 @@ export class SubscriptionsController {
    * DELETE /subscriptions/plans/:id
    * Soft deletes a subscription plan (admin)
    */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   @Delete('plans/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
   async removePlan(@Param('id', ParseUUIDPipe) id: string) {
@@ -139,6 +149,8 @@ export class SubscriptionsController {
    * GET /subscriptions
    * Returns all client subscriptions
    */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   @Get()
   async findAllSubscriptions(@Query('status') status?: string) {
     return this.subscriptionsService.findAllSubscriptions(status);
@@ -166,6 +178,8 @@ export class SubscriptionsController {
    * POST /subscriptions/subscribe
    * Subscribes a client to a plan (admin)
    */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   @Post('subscribe')
   @HttpCode(HttpStatus.CREATED)
   async subscribe(@Body() dto: SubscribeClientDto) {
@@ -176,6 +190,8 @@ export class SubscriptionsController {
    * POST /subscriptions/:id/cancel
    * Cancels a subscription
    */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   @Post(':id/cancel')
   async cancelSubscription(@Param('id', ParseUUIDPipe) id: string) {
     return this.subscriptionsService.cancelSubscription(id);
@@ -185,6 +201,8 @@ export class SubscriptionsController {
    * POST /subscriptions/:id/use-cut
    * Registers a cut usage from subscription
    */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   @Post(':id/use-cut')
   async useCut(@Param('id', ParseUUIDPipe) id: string) {
     return this.subscriptionsService.useCut(id);
@@ -194,6 +212,8 @@ export class SubscriptionsController {
    * POST /subscriptions/:id/reset-cuts
    * Resets cuts counter (after payment confirmed)
    */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   @Post(':id/reset-cuts')
   async resetCuts(@Param('id', ParseUUIDPipe) id: string) {
     return this.subscriptionsService.resetCuts(id);
@@ -212,6 +232,8 @@ export class SubscriptionsController {
    * POST /subscriptions/:id/force-charge
    * Força uma nova cobrança manual para a assinatura (Admin)
    */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   @Post(':id/force-charge')
   async forceCharge(@Param('id', ParseUUIDPipe) id: string) {
     return this.subscriptionsService.forceCharge(id);

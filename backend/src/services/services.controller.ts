@@ -10,12 +10,18 @@ import {
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '../common/enums';
 import { ServicesService } from './services.service';
 import { CreateServiceDto, UpdateServiceDto } from './dto';
 
 @ApiTags('Services')
+@ApiBearerAuth()
 @Controller('services')
 export class ServicesController {
   constructor(private readonly servicesService: ServicesService) {}
@@ -76,6 +82,8 @@ export class ServicesController {
    * POST /services
    * Creates a new service (admin)
    */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() dto: CreateServiceDto) {
@@ -86,6 +94,8 @@ export class ServicesController {
    * PATCH /services/:id
    * Updates a service (admin)
    */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   @Patch(':id')
   async update(
     @Param('id', ParseUUIDPipe) id: string,
@@ -98,6 +108,8 @@ export class ServicesController {
    * DELETE /services/:id
    * Soft deletes a service
    */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param('id', ParseUUIDPipe) id: string) {
@@ -108,6 +120,8 @@ export class ServicesController {
    * DELETE /services/:id/permanent
    * Permanently deletes a service
    */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   @Delete(':id/permanent')
   @HttpCode(HttpStatus.NO_CONTENT)
   async hardDelete(@Param('id', ParseUUIDPipe) id: string) {

@@ -20,7 +20,7 @@ import {
   SubscribeClientModal,
   ConfirmCancelModal,
 } from '@/components/subscriptions';
-import { Modal, SkeletonTable, useToast } from '@/components/ui';
+import { Modal, SkeletonTable, useToast, PixPaymentModal } from '@/components/ui';
 import type {
   SubscriptionPlan,
   ClientSubscription,
@@ -44,6 +44,9 @@ export function Subscriptions() {
   const [isSubscribeModalOpen, setIsSubscribeModalOpen] = useState(false);
   const [cancelingSubscription, setCancelingSubscription] = useState<ClientSubscription | null>(null);
   const [subscribeError, setSubscribeError] = useState<string | null>(null);
+  
+  // Pix Payment state
+  const [pixModalData, setPixModalData] = useState<{ pixData: any; amount: number; description?: string } | null>(null);
 
   // Hooks
   const { data: plans, isLoading: isLoadingPlans, isError: isPlansError, error: plansError } = useSubscriptionPlans(true);
@@ -128,9 +131,18 @@ export function Subscriptions() {
   const handleSubscribe = async (payload: SubscribeClientPayload) => {
     setSubscribeError(null);
     try {
-      await subscribeClient.mutateAsync(payload);
+      const response = await subscribeClient.mutateAsync(payload) as any;
       handleCloseSubscribeModal();
       toast.success('Assinatura criada', 'O cliente foi assinado no plano com sucesso.');
+
+      // Se houver dados de pagamento (PIX), abre o modal
+      if (response?.pixData) {
+        setPixModalData({
+          pixData: response.pixData,
+          amount: response.subscription?.plan?.price || 0,
+          description: `Assinatura: ${response.subscription?.plan?.name}`
+        });
+      }
     } catch (err) {
       setSubscribeError(getApiErrorMessage(err));
     }
@@ -355,6 +367,15 @@ export function Subscriptions() {
         onConfirm={handleCancelSubscription}
         subscription={cancelingSubscription}
         isLoading={cancelSubscription.isPending}
+      />
+
+      {/* Modal do PIX */}
+      <PixPaymentModal
+        isOpen={!!pixModalData}
+        onClose={() => setPixModalData(null)}
+        pixData={pixModalData?.pixData}
+        amount={pixModalData?.amount ?? 0}
+        description={pixModalData?.description}
       />
     </div>
   );
