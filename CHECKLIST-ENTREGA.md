@@ -367,8 +367,9 @@
 - [ ] Desative um cliente → some da lista (ou filtro)
 
 ### 15.2 Asaas (se configurado)
-- [ ] Crie cobranca PIX → link/QR gerado
-- [ ] Crie cobranca Boleto → boleto gerado
+- [ ] **Deploy Postgres:** rodar `backend/sql/alter_subscription_status_enum.sql` e `backend/sql/alter_payments_add_subscription_id.sql` (assinaturas com `PENDING_PAYMENT` / pagamentos com `subscriptionId` dependem disso).
+- [ ] Crie cobrança PIX → link/QR gerado
+- [ ] Crie cobrança cartão → `invoiceUrl` abre checkout
 - [ ] Estorne uma cobranca
 - [ ] Webhook recebe atualizacao de status
 

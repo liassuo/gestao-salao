@@ -225,17 +225,40 @@ export class SubscriptionsService {
       .select('*')
       .single();
 
-    if (error) throw error;
+    if (error) {
+      this.logger.error(`client_subscriptions insert failed: ${JSON.stringify(error)}`);
+      const msg = (error as { message?: string }).message || 'Erro ao criar assinatura';
+      const enumHint =
+        msg.includes('invalid input value for enum') ||
+        msg.includes('PENDING_PAYMENT') ||
+        msg.includes('SUSPENDED')
+          ? ' Aplique no PostgreSQL o script backend/sql/alter_subscription_status_enum.sql (valores PENDING_PAYMENT e SUSPENDED).'
+          : '';
+      throw new BadRequestException(`${msg}${enumHint}`);
+    }
 
-    // Re-fetch with relations
-    const { data: subscription } = await this.supabase
+    // Re-fetch com relações (fallback se o select com join falhar)
+    const { data: subscription, error: refetchError } = await this.supabase
       .from('client_subscriptions')
       .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth)')
       .eq('id', insertedSub.id)
       .single();
 
+    if (refetchError) {
+      this.logger.warn(`Re-fetch assinatura com joins falhou: ${refetchError.message}`);
+    }
+    let resolved = subscription;
+    if (!resolved) {
+      const { data: minimal } = await this.supabase
+        .from('client_subscriptions')
+        .select('*')
+        .eq('id', insertedSub.id)
+        .single();
+      resolved = minimal as typeof subscription;
+    }
+
     // Criar assinatura recorrente no Asaas (se configurado)
-    if (this.asaasService.configured && subscription) {
+    if (this.asaasService.configured && resolved) {
       try {
         // Buscar cliente com asaasCustomerId
         const { data: clientData } = await this.supabase
@@ -272,13 +295,13 @@ export class SubscriptionsService {
             nextDueDate: startDate.toISOString().split('T')[0],
             cycle: AsaasSubscriptionCycle.MONTHLY,
             description: `Plano ${plan.name ?? 'Assinatura'}`,
-            externalReference: subscription.id,
+            externalReference: resolved.id,
           });
 
           await this.supabase
             .from('client_subscriptions')
             .update({ asaasSubscriptionId: asaasSub.id })
-            .eq('id', subscription.id);
+            .eq('id', resolved.id);
 
           this.logger.log(`Assinatura Asaas criada: ${asaasSub.id}`);
         }
@@ -287,7 +310,7 @@ export class SubscriptionsService {
       }
     }
 
-    return subscription;
+    return resolved;
   }
 
   async subscribe(dto: SubscribeClientDto) {
@@ -513,6 +536,8 @@ export class SubscriptionsService {
             subscriptionId: freshSub.id,
             amount: freshSub.plan?.price ?? 0,
             method: localMethod,
+            registeredBy: clientId,
+            notes: `Cobrança inicial assinatura Asaas #${pending.id}`,
             asaasPaymentId: pending.id,
             asaasStatus: pending.status,
             paidAt: null,
@@ -647,6 +672,8 @@ export class SubscriptionsService {
             subscriptionId: subscription.id,
             amount: subscription.plan?.price ?? 0,
             method: localMethod,
+            registeredBy: clientId,
+            notes: `Reativação assinatura Asaas #${charge.id}`,
             asaasPaymentId: charge.id,
             asaasStatus: charge.status,
             paidAt: null,

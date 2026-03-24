@@ -20,7 +20,13 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../common/enums';
 import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 import { SubscriptionsService } from './subscriptions.service';
-import { CreatePlanDto, UpdatePlanDto, SubscribeClientDto } from './dto';
+import {
+  CreatePlanDto,
+  UpdatePlanDto,
+  SubscribeClientDto,
+  SubscribeMeDto,
+  ReactivateMeDto,
+} from './dto';
 
 interface RequestWithUser extends Request {
   user: AuthenticatedUser;
@@ -53,11 +59,12 @@ export class SubscriptionsController {
   @UseGuards(JwtAuthGuard)
   @Post('me/subscribe')
   @HttpCode(HttpStatus.CREATED)
-  async subscribeMe(
-    @Req() req: RequestWithUser,
-    @Body() body: { planId: string, billingType?: any },
-  ) {
-    return this.subscriptionsService.subscribeByClientId(req.user.id, body.planId, body.billingType);
+  async subscribeMe(@Req() req: RequestWithUser, @Body() body: SubscribeMeDto) {
+    return this.subscriptionsService.subscribeByClientId(
+      req.user.id,
+      body.planId,
+      body.billingType,
+    );
   }
 
   /**
@@ -78,7 +85,7 @@ export class SubscriptionsController {
   @Post('me/reactivate')
   async reactivateMySubscription(
     @Req() req: RequestWithUser,
-    @Body() body: { billingType?: any },
+    @Body() body: ReactivateMeDto,
   ) {
     return this.subscriptionsService.reactivateMySubscription(req.user.id, body.billingType);
   }
