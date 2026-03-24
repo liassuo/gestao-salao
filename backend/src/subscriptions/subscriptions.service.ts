@@ -157,12 +157,13 @@ export class SubscriptionsService {
       throw new NotFoundException('Plano não encontrado ou inativo');
     }
 
-    // Verificar se já tem assinatura ativa ou aguardando pagamento
+    // Verificar se já tem assinatura ativa (excluindo canceladas e suspensas)
     const { data: existingSubscriptions } = await this.supabase
       .from('client_subscriptions')
       .select('id')
       .eq('clientId', dto.clientId)
-      .in('status', ['ACTIVE', 'PENDING_PAYMENT'])
+      .neq('status', 'CANCELED')
+      .neq('status', 'SUSPENDED')
       .limit(1);
 
     if (existingSubscriptions && existingSubscriptions.length > 0) {
@@ -307,11 +308,13 @@ export class SubscriptionsService {
 
 
   async findClientSubscription(clientId: string) {
+    // Usa neq em vez de in para evitar problemas se novos valores do enum ainda
+    // não tiverem sido adicionados ao banco (PENDING_PAYMENT, SUSPENDED)
     const { data: results } = await this.supabase
       .from('client_subscriptions')
       .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth)')
       .eq('clientId', clientId)
-      .in('status', ['ACTIVE', 'PENDING_PAYMENT', 'SUSPENDED'])
+      .neq('status', 'CANCELED')
       .order('createdAt', { ascending: false })
       .limit(1);
 
