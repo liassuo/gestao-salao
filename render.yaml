@@ -8,3 +8,13 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+
+  - type: cron
+    name: keep-alive
+    runtime: node
+    schedule: "*/14 * * * *"
+    buildCommand: echo "ok"
+    startCommand: node -e "require('https').get(process.env.BACKEND_URL + '/health', r => { process.stdout.write('keep-alive: ' + r.statusCode + '\n'); process.exit(0); })"
+    envVars:
+      - key: BACKEND_URL
+        sync: false

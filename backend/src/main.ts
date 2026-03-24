@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import * as compression from 'compression';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -15,14 +16,20 @@ async function bootstrap() {
     }),
   );
 
+  app.use(compression());
   app.setGlobalPrefix('api');
   app.enableCors();
 
-  // Swagger Configuration
-  const config = new DocumentBuilder()
-    .setTitle('API Gestão de Salão/Barbearia')
-    .setDescription(
-      `
+  // Health check — usado por serviços de keep-alive para evitar cold start
+  const httpAdapter = app.getHttpAdapter();
+  httpAdapter.get('/health', (_req, res) => res.send({ status: 'ok' }));
+
+  // Swagger — apenas em desenvolvimento (evita custo de CPU/memória no boot em produção)
+  if (process.env.NODE_ENV !== 'production') {
+    const config = new DocumentBuilder()
+      .setTitle('API Gestão de Salão/Barbearia')
+      .setDescription(
+        `
 ## Sistema de Gestão de Salão/Barbearia
 
 Esta API fornece endpoints para gerenciar:
@@ -47,47 +54,48 @@ Esta API fornece endpoints para gerenciar:
 - **Dívidas são independentes**: Não estão vinculadas ao método de pagamento
 - **Preços em centavos**: Todos os valores monetários são em centavos (5000 = R$ 50,00)
 - **Um caixa por dia**: Apenas um caixa pode estar aberto por data
-      `,
-    )
-    .setVersion('1.0')
-    .addBearerAuth(
-      {
-        type: 'http',
-        scheme: 'bearer',
-        bearerFormat: 'JWT',
-        name: 'JWT',
-        description: 'Enter JWT token',
-        in: 'header',
-      },
-      'JWT-auth',
-    )
-    .addTag('Auth', 'Autenticação e autorização')
-    .addTag('Users', 'Gerenciamento de usuários do sistema')
-    .addTag('Clients', 'Gerenciamento de clientes')
-    .addTag('Professionals', 'Gerenciamento de profissionais')
-    .addTag('Services', 'Catálogo de serviços')
-    .addTag('Appointments', 'Agendamentos')
-    .addTag('Payments', 'Registro de pagamentos')
-    .addTag('Debts', 'Controle de dívidas/fiado')
-    .addTag('Cash Register', 'Controle de caixa')
-    .addTag('Dashboard', 'Estatísticas e métricas')
-    .addTag('Reports', 'Relatórios gerenciais')
-    .addTag('Asaas', 'Integração com gateway de pagamento Asaas')
-    .addTag('Webhooks', 'Webhooks para notificações externas')
-    .build();
+        `,
+      )
+      .setVersion('1.0')
+      .addBearerAuth(
+        {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          name: 'JWT',
+          description: 'Enter JWT token',
+          in: 'header',
+        },
+        'JWT-auth',
+      )
+      .addTag('Auth', 'Autenticação e autorização')
+      .addTag('Users', 'Gerenciamento de usuários do sistema')
+      .addTag('Clients', 'Gerenciamento de clientes')
+      .addTag('Professionals', 'Gerenciamento de profissionais')
+      .addTag('Services', 'Catálogo de serviços')
+      .addTag('Appointments', 'Agendamentos')
+      .addTag('Payments', 'Registro de pagamentos')
+      .addTag('Debts', 'Controle de dívidas/fiado')
+      .addTag('Cash Register', 'Controle de caixa')
+      .addTag('Dashboard', 'Estatísticas e métricas')
+      .addTag('Reports', 'Relatórios gerenciais')
+      .addTag('Asaas', 'Integração com gateway de pagamento Asaas')
+      .addTag('Webhooks', 'Webhooks para notificações externas')
+      .build();
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document, {
-    swaggerOptions: {
-      persistAuthorization: true,
-    },
-    customSiteTitle: 'API Gestão Salão - Documentação',
-  });
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api/docs', app, document, {
+      swaggerOptions: {
+        persistAuthorization: true,
+      },
+      customSiteTitle: 'API Gestão Salão - Documentação',
+    });
+    console.log(`Swagger docs available at: ${await app.getUrl()}/api/docs`);
+  }
 
   const port = process.env.PORT || 3000;
   await app.listen(port);
   console.log(`Application is running on: ${await app.getUrl()}`);
-  console.log(`Swagger docs available at: ${await app.getUrl()}/api/docs`);
 }
 
 bootstrap();

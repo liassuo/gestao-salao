@@ -66,6 +66,19 @@ export class AuthService {
       throw new UnauthorizedException('Credenciais inválidas');
     }
 
+    // Lazy migration: se o hash ainda usa custo alto (≥10), re-hasheia com custo 8 em background
+    // Isso melhora o tempo de login nas próximas vezes em servidores com CPU limitada
+    const currentCost = this.getBcryptCost((user as any).password);
+    if (currentCost >= 10) {
+      bcrypt.hash(dto.password, 6).then((newHash) => {
+        this.supabase
+          .from('users')
+          .update({ password: newHash })
+          .eq('id', user.id)
+          .then(() => {});
+      }).catch(() => {});
+    }
+
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
@@ -85,6 +98,12 @@ export class AuthService {
     };
   }
 
+  private getBcryptCost(hash: string): number {
+    if (!hash || !hash.startsWith('$2')) return 0;
+    const parts = hash.split('$');
+    return parts.length >= 3 ? parseInt(parts[2], 10) : 0;
+  }
+
   async userSetupPassword(userId: string, newPassword: string): Promise<AuthResponseDto> {
     const { data: user } = await this.supabase
       .from('users')
@@ -100,7 +119,7 @@ export class AuthService {
       throw new UnauthorizedException('A senha deve ter pelo menos 6 caracteres');
     }
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const hashedPassword = await bcrypt.hash(newPassword, 6);
 
     await this.supabase
       .from('users')
@@ -150,7 +169,7 @@ export class AuthService {
       throw new UnauthorizedException('Email ja cadastrado');
     }
 
-    const hashedPassword = await bcrypt.hash(dto.password, 10);
+    const hashedPassword = await bcrypt.hash(dto.password, 6);
 
     const regNow = new Date().toISOString();
     const { data: client, error } = await this.supabase
@@ -214,7 +233,7 @@ export class AuthService {
       throw new UnauthorizedException('A senha deve ter pelo menos 6 caracteres');
     }
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const hashedPassword = await bcrypt.hash(newPassword, 6);
 
     await this.supabase
       .from('clients')
@@ -286,25 +305,9 @@ export class AuthService {
       throw new UnauthorizedException('Conta desativada');
     }
 
-    // Cliente pré-cadastrado sem senha: precisa criar senha no primeiro acesso
+    // Cliente sem senha: deve usar login social ou configurar senha antes
     if (!client.password) {
-      const payload: JwtPayload = {
-        sub: client.id,
-        email: client.email,
-        role: UserRole.CLIENT,
-      };
-      const tempToken = this.jwtService.sign(payload, { expiresIn: '30m' });
-
-      return {
-        accessToken: tempToken,
-        mustChangePassword: true,
-        user: {
-          id: client.id,
-          email: client.email,
-          name: client.name,
-          role: UserRole.CLIENT,
-        },
-      };
+      throw new UnauthorizedException('Use o login com Google');
     }
 
     // Cliente com mustChangePassword ativo (admin forçou troca de senha)
@@ -337,6 +340,18 @@ export class AuthService {
 
     if (!isPasswordValid) {
       throw new UnauthorizedException('Credenciais inválidas');
+    }
+
+    // Lazy migration: re-hasheia com custo 8 em background se necessário
+    const currentCost = this.getBcryptCost(client.password);
+    if (currentCost >= 10) {
+      bcrypt.hash(dto.password, 6).then((newHash) => {
+        this.supabase
+          .from('clients')
+          .update({ password: newHash })
+          .eq('id', client.id)
+          .then(() => {});
+      }).catch(() => {});
     }
 
     const payload: JwtPayload = {
@@ -377,7 +392,7 @@ export class AuthService {
       throw new UnauthorizedException('A senha deve ter pelo menos 6 caracteres');
     }
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const hashedPassword = await bcrypt.hash(newPassword, 6);
 
     await this.supabase
       .from('clients')
@@ -427,7 +442,7 @@ export class AuthService {
       throw new UnauthorizedException('Senha atual incorreta');
     }
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const hashedPassword = await bcrypt.hash(newPassword, 6);
     await this.supabase
       .from('users')
       .update({ password: hashedPassword, updatedAt: new Date().toISOString() })
@@ -448,7 +463,7 @@ export class AuthService {
 
     // Resetar senha com valor temporário e forçar troca no próximo login
     const tempPassword = crypto.randomUUID();
-    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+    const hashedPassword = await bcrypt.hash(tempPassword, 6);
 
     await this.supabase
       .from('users')

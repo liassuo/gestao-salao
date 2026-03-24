@@ -33,7 +33,7 @@ export class UsersService {
       throw new ConflictException('Email já cadastrado');
     }
 
-    const hashedPassword = await bcrypt.hash(dto.password, 10);
+    const hashedPassword = await bcrypt.hash(dto.password, 6);
 
     const { data: user, error } = await this.supabase
       .from('users')
@@ -111,7 +111,7 @@ export class UsersService {
 
     const updateData: any = { ...dto, updatedAt: new Date().toISOString() };
     if (dto.password) {
-      updateData.password = await bcrypt.hash(dto.password, 10);
+      updateData.password = await bcrypt.hash(dto.password, 6);
     }
 
     const { data: updatedUser, error } = await this.supabase

@@ -42,7 +42,7 @@ export class ProfessionalsService {
 
     // Auto-criar conta de usuário para o profissional fazer login (senha padrão: 123456)
     const defaultPassword = '123456';
-    const hashedPassword = await bcrypt.hash(defaultPassword, 8);
+    const hashedPassword = await bcrypt.hash(defaultPassword, 6);
 
     const userId = crypto.randomUUID();
     const { error: userError } = await this.supabase
