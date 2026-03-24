@@ -302,6 +302,9 @@ export class SubscriptionsService {
             cycle: AsaasSubscriptionCycle.MONTHLY,
             description: `Plano ${plan.name ?? 'Assinatura'}`,
             externalReference: resolved.id,
+            creditCard: dto.creditCard,
+            creditCardHolderInfo: dto.creditCardHolderInfo,
+            remoteIp: dto.remoteIp,
           });
 
           await this.supabase
@@ -525,6 +528,17 @@ export class SubscriptionsService {
 
     const payment = payments?.[0];
     if (!payment || !payment.asaasPaymentId) {
+      if (subscription.asaasSubscriptionId) {
+        try {
+          const charges = await this.asaasService.getSubscriptionPayments(subscription.asaasSubscriptionId);
+          const pending = charges.find((c: any) => c.status === 'PENDING' || c.status === 'AWAITING_RISK_ANALYSIS');
+          if (pending && pending.billingType === 'PIX') {
+            return await this.asaasService.getPixQrCode(pending.id);
+          }
+        } catch (e) {
+          this.logger.warn(`Falha no fallback de QR Code PIX: ${e}`);
+        }
+      }
       return null;
     }
 
@@ -547,24 +561,15 @@ export class SubscriptionsService {
       clientId,
       planId,
       billingType: effectiveBilling === AsaasBillingType.CREDIT_CARD ? 'CREDIT_CARD' : 'PIX',
+      creditCard: body.creditCard,
+      creditCardHolderInfo: body.creditCardHolderInfo,
+      remoteIp: body.remoteIp,
     });
 
     let pixData: any = null;
     let invoiceUrl: string | null = null;
     const freshSub = await this.findClientSubscription(clientId);
     if (this.asaasService.configured && freshSub?.asaasSubscriptionId) {
-      if (effectiveBilling === AsaasBillingType.CREDIT_CARD && body.creditCard) {
-        try {
-          await this.asaasService.updateSubscription(freshSub.asaasSubscriptionId, {
-            creditCard: body.creditCard,
-            creditCardHolderInfo: body.creditCardHolderInfo,
-            remoteIp: body.remoteIp,
-          });
-          this.logger.log(`Dados de cartão enviados para assinatura ${freshSub.asaasSubscriptionId}`);
-        } catch (e) {
-          this.logger.warn(`Falha ao enviar dados de cartão para assinatura: ${e}`);
-        }
-      }
       try {
         const charges = await this.asaasService.getSubscriptionPayments(freshSub.asaasSubscriptionId);
         const pending =

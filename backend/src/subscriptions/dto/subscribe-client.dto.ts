@@ -1,4 +1,6 @@
-import { IsString, IsOptional, IsIn } from 'class-validator';
+import { IsString, IsOptional, IsIn, ValidateNested, IsObject } from 'class-validator';
+import { Type } from 'class-transformer';
+import { CreditCardDto, CreditCardHolderInfoDto } from './credit-card.dto';
 
 export class SubscribeClientDto {
   @IsString()
@@ -14,4 +16,20 @@ export class SubscribeClientDto {
   @IsOptional()
   @IsIn(['PIX', 'CREDIT_CARD'])
   billingType?: 'PIX' | 'CREDIT_CARD';
+
+  @IsOptional()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => CreditCardDto)
+  creditCard?: CreditCardDto;
+
+  @IsOptional()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => CreditCardHolderInfoDto)
+  creditCardHolderInfo?: CreditCardHolderInfoDto;
+
+  @IsOptional()
+  @IsString()
+  remoteIp?: string;
 }
