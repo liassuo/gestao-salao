@@ -163,9 +163,9 @@ export function ClientPlans() {
   };
 
   const remainingCuts = mySubscription
-    ? mySubscription.plan.cutsPerMonth === 99
+    ? mySubscription.plan?.cutsPerMonth === 99
       ? 99
-      : Math.max(mySubscription.plan.cutsPerMonth - mySubscription.cutsUsedThisMonth, 0)
+      : Math.max((mySubscription.plan?.cutsPerMonth || 0) - mySubscription.cutsUsedThisMonth, 0)
     : 0;
 
   if (isLoading) {
@@ -194,31 +194,31 @@ export function ClientPlans() {
             <div className="flex items-start justify-between mb-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider opacity-80">Plano ativo</p>
-                <h2 className="text-xl font-bold mt-0.5">{mySubscription.plan.name}</h2>
+                <h2 className="text-xl font-bold mt-0.5">{mySubscription.plan?.name}</h2>
               </div>
               <span className="bg-white/20 text-white text-xs font-semibold px-2.5 py-1 rounded-full">
-                {formatPrice(mySubscription.plan.price)}/mês
+                {formatPrice(mySubscription.plan?.price || 0)}/mês
               </span>
             </div>
 
             {/* Contador de cortes */}
             <div className="bg-white/10 rounded-xl p-4 mt-3">
               <p className="text-xs opacity-80 mb-1">Créditos este mês</p>
-              {mySubscription.plan.cutsPerMonth === 99 ? (
+              {mySubscription.plan?.cutsPerMonth === 99 ? (
                 <p className="text-2xl font-bold">Ilimitado</p>
               ) : (
                 <>
                   <div className="flex items-end gap-2 mb-2">
                     <span className="text-3xl font-bold">{remainingCuts}</span>
                     <span className="text-base opacity-70 mb-0.5">
-                      / {mySubscription.plan.cutsPerMonth} restantes
+                      / {mySubscription.plan?.cutsPerMonth || 0} restantes
                     </span>
                   </div>
                   <div className="w-full bg-white/20 rounded-full h-2">
                     <div
                       className="bg-white rounded-full h-2 transition-all"
                       style={{
-                        width: `${Math.round((remainingCuts / mySubscription.plan.cutsPerMonth) * 100)}%`,
+                        width: `${Math.round((remainingCuts / (mySubscription.plan?.cutsPerMonth || 1)) * 100)}%`,
                       }}
                     />
                   </div>
@@ -272,11 +272,11 @@ export function ClientPlans() {
                 </svg>
               </div>
               <div className="flex-1">
-                <p className="font-semibold text-[var(--text-primary)]">{mySubscription.plan.name}</p>
+                <p className="font-semibold text-[var(--text-primary)]">{mySubscription.plan?.name}</p>
                 <p className="text-sm text-red-400 font-medium">Assinatura suspensa</p>
               </div>
               <span className="text-sm font-bold text-[var(--text-primary)]">
-                {formatPrice(mySubscription.plan.price)}/mês
+                {formatPrice(mySubscription.plan?.price || 0)}/mês
               </span>
             </div>
 
@@ -346,11 +346,11 @@ export function ClientPlans() {
                 </svg>
               </div>
               <div>
-                <p className="font-semibold text-[var(--text-primary)]">{mySubscription.plan.name}</p>
+                <p className="font-semibold text-[var(--text-primary)]">{mySubscription.plan?.name}</p>
                 <p className="text-sm text-amber-400 font-medium">Aguardando pagamento</p>
               </div>
               <span className="ml-auto text-sm font-bold text-[var(--text-primary)]">
-                {formatPrice(mySubscription.plan.price)}/mês
+                {formatPrice(mySubscription.plan?.price || 0)}/mês
               </span>
             </div>
 
@@ -478,7 +478,7 @@ export function ClientPlans() {
             <h2 className="text-base font-semibold text-[var(--text-primary)] mb-3">Planos disponíveis</h2>
             <div className="space-y-3">
               {plans.map((plan) => {
-                const isCurrent = plan.id === mySubscription.plan.id;
+                const isCurrent = plan.id === mySubscription.plan?.id;
                 return (
                   <div
                     key={plan.id}
@@ -513,8 +513,8 @@ export function ClientPlans() {
         isOpen={!!pixModal}
         onClose={() => setPixModal(null)}
         pixData={pixModal}
-        amount={mySubscription?.plan.price || 0}
-        description={`Plano ${mySubscription?.plan.name}`}
+        amount={mySubscription?.plan?.price || 0}
+        description={`Plano ${mySubscription?.plan?.name || ''}`}
       />
 
       <CreditCardModal
@@ -578,7 +578,7 @@ export function ClientPlans() {
                 onClick={() => {
                   const id = paymentMethodModal;
                   if (id === 'REACTIVATE') {
-                    setCreditCardModal({ isReactivating: true, amount: mySubscription?.plan.price || 0 });
+                    setCreditCardModal({ isReactivating: true, amount: mySubscription?.plan?.price || 0 });
                   } else {
                     const plan = plans.find(p => p.id === id);
                     setCreditCardModal({ planId: id, isReactivating: false, amount: plan?.price || 0 });

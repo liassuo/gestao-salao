@@ -260,7 +260,7 @@ export class SubscriptionsService {
         .select('*')
         .eq('id', insertedSub.id)
         .single();
-      resolved = minimal as typeof subscription;
+      resolved = minimal ? { ...minimal, plan } : null;
     }
 
     // Criar assinatura recorrente no Asaas (se configurado)
@@ -724,7 +724,12 @@ export class SubscriptionsService {
       .eq('id', subscription.id)
       .single();
 
-    return { subscription: updated ?? subscription, pixData, invoiceUrl };
+    if (!updated && subscription) {
+        // Fallback para o objeto original se o re-fetch falhar
+        return { subscription, pixData, invoiceUrl };
+    }
+
+    return { subscription: updated, pixData, invoiceUrl };
   }
 
   async forceCharge(subscriptionId: string) {
