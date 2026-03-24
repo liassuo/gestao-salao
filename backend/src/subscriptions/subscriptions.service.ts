@@ -479,7 +479,34 @@ export class SubscriptionsService {
     if (!subscription) {
       throw new NotFoundException('Nenhuma assinatura encontrada');
     }
-    return this.cancelSubscription(subscription.id);
+
+    if (!['ACTIVE', 'PENDING_PAYMENT', 'SUSPENDED'].includes(subscription.status)) {
+      throw new BadRequestException('Assinatura não pode ser cancelada');
+    }
+
+    const { data: updated, error } = await this.supabase
+      .from('client_subscriptions')
+      .update({ status: 'CANCELED', updatedAt: new Date().toISOString() })
+      .eq('id', subscription.id)
+      .select('*')
+      .single();
+
+    if (error) {
+      this.logger.error(`Erro ao cancelar assinatura ${subscription.id}: ${JSON.stringify(error)}`);
+      throw error;
+    }
+
+    // Cancelar assinatura no Asaas (se vinculada)
+    if (this.asaasService.configured && subscription.asaasSubscriptionId) {
+      try {
+        await this.asaasService.cancelSubscription(subscription.asaasSubscriptionId);
+        this.logger.log(`Assinatura Asaas cancelada: ${subscription.asaasSubscriptionId}`);
+      } catch (syncError) {
+        this.logger.warn(`Falha ao cancelar assinatura no Asaas: ${syncError}`);
+      }
+    }
+
+    return updated;
   }
 
   async reactivateMySubscription(clientId: string) {
