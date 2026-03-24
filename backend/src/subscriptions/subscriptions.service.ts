@@ -398,6 +398,23 @@ export class SubscriptionsService {
       
       if (latestPayments?.[0]) {
         subscription.latestPayment = latestPayments[0];
+      } else if (subscription.status === 'PENDING_PAYMENT' && subscription.asaasSubscriptionId) {
+        // Fallback: buscar última cobrança no Asaas se não houver no banco local (assinaturas legadas)
+        try {
+          const charges = await this.asaasService.getSubscriptionPayments(subscription.asaasSubscriptionId);
+          const pending = charges.find((c: any) => c.status === 'PENDING' || c.status === 'AWAITING_RISK_ANALYSIS') || charges[0];
+          if (pending) {
+            subscription.latestPayment = {
+              asaasPaymentId: pending.id,
+              asaasStatus: pending.status,
+              invoiceUrl: pending.invoiceUrl,
+              method: pending.billingType === 'PIX' ? 'PIX' : 'CARD',
+              amount: this.asaasService. centavosToReais(pending.value) * 100, // Volta pra centavos
+            };
+          }
+        } catch (e) {
+          this.logger.warn(`Falha ao buscar fallback de pagamento no Asaas para assinatura ${subscription.id}: ${e}`);
+        }
       }
     }
 
@@ -567,8 +584,9 @@ export class SubscriptionsService {
     try {
         const { data: clientData } = await this.supabase.from('clients').select('asaasCustomerId').eq('id', clientId).single();
         if (clientData?.asaasCustomerId) {
-            const { data: chargesRes } = await (this.asaasService as any).httpClient.get('/payments', {
-                params: { customer: clientData.asaasCustomerId, status: 'PENDING' }
+            const chargesRes = await this.asaasService.getPayments({
+                customer: clientData.asaasCustomerId, 
+                status: 'PENDING'
             });
             const pending = (chargesRes?.data || []).find((c: any) => c.billingType === 'PIX');
             if (pending) {

@@ -144,6 +144,16 @@ export class AsaasService implements OnModuleInit {
     }
   }
 
+  async getPayments(params: any): Promise<{ data: AsaasCharge[] }> {
+    this.ensureConfigured();
+    try {
+      const { data } = await this.httpClient.get('/payments', { params });
+      return data;
+    } catch (error) {
+      this.handleApiError(error, 'Erro ao buscar cobranças no Asaas');
+    }
+  }
+
   async cancelCharge(asaasPaymentId: string): Promise<AsaasCharge> {
     this.ensureConfigured();
     try {
