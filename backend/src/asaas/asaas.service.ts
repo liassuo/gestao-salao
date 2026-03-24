@@ -191,6 +191,23 @@ export class AsaasService implements OnModuleInit {
     }
   }
 
+  async updateSubscription(
+    asaasSubscriptionId: string,
+    payload: Partial<AsaasCreateSubscriptionPayload>,
+  ): Promise<AsaasSubscription> {
+    this.ensureConfigured();
+    try {
+      const { data } = await this.httpClient.put<AsaasSubscription>(
+        `/subscriptions/${asaasSubscriptionId}`,
+        payload,
+      );
+      this.logger.log(`Assinatura Asaas atualizada: ${asaasSubscriptionId}`);
+      return data;
+    } catch (error) {
+      this.handleApiError(error, 'Erro ao atualizar assinatura no Asaas');
+    }
+  }
+
   async cancelSubscription(
     asaasSubscriptionId: string,
   ): Promise<AsaasSubscription> {

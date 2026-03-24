@@ -13,7 +13,13 @@ import {
   asaasBillingToLocalPaymentMethod,
   parseAsaasBillingType,
 } from '../asaas/asaas.types';
-import { CreatePlanDto, UpdatePlanDto, SubscribeClientDto } from './dto';
+import {
+  CreatePlanDto,
+  UpdatePlanDto,
+  SubscribeClientDto,
+  SubscribeMeDto,
+  ReactivateMeDto,
+} from './dto';
 
 @Injectable()
 export class SubscriptionsService {
@@ -499,8 +505,9 @@ export class SubscriptionsService {
     return this.findClientSubscription(clientId);
   }
 
-  async subscribeByClientId(clientId: string, planId: string, billingType?: any) {
-    const parsed = parseAsaasBillingType(billingType);
+  async subscribeByClientId(clientId: string, planId: string, body: SubscribeMeDto) {
+    const billingTypeRaw = body.billingType;
+    const parsed = parseAsaasBillingType(billingTypeRaw);
     const effectiveBilling =
       parsed === AsaasBillingType.CREDIT_CARD
         ? AsaasBillingType.CREDIT_CARD
@@ -515,6 +522,18 @@ export class SubscriptionsService {
     let invoiceUrl: string | null = null;
     const freshSub = await this.findClientSubscription(clientId);
     if (this.asaasService.configured && freshSub?.asaasSubscriptionId) {
+      if (effectiveBilling === AsaasBillingType.CREDIT_CARD && body.creditCard) {
+        try {
+          await this.asaasService.updateSubscription(freshSub.asaasSubscriptionId, {
+            creditCard: body.creditCard,
+            creditCardHolderInfo: body.creditCardHolderInfo,
+            remoteIp: body.remoteIp,
+          });
+          this.logger.log(`Dados de cartão enviados para assinatura ${freshSub.asaasSubscriptionId}`);
+        } catch (e) {
+          this.logger.warn(`Falha ao enviar dados de cartão para assinatura: ${e}`);
+        }
+      }
       try {
         const charges = await this.asaasService.getSubscriptionPayments(freshSub.asaasSubscriptionId);
         const pending =
@@ -590,7 +609,8 @@ export class SubscriptionsService {
     return updated;
   }
 
-  async reactivateMySubscription(clientId: string, billingTypeRaw?: any) {
+  async reactivateMySubscription(clientId: string, body: ReactivateMeDto) {
+    const billingTypeRaw = body.billingType;
     const parsed = parseAsaasBillingType(billingTypeRaw);
     const billingType =
       parsed === AsaasBillingType.CREDIT_CARD
@@ -663,6 +683,9 @@ export class SubscriptionsService {
             dueDate: today,
             description: `Reativação: Plano ${subscription.plan?.name}`,
             externalReference: subscription.id,
+            creditCard: body.creditCard,
+            creditCardHolderInfo: body.creditCardHolderInfo,
+            remoteIp: body.remoteIp,
           });
 
           const localMethod = asaasBillingToLocalPaymentMethod(billingType);

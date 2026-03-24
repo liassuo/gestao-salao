@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CLIENT_PATHS } from '../utils/paths';
 import { clientApi } from '../services/api';
-import { LoadingState } from '../components/ui';
+import { LoadingState, PixPaymentModal, CreditCardModal } from '../components/ui';
 import { formatPrice } from '../utils/format';
 
 interface SubscriptionPlan {
@@ -28,6 +28,26 @@ interface PixData {
   expirationDate: string;
 }
 
+interface CreditCardFormData {
+  creditCard: {
+    holderName: string;
+    number: string;
+    expiryMonth: string;
+    expiryYear: string;
+    ccv: string;
+  };
+  creditCardHolderInfo: {
+    name: string;
+    email: string;
+    cpfCnpj: string;
+    postalCode: string;
+    addressNumber: string;
+    addressComplement?: string;
+    phone: string;
+    mobilePhone?: string;
+  };
+}
+
 export function ClientPlans() {
   const navigate = useNavigate();
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
@@ -38,8 +58,8 @@ export function ClientPlans() {
   const [isReactivating, setIsReactivating] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [pixModal, setPixModal] = useState<PixData | null>(null);
-  const [paymentMethodModal, setPaymentMethodModal] = useState<string | null>(null); // planId
-  const [copied, setCopied] = useState(false);
+  const [paymentMethodModal, setPaymentMethodModal] = useState<string | null>(null); // planId ou 'REACTIVATE'
+  const [creditCardModal, setCreditCardModal] = useState<{ planId?: string; isReactivating: boolean; amount: number } | null>(null);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -59,23 +79,33 @@ export function ClientPlans() {
     loadData();
   }, [loadData]);
 
-  const handleSubscribe = async (planId: string, billingType: string = 'PIX') => {
+  const handleSubscribe = async (planId: string, billingType: string = 'PIX', cardData?: CreditCardFormData) => {
     setSubscribingId(planId);
     setPaymentMethodModal(null);
+    setCreditCardModal(null);
     try {
+      const payload: any = { planId, billingType };
+      if (cardData) {
+        payload.creditCard = cardData.creditCard;
+        payload.creditCardHolderInfo = cardData.creditCardHolderInfo;
+        payload.remoteIp = '127.0.0.1'; // Idealmente pegar do cliente, mas Asaas aceita o do server se necessário ou qualquer IP válido para sandbox
+      }
+
       const res = await clientApi.post<{
         subscription: ClientSubscription;
         pixData: PixData | null;
         invoiceUrl?: string | null;
-      }>('/subscriptions/me/subscribe', { planId, billingType });
+      }>('/subscriptions/me/subscribe', payload);
+      
       setMySubscription(res.data.subscription);
+      
       if (res.data.pixData) {
         setPixModal(res.data.pixData);
+      } else if (billingType === 'CREDIT_CARD') {
+        alert('Assinatura com cartão processada com sucesso!');
       } else if (res.data.invoiceUrl) {
         window.open(res.data.invoiceUrl, '_blank', 'noopener,noreferrer');
-        alert('Abra a nova aba para pagar com cartão. Os créditos serão liberados após a confirmação.');
-      } else if (billingType === 'CREDIT_CARD') {
-        alert('Assinatura criada! Verifique seu e-mail ou a área do Asaas para concluir o cadastro do cartão.');
+        alert('Abra a nova aba para concluir o pagamento.');
       }
     } catch (e: any) {
       alert(e.response?.data?.message || 'Erro ao assinar plano. Tente novamente.');
@@ -97,36 +127,39 @@ export function ClientPlans() {
     }
   };
 
-  const handleReactivate = async (billingType: string = 'PIX') => {
+  const handleReactivate = async (billingType: string = 'PIX', cardData?: CreditCardFormData) => {
     setIsReactivating(true);
     setPaymentMethodModal(null);
+    setCreditCardModal(null);
     try {
+      const payload: any = { billingType };
+      if (cardData) {
+        payload.creditCard = cardData.creditCard;
+        payload.creditCardHolderInfo = cardData.creditCardHolderInfo;
+        payload.remoteIp = '127.0.0.1';
+      }
+
       const res = await clientApi.post<{
         subscription: ClientSubscription;
         pixData: PixData | null;
         invoiceUrl?: string | null;
-      }>('/subscriptions/me/reactivate', { billingType });
+      }>('/subscriptions/me/reactivate', payload);
+      
       setMySubscription(res.data.subscription);
+      
       if (res.data.pixData) {
         setPixModal(res.data.pixData);
+      } else if (billingType === 'CREDIT_CARD') {
+        alert('Assinatura reativada com cartão!');
       } else if (res.data.invoiceUrl) {
         window.open(res.data.invoiceUrl, '_blank', 'noopener,noreferrer');
-        alert('Abra a nova aba para pagar com cartão e reativar seus créditos.');
-      } else {
-        alert('Assinatura reativada! Conclua o pagamento para liberar seus créditos.');
+        alert('Abra a nova aba para pagar com cartão.');
       }
     } catch (e: any) {
       alert(e.response?.data?.message || 'Erro ao reativar assinatura. Tente novamente.');
     } finally {
       setIsReactivating(false);
     }
-  };
-
-  const handleCopyPix = async () => {
-    if (!pixModal?.payload) return;
-    await navigator.clipboard.writeText(pixModal.payload);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   };
 
   const remainingCuts = mySubscription
@@ -475,67 +508,33 @@ export function ClientPlans() {
         )}
       </div>
 
-      {/* Modal PIX */}
-      {pixModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-4">
-          <div className="bg-[var(--bg-primary)] rounded-2xl w-full max-w-sm p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-[var(--text-primary)]">Pagar com PIX</h3>
-              <button
-                onClick={() => setPixModal(null)}
-                className="p-1 text-[var(--text-muted)]"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
+      {/* Modais de Pagamento */}
+      <PixPaymentModal
+        isOpen={!!pixModal}
+        onClose={() => setPixModal(null)}
+        pixData={pixModal}
+        amount={mySubscription?.plan.price || 0}
+        description={`Plano ${mySubscription?.plan.name}`}
+      />
 
-            <p className="text-sm text-[var(--text-muted)] text-center mb-4">
-              Escaneie o QR Code ou copie o código PIX para pagar
-            </p>
+      <CreditCardModal
+        isOpen={!!creditCardModal}
+        onClose={() => setCreditCardModal(null)}
+        amount={creditCardModal?.amount || 0}
+        isSubmitting={subscribingId !== null || isReactivating}
+        onSubmit={(data) => {
+          if (creditCardModal?.isReactivating) {
+            handleReactivate('CREDIT_CARD', data);
+          } else if (creditCardModal?.planId) {
+            handleSubscribe(creditCardModal.planId, 'CREDIT_CARD', data);
+          }
+        }}
+      />
 
-            {pixModal.encodedImage && (
-              <div className="flex justify-center mb-4">
-                <img
-                  src={`data:image/png;base64,${pixModal.encodedImage}`}
-                  alt="QR Code PIX"
-                  className="w-48 h-48 rounded-xl"
-                />
-              </div>
-            )}
-
-            <button
-              onClick={handleCopyPix}
-              className="w-full py-3 rounded-xl border-2 border-[#C8923A] text-[#C8923A] font-semibold transition-colors hover:bg-[#C8923A]/10 flex items-center justify-center gap-2"
-            >
-              {copied ? (
-                <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Copiado!
-                </>
-              ) : (
-                <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                  Copiar código PIX
-                </>
-              )}
-            </button>
-
-            <p className="text-xs text-center text-[var(--text-muted)] mt-3">
-              Após o pagamento, seus créditos serão liberados automaticamente
-            </p>
-          </div>
-        </div>
-      )}
-      {/* Modal Escolha Pagamento */}
+      {/* Modal de Seleção de Método */}
       {paymentMethodModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-4">
-          <div className="bg-[var(--bg-primary)] rounded-2xl w-full max-w-sm p-6 shadow-2xl border border-[var(--card-border)]">
+          <div className="bg-[var(--bg-primary)] rounded-2xl w-full max-w-sm p-6 shadow-2xl border border-[var(--card-border)] animate-in slide-in-from-bottom duration-300">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-[var(--text-primary)]">Forma de Pagamento</h3>
               <button
@@ -555,10 +554,11 @@ export function ClientPlans() {
             <div className="space-y-3">
               <button
                 onClick={() => {
-                  if (paymentMethodModal === 'REACTIVATE') {
+                  const id = paymentMethodModal;
+                  if (id === 'REACTIVATE') {
                     handleReactivate('PIX');
                   } else {
-                    handleSubscribe(paymentMethodModal, 'PIX');
+                    handleSubscribe(id, 'PIX');
                   }
                 }}
                 className="w-full p-4 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] hover:border-[#C8923A] transition-all flex items-center gap-4 group"
@@ -576,11 +576,14 @@ export function ClientPlans() {
 
               <button
                 onClick={() => {
-                  if (paymentMethodModal === 'REACTIVATE') {
-                    handleReactivate('CREDIT_CARD');
+                  const id = paymentMethodModal;
+                  if (id === 'REACTIVATE') {
+                    setCreditCardModal({ isReactivating: true, amount: mySubscription?.plan.price || 0 });
                   } else {
-                    handleSubscribe(paymentMethodModal, 'CREDIT_CARD');
+                    const plan = plans.find(p => p.id === id);
+                    setCreditCardModal({ planId: id, isReactivating: false, amount: plan?.price || 0 });
                   }
+                  setPaymentMethodModal(null);
                 }}
                 className="w-full p-4 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] hover:border-[#C8923A] transition-all flex items-center gap-4 group"
               >
@@ -595,10 +598,6 @@ export function ClientPlans() {
                 </div>
               </button>
             </div>
-
-            <p className="text-[10px] text-center text-[var(--text-muted)] mt-5">
-              Ao assinar, você concorda com nossos termos de uso e política de cancelamento.
-            </p>
           </div>
         </div>
       )}

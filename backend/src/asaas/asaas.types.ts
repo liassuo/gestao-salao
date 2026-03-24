@@ -162,6 +162,9 @@ export interface AsaasCreateChargePayload {
   externalReference?: string;
   installmentCount?: number;
   installmentValue?: number;
+  creditCard?: AsaasCreditCard;
+  creditCardHolderInfo?: AsaasCreditCardHolderInfo;
+  remoteIp?: string;
 }
 
 export interface AsaasPixQrCode {
@@ -182,6 +185,25 @@ export interface AsaasSubscription {
   externalReference?: string;
 }
 
+export interface AsaasCreditCard {
+  holderName: string;
+  number: string;
+  expiryMonth: string;
+  expiryYear: string;
+  ccv: string;
+}
+
+export interface AsaasCreditCardHolderInfo {
+  name: string;
+  email: string;
+  cpfCnpj: string;
+  postalCode: string;
+  addressNumber: string;
+  addressComplement?: string | null;
+  phone: string;
+  mobilePhone?: string;
+}
+
 export interface AsaasCreateSubscriptionPayload {
   customer: string; // Asaas customer ID
   billingType: AsaasBillingType;
@@ -190,6 +212,9 @@ export interface AsaasCreateSubscriptionPayload {
   cycle: AsaasSubscriptionCycle;
   description?: string;
   externalReference?: string;
+  creditCard?: AsaasCreditCard;
+  creditCardHolderInfo?: AsaasCreditCardHolderInfo;
+  remoteIp?: string;
 }
 
 export interface AsaasWebhookPayload {
