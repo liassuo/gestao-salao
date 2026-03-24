@@ -505,6 +505,37 @@ export class SubscriptionsService {
     return this.findClientSubscription(clientId);
   }
 
+  async getMePendingPix(clientId: string) {
+    const subscription = await this.findClientSubscription(clientId);
+    if (!subscription || subscription.status !== 'PENDING_PAYMENT') {
+      return null;
+    }
+
+    // Buscar último pagamento PIX pendente para esta assinatura
+    const { data: payments } = await this.supabase
+      .from('payments')
+      .select('*')
+      .eq('subscriptionId', subscription.id)
+      .eq('method', 'PIX')
+      .neq('asaasStatus', 'RECEIVED')
+      .neq('asaasStatus', 'CONFIRMED')
+      .neq('asaasStatus', 'OVERDUE')
+      .order('createdAt', { ascending: false })
+      .limit(1);
+
+    const payment = payments?.[0];
+    if (!payment || !payment.asaasPaymentId) {
+      return null;
+    }
+
+    try {
+      return await this.asaasService.getPixQrCode(payment.asaasPaymentId);
+    } catch (e) {
+      this.logger.warn(`Falha ao carregar QR Code PIX pendente: ${e}`);
+      return null;
+    }
+  }
+
   async subscribeByClientId(clientId: string, planId: string, body: SubscribeMeDto) {
     const billingTypeRaw = body.billingType;
     const parsed = parseAsaasBillingType(billingTypeRaw);

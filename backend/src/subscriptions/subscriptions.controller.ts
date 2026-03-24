@@ -53,6 +53,16 @@ export class SubscriptionsController {
   }
 
   /**
+   * GET /subscriptions/me/pending-pix
+   * Retorna dados do PIX pendente da assinatura atual
+   */
+  @UseGuards(JwtAuthGuard)
+  @Get('me/pending-pix')
+  async getMePendingPix(@Req() req: RequestWithUser) {
+    return this.subscriptionsService.getMePendingPix(req.user.id);
+  }
+
+  /**
    * POST /subscriptions/me/subscribe
    * Assina um plano (cliente autenticado)
    */
@@ -63,7 +73,7 @@ export class SubscriptionsController {
     return this.subscriptionsService.subscribeByClientId(
       req.user.id,
       body.planId,
-      body.billingType,
+      body,
     );
   }
 
@@ -87,7 +97,7 @@ export class SubscriptionsController {
     @Req() req: RequestWithUser,
     @Body() body: ReactivateMeDto,
   ) {
-    return this.subscriptionsService.reactivateMySubscription(req.user.id, body.billingType);
+    return this.subscriptionsService.reactivateMySubscription(req.user.id, body);
   }
 
   // ============================================

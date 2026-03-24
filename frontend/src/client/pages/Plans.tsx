@@ -70,6 +70,15 @@ export function ClientPlans() {
       ]);
       setPlans(plansRes.data);
       setMySubscription(subRes.data);
+
+      // Se a assinatura está pendente de pagamento, tenta buscar o PIX
+      if (subRes.data?.status === 'PENDING_PAYMENT') {
+        clientApi.get<PixData | null>('/subscriptions/me/pending-pix')
+          .then(res => {
+            if (res.data) setPixModal(res.data);
+          })
+          .catch(e => console.warn('Erro ao buscar PIX pendente:', e));
+      }
     } finally {
       setIsLoading(false);
     }
@@ -84,7 +93,13 @@ export function ClientPlans() {
     setPaymentMethodModal(null);
     setCreditCardModal(null);
     try {
-      const payload: any = { planId, billingType };
+      const payload: {
+        planId: string;
+        billingType: string;
+        creditCard?: CreditCardFormData['creditCard'];
+        creditCardHolderInfo?: CreditCardFormData['creditCardHolderInfo'];
+        remoteIp?: string;
+      } = { planId, billingType };
       if (cardData) {
         payload.creditCard = cardData.creditCard;
         payload.creditCardHolderInfo = cardData.creditCardHolderInfo;
@@ -107,8 +122,9 @@ export function ClientPlans() {
         window.open(res.data.invoiceUrl, '_blank', 'noopener,noreferrer');
         alert('Abra a nova aba para concluir o pagamento.');
       }
-    } catch (e: any) {
-      alert(e.response?.data?.message || 'Erro ao assinar plano. Tente novamente.');
+    } catch (e: unknown) {
+      const error = e as { response?: { data?: { message?: string } } };
+      alert(error.response?.data?.message || 'Erro ao assinar plano. Tente novamente.');
     } finally {
       setSubscribingId(null);
     }
@@ -120,8 +136,9 @@ export function ClientPlans() {
       await clientApi.post('/subscriptions/me/cancel');
       setMySubscription(null);
       setShowCancelConfirm(false);
-    } catch (e: any) {
-      alert(e.response?.data?.message || 'Erro ao cancelar assinatura.');
+    } catch (e: unknown) {
+      const error = e as { response?: { data?: { message?: string } } };
+      alert(error.response?.data?.message || 'Erro ao cancelar assinatura.');
     } finally {
       setIsCancelling(false);
     }
@@ -132,7 +149,12 @@ export function ClientPlans() {
     setPaymentMethodModal(null);
     setCreditCardModal(null);
     try {
-      const payload: any = { billingType };
+      const payload: {
+        billingType: string;
+        creditCard?: CreditCardFormData['creditCard'];
+        creditCardHolderInfo?: CreditCardFormData['creditCardHolderInfo'];
+        remoteIp?: string;
+      } = { billingType };
       if (cardData) {
         payload.creditCard = cardData.creditCard;
         payload.creditCardHolderInfo = cardData.creditCardHolderInfo;
@@ -155,8 +177,9 @@ export function ClientPlans() {
         window.open(res.data.invoiceUrl, '_blank', 'noopener,noreferrer');
         alert('Abra a nova aba para pagar com cartão.');
       }
-    } catch (e: any) {
-      alert(e.response?.data?.message || 'Erro ao reativar assinatura. Tente novamente.');
+    } catch (e: unknown) {
+      const error = e as { response?: { data?: { message?: string } } };
+      alert(error.response?.data?.message || 'Erro ao reativar assinatura. Tente novamente.');
     } finally {
       setIsReactivating(false);
     }
