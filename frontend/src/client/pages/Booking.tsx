@@ -79,6 +79,19 @@ interface MySubscription {
   plan: { id: string; name: string; price: number; cutsPerMonth: number };
 }
 
+interface SubscriptionPlan {
+  id: string;
+  name: string;
+  description?: string;
+  price: number;
+  cutsPerMonth: number;
+}
+
+interface PixData {
+  encodedImage: string;
+  payload: string;
+}
+
 export function ClientBooking() {
   const [currentStep, setCurrentStep] = useState<Step>('service');
   const [selectedServices, setSelectedServices] = useState<Service[]>([]);
@@ -89,6 +102,10 @@ export function ClientBooking() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mySubscription, setMySubscription] = useState<MySubscription | null>(null);
   const [useSubscriptionCut, setUseSubscriptionCut] = useState(false);
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+  const [subscribingPlanId, setSubscribingPlanId] = useState<string | null>(null);
+  const [pixModal, setPixModal] = useState<PixData | null>(null);
+  const [pixCopied, setPixCopied] = useState(false);
 
   const navigate = useNavigate();
   const [activePromotions, setActivePromotions] = useState<ActivePromotion[]>([]);
@@ -122,7 +139,41 @@ export function ClientBooking() {
         }
       })
       .catch(() => {});
+    clientApi.get<SubscriptionPlan[]>('/subscriptions/plans')
+      .then((res) => setPlans(res.data))
+      .catch(() => {});
   }, [fetchServices]);
+
+  const handleSubscribePlan = async (planId: string) => {
+    setSubscribingPlanId(planId);
+    try {
+      const res = await clientApi.post<{ subscription: MySubscription; pixData: PixData | null }>(
+        '/subscriptions/me/subscribe',
+        { planId },
+      );
+      setMySubscription(res.data.subscription);
+      const remaining = res.data.subscription.plan.cutsPerMonth === 99
+        ? 99
+        : Math.max(res.data.subscription.plan.cutsPerMonth - res.data.subscription.cutsUsedThisMonth, 0);
+      setUseSubscriptionCut(remaining > 0);
+      if (res.data.pixData) {
+        setPixModal(res.data.pixData);
+      } else {
+        alert('Plano assinado! Seus créditos serão liberados após o pagamento.');
+      }
+    } catch (e: any) {
+      alert(e.response?.data?.message || 'Erro ao assinar plano. Tente novamente.');
+    } finally {
+      setSubscribingPlanId(null);
+    }
+  };
+
+  const handleCopyPix = async () => {
+    if (!pixModal?.payload) return;
+    await navigator.clipboard.writeText(pixModal.payload);
+    setPixCopied(true);
+    setTimeout(() => setPixCopied(false), 2000);
+  };
 
   useEffect(() => {
     if (currentStep === 'schedule' && selectedServices.length > 0) {
@@ -227,6 +278,12 @@ export function ClientBooking() {
       return <EmptyState icon="scissors" title="Nenhum serviço disponível" subtitle="Tente novamente mais tarde" />;
     }
 
+    const remainingCuts = mySubscription
+      ? mySubscription.plan.cutsPerMonth === 99
+        ? 99
+        : Math.max(mySubscription.plan.cutsPerMonth - mySubscription.cutsUsedThisMonth, 0)
+      : 0;
+
     return (
       <div className="space-y-3">
         {services.map((service) => {
@@ -286,6 +343,85 @@ export function ClientBooking() {
             </button>
           );
         })}
+
+        {/* Seção de Planos */}
+        {(mySubscription || plans.length > 0) && (
+          <div className="pt-2">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="flex-1 h-px bg-[var(--border-color)]" />
+              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                Planos
+              </p>
+              <div className="flex-1 h-px bg-[var(--border-color)]" />
+            </div>
+
+            {/* Assinatura ativa */}
+            {mySubscription && mySubscription.status === 'ACTIVE' && (
+              <div className="bg-gradient-to-r from-[#8B6914] to-[#C8923A] rounded-xl p-4 flex items-center gap-3">
+                <div className="flex-1">
+                  <p className="text-white font-semibold text-sm">{mySubscription.plan.name}</p>
+                  <p className="text-white/80 text-xs mt-0.5">
+                    {mySubscription.plan.cutsPerMonth === 99
+                      ? 'Créditos ilimitados'
+                      : `${remainingCuts} crédito${remainingCuts !== 1 ? 's' : ''} restante${remainingCuts !== 1 ? 's' : ''} este mês`}
+                  </p>
+                </div>
+                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                  {mySubscription.plan.cutsPerMonth === 99 ? (
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                    </svg>
+                  ) : (
+                    <span className="text-white font-bold text-sm">{remainingCuts}</span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Aguardando pagamento */}
+            {mySubscription && mySubscription.status === 'PENDING_PAYMENT' && (
+              <div className="bg-[var(--card-bg)] border border-amber-500/40 rounded-xl p-4 flex items-center gap-3">
+                <svg className="w-5 h-5 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">{mySubscription.plan.name}</p>
+                  <p className="text-xs text-amber-400">Aguardando pagamento</p>
+                </div>
+              </div>
+            )}
+
+            {/* Planos disponíveis (sem assinatura) */}
+            {!mySubscription && plans.length > 0 && (
+              <div className="flex gap-3 overflow-x-auto pb-1 -mx-5 px-5 scrollbar-hide">
+                {plans.map((plan) => (
+                  <div
+                    key={plan.id}
+                    className="flex-shrink-0 w-52 bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-4"
+                  >
+                    <p className="font-bold text-[var(--text-primary)] text-sm">{plan.name}</p>
+                    {plan.description && (
+                      <p className="text-xs text-[var(--text-muted)] mt-0.5 line-clamp-2">{plan.description}</p>
+                    )}
+                    <p className="text-[#C8923A] font-bold text-lg mt-2">{formatPrice(plan.price)}<span className="text-xs font-normal text-[var(--text-muted)]">/mês</span></p>
+                    <p className="text-xs text-[var(--text-muted)] mt-0.5 mb-3">
+                      {plan.cutsPerMonth === 99 ? 'Cortes ilimitados' : `${plan.cutsPerMonth} corte${plan.cutsPerMonth > 1 ? 's' : ''}/mês`}
+                    </p>
+                    <button
+                      onClick={() => handleSubscribePlan(plan.id)}
+                      disabled={subscribingPlanId === plan.id}
+                      className="w-full py-2 bg-[#8B6914] hover:bg-[#725510] text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center"
+                    >
+                      {subscribingPlanId === plan.id ? (
+                        <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white" />
+                      ) : 'Assinar'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   };
@@ -633,6 +769,57 @@ export function ClientBooking() {
       <div className="flex-1 overflow-auto px-5 py-4">
         {renderStepContent()}
       </div>
+
+      {/* Modal PIX após assinar plano */}
+      {pixModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="bg-[var(--bg-primary)] rounded-2xl w-full max-w-sm p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-[var(--text-primary)]">Pagar com PIX</h3>
+              <button onClick={() => setPixModal(null)} className="p-1 text-[var(--text-muted)]">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <p className="text-sm text-[var(--text-muted)] text-center mb-4">
+              Escaneie o QR Code ou copie o código PIX para ativar seu plano
+            </p>
+            {pixModal.encodedImage && (
+              <div className="flex justify-center mb-4">
+                <img
+                  src={`data:image/png;base64,${pixModal.encodedImage}`}
+                  alt="QR Code PIX"
+                  className="w-44 h-44 rounded-xl"
+                />
+              </div>
+            )}
+            <button
+              onClick={handleCopyPix}
+              className="w-full py-3 rounded-xl border-2 border-[#C8923A] text-[#C8923A] font-semibold hover:bg-[#C8923A]/10 flex items-center justify-center gap-2 transition-colors"
+            >
+              {pixCopied ? (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Copiado!
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  Copiar código PIX
+                </>
+              )}
+            </button>
+            <p className="text-xs text-center text-[var(--text-muted)] mt-3">
+              Após o pagamento, seus créditos são liberados automaticamente
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <div className="sticky bottom-0 bg-[var(--bg-primary)] border-t border-[var(--border-color)] p-4 flex items-center gap-4">
