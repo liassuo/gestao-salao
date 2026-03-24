@@ -387,9 +387,21 @@ export function ClientPlans() {
             {pixModal && (
               <button
                 onClick={() => setPixModal(pixModal)}
-                className="w-full py-2.5 rounded-xl bg-amber-500/20 text-amber-400 text-sm font-medium mb-3"
+                className="w-full py-2.5 rounded-xl bg-amber-500/20 text-amber-400 text-sm font-medium mb-3 hover:bg-amber-500/30 transition-colors"
               >
                 Ver QR Code PIX
+              </button>
+            )}
+
+            {!pixModal && mySubscription.latestPayment?.invoiceUrl && (
+              <button
+                onClick={() => window.open(mySubscription.latestPayment?.invoiceUrl, '_blank')}
+                className="w-full py-2.5 rounded-xl bg-amber-500/20 text-amber-400 text-sm font-medium mb-3 hover:bg-amber-500/30 transition-colors flex items-center justify-center gap-2"
+              >
+                Pagar no Asaas
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
               </button>
             )}
 

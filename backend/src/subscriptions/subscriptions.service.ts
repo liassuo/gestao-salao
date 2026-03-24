@@ -514,40 +514,58 @@ export class SubscriptionsService {
       return null;
     }
 
-    // Buscar último pagamento PIX pendente para esta assinatura
+    // Buscar último pagamento PIX pendente para esta assinatura ou cliente
     const { data: payments } = await this.supabase
       .from('payments')
       .select('*')
-      .eq('subscriptionId', subscription.id)
+      .eq('clientId', clientId)
       .eq('method', 'PIX')
-      .neq('asaasStatus', 'RECEIVED')
-      .neq('asaasStatus', 'CONFIRMED')
-      .neq('asaasStatus', 'OVERDUE')
+      .in('asaasStatus', ['PENDING', 'AWAITING_RISK_ANALYSIS'])
       .order('createdAt', { ascending: false })
       .limit(1);
 
     const payment = payments?.[0];
-    if (!payment || !payment.asaasPaymentId) {
-      if (subscription.asaasSubscriptionId) {
-        try {
-          const charges = await this.asaasService.getSubscriptionPayments(subscription.asaasSubscriptionId);
-          const pending = charges.find((c: any) => c.status === 'PENDING' || c.status === 'AWAITING_RISK_ANALYSIS');
-          if (pending && pending.billingType === 'PIX') {
-            return await this.asaasService.getPixQrCode(pending.id);
-          }
-        } catch (e) {
-          this.logger.warn(`Falha no fallback de QR Code PIX: ${e}`);
-        }
+    if (payment?.asaasPaymentId) {
+      try {
+        return await this.asaasService.getPixQrCode(payment.asaasPaymentId);
+      } catch (e) {
+        this.logger.warn(`Falha ao carregar QR Code PIX do banco local: ${e}`);
       }
-      return null;
     }
 
-    try {
-      return await this.asaasService.getPixQrCode(payment.asaasPaymentId);
-    } catch (e) {
-      this.logger.warn(`Falha ao carregar QR Code PIX pendente: ${e}`);
-      return null;
+    // Fallback: buscar diretamente da assinatura no Asaas
+    if (subscription.asaasSubscriptionId) {
+      try {
+        const charges = await this.asaasService.getSubscriptionPayments(subscription.asaasSubscriptionId);
+        const pending = charges.find((c: any) => 
+          (c.status === 'PENDING' || c.status === 'AWAITING_RISK_ANALYSIS') && 
+          c.billingType === 'PIX'
+        );
+        if (pending) {
+          return await this.asaasService.getPixQrCode(pending.id);
+        }
+      } catch (e) {
+        this.logger.warn(`Falha no fallback de QR Code PIX via assinatura: ${e}`);
+      }
     }
+
+    // Fallback 2: buscar cobranças avulsas do cliente no Asaas (se for reativação manual)
+    try {
+        const { data: clientData } = await this.supabase.from('clients').select('asaasCustomerId').eq('id', clientId).single();
+        if (clientData?.asaasCustomerId) {
+            const { data: chargesRes } = await (this.asaasService as any).httpClient.get('/payments', {
+                params: { customer: clientData.asaasCustomerId, status: 'PENDING' }
+            });
+            const pending = (chargesRes?.data || []).find((c: any) => c.billingType === 'PIX');
+            if (pending) {
+                return await this.asaasService.getPixQrCode(pending.id);
+            }
+        }
+    } catch (e) {
+        this.logger.warn(`Falha no fallback 2 de QR Code PIX: ${e}`);
+    }
+
+    return null;
   }
 
   async subscribeByClientId(clientId: string, planId: string, body: SubscribeMeDto) {
