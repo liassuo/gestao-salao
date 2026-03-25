@@ -287,62 +287,6 @@ export class SubscriptionsService {
       resolved = minimal ? { ...minimal, plan } : null;
     }
 
-    // Criar assinatura recorrente no Asaas (se configurado)
-    if (this.asaasService.configured && resolved) {
-      try {
-        // Buscar cliente com asaasCustomerId
-        const { data: clientData } = await this.supabase
-          .from('clients')
-          .select('id, name, email, phone, asaasCustomerId')
-          .eq('id', dto.clientId)
-          .single();
-
-        let asaasCustomerId = clientData?.asaasCustomerId;
-        if (!asaasCustomerId && clientData) {
-          const asaasCustomer = await this.asaasService.createCustomer({
-            name: clientData.name,
-            email: clientData.email || undefined,
-            mobilePhone: clientData.phone || undefined,
-            externalReference: clientData.id,
-          });
-          asaasCustomerId = asaasCustomer.id;
-          await this.supabase
-            .from('clients')
-            .update({ asaasCustomerId })
-            .eq('id', clientData.id);
-        }
-
-        if (asaasCustomerId) {
-          const parsed = parseAsaasBillingType(dto.billingType);
-          const billingType =
-            parsed === AsaasBillingType.CREDIT_CARD
-              ? AsaasBillingType.CREDIT_CARD
-              : AsaasBillingType.PIX;
-          const asaasSub = await this.asaasService.createSubscription({
-            customer: asaasCustomerId,
-            billingType,
-            value: this.asaasService.centavosToReais(plan.price ?? 0),
-            nextDueDate: startDate.toISOString().split('T')[0],
-            cycle: AsaasSubscriptionCycle.MONTHLY,
-            description: `Plano ${plan.name ?? 'Assinatura'}`,
-            externalReference: resolved.id,
-            creditCard: dto.creditCard,
-            creditCardHolderInfo: dto.creditCardHolderInfo,
-            remoteIp: dto.remoteIp,
-          });
-
-          await this.supabase
-            .from('client_subscriptions')
-            .update({ asaasSubscriptionId: asaasSub.id })
-            .eq('id', resolved.id);
-
-          this.logger.log(`Assinatura Asaas criada: ${asaasSub.id}`);
-        }
-      } catch (syncError) {
-        this.logger.warn(`Falha ao criar assinatura no Asaas: ${syncError}`);
-      }
-    }
-
     return resolved;
   }
 
@@ -630,44 +574,59 @@ export class SubscriptionsService {
       parsed === AsaasBillingType.CREDIT_CARD
         ? AsaasBillingType.CREDIT_CARD
         : AsaasBillingType.PIX;
+
     const subscription = await this.subscribeClient({
       clientId,
       planId,
       billingType: effectiveBilling === AsaasBillingType.CREDIT_CARD ? 'CREDIT_CARD' : 'PIX',
-      creditCard: body.creditCard,
-      creditCardHolderInfo: body.creditCardHolderInfo,
-      remoteIp: body.remoteIp,
     });
 
     let pixData: any = null;
     let invoiceUrl: string | null = null;
     const freshSub = await this.findClientSubscription(clientId);
-    if (this.asaasService.configured && freshSub?.asaasSubscriptionId) {
+
+    if (this.asaasService.configured && freshSub) {
       try {
-        // Asaas gera a primeira cobrança de forma assíncrona: retry com delay
-        let charges: any[] = [];
-        for (let attempt = 0; attempt < 4; attempt++) {
-          if (attempt > 0) {
-            await new Promise((r) => setTimeout(r, 2000));
-          }
-          charges = await this.asaasService.getSubscriptionPayments(freshSub.asaasSubscriptionId);
-          if (charges.length > 0) break;
-          this.logger.warn(
-            `Tentativa ${attempt + 1}: nenhuma cobrança encontrada para assinatura ${freshSub.asaasSubscriptionId}`,
-          );
+        // Buscar ou criar customer no Asaas
+        const { data: clientData } = await this.supabase
+          .from('clients')
+          .select('asaasCustomerId, name, email, phone')
+          .eq('id', clientId)
+          .single();
+
+        let asaasCustomerId = clientData?.asaasCustomerId;
+        if (!asaasCustomerId && clientData) {
+          const asaasCustomer = await this.asaasService.createCustomer({
+            name: clientData.name,
+            email: clientData.email || undefined,
+            mobilePhone: clientData.phone || undefined,
+            externalReference: clientId,
+          });
+          asaasCustomerId = asaasCustomer.id;
+          await this.supabase
+            .from('clients')
+            .update({ asaasCustomerId })
+            .eq('id', clientId);
         }
 
-        const pending =
-          charges.find((c: any) => c.status === 'PENDING') ??
-          charges.find((c: any) => c.status === 'AWAITING_RISK_ANALYSIS') ??
-          charges[0];
-        if (pending) {
+        if (asaasCustomerId) {
+          const today = new Date().toISOString().split('T')[0];
+          // createCharge retorna invoiceUrl imediatamente (sem timing issue)
+          const charge = await this.asaasService.createCharge({
+            customer: asaasCustomerId,
+            billingType: effectiveBilling,
+            value: this.asaasService.centavosToReais(freshSub.plan?.price ?? 0),
+            dueDate: today,
+            description: `Plano ${freshSub.plan?.name ?? 'Assinatura'}`,
+            externalReference: freshSub.id,
+          });
+
+          invoiceUrl = charge.invoiceUrl || null;
           const now = new Date().toISOString();
           const localMethod = asaasBillingToLocalPaymentMethod(effectiveBilling);
-          invoiceUrl = pending.invoiceUrl || null;
 
           if (effectiveBilling === AsaasBillingType.PIX) {
-            pixData = await this.asaasService.getPixQrCode(pending.id);
+            pixData = await this.asaasService.getPixQrCode(charge.id);
           }
 
           await this.supabase.from('payments').insert({
@@ -677,22 +636,20 @@ export class SubscriptionsService {
             amount: freshSub.plan?.price ?? 0,
             method: localMethod,
             registeredBy: clientId,
-            notes: `Cobrança inicial assinatura Asaas #${pending.id}`,
-            asaasPaymentId: pending.id,
-            asaasStatus: pending.status,
+            notes: `Cobrança inicial plano ${freshSub.plan?.name ?? 'Assinatura'} #${charge.id}`,
+            asaasPaymentId: charge.id,
+            asaasStatus: charge.status,
             paidAt: null,
             invoiceUrl,
-            bankSlipUrl: pending.bankSlipUrl || null,
+            bankSlipUrl: charge.bankSlipUrl || null,
             createdAt: now,
             updatedAt: now,
           });
-        } else {
-          this.logger.warn(
-            `Nenhuma cobrança encontrada após 4 tentativas para assinatura Asaas ${freshSub.asaasSubscriptionId}`,
-          );
+
+          this.logger.log(`Cobrança inicial criada: ${charge.id} - invoiceUrl: ${invoiceUrl}`);
         }
       } catch (e) {
-        this.logger.warn(`Falha ao sincronizar cobrança inicial da assinatura: ${e}`);
+        this.logger.warn(`Falha ao criar cobrança inicial: ${e}`);
       }
     }
 
