@@ -644,7 +644,19 @@ export class SubscriptionsService {
     const freshSub = await this.findClientSubscription(clientId);
     if (this.asaasService.configured && freshSub?.asaasSubscriptionId) {
       try {
-        const charges = await this.asaasService.getSubscriptionPayments(freshSub.asaasSubscriptionId);
+        // Asaas gera a primeira cobrança de forma assíncrona: retry com delay
+        let charges: any[] = [];
+        for (let attempt = 0; attempt < 4; attempt++) {
+          if (attempt > 0) {
+            await new Promise((r) => setTimeout(r, 2000));
+          }
+          charges = await this.asaasService.getSubscriptionPayments(freshSub.asaasSubscriptionId);
+          if (charges.length > 0) break;
+          this.logger.warn(
+            `Tentativa ${attempt + 1}: nenhuma cobrança encontrada para assinatura ${freshSub.asaasSubscriptionId}`,
+          );
+        }
+
         const pending =
           charges.find((c: any) => c.status === 'PENDING') ??
           charges.find((c: any) => c.status === 'AWAITING_RISK_ANALYSIS') ??
@@ -657,7 +669,6 @@ export class SubscriptionsService {
           if (effectiveBilling === AsaasBillingType.PIX) {
             pixData = await this.asaasService.getPixQrCode(pending.id);
           }
-          invoiceUrl = pending.invoiceUrl || null;
 
           await this.supabase.from('payments').insert({
             id: randomUUID(),
@@ -675,6 +686,10 @@ export class SubscriptionsService {
             createdAt: now,
             updatedAt: now,
           });
+        } else {
+          this.logger.warn(
+            `Nenhuma cobrança encontrada após 4 tentativas para assinatura Asaas ${freshSub.asaasSubscriptionId}`,
+          );
         }
       } catch (e) {
         this.logger.warn(`Falha ao sincronizar cobrança inicial da assinatura: ${e}`);
