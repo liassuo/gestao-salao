@@ -1,6 +1,6 @@
 const CACHE_NAME = 'barbearia-america-v1';
 const PRECACHE_URLS = [
-  '/cliente/',
+  '/',
   '/favicon/favicon.svg',
   '/favicon/web-app-manifest-192x192.png',
   '/favicon/web-app-manifest-512x512.png',
@@ -54,7 +54,7 @@ self.addEventListener('fetch', (event) => {
           if (cached) return cached;
           // For navigation requests, return the cached app shell
           if (event.request.mode === 'navigate') {
-            return caches.match('/cliente/');
+            return caches.match('/');
           }
         });
       })
@@ -88,7 +88,7 @@ self.addEventListener('notificationclick', (event) => {
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
       // Focus existing window if open
       for (const client of clients) {
-        if (client.url.includes('/cliente') && 'focus' in client) {
+        if ('focus' in client) {
           return client.focus();
         }
       }

@@ -168,6 +168,10 @@ export const router = createBrowserRouter([
         path: 'configuracoes',
         element: withRoleProtection('/configuracoes', <Settings />),
       },
+      {
+        path: '*',
+        element: <Navigate to="/" replace />,
+      },
     ],
   },
 
@@ -227,6 +231,10 @@ export const router = createBrowserRouter([
             <ClientPlans />
           </ClientPrivateRoute>
         ),
+      },
+      {
+        path: '*',
+        element: <Navigate to="/cliente" replace />,
       },
     ],
   },
@@ -289,6 +297,10 @@ export const clientRouter = createBrowserRouter([
             <ClientPlans />
           </ClientPrivateRoute>
         ),
+      },
+      {
+        path: '*',
+        element: <Navigate to="/" replace />,
       },
     ],
   },
