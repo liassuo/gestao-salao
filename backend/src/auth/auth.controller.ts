@@ -110,6 +110,42 @@ export class AuthController {
     return this.authService.userSetupPassword(payload.sub, body.password);
   }
 
+  @Public()
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Envia email de recuperação de senha para usuário admin/profissional' })
+  async forgotPassword(@Body() body: { email: string }) {
+    await this.authService.forgotPassword(body.email);
+    return { message: 'Se esse email estiver cadastrado, você receberá as instruções em breve.' };
+  }
+
+  @Public()
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Redefine a senha do usuário admin/profissional via token' })
+  async resetPassword(@Body() body: { token: string; password: string }) {
+    await this.authService.resetPassword(body.token, body.password);
+    return { message: 'Senha redefinida com sucesso.' };
+  }
+
+  @Public()
+  @Post('client/forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Envia email de recuperação de senha para cliente' })
+  async clientForgotPassword(@Body() body: { email: string }) {
+    await this.authService.clientForgotPassword(body.email);
+    return { message: 'Se esse email estiver cadastrado, você receberá as instruções em breve.' };
+  }
+
+  @Public()
+  @Post('client/reset-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Redefine a senha do cliente via token' })
+  async clientResetPassword(@Body() body: { token: string; password: string }) {
+    await this.authService.clientResetPassword(body.token, body.password);
+    return { message: 'Senha redefinida com sucesso.' };
+  }
+
   @Post('reset-professional-password/:professionalId')
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)

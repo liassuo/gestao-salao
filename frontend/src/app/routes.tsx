@@ -25,6 +25,8 @@ import {
   StockCurrent,
   StockMovements,
   Subscriptions,
+  ForgotPassword,
+  ResetPassword,
 } from '@/pages';
 import { getRolesForPath } from '@/config/permissions';
 import {
@@ -37,6 +39,8 @@ import {
   ClientProfile,
   ClientSetPassword,
   ClientPlans,
+  ClientForgotPassword,
+  ClientResetPassword,
 } from '@/client';
 
 // Redireciona profissionais para /agendamentos, admin para Dashboard
@@ -67,6 +71,14 @@ export const router = createBrowserRouter([
   {
     path: '/criar-senha',
     element: <SetPassword />,
+  },
+  {
+    path: '/recuperar-senha',
+    element: <ForgotPassword />,
+  },
+  {
+    path: '/redefinir-senha',
+    element: <ResetPassword />,
   },
   {
     path: '/',
@@ -177,6 +189,14 @@ export const router = createBrowserRouter([
         element: <ClientSetPassword />,
       },
       {
+        path: 'esqueceu-senha',
+        element: <ClientForgotPassword />,
+      },
+      {
+        path: 'recuperar-senha',
+        element: <ClientResetPassword />,
+      },
+      {
         index: true,
         element: (
           <ClientPrivateRoute>
@@ -229,6 +249,14 @@ export const clientRouter = createBrowserRouter([
       {
         path: 'criar-senha',
         element: <ClientSetPassword />,
+      },
+      {
+        path: 'esqueceu-senha',
+        element: <ClientForgotPassword />,
+      },
+      {
+        path: 'recuperar-senha',
+        element: <ClientResetPassword />,
       },
       {
         index: true,

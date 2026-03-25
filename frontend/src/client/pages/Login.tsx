@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { CLIENT_PATHS } from '../utils/paths';
 import { GoogleLogin } from '@react-oauth/google';
 import type { CredentialResponse } from '@react-oauth/google';
@@ -358,6 +358,12 @@ export function ClientLogin() {
                     className={inputClass}
                   />
                 </div>
+              </div>
+
+              <div className="text-right">
+                <Link to={CLIENT_PATHS.esqueceuSenha} className="text-xs text-[#8B7D6B] hover:text-[#C8923A] transition-colors">
+                  Esqueceu sua senha?
+                </Link>
               </div>
 
               <button

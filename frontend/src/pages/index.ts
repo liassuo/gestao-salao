@@ -20,3 +20,5 @@ export * from './StockMovements';
 export * from './Subscriptions';
 export * from './Promotions';
 export * from './SetPassword';
+export * from './ForgotPassword';
+export * from './ResetPassword';

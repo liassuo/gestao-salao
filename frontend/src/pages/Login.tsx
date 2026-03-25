@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Eye, EyeOff, LogIn, Mail, Lock } from 'lucide-react';
 import { useAuth } from '@/auth';
 import type { LoginCredentials } from '@/auth';
@@ -179,6 +179,13 @@ export function Login() {
                   {errors.password.message}
                 </p>
               )}
+            </div>
+
+            {/* Esqueceu a senha */}
+            <div className="text-right">
+              <Link to="/recuperar-senha" className="text-xs text-[#8B7D6B] hover:text-[#C8923A] transition-colors">
+                Esqueceu sua senha?
+              </Link>
             </div>
 
             {/* Botão de submit */}

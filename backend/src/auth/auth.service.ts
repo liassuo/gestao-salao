@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, NotFoundException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -6,6 +6,7 @@ import * as bcrypt from 'bcrypt';
 import { OAuth2Client } from 'google-auth-library';
 import { UsersService } from '../users/users.service';
 import { SupabaseService } from '../supabase/supabase.service';
+import { MailService } from '../mail/mail.service';
 import { LoginDto, AuthResponseDto, GoogleAuthDto } from './dto';
 import { JwtPayload } from './strategies/jwt.strategy';
 import { UserRole } from '../common/enums/user-role.enum';
@@ -19,6 +20,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly supabase: SupabaseService,
     private readonly configService: ConfigService,
+    private readonly mailService: MailService,
   ) {
     const googleClientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
     if (googleClientId) {
@@ -476,6 +478,127 @@ export class AuthService {
       .eq('id', user.id);
 
     return { message: 'Senha resetada. O profissional deverá criar uma nova senha no próximo login.' };
+  }
+
+  // ── Recuperação de senha — Usuários (admin/profissionais) ─────────────────
+
+  async forgotPassword(email: string): Promise<void> {
+    const { data: user } = await this.supabase
+      .from('users')
+      .select('id, name, email, password, isActive')
+      .eq('email', email)
+      .single();
+
+    // Retorno silencioso para não expor se o email existe
+    if (!user || !user.isActive) return;
+
+    const resetToken = this.jwtService.sign(
+      { sub: user.id, email: user.email, purpose: 'password-reset', table: 'users', pwdPrefix: (user.password || '').slice(0, 10) },
+      { expiresIn: '1h' },
+    );
+
+    const frontendUrl = this.configService.get<string>('FRONTEND_ADMIN_URL', 'http://localhost:5173');
+    const resetUrl = `${frontendUrl}/redefinir-senha?token=${resetToken}`;
+
+    await this.mailService.sendPasswordResetEmail(user.email, user.name, resetUrl);
+  }
+
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    let payload: any;
+    try {
+      payload = this.jwtService.verify(token);
+    } catch {
+      throw new BadRequestException('Link inválido ou expirado');
+    }
+
+    if (payload.purpose !== 'password-reset' || payload.table !== 'users') {
+      throw new BadRequestException('Link inválido');
+    }
+
+    if (!newPassword || newPassword.length < 6) {
+      throw new BadRequestException('A senha deve ter pelo menos 6 caracteres');
+    }
+
+    const { data: user } = await this.supabase
+      .from('users')
+      .select('id, password')
+      .eq('id', payload.sub)
+      .single();
+
+    if (!user) throw new NotFoundException('Usuário não encontrado');
+
+    // Verificar se o token já foi usado (senha mudou desde a emissão)
+    if ((user.password || '').slice(0, 10) !== payload.pwdPrefix) {
+      throw new BadRequestException('Este link já foi utilizado');
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 6);
+    await this.supabase
+      .from('users')
+      .update({ password: hashedPassword, mustChangePassword: false, updatedAt: new Date().toISOString() })
+      .eq('id', user.id);
+  }
+
+  // ── Recuperação de senha — Clientes ────────────────────────────────────────
+
+  async clientForgotPassword(email: string): Promise<void> {
+    const { data: client } = await this.supabase
+      .from('clients')
+      .select('id, name, email, password, isActive, googleId')
+      .eq('email', email)
+      .single();
+
+    // Retorno silencioso para não expor se o email existe
+    if (!client || !client.isActive) return;
+
+    // Clientes que só usam Google não têm senha
+    if (client.googleId && !client.password) return;
+
+    const resetToken = this.jwtService.sign(
+      { sub: client.id, email: client.email, purpose: 'password-reset', table: 'clients', pwdPrefix: (client.password || '').slice(0, 10) },
+      { expiresIn: '1h' },
+    );
+
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:5173');
+    const resetUrl = `${frontendUrl}/recuperar-senha?token=${resetToken}`;
+    // Note: client domain uses /recuperar-senha, admin uses /redefinir-senha
+
+    await this.mailService.sendPasswordResetEmail(client.email, client.name, resetUrl);
+  }
+
+  async clientResetPassword(token: string, newPassword: string): Promise<void> {
+    let payload: any;
+    try {
+      payload = this.jwtService.verify(token);
+    } catch {
+      throw new BadRequestException('Link inválido ou expirado');
+    }
+
+    if (payload.purpose !== 'password-reset' || payload.table !== 'clients') {
+      throw new BadRequestException('Link inválido');
+    }
+
+    if (!newPassword || newPassword.length < 6) {
+      throw new BadRequestException('A senha deve ter pelo menos 6 caracteres');
+    }
+
+    const { data: client } = await this.supabase
+      .from('clients')
+      .select('id, password')
+      .eq('id', payload.sub)
+      .single();
+
+    if (!client) throw new NotFoundException('Cliente não encontrado');
+
+    if ((client.password || '').slice(0, 10) !== payload.pwdPrefix) {
+      throw new BadRequestException('Este link já foi utilizado');
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 6);
+    await this.supabase
+      .from('clients')
+      .update({ password: hashedPassword, mustChangePassword: false, updatedAt: new Date().toISOString() })
+      .eq('id', client.id);
   }
 
   async clientGoogleLogin(dto: GoogleAuthDto): Promise<AuthResponseDto> {

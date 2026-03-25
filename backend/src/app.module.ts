@@ -27,6 +27,7 @@ import { AsaasModule } from './asaas/asaas.module';
 import { PromotionsModule } from './promotions/promotions.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SettingsModule } from './settings/settings.module';
+import { MailModule } from './mail/mail.module';
 
 @Module({
   imports: [
@@ -73,6 +74,7 @@ import { SettingsModule } from './settings/settings.module';
     PromotionsModule,
     NotificationsModule,
     SettingsModule,
+    MailModule,
   ],
   providers: [
     {

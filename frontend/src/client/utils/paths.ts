@@ -14,4 +14,6 @@ export const CLIENT_PATHS = {
   perfil: IS_CLIENT_DOMAIN ? '/perfil' : '/cliente/perfil',
   criarSenha: IS_CLIENT_DOMAIN ? '/criar-senha' : '/cliente/criar-senha',
   planos: IS_CLIENT_DOMAIN ? '/planos' : '/cliente/planos',
+  esqueceuSenha: IS_CLIENT_DOMAIN ? '/esqueceu-senha' : '/cliente/esqueceu-senha',
+  recuperarSenha: IS_CLIENT_DOMAIN ? '/recuperar-senha' : '/cliente/recuperar-senha',
 };

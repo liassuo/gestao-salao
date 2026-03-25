@@ -94,6 +94,14 @@ export const clientAuthApi = {
     });
     return response.data;
   },
+  forgotPassword: async (email: string): Promise<{ message: string }> => {
+    const response = await clientApi.post<{ message: string }>('/auth/client/forgot-password', { email });
+    return response.data;
+  },
+  resetPassword: async (token: string, password: string): Promise<{ message: string }> => {
+    const response = await clientApi.post<{ message: string }>('/auth/client/reset-password', { token, password });
+    return response.data;
+  },
 };
 
 export const storage = {
