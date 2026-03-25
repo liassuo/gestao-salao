@@ -127,8 +127,6 @@ export function ClientPlans() {
         setPixModal(res.data.pixData);
       } else if (billingType === 'CREDIT_CARD') {
         alert('Assinatura com cartão processada com sucesso!');
-      } else if (res.data.invoiceUrl) {
-        alert('Abra a nova aba para concluir o pagamento.');
       }
     } catch (e: unknown) {
       const error = e as { response?: { data?: { message?: string } } };
@@ -186,8 +184,6 @@ export function ClientPlans() {
         setPixModal(res.data.pixData);
       } else if (billingType === 'CREDIT_CARD') {
         alert('Assinatura reativada com cartão!');
-      } else if (res.data.invoiceUrl) {
-        alert('Abra a nova aba para pagar.');
       }
     } catch (e: unknown) {
       const error = e as { response?: { data?: { message?: string } } };

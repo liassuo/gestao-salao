@@ -141,13 +141,28 @@ export function Orders() {
     setPayingOrderId(id);
   };
 
+  const [useAsaas, setUseAsaas] = useState(false);
+
   const handleConfirmPay = async () => {
     if (!payingOrderId) return;
     try {
-      await payOrder.mutateAsync({ id: payingOrderId, paymentMethod });
-      toast.success('Comanda marcada como paga');
+      const data: { paymentMethod?: PaymentMethod; billingType?: string } = { paymentMethod };
+      if (useAsaas && (paymentMethod === 'PIX' || paymentMethod === 'CARD')) {
+        data.billingType = paymentMethod === 'PIX' ? 'PIX' : 'CREDIT_CARD';
+      }
+
+      const res = (await payOrder.mutateAsync({ id: payingOrderId, ...data })) as any;
+      
+      if (res.asaasCharge?.invoiceUrl) {
+        window.open(res.asaasCharge.invoiceUrl, '_blank');
+        toast.success('Cobrança Asaas gerada. Link aberto em nova aba.');
+      } else {
+        toast.success('Comanda marcada como paga');
+      }
+
       setPayingOrderId(null);
       setViewingOrder(null);
+      setUseAsaas(false);
     } catch (err) { toast.error('Erro', getApiErrorMessage(err)); }
   };
 
@@ -650,27 +665,40 @@ export function Orders() {
           <p className="text-sm text-[var(--text-muted)]">Selecione a forma de pagamento para registrar no caixa:</p>
           <div className="grid grid-cols-3 gap-3">
             <button
-              onClick={() => setPaymentMethod('CASH')}
+              onClick={() => { setPaymentMethod('CASH'); setUseAsaas(false); }}
               className={`flex flex-col items-center gap-2 rounded-xl border p-4 transition-colors ${paymentMethod === 'CASH' ? 'border-green-500 bg-green-500/20 text-green-400' : 'border-[var(--card-border)] text-[var(--text-muted)] hover:bg-[var(--hover-bg)]'}`}
             >
               <Banknote className="h-6 w-6" />
               <span className="text-xs font-medium">Dinheiro</span>
             </button>
             <button
-              onClick={() => setPaymentMethod('PIX')}
+              onClick={() => { setPaymentMethod('PIX'); setUseAsaas(true); }}
               className={`flex flex-col items-center gap-2 rounded-xl border p-4 transition-colors ${paymentMethod === 'PIX' ? 'border-[#C8923A] bg-[#C8923A]/20 text-[#D4A85C]' : 'border-[var(--card-border)] text-[var(--text-muted)] hover:bg-[var(--hover-bg)]'}`}
             >
               <Smartphone className="h-6 w-6" />
-              <span className="text-xs font-medium">PIX</span>
+              <span className="text-xs font-medium">PIX (Asaas)</span>
             </button>
             <button
-              onClick={() => setPaymentMethod('CARD')}
+              onClick={() => { setPaymentMethod('CARD'); setUseAsaas(true); }}
               className={`flex flex-col items-center gap-2 rounded-xl border p-4 transition-colors ${paymentMethod === 'CARD' ? 'border-purple-500 bg-purple-500/20 text-purple-400' : 'border-[var(--card-border)] text-[var(--text-muted)] hover:bg-[var(--hover-bg)]'}`}
             >
               <CircleDollarSign className="h-6 w-6" />
-              <span className="text-xs font-medium">Cartão</span>
+              <span className="text-xs font-medium">Cartão (Asaas)</span>
             </button>
           </div>
+
+          {(paymentMethod === 'PIX' || paymentMethod === 'CARD') && (
+            <div className="flex items-center gap-2 px-1">
+              <input
+                type="checkbox"
+                id="useAsaas"
+                checked={useAsaas}
+                onChange={(e) => setUseAsaas(e.target.checked)}
+                className="h-4 w-4 rounded border-[var(--card-border)] bg-[var(--hover-bg)] text-[#C8923A] focus:ring-[#C8923A]"
+              />
+              <label htmlFor="useAsaas" className="text-xs text-[var(--text-secondary)]">Usar cobrança digital Asaas (link externo)</label>
+            </div>
+          )}
           <div className="flex justify-end gap-3 pt-2">
             <button onClick={() => setPayingOrderId(null)} className="rounded-xl border border-[var(--card-border)] px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]">Cancelar</button>
             <button
