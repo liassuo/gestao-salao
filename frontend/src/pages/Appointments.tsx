@@ -79,10 +79,10 @@ export function Appointments() {
           description: `Agendamento: ${response.id}`,
         });
       } else if (response?.payment?.invoiceUrl) {
-        window.open(response.payment.invoiceUrl, '_blank', 'noopener,noreferrer');
+        window.location.href = response.payment.invoiceUrl;
         toast.success(
           'Link de pagamento',
-          'Abra a nova aba para o cliente pagar com cartão no Asaas.',
+          'Redirecionando para o Asaas para pagamento com cartão.',
         );
       }
     } catch (err) {

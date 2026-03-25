@@ -167,8 +167,7 @@ export function ClientBooking() {
         setLeaveAfterPixClose(false);
         setPixModal(res.data.pixData);
       } else if (res.data.invoiceUrl) {
-        window.open(res.data.invoiceUrl, '_blank', 'noopener,noreferrer');
-        alert('Abra a nova aba para concluir o pagamento com cartão. Os créditos serão liberados após a confirmação.');
+        window.location.href = res.data.invoiceUrl;
       } else {
         alert('Assinatura criada. Conclua o pagamento conforme as instruções enviadas (e-mail ou link).');
       }
@@ -256,9 +255,7 @@ export function ClientBooking() {
         setLeaveAfterPixClose(true);
         setPixModal(result.payment.pixData);
       } else if (result.payment?.invoiceUrl) {
-        window.open(result.payment.invoiceUrl, '_blank', 'noopener,noreferrer');
-        alert('Agendamento criado. Conclua o pagamento com cartão na nova aba.');
-        navigate(CLIENT_PATHS.home);
+        window.location.href = result.payment.invoiceUrl;
       } else {
         alert('Agendamento realizado com sucesso!');
         navigate(CLIENT_PATHS.home);

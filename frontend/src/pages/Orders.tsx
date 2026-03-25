@@ -154,8 +154,8 @@ export function Orders() {
       const res = (await payOrder.mutateAsync({ id: payingOrderId, ...data })) as any;
       
       if (res.asaasCharge?.invoiceUrl) {
-        window.open(res.asaasCharge.invoiceUrl, '_blank');
-        toast.success('Cobrança Asaas gerada. Link aberto em nova aba.');
+        window.location.href = res.asaasCharge.invoiceUrl;
+        toast.success('Cobrança Asaas gerada. Redirecionando para pagamento.');
       } else {
         toast.success('Comanda marcada como paga');
       }
