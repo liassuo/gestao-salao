@@ -319,6 +319,38 @@ export class AppointmentsService {
       throw new BadRequestException('Agendamento já foi marcado como atendido');
     }
 
+    // Converter pagamento online não pago para pagamento no local
+    const { data: pendingPayment } = await this.supabase
+      .from('payments')
+      .select('id, asaasPaymentId, asaasStatus, method')
+      .eq('appointmentId', id)
+      .is('paidAt', null)
+      .in('method', ['PIX', 'CARD'])
+      .single();
+
+    if (pendingPayment) {
+      const now = new Date().toISOString();
+      await this.supabase
+        .from('payments')
+        .update({
+          method: 'CASH',
+          asaasStatus: null,
+          notes: `Convertido para pagamento no local (original: ${pendingPayment.method})`,
+          updatedAt: now,
+        })
+        .eq('id', pendingPayment.id);
+
+      // Cancelar cobrança no Asaas (se existir)
+      if (pendingPayment.asaasPaymentId && this.asaasService.configured) {
+        try {
+          await this.asaasService.cancelCharge(pendingPayment.asaasPaymentId);
+          this.logger.log(`Cobrança Asaas ${pendingPayment.asaasPaymentId} cancelada (agendamento ${id} atendido sem pagamento online)`);
+        } catch (e) {
+          this.logger.warn(`Falha ao cancelar cobrança Asaas ${pendingPayment.asaasPaymentId}: ${e}`);
+        }
+      }
+    }
+
     const { data: updated, error: updateError } = await this.supabase
       .from('appointments')
       .update({ status: 'ATTENDED', attendedAt: new Date().toISOString() })

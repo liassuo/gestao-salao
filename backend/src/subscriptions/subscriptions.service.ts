@@ -403,6 +403,22 @@ export class SubscriptionsService {
       }
     }
 
+    // Auto-cancelar se PENDING_PAYMENT e endDate já venceu (nunca pagou)
+    if (subscription && subscription.status === 'PENDING_PAYMENT') {
+      const endDate = new Date(subscription.endDate);
+      if (new Date() > endDate) {
+        const now = new Date().toISOString();
+        const { data: canceled } = await this.supabase
+          .from('client_subscriptions')
+          .update({ status: 'CANCELED', updatedAt: now })
+          .eq('id', subscription.id)
+          .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth)')
+          .single();
+        this.logger.log(`Assinatura ${subscription.id} cancelada automaticamente (PENDING_PAYMENT expirado, endDate ${subscription.endDate})`);
+        return canceled ?? subscription;
+      }
+    }
+
     return subscription;
   }
 
