@@ -5,6 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../supabase/supabase.service';
 import { AsaasService } from '../asaas/asaas.service';
 import {
@@ -28,6 +29,7 @@ export class SubscriptionsService {
   constructor(
     private readonly supabase: SupabaseService,
     private readonly asaasService: AsaasService,
+    private readonly configService: ConfigService,
   ) {}
 
   // SUBSCRIPTION PLANS
@@ -620,6 +622,7 @@ export class SubscriptionsService {
         }
 
         const today = new Date().toISOString().split('T')[0];
+        const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:5173');
         const charge = await this.asaasService.createCharge({
           customer: asaasCustomerId,
           billingType: effectiveBilling,
@@ -630,6 +633,10 @@ export class SubscriptionsService {
           creditCard: body.creditCard,
           creditCardHolderInfo: body.creditCardHolderInfo,
           remoteIp: body.remoteIp,
+          callback: {
+            successUrl: `${frontendUrl}/planos`,
+            autoRedirect: true,
+          },
         });
 
         invoiceUrl = charge.invoiceUrl || null;
@@ -796,6 +803,7 @@ export class SubscriptionsService {
         }
 
         const today = now.toISOString().split('T')[0];
+        const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:5173');
         const charge = await this.asaasService.createCharge({
           customer: asaasCustomerId,
           billingType,
@@ -806,6 +814,10 @@ export class SubscriptionsService {
           creditCard: body.creditCard,
           creditCardHolderInfo: body.creditCardHolderInfo,
           remoteIp: body.remoteIp,
+          callback: {
+            successUrl: `${frontendUrl}/planos`,
+            autoRedirect: true,
+          },
         });
 
         invoiceUrl = charge.invoiceUrl || null;

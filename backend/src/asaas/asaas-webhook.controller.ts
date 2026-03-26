@@ -89,6 +89,7 @@ export class AsaasWebhookController {
 
   /**
    * Pagamento confirmado - atualizar status local
+   * Idempotente: verifica se já foi processado antes de aplicar mudanças
    */
   private async handlePaymentConfirmed(paymentData: any) {
     const asaasPaymentId = paymentData.id;
@@ -101,7 +102,7 @@ export class AsaasWebhookController {
     // Buscar pagamento local pelo asaasPaymentId
     const { data: localPayment } = await this.supabase
       .from('payments')
-      .select('id, appointmentId, clientId, amount, subscriptionId')
+      .select('id, appointmentId, clientId, amount, subscriptionId, asaasStatus, paidAt')
       .eq('asaasPaymentId', asaasPaymentId)
       .single();
 
@@ -109,6 +110,12 @@ export class AsaasWebhookController {
       this.logger.warn(
         `Pagamento local não encontrado para Asaas ID: ${asaasPaymentId}`,
       );
+      return;
+    }
+
+    // Idempotência: se já foi confirmado/recebido, não processar novamente
+    if (localPayment.paidAt && (localPayment.asaasStatus === 'RECEIVED' || localPayment.asaasStatus === 'CONFIRMED')) {
+      this.logger.log(`Webhook duplicado ignorado: ${asaasPaymentId} já processado (${localPayment.asaasStatus})`);
       return;
     }
 

@@ -165,6 +165,12 @@ export interface AsaasCreateChargePayload {
   creditCard?: AsaasCreditCard;
   creditCardHolderInfo?: AsaasCreditCardHolderInfo;
   remoteIp?: string;
+  callback?: AsaasCallback;
+}
+
+export interface AsaasCallback {
+  successUrl: string;
+  autoRedirect?: boolean; // padrão: true
 }
 
 export interface AsaasPixQrCode {
