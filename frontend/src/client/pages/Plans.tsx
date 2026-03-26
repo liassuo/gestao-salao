@@ -105,6 +105,25 @@ export function ClientPlans() {
     loadData();
   }, [loadData]);
 
+  // Polling: verifica a cada 5s se a assinatura saiu de PENDING_PAYMENT
+  useEffect(() => {
+    if (!mySubscription || mySubscription.status !== 'PENDING_PAYMENT') return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await clientApi.get<ClientSubscription | null>('/subscriptions/me');
+        if (res.data && res.data.status !== 'PENDING_PAYMENT') {
+          setMySubscription(res.data);
+          setPixModal(null);
+        }
+      } catch {
+        // ignora erros silenciosamente no polling
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [mySubscription?.status]);
+
   const handleRequestPayment = (target: string) => {
     if (!clientCpf) {
       setCpfModalTarget(target);
