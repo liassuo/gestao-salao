@@ -590,15 +590,21 @@ export class SubscriptionsService {
         // Buscar ou criar customer no Asaas
         const { data: clientData } = await this.supabase
           .from('clients')
-          .select('asaasCustomerId, name, email, phone')
+          .select('asaasCustomerId, name, email, phone, cpf')
           .eq('id', clientId)
           .single();
 
         let asaasCustomerId = clientData?.asaasCustomerId;
         if (!asaasCustomerId && clientData) {
+          if (!clientData.cpf) {
+            throw new BadRequestException(
+              'CPF é obrigatório para gerar cobranças PIX. Atualize seu perfil com um CPF válido.',
+            );
+          }
           const asaasCustomer = await this.asaasService.createCustomer({
             name: clientData.name,
             email: clientData.email || undefined,
+            cpfCnpj: clientData.cpf,
             mobilePhone: clientData.phone || undefined,
             externalReference: clientId,
           });
@@ -609,47 +615,70 @@ export class SubscriptionsService {
             .eq('id', clientId);
         }
 
-        if (asaasCustomerId) {
-          const today = new Date().toISOString().split('T')[0];
-          // createCharge retorna invoiceUrl imediatamente (sem timing issue)
-          const charge = await this.asaasService.createCharge({
-            customer: asaasCustomerId,
-            billingType: effectiveBilling,
-            value: this.asaasService.centavosToReais(freshSub.plan?.price ?? 0),
-            dueDate: today,
-            description: `Plano ${freshSub.plan?.name ?? 'Assinatura'}`,
-            externalReference: freshSub.id,
-          });
-
-          invoiceUrl = charge.invoiceUrl || null;
-          const now = new Date().toISOString();
-          const localMethod = asaasBillingToLocalPaymentMethod(effectiveBilling);
-
-          if (effectiveBilling === AsaasBillingType.PIX) {
-            pixData = await this.asaasService.getPixQrCode(charge.id);
-          }
-
-          await this.supabase.from('payments').insert({
-            id: randomUUID(),
-            clientId,
-            subscriptionId: freshSub.id,
-            amount: freshSub.plan?.price ?? 0,
-            method: localMethod,
-            registeredBy: clientId,
-            notes: `Cobrança inicial plano ${freshSub.plan?.name ?? 'Assinatura'} #${charge.id}`,
-            asaasPaymentId: charge.id,
-            asaasStatus: charge.status,
-            paidAt: null,
-            invoiceUrl,
-            bankSlipUrl: charge.bankSlipUrl || null,
-            createdAt: now,
-            updatedAt: now,
-          });
-
-          this.logger.log(`Cobrança inicial criada: ${charge.id} - invoiceUrl: ${invoiceUrl}`);
+        if (!asaasCustomerId) {
+          throw new Error('Não foi possível obter/criar customer no Asaas');
         }
+
+        const today = new Date().toISOString().split('T')[0];
+        const charge = await this.asaasService.createCharge({
+          customer: asaasCustomerId,
+          billingType: effectiveBilling,
+          value: this.asaasService.centavosToReais(freshSub.plan?.price ?? 0),
+          dueDate: today,
+          description: `Plano ${freshSub.plan?.name ?? 'Assinatura'}`,
+          externalReference: freshSub.id,
+          creditCard: body.creditCard,
+          creditCardHolderInfo: body.creditCardHolderInfo,
+          remoteIp: body.remoteIp,
+        });
+
+        invoiceUrl = charge.invoiceUrl || null;
+        const now = new Date().toISOString();
+        const localMethod = asaasBillingToLocalPaymentMethod(effectiveBilling);
+
+        // Inserir registro de pagamento (antes do QR Code para garantir persistência)
+        await this.supabase.from('payments').insert({
+          id: randomUUID(),
+          clientId,
+          subscriptionId: freshSub.id,
+          amount: freshSub.plan?.price ?? 0,
+          method: localMethod,
+          registeredBy: clientId,
+          notes: `Cobrança inicial plano ${freshSub.plan?.name ?? 'Assinatura'} #${charge.id}`,
+          asaasPaymentId: charge.id,
+          asaasStatus: charge.status,
+          paidAt: null,
+          invoiceUrl,
+          bankSlipUrl: charge.bankSlipUrl || null,
+          createdAt: now,
+          updatedAt: now,
+        });
+
+        // PIX QR Code — não-crítico, com retry (invoiceUrl serve de fallback)
+        if (effectiveBilling === AsaasBillingType.PIX) {
+          try {
+            pixData = await this.asaasService.getPixQrCode(charge.id);
+          } catch (pixError) {
+            this.logger.warn(`QR Code PIX tentativa 1 falhou, retry em 2s: ${pixError}`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            try {
+              pixData = await this.asaasService.getPixQrCode(charge.id);
+            } catch (retryError) {
+              this.logger.warn(`QR Code PIX retry falhou: ${retryError}. invoiceUrl será usado como fallback.`);
+            }
+          }
+        }
+
+        this.logger.log(`Cobrança inicial criada: ${charge.id} - invoiceUrl: ${invoiceUrl}`);
       } catch (e) {
-        this.logger.warn(`Falha ao criar cobrança inicial: ${e}`);
+        // Falha crítica (customer/cobrança) — cancela assinatura para permitir retry limpo
+        this.logger.error(`Falha ao criar cobrança Asaas: ${e}`);
+        await this.supabase
+          .from('client_subscriptions')
+          .update({ status: 'CANCELED', updatedAt: new Date().toISOString() })
+          .eq('id', freshSub.id);
+        const detail = e instanceof Error ? e.message : String(e);
+        throw new BadRequestException(`Erro ao gerar cobrança no gateway de pagamento. Tente novamente. (${detail})`);
       }
     }
 
@@ -738,14 +767,20 @@ export class SubscriptionsService {
         if (!asaasCustomerId) {
           const { data: clientData } = await this.supabase
             .from('clients')
-            .select('asaasCustomerId, name, email, phone')
+            .select('asaasCustomerId, name, email, phone, cpf')
             .eq('id', clientId)
             .single();
 
           if (!clientData?.asaasCustomerId && clientData) {
+            if (!clientData.cpf) {
+              throw new BadRequestException(
+                'CPF é obrigatório para gerar cobranças PIX. Atualize seu perfil com um CPF válido.',
+              );
+            }
             const asaasCustomer = await this.asaasService.createCustomer({
               name: clientData.name,
               email: clientData.email || undefined,
+              cpfCnpj: clientData.cpf,
               mobilePhone: clientData.phone || undefined,
               externalReference: clientId,
             });
@@ -756,45 +791,67 @@ export class SubscriptionsService {
           }
         }
 
-        if (asaasCustomerId) {
-          const today = now.toISOString().split('T')[0];
-          const charge = await this.asaasService.createCharge({
-            customer: asaasCustomerId,
-            billingType,
-            value: this.asaasService.centavosToReais(subscription.plan?.price ?? 0),
-            dueDate: today,
-            description: `Reativação: Plano ${subscription.plan?.name}`,
-            externalReference: subscription.id,
-            creditCard: body.creditCard,
-            creditCardHolderInfo: body.creditCardHolderInfo,
-            remoteIp: body.remoteIp,
-          });
+        if (!asaasCustomerId) {
+          throw new Error('Não foi possível obter/criar customer no Asaas');
+        }
 
-          const localMethod = asaasBillingToLocalPaymentMethod(billingType);
-          await this.supabase.from('payments').insert({
-            id: randomUUID(),
-            clientId,
-            subscriptionId: subscription.id,
-            amount: subscription.plan?.price ?? 0,
-            method: localMethod,
-            registeredBy: clientId,
-            notes: `Reativação assinatura Asaas #${charge.id}`,
-            asaasPaymentId: charge.id,
-            asaasStatus: charge.status,
-            paidAt: null,
-            invoiceUrl: charge.invoiceUrl || null,
-            bankSlipUrl: charge.bankSlipUrl || null,
-            createdAt: now.toISOString(),
-            updatedAt: now.toISOString(),
-          });
+        const today = now.toISOString().split('T')[0];
+        const charge = await this.asaasService.createCharge({
+          customer: asaasCustomerId,
+          billingType,
+          value: this.asaasService.centavosToReais(subscription.plan?.price ?? 0),
+          dueDate: today,
+          description: `Reativação: Plano ${subscription.plan?.name}`,
+          externalReference: subscription.id,
+          creditCard: body.creditCard,
+          creditCardHolderInfo: body.creditCardHolderInfo,
+          remoteIp: body.remoteIp,
+        });
 
-          if (billingType === AsaasBillingType.PIX) {
+        invoiceUrl = charge.invoiceUrl || null;
+        const localMethod = asaasBillingToLocalPaymentMethod(billingType);
+
+        // Inserir registro de pagamento (antes do QR Code para garantir persistência)
+        await this.supabase.from('payments').insert({
+          id: randomUUID(),
+          clientId,
+          subscriptionId: subscription.id,
+          amount: subscription.plan?.price ?? 0,
+          method: localMethod,
+          registeredBy: clientId,
+          notes: `Reativação assinatura Asaas #${charge.id}`,
+          asaasPaymentId: charge.id,
+          asaasStatus: charge.status,
+          paidAt: null,
+          invoiceUrl,
+          bankSlipUrl: charge.bankSlipUrl || null,
+          createdAt: now.toISOString(),
+          updatedAt: now.toISOString(),
+        });
+
+        // PIX QR Code — não-crítico, com retry
+        if (billingType === AsaasBillingType.PIX) {
+          try {
             pixData = await this.asaasService.getPixQrCode(charge.id);
+          } catch (pixError) {
+            this.logger.warn(`QR Code PIX tentativa 1 falhou, retry em 2s: ${pixError}`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            try {
+              pixData = await this.asaasService.getPixQrCode(charge.id);
+            } catch (retryError) {
+              this.logger.warn(`QR Code PIX retry falhou: ${retryError}. invoiceUrl será usado como fallback.`);
+            }
           }
-          invoiceUrl = charge.invoiceUrl || null;
         }
       } catch (e) {
-        this.logger.warn(`Falha ao gerar cobrança de reativação: ${e}`);
+        // Falha crítica — reverte para SUSPENDED para permitir retry
+        this.logger.error(`Falha ao gerar cobrança de reativação: ${e}`);
+        await this.supabase
+          .from('client_subscriptions')
+          .update({ status: 'SUSPENDED', updatedAt: now.toISOString() })
+          .eq('id', subscription.id);
+        const detail = e instanceof Error ? e.message : String(e);
+        throw new BadRequestException(`Erro ao gerar cobrança de reativação. Tente novamente. (${detail})`);
       }
     }
 
@@ -829,15 +886,19 @@ export class SubscriptionsService {
     // 1. Buscar asaasCustomerId do cliente (se não tiver, criar)
     const { data: clientData } = await this.supabase
       .from('clients')
-      .select('asaasCustomerId, email, phone, name')
+      .select('asaasCustomerId, email, phone, name, cpf')
       .eq('id', subscription.clientId)
       .single();
 
     let asaasCustomerId = clientData?.asaasCustomerId;
     if (!asaasCustomerId && clientData) {
+      if (!clientData.cpf) {
+        throw new BadRequestException('CPF é obrigatório para gerar cobranças. Atualize o cadastro do cliente.');
+      }
       const asaasCustomer = await this.asaasService.createCustomer({
         name: clientData.name,
         email: clientData.email || undefined,
+        cpfCnpj: clientData.cpf,
         mobilePhone: clientData.phone || undefined,
         externalReference: subscription.clientId,
       });

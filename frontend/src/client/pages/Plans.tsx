@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CLIENT_PATHS } from '../utils/paths';
 import { clientApi } from '../services/api';
+import { useClientAuth } from '../auth';
 import { LoadingState, PixPaymentModal, CreditCardModal } from '../components/ui';
 import { formatPrice } from '../utils/format';
 
@@ -54,6 +55,7 @@ interface CreditCardFormData {
 
 export function ClientPlans() {
   const navigate = useNavigate();
+  const { user } = useClientAuth();
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [mySubscription, setMySubscription] = useState<ClientSubscription | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -64,16 +66,27 @@ export function ClientPlans() {
   const [pixModal, setPixModal] = useState<PixData | null>(null);
   const [paymentMethodModal, setPaymentMethodModal] = useState<string | null>(null); // planId ou 'REACTIVATE'
   const [creditCardModal, setCreditCardModal] = useState<{ planId?: string; isReactivating: boolean; amount: number } | null>(null);
+  const [clientCpf, setClientCpf] = useState<string | null>(null);
+  const [cpfInput, setCpfInput] = useState('');
+  const [cpfModalTarget, setCpfModalTarget] = useState<string | null>(null); // planId ou 'REACTIVATE'
+  const [savingCpf, setSavingCpf] = useState(false);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [plansRes, subRes] = await Promise.all([
+      const requests: Promise<any>[] = [
         clientApi.get<SubscriptionPlan[]>('/subscriptions/plans'),
         clientApi.get<ClientSubscription | null>('/subscriptions/me').catch(() => ({ data: null })),
-      ]);
+      ];
+      if (user?.id) {
+        requests.push(clientApi.get(`/clients/${user.id}`).catch(() => ({ data: null })));
+      }
+      const [plansRes, subRes, profileRes] = await Promise.all(requests);
       setPlans(plansRes.data);
       setMySubscription(subRes.data);
+      if (profileRes?.data?.cpf) {
+        setClientCpf(profileRes.data.cpf);
+      }
 
       // Se a assinatura está pendente de pagamento, tenta buscar o PIX
       if (subRes.data?.status === 'PENDING_PAYMENT') {
@@ -86,11 +99,48 @@ export function ClientPlans() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const handleRequestPayment = (target: string) => {
+    if (!clientCpf) {
+      setCpfModalTarget(target);
+      setCpfInput('');
+      return;
+    }
+    setPaymentMethodModal(target);
+  };
+
+  const formatCpfInput = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 11);
+    if (digits.length <= 3) return digits;
+    if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+    if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+    return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+  };
+
+  const handleSaveCpf = async () => {
+    const digits = cpfInput.replace(/\D/g, '');
+    if (digits.length !== 11) {
+      alert('CPF inválido. Digite os 11 dígitos.');
+      return;
+    }
+    setSavingCpf(true);
+    try {
+      await clientApi.patch(`/clients/${user?.id}`, { cpf: digits });
+      setClientCpf(digits);
+      setCpfModalTarget(null);
+      setPaymentMethodModal(cpfModalTarget);
+    } catch (e: unknown) {
+      const error = e as { response?: { data?: { message?: string } } };
+      alert(error.response?.data?.message || 'Erro ao salvar CPF. Tente novamente.');
+    } finally {
+      setSavingCpf(false);
+    }
+  };
 
   const handleSubscribe = async (planId: string, billingType: string = 'PIX', cardData?: CreditCardFormData) => {
     setSubscribingId(planId);
@@ -118,15 +168,16 @@ export function ClientPlans() {
       
       setMySubscription(res.data.subscription);
       
-      if (res.data.invoiceUrl) {
-        window.location.href = res.data.invoiceUrl;
-        return;
-      }
-
       if (res.data.pixData) {
         setPixModal(res.data.pixData);
+      } else if (res.data.invoiceUrl) {
+        window.location.href = res.data.invoiceUrl;
+        return;
       } else if (billingType === 'CREDIT_CARD') {
         alert('Assinatura com cartão processada com sucesso!');
+      } else {
+        alert('Assinatura criada, mas não foi possível gerar o QR Code. Recarregue a página para tentar novamente.');
+        loadData();
       }
     } catch (e: unknown) {
       const error = e as { response?: { data?: { message?: string } } };
@@ -174,16 +225,17 @@ export function ClientPlans() {
       }>('/subscriptions/me/reactivate', payload);
       
       setMySubscription(res.data.subscription);
-      
-      if (res.data.invoiceUrl) {
-        window.location.href = res.data.invoiceUrl;
-        return;
-      }
 
       if (res.data.pixData) {
         setPixModal(res.data.pixData);
+      } else if (res.data.invoiceUrl) {
+        window.location.href = res.data.invoiceUrl;
+        return;
       } else if (billingType === 'CREDIT_CARD') {
         alert('Assinatura reativada com cartão!');
+      } else {
+        alert('Reativação criada, mas não foi possível gerar o QR Code. Recarregue a página para tentar novamente.');
+        loadData();
       }
     } catch (e: unknown) {
       const error = e as { response?: { data?: { message?: string } } };
@@ -318,7 +370,7 @@ export function ClientPlans() {
             </div>
 
             <button
-              onClick={() => setPaymentMethodModal('REACTIVATE')}
+              onClick={() => handleRequestPayment('REACTIVATE')}
               disabled={isReactivating}
               className="w-full py-3 bg-[#8B6914] hover:bg-[#725510] text-white font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             >
@@ -498,7 +550,7 @@ export function ClientPlans() {
                     </div>
 
                     <button
-                      onClick={() => setPaymentMethodModal(plan.id)}
+                      onClick={() => handleRequestPayment(plan.id)}
                       disabled={subscribingId === plan.id}
                       className="w-full py-3 bg-[#8B6914] hover:bg-[#725510] text-white font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center"
                     >
@@ -641,6 +693,51 @@ export function ClientPlans() {
                 </div>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de CPF obrigatório */}
+      {cpfModalTarget && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="bg-[var(--bg-primary)] rounded-2xl w-full max-w-sm p-6 shadow-2xl border border-[var(--card-border)] animate-in slide-in-from-bottom duration-300">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-[var(--text-primary)]">CPF Necessário</h3>
+              <button
+                onClick={() => setCpfModalTarget(null)}
+                className="p-1 text-[var(--text-muted)]"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <p className="text-sm text-[var(--text-muted)] mb-4">
+              Para gerar o pagamento, precisamos do seu CPF. Ele será usado apenas para a cobrança.
+            </p>
+
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder="000.000.000-00"
+              value={cpfInput}
+              onChange={e => setCpfInput(formatCpfInput(e.target.value))}
+              className="w-full px-4 py-3 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] text-[var(--text-primary)] text-center text-lg tracking-wider font-mono focus:outline-none focus:border-[#C8923A] transition-colors"
+              maxLength={14}
+            />
+
+            <button
+              onClick={handleSaveCpf}
+              disabled={savingCpf || cpfInput.replace(/\D/g, '').length !== 11}
+              className="mt-4 w-full py-3 bg-[#8B6914] hover:bg-[#725510] text-white font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center"
+            >
+              {savingCpf ? (
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
+              ) : (
+                'Continuar'
+              )}
+            </button>
           </div>
         </div>
       )}
