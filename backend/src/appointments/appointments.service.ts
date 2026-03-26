@@ -201,18 +201,31 @@ export class AppointmentsService {
 
     if (this.asaasService.configured && totalPrice > 0 && !skipAsaasForSubscriptionCut && dto.billingType !== 'CASH') {
       try {
-        // Buscar/Criar cliente no Asaas
+        // Buscar/Criar cliente no Asaas (valida se o ID existente é do ambiente correto)
         const { data: clientData } = await this.supabase
           .from('clients')
-          .select('id, name, email, phone, asaasCustomerId')
+          .select('id, name, email, phone, cpf, asaasCustomerId')
           .eq('id', dto.clientId)
           .single();
 
         let asaasCustomerId = clientData?.asaasCustomerId;
+
+        // Validar se o customer existente é acessível no ambiente atual
+        if (asaasCustomerId) {
+          try {
+            await this.asaasService.findCustomerByExternalReference(dto.clientId);
+          } catch {
+            this.logger.warn(`asaasCustomerId ${asaasCustomerId} inválido (provável troca de ambiente). Recriando...`);
+            asaasCustomerId = null;
+            await this.supabase.from('clients').update({ asaasCustomerId: null }).eq('id', dto.clientId);
+          }
+        }
+
         if (!asaasCustomerId && clientData) {
           const newCustomer = await this.asaasService.createCustomer({
             name: clientData.name,
             email: clientData.email || undefined,
+            cpfCnpj: clientData.cpf || undefined,
             mobilePhone: clientData.phone || undefined,
             externalReference: clientData.id,
           });

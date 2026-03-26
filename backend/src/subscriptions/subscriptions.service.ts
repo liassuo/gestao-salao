@@ -169,6 +169,63 @@ export class SubscriptionsService {
     if (error) throw error;
   }
 
+  /**
+   * Obtém ou cria um customer no Asaas para o cliente.
+   * Se o asaasCustomerId salvo no banco for inválido (ex: sandbox vs produção),
+   * recria o customer automaticamente.
+   */
+  private async ensureAsaasCustomer(clientId: string): Promise<string> {
+    const { data: clientData } = await this.supabase
+      .from('clients')
+      .select('asaasCustomerId, name, email, phone, cpf')
+      .eq('id', clientId)
+      .single();
+
+    if (!clientData) {
+      throw new BadRequestException('Cliente não encontrado');
+    }
+
+    // Se já tem asaasCustomerId, verificar se é válido no ambiente atual
+    if (clientData.asaasCustomerId) {
+      try {
+        await this.asaasService.findCustomerByExternalReference(clientId);
+        return clientData.asaasCustomerId;
+      } catch {
+        this.logger.warn(
+          `asaasCustomerId ${clientData.asaasCustomerId} inválido para cliente ${clientId} (provável troca de ambiente). Recriando...`,
+        );
+        // Limpa o ID inválido e recria abaixo
+        await this.supabase
+          .from('clients')
+          .update({ asaasCustomerId: null })
+          .eq('id', clientId);
+      }
+    }
+
+    // Criar novo customer no Asaas
+    if (!clientData.cpf) {
+      throw new BadRequestException(
+        'CPF é obrigatório para gerar cobranças. Atualize seu perfil com um CPF válido.',
+      );
+    }
+
+    const asaasCustomer = await this.asaasService.createCustomer({
+      name: clientData.name,
+      email: clientData.email || undefined,
+      cpfCnpj: clientData.cpf,
+      mobilePhone: clientData.phone || undefined,
+      externalReference: clientId,
+    });
+
+    await this.supabase
+      .from('clients')
+      .update({ asaasCustomerId: asaasCustomer.id })
+      .eq('id', clientId);
+
+    this.logger.log(`Customer Asaas criado: ${asaasCustomer.id} para cliente ${clientId}`);
+    return asaasCustomer.id;
+  }
+
   // CLIENT SUBSCRIPTIONS
 
   async subscribeClient(dto: SubscribeClientDto) {
@@ -605,37 +662,7 @@ export class SubscriptionsService {
 
     if (this.asaasService.configured && freshSub) {
       try {
-        // Buscar ou criar customer no Asaas
-        const { data: clientData } = await this.supabase
-          .from('clients')
-          .select('asaasCustomerId, name, email, phone, cpf')
-          .eq('id', clientId)
-          .single();
-
-        let asaasCustomerId = clientData?.asaasCustomerId;
-        if (!asaasCustomerId && clientData) {
-          if (!clientData.cpf) {
-            throw new BadRequestException(
-              'CPF é obrigatório para gerar cobranças PIX. Atualize seu perfil com um CPF válido.',
-            );
-          }
-          const asaasCustomer = await this.asaasService.createCustomer({
-            name: clientData.name,
-            email: clientData.email || undefined,
-            cpfCnpj: clientData.cpf,
-            mobilePhone: clientData.phone || undefined,
-            externalReference: clientId,
-          });
-          asaasCustomerId = asaasCustomer.id;
-          await this.supabase
-            .from('clients')
-            .update({ asaasCustomerId })
-            .eq('id', clientId);
-        }
-
-        if (!asaasCustomerId) {
-          throw new Error('Não foi possível obter/criar customer no Asaas');
-        }
+        const asaasCustomerId = await this.ensureAsaasCustomer(clientId);
 
         const today = new Date().toISOString().split('T')[0];
         const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:5173');
@@ -786,37 +813,7 @@ export class SubscriptionsService {
     let invoiceUrl: string | null = null;
     if (this.asaasService.configured) {
       try {
-        let asaasCustomerId = subscription.client?.asaasCustomerId;
-        if (!asaasCustomerId) {
-          const { data: clientData } = await this.supabase
-            .from('clients')
-            .select('asaasCustomerId, name, email, phone, cpf')
-            .eq('id', clientId)
-            .single();
-
-          if (!clientData?.asaasCustomerId && clientData) {
-            if (!clientData.cpf) {
-              throw new BadRequestException(
-                'CPF é obrigatório para gerar cobranças PIX. Atualize seu perfil com um CPF válido.',
-              );
-            }
-            const asaasCustomer = await this.asaasService.createCustomer({
-              name: clientData.name,
-              email: clientData.email || undefined,
-              cpfCnpj: clientData.cpf,
-              mobilePhone: clientData.phone || undefined,
-              externalReference: clientId,
-            });
-            asaasCustomerId = asaasCustomer.id;
-            await this.supabase.from('clients').update({ asaasCustomerId }).eq('id', clientId);
-          } else {
-            asaasCustomerId = clientData?.asaasCustomerId;
-          }
-        }
-
-        if (!asaasCustomerId) {
-          throw new Error('Não foi possível obter/criar customer no Asaas');
-        }
+        const asaasCustomerId = await this.ensureAsaasCustomer(clientId);
 
         const today = now.toISOString().split('T')[0];
         const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:5173');
@@ -911,35 +908,8 @@ export class SubscriptionsService {
       throw new BadRequestException('Integração Asaas não configurada');
     }
 
-    // 1. Buscar asaasCustomerId do cliente (se não tiver, criar)
-    const { data: clientData } = await this.supabase
-      .from('clients')
-      .select('asaasCustomerId, email, phone, name, cpf')
-      .eq('id', subscription.clientId)
-      .single();
-
-    let asaasCustomerId = clientData?.asaasCustomerId;
-    if (!asaasCustomerId && clientData) {
-      if (!clientData.cpf) {
-        throw new BadRequestException('CPF é obrigatório para gerar cobranças. Atualize o cadastro do cliente.');
-      }
-      const asaasCustomer = await this.asaasService.createCustomer({
-        name: clientData.name,
-        email: clientData.email || undefined,
-        cpfCnpj: clientData.cpf,
-        mobilePhone: clientData.phone || undefined,
-        externalReference: subscription.clientId,
-      });
-      asaasCustomerId = asaasCustomer.id;
-      await this.supabase
-        .from('clients')
-        .update({ asaasCustomerId })
-        .eq('id', subscription.clientId);
-    }
-
-    if (!asaasCustomerId) {
-      throw new BadRequestException('Não foi possível obter o ID do cliente no Asaas');
-    }
+    // 1. Obter ou criar customer no Asaas
+    const asaasCustomerId = await this.ensureAsaasCustomer(subscription.clientId);
 
     // 2. Criar cobrança avulsa no Asaas
     const today = new Date().toISOString().split('T')[0];
