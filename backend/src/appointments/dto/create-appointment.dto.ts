@@ -29,10 +29,14 @@ export class CreateAppointmentDto {
   notes?: string;
 
   @IsOptional()
-  @IsIn(['PIX', 'CREDIT_CARD'])
-  billingType?: 'PIX' | 'CREDIT_CARD';
+  @IsIn(['PIX', 'CREDIT_CARD', 'CASH'])
+  billingType?: 'PIX' | 'CREDIT_CARD' | 'CASH';
 
   @IsOptional()
   @IsBoolean()
   useSubscriptionCut?: boolean;
+
+  @IsOptional()
+  @IsIn(['ADMIN', 'CLIENT'])
+  source?: 'ADMIN' | 'CLIENT';
 }

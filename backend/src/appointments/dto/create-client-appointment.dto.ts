@@ -37,6 +37,6 @@ export class CreateClientAppointmentDto {
   useSubscriptionCut?: boolean;
 
   @IsOptional()
-  @IsIn(['PIX', 'CREDIT_CARD'])
-  billingType?: 'PIX' | 'CREDIT_CARD';
+  @IsIn(['PIX', 'CREDIT_CARD', 'CASH'])
+  billingType?: 'PIX' | 'CREDIT_CARD' | 'CASH';
 }

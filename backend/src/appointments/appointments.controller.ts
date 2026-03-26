@@ -126,6 +126,7 @@ export class AppointmentsController {
       notes: dto.notes,
       billingType: dto.billingType,
       useSubscriptionCut: dto.useSubscriptionCut === true,
+      source: 'CLIENT',
     });
 
     // Usar crédito de assinatura se solicitado

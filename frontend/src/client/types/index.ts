@@ -44,7 +44,7 @@ export interface TimeSlot {
   available: boolean;
 }
 
-export type AppointmentBillingType = 'PIX' | 'CREDIT_CARD';
+export type AppointmentBillingType = 'PIX' | 'CREDIT_CARD' | 'CASH';
 
 export interface CreateAppointmentData {
   serviceIds: string[];

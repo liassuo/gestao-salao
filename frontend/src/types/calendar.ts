@@ -16,6 +16,8 @@ export interface CalendarAppointment {
   totalDuration: number;
   isPaid: boolean;
   notes: string | null;
+  source?: 'ADMIN' | 'CLIENT';
+  usedSubscriptionCut?: boolean;
   client: { id: string; name: string; phone: string };
   services: { service: { name: string } }[];
 }

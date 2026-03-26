@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Clock, Lock, Trash2, AlertCircle, Loader2, User, CalendarPlus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, Lock, Trash2, AlertCircle, Loader2, User, CalendarPlus, Smartphone, Monitor } from 'lucide-react';
 import { useCalendarData, useDeleteTimeBlock, useAppointmentActions, useUpdateAppointment } from '@/hooks';
 import { useToast } from '@/components/ui';
 import { BlockTimeModal } from './BlockTimeModal';
@@ -61,10 +61,16 @@ function formatCurrency(cents: number): string {
 }
 
 const statusColors: Record<string, { bg: string; border: string; text: string }> = {
-  SCHEDULED: { bg: 'bg-[#C8923A]/20', border: 'border-[#C8923A]/40', text: 'text-[#D4A85C]' },
-  ATTENDED: { bg: 'bg-emerald-500/20', border: 'border-emerald-500/40', text: 'text-emerald-400' },
-  CANCELLED: { bg: 'bg-red-500/15', border: 'border-[#A63030]/30', text: 'text-[#C45050]' },
-  NO_SHOW: { bg: 'bg-amber-500/15', border: 'border-amber-500/30', text: 'text-amber-400' },
+  // SCHEDULED variantes
+  SUBSCRIPTION:    { bg: 'bg-[#C8923A]/20', border: 'border-[#C8923A]/40', text: 'text-[#D4A85C]' }, // âmbar — assinatura
+  PENDING_PAYMENT: { bg: 'bg-green-500/15',  border: 'border-green-500/30',  text: 'text-green-400' }, // verde — vai pagar
+  PAID:            { bg: 'bg-yellow-400/15', border: 'border-yellow-400/30', text: 'text-yellow-300' }, // amarelo — já pagou
+  // outros status
+  ATTENDED:  { bg: 'bg-green-500/15',      border: 'border-green-500/30',      text: 'text-green-400'  },
+  CANCELLED: { bg: 'bg-red-500/15',        border: 'border-[#A63030]/30',      text: 'text-[#C45050]' },
+  CANCELED:  { bg: 'bg-red-500/15',        border: 'border-[#A63030]/30',      text: 'text-[#C45050]' },
+  NO_SHOW:   { bg: 'bg-amber-500/15',      border: 'border-amber-500/30',      text: 'text-amber-400' },
+  SCHEDULED: { bg: 'bg-green-500/15',      border: 'border-green-500/30',      text: 'text-green-400' }, // fallback
 };
 
 function generateTimeSlots(): string[] {
@@ -86,16 +92,25 @@ function AppointmentBlock({ appointment, onAppointmentClick }: AppointmentBlockP
   const time = extractTime(appointment.scheduledAt);
   const top = getTopPosition(time);
   const height = getBlockHeight(appointment.totalDuration);
-  const colors = statusColors[appointment.status] || statusColors.SCHEDULED;
+  const isSubscription = !!appointment.usedSubscriptionCut && appointment.status === 'SCHEDULED';
+  const colorKey = appointment.status !== 'SCHEDULED'
+    ? appointment.status
+    : isSubscription
+      ? 'SUBSCRIPTION'
+      : appointment.isPaid
+        ? 'PAID'
+        : 'PENDING_PAYMENT';
+  const colors = statusColors[colorKey] || statusColors.SCHEDULED;
   const serviceNames = (appointment.services || []).map((s) => s.service?.name || 'Serviço').join(', ');
   const endMinutes = timeToMinutes(time) + appointment.totalDuration;
   const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
+  const isFromClient = appointment.source === 'CLIENT';
 
   return (
     <div
       className={`absolute left-1 right-1 cursor-pointer overflow-hidden rounded-lg border ${colors.border} ${colors.bg} px-2 py-1 backdrop-blur-sm transition-all duration-150 hover:z-20 hover:shadow-lg`}
       style={{ top: `${top}px`, height: `${Math.max(height, SLOT_HEIGHT)}px` }}
-      title={`${appointment.client?.name || 'Cliente'} - ${serviceNames} (${time} - ${endTime})`}
+      title={`${appointment.client?.name || 'Cliente'} - ${serviceNames} (${time} - ${endTime})${isFromClient ? ' · App' : ' · Painel'}${isSubscription ? ' · Assinatura' : ''}`}
       onClick={(e) => {
         e.stopPropagation();
         onAppointmentClick(appointment);
@@ -106,8 +121,13 @@ function AppointmentBlock({ appointment, onAppointmentClick }: AppointmentBlockP
           {appointment.client?.name || 'Cliente'}
         </div>
         {height >= 40 && (
-          <div className="truncate text-[10px] text-[var(--text-muted)]">
-            {serviceNames}
+          <div className="flex items-center gap-1 overflow-hidden">
+            <span className={`shrink-0 ${colors.text} opacity-70`} title={isFromClient ? 'Agendado pelo app' : 'Agendado pelo painel'}>
+              {isFromClient
+                ? <Smartphone className="h-2.5 w-2.5" />
+                : <Monitor className="h-2.5 w-2.5" />}
+            </span>
+            <span className="truncate text-[10px] text-[var(--text-muted)]">{serviceNames}</span>
           </div>
         )}
         {height >= 60 && (

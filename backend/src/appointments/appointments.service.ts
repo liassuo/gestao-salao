@@ -168,6 +168,8 @@ export class AppointmentsService {
         totalDuration: totalDuration,
         status: 'SCHEDULED',
         notes: dto.notes,
+        source: dto.source || 'ADMIN',
+        usedSubscriptionCut: !!dto.useSubscriptionCut,
         createdAt: now,
         updatedAt: now,
       })
@@ -197,7 +199,7 @@ export class AppointmentsService {
     const billingType = parseAsaasBillingType(dto.billingType);
     const skipAsaasForSubscriptionCut = !!dto.useSubscriptionCut;
 
-    if (this.asaasService.configured && totalPrice > 0 && !skipAsaasForSubscriptionCut) {
+    if (this.asaasService.configured && totalPrice > 0 && !skipAsaasForSubscriptionCut && dto.billingType !== 'CASH') {
       try {
         // Buscar/Criar cliente no Asaas
         const { data: clientData } = await this.supabase

@@ -238,7 +238,8 @@ export function ClientBooking() {
   const handleConfirm = async () => {
     if (!selectedProfessional || !selectedDate || !selectedTime) return;
 
-    const paysOnline = totalPrice > 0 && !(useSubscriptionCut && mySubscription);
+    const usesSubscription = useSubscriptionCut && !!mySubscription;
+    const needsPayment = totalPrice > 0 && !usesSubscription;
 
     setIsSubmitting(true);
     try {
@@ -247,11 +248,14 @@ export function ClientBooking() {
         professionalId: selectedProfessional.id,
         date: formatDateISO(selectedDate),
         startTime: selectedTime,
-        useSubscriptionCut: useSubscriptionCut && !!mySubscription,
-        billingType: paysOnline ? appointmentBillingType : undefined,
+        useSubscriptionCut: usesSubscription,
+        billingType: needsPayment ? appointmentBillingType : undefined,
       });
 
-      if (result.payment?.pixData) {
+      if (appointmentBillingType === 'CASH' && needsPayment) {
+        alert('Agendamento realizado! O pagamento será feito no local.');
+        navigate(CLIENT_PATHS.home);
+      } else if (result.payment?.pixData) {
         setLeaveAfterPixClose(true);
         setPixModal(result.payment.pixData);
       } else if (result.payment?.invoiceUrl) {
@@ -711,7 +715,7 @@ export function ClientBooking() {
         {totalPrice > 0 && !(useSubscriptionCut && mySubscription) && (
           <div className="mb-4">
             <p className="text-sm font-medium text-[var(--text-primary)] mb-2">Forma de pagamento</p>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
                 onClick={() => setAppointmentBillingType('PIX')}
@@ -734,11 +738,24 @@ export function ClientBooking() {
               >
                 Cartão
               </button>
+              <button
+                type="button"
+                onClick={() => setAppointmentBillingType('CASH')}
+                className={`rounded-xl border py-3 px-2 text-sm font-semibold transition-colors ${
+                  appointmentBillingType === 'CASH'
+                    ? 'border-[#C8923A] bg-[#C8923A]/15 text-[#C8923A]'
+                    : 'border-[var(--card-border)] bg-[var(--card-bg)] text-[var(--text-secondary)]'
+                }`}
+              >
+                Dinheiro
+              </button>
             </div>
             <p className="text-xs text-[var(--text-muted)] mt-2">
               {appointmentBillingType === 'PIX'
                 ? 'Você verá o QR Code após confirmar.'
-                : 'Abriremos o link seguro do Asaas para pagar com cartão.'}
+                : appointmentBillingType === 'CREDIT_CARD'
+                ? 'Abriremos o link seguro do Asaas para pagar com cartão.'
+                : 'Pagamento em dinheiro no local. O agendamento é confirmado agora.'}
             </p>
           </div>
         )}
