@@ -31,10 +31,16 @@ export class AsaasService implements OnModuleInit {
       return;
     }
 
+    const normalizedEnv = (environment || '').trim().toLowerCase();
     const baseURL =
-      environment === 'production'
+      normalizedEnv === 'production'
         ? 'https://api.asaas.com/v3'
         : 'https://sandbox.asaas.com/api/v3';
+
+    const keyPrefix = apiKey.substring(0, 20);
+    this.logger.log(
+      `Asaas init: ASAAS_ENVIRONMENT="${environment}" (normalizado: "${normalizedEnv}") → baseURL: ${baseURL} | key prefix: ${keyPrefix}...`,
+    );
 
     this.httpClient = axios.create({
       baseURL,
@@ -46,7 +52,6 @@ export class AsaasService implements OnModuleInit {
     });
 
     this.isConfigured = true;
-    this.logger.log(`Asaas configurado (${environment}): ${baseURL}`);
   }
 
   /**
