@@ -102,7 +102,7 @@ export class AsaasWebhookController {
     // Buscar pagamento local pelo asaasPaymentId
     const { data: localPayment } = await this.supabase
       .from('payments')
-      .select('id, appointmentId, clientId, amount, subscriptionId, asaasStatus, paidAt')
+      .select('id, appointmentId, clientId, amount, subscriptionId, asaasStatus, paidAt, notes')
       .eq('asaasPaymentId', asaasPaymentId)
       .single();
 
@@ -187,6 +187,38 @@ export class AsaasWebhookController {
 
       this.logger.log(
         `Assinatura ${localPayment.subscriptionId} ativada/renovada até ${newEndDate.toISOString()}`,
+      );
+    }
+
+    // Se for pagamento de dívida, quitar todas as dívidas pendentes do cliente
+    if (localPayment.notes === 'DEBT_PAYMENT' && localPayment.clientId) {
+      const debtNow = new Date().toISOString();
+
+      const { data: pendingDebts } = await this.supabase
+        .from('debts')
+        .select('id, amount')
+        .eq('clientId', localPayment.clientId)
+        .eq('isSettled', false);
+
+      for (const debt of pendingDebts || []) {
+        await this.supabase
+          .from('debts')
+          .update({
+            amountPaid: debt.amount,
+            remainingBalance: 0,
+            isSettled: true,
+            paidAt: debtNow,
+          })
+          .eq('id', debt.id);
+      }
+
+      await this.supabase
+        .from('clients')
+        .update({ hasDebts: false })
+        .eq('id', localPayment.clientId);
+
+      this.logger.log(
+        `Dívidas do cliente ${localPayment.clientId} quitadas via PIX (${pendingDebts?.length || 0} dívida(s))`,
       );
     }
 

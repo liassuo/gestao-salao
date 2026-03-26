@@ -100,6 +100,25 @@ export class AppointmentsService {
       throw new NotFoundException('Cliente não encontrado');
     }
 
+    // 3.1 Bloquear agendamento se cliente possui dívidas pendentes
+    if (dto.source === 'CLIENT') {
+      const { data: clientDebts } = await this.supabase
+        .from('debts')
+        .select('remainingBalance')
+        .eq('clientId', dto.clientId)
+        .eq('isSettled', false);
+
+      if (clientDebts && clientDebts.length > 0) {
+        const totalDebt = clientDebts.reduce((sum, d) => sum + d.remainingBalance, 0);
+        const reais = Math.floor(totalDebt / 100);
+        const centavos = totalDebt % 100;
+        const formatted = `${reais},${String(centavos).padStart(2, '0')}`;
+        throw new BadRequestException(
+          `Você possui uma dívida pendente de R$ ${formatted}. Quite sua dívida antes de fazer um novo agendamento.`,
+        );
+      }
+    }
+
     // 4. Verificar conflitos com bloqueios de horário e agendamentos existentes
     const scheduledDate = String(dto.scheduledAt).substring(0, 10); // YYYY-MM-DD
     const startOfDay = `${scheduledDate}T00:00:00`;
@@ -565,6 +584,39 @@ export class AppointmentsService {
 
     if (updateError) throw updateError;
     return updated;
+  }
+
+  async getPendingPixQrCode(appointmentId: string, clientId: string) {
+    const { data: appointment } = await this.supabase
+      .from('appointments')
+      .select('id, clientId, totalPrice, status')
+      .eq('id', appointmentId)
+      .eq('clientId', clientId)
+      .single();
+
+    if (!appointment) throw new NotFoundException('Agendamento não encontrado');
+    if (appointment.status !== 'PENDING_PAYMENT') {
+      throw new BadRequestException('Este agendamento não possui pagamento PIX pendente');
+    }
+
+    const { data: payment } = await this.supabase
+      .from('payments')
+      .select('asaasPaymentId')
+      .eq('appointmentId', appointmentId)
+      .is('paidAt', null)
+      .eq('method', 'PIX')
+      .single();
+
+    if (!payment?.asaasPaymentId) {
+      throw new NotFoundException('Cobrança PIX não encontrada para este agendamento');
+    }
+
+    if (!this.asaasService.configured) {
+      throw new BadRequestException('Integração PIX não configurada');
+    }
+
+    const pixData = await this.asaasService.getPixQrCode(payment.asaasPaymentId);
+    return { pixData, totalPrice: appointment.totalPrice };
   }
 
   async linkPayment(appointmentId: string, paymentId: string): Promise<void> {

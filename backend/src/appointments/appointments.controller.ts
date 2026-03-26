@@ -182,6 +182,19 @@ export class AppointmentsController {
   }
 
   /**
+   * GET /appointments/:id/pending-pix
+   * Cliente recupera QR Code PIX de um agendamento com pagamento pendente
+   */
+  @UseGuards(JwtAuthGuard)
+  @Get(':id/pending-pix')
+  async getPendingPixQrCode(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.appointmentsService.getPendingPixQrCode(id, req.user.id);
+  }
+
+  /**
    * PATCH /appointments/:id/rate
    * Cliente avalia um agendamento atendido
    */

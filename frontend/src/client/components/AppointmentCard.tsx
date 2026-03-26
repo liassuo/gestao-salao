@@ -3,6 +3,7 @@ import { formatDate, formatTime, formatEndTime, formatPrice, hoursUntil } from '
 import { clientApi } from '../services/api';
 import { appointmentsApi } from '../services/appointments';
 import type { Appointment, AppointmentStatus } from '../types';
+import { PixPaymentModal } from './ui';
 
 const CANCELLATION_HOURS_LIMIT = 1;
 
@@ -24,6 +25,7 @@ const STATUS_CONFIG: Record<AppointmentStatus, { label: string; bgColor: string;
   ATTENDED: { label: 'Concluído', bgColor: 'bg-green-100 dark:bg-green-900/30', textColor: 'text-green-700 dark:text-green-400' },
   CANCELED: { label: 'Cancelado', bgColor: 'bg-[#8B2020]/20', textColor: 'text-[#A63030]' },
   NO_SHOW: { label: 'Não compareceu', bgColor: 'bg-orange-100 dark:bg-orange-900/30', textColor: 'text-orange-700 dark:text-orange-400' },
+  PENDING_PAYMENT: { label: 'Aguard. Pagamento', bgColor: 'bg-amber-500/20', textColor: 'text-amber-500' },
 };
 
 interface AppointmentCardProps {
@@ -45,14 +47,40 @@ export function AppointmentCard({
   const canCancel = isScheduled && hours > CANCELLATION_HOURS_LIMIT;
   const showContactButton = isScheduled && hours > 0 && hours <= CANCELLATION_HOURS_LIMIT;
 
+  const isPendingPayment = appointment.status === 'PENDING_PAYMENT';
+
   const isHighlight = variant === 'highlight';
   const [whatsapp, setWhatsapp] = useState('');
+  const [pendingPixData, setPendingPixData] = useState<{ encodedImage: string; payload: string; expirationDate: string } | null>(null);
+  const [showPixModal, setShowPixModal] = useState(false);
+  const [loadingPix, setLoadingPix] = useState(false);
 
   useEffect(() => {
     if (showContactButton) {
       getWhatsapp().then(setWhatsapp);
     }
   }, [showContactButton]);
+
+  const handleViewPixQrCode = async () => {
+    if (pendingPixData) {
+      setShowPixModal(true);
+      return;
+    }
+    setLoadingPix(true);
+    try {
+      const res = await clientApi.get<{ pixData: { encodedImage: string; payload: string; expirationDate: string }; totalPrice: number }>(
+        `/appointments/${appointment.id}/pending-pix`,
+      );
+      if (res.data.pixData) {
+        setPendingPixData(res.data.pixData);
+        setShowPixModal(true);
+      }
+    } catch {
+      alert('Não foi possível carregar o QR Code. Tente novamente.');
+    } finally {
+      setLoadingPix(false);
+    }
+  };
 
   const handleContact = () => {
     if (!whatsapp) {
@@ -117,25 +145,57 @@ export function AppointmentCard({
         </div>
       </div>
 
-      {canCancel && onCancel && (
-        <button
-          onClick={() => onCancel(appointment)}
-          disabled={isCancelling}
-          className={`w-full mt-4 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-[#8B2020]/10 text-[#A63030] font-medium text-sm transition-colors hover:bg-[#8B2020]/20 ${
-            isCancelling ? 'opacity-60 cursor-not-allowed' : ''
-          }`}
-        >
-          {isCancelling ? (
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#A63030]"></div>
-          ) : (
-            <>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Cancelar agendamento
-            </>
+      {(canCancel && onCancel) || isPendingPayment ? (
+        <div className="flex gap-2 mt-4">
+          {isPendingPayment && (
+            <button
+              onClick={handleViewPixQrCode}
+              disabled={loadingPix}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-amber-500/15 text-amber-500 font-medium text-sm transition-colors hover:bg-amber-500/25 disabled:opacity-60"
+            >
+              {loadingPix ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-amber-500"></div>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                  </svg>
+                  Ver QR Code
+                </>
+              )}
+            </button>
           )}
-        </button>
+          {canCancel && onCancel && (
+            <button
+              onClick={() => onCancel(appointment)}
+              disabled={isCancelling}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-[#8B2020]/10 text-[#A63030] font-medium text-sm transition-colors hover:bg-[#8B2020]/20 ${
+                isCancelling ? 'opacity-60 cursor-not-allowed' : ''
+              }`}
+            >
+              {isCancelling ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#A63030]"></div>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Cancelar
+                </>
+              )}
+            </button>
+          )}
+        </div>
+      ) : null}
+
+      {showPixModal && pendingPixData && (
+        <PixPaymentModal
+          isOpen={showPixModal}
+          onClose={() => setShowPixModal(false)}
+          pixData={pendingPixData}
+          amount={appointment.totalPrice}
+          description="Pagamento do agendamento"
+        />
       )}
 
       {/* Rating for attended appointments */}

@@ -6,10 +6,15 @@ import {
 import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
 import { CreateDebtDto, UpdateDebtDto, PayDebtDto } from './dto';
+import { AsaasService } from '../asaas/asaas.service';
+import { AsaasBillingType } from '../asaas/asaas.types';
 
 @Injectable()
 export class DebtsService {
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(
+    private readonly supabase: SupabaseService,
+    private readonly asaasService: AsaasService,
+  ) {}
 
   private readonly DEBT_SELECT = `
     *,
@@ -354,5 +359,84 @@ export class DebtsService {
       .from('clients')
       .update({ hasDebts: (count || 0) > 0 })
       .eq('id', clientId);
+  }
+
+  async createPixChargeForDebts(clientId: string): Promise<{
+    pixData: { encodedImage: string; payload: string; expirationDate: string } | null;
+    totalAmount: number;
+  }> {
+    // 1. Buscar dívidas pendentes
+    const { data: debts, error } = await this.supabase
+      .from('debts')
+      .select('remainingBalance')
+      .eq('clientId', clientId)
+      .eq('isSettled', false);
+
+    if (error) throw error;
+    if (!debts || debts.length === 0) {
+      throw new BadRequestException('Nenhuma dívida pendente encontrada');
+    }
+
+    const totalAmount = debts.reduce((sum, d) => sum + d.remainingBalance, 0);
+
+    if (!this.asaasService.configured) {
+      throw new BadRequestException(
+        'Pagamento PIX não está disponível. Entre em contato com o salão para quitar sua dívida.',
+      );
+    }
+
+    // 2. Buscar/criar cliente no Asaas
+    const { data: client } = await this.supabase
+      .from('clients')
+      .select('id, name, email, phone, asaasCustomerId')
+      .eq('id', clientId)
+      .single();
+
+    if (!client) throw new NotFoundException('Cliente não encontrado');
+
+    let asaasCustomerId = client.asaasCustomerId;
+    if (!asaasCustomerId) {
+      const newCustomer = await this.asaasService.createCustomer({
+        name: client.name,
+        email: client.email || undefined,
+        mobilePhone: client.phone || undefined,
+        externalReference: client.id,
+      });
+      asaasCustomerId = newCustomer.id;
+      await this.supabase
+        .from('clients')
+        .update({ asaasCustomerId })
+        .eq('id', clientId);
+    }
+
+    // 3. Criar cobrança PIX no Asaas
+    const today = new Date().toISOString().substring(0, 10);
+    const asaasCharge = await this.asaasService.createCharge({
+      customer: asaasCustomerId,
+      billingType: AsaasBillingType.PIX,
+      value: this.asaasService.centavosToReais(totalAmount),
+      dueDate: today,
+      description: 'Quitação de dívida',
+      externalReference: clientId,
+    });
+
+    // 4. Registrar pagamento pendente para rastreamento
+    const now = new Date().toISOString();
+    await this.supabase.from('payments').insert({
+      id: randomUUID(),
+      clientId,
+      amount: totalAmount,
+      method: 'PIX',
+      asaasPaymentId: asaasCharge.id,
+      asaasStatus: asaasCharge.status,
+      notes: 'DEBT_PAYMENT',
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // 5. Buscar QR Code PIX
+    const pixData = await this.asaasService.getPixQrCode(asaasCharge.id);
+
+    return { pixData, totalAmount };
   }
 }

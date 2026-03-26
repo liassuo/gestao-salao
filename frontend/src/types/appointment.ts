@@ -1,7 +1,7 @@
 import type { Client } from './client';
 import type { Professional } from './professional';
 
-export type AppointmentStatus = 'SCHEDULED' | 'ATTENDED' | 'CANCELED' | 'NO_SHOW';
+export type AppointmentStatus = 'SCHEDULED' | 'ATTENDED' | 'CANCELED' | 'NO_SHOW' | 'PENDING_PAYMENT';
 
 export interface AppointmentService {
   id: string;
@@ -52,6 +52,7 @@ export const appointmentStatusLabels: Record<AppointmentStatus, string> = {
   ATTENDED: 'Atendido',
   CANCELED: 'Cancelado',
   NO_SHOW: 'Não compareceu',
+  PENDING_PAYMENT: 'Aguardando Pagamento',
 };
 
 export const appointmentStatusColors: Record<AppointmentStatus, string> = {
@@ -59,4 +60,5 @@ export const appointmentStatusColors: Record<AppointmentStatus, string> = {
   ATTENDED: 'bg-blue-600/20 text-blue-400',
   CANCELED: 'bg-zinc-500/20 text-zinc-400',
   NO_SHOW: 'bg-red-500/20 text-red-500',
+  PENDING_PAYMENT: 'bg-amber-500/20 text-amber-500',
 };

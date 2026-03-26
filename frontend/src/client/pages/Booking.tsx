@@ -107,6 +107,11 @@ export function ClientBooking() {
   const [subscribingPlanId, setSubscribingPlanId] = useState<string | null>(null);
   const [pixModal, setPixModal] = useState<PixData | null>(null);
   const [pixCopied, setPixCopied] = useState(false);
+  const [debtData, setDebtData] = useState<{ total: number; debts: any[] } | null>(null);
+  const [debtPixData, setDebtPixData] = useState<PixData | null>(null);
+  const [isPayingDebt, setIsPayingDebt] = useState(false);
+  const [debtPixCopied, setDebtPixCopied] = useState(false);
+  const [debtPollingActive, setDebtPollingActive] = useState(false);
   const [appointmentBillingType, setAppointmentBillingType] =
     useState<AppointmentBillingType>('PIX');
   const [subscribePlanModal, setSubscribePlanModal] = useState<string | null>(null);
@@ -127,6 +132,33 @@ export function ClientBooking() {
   }, [weekOffset]);
 
   const weekDates = useMemo(() => generateWeekDates(baseDate), [baseDate]);
+
+  useEffect(() => {
+    clientApi.get<{ debts: any[]; total: number }>('/debts/my')
+      .then((res) => {
+        if (res.data.debts.length > 0) {
+          setDebtData(res.data);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!debtPollingActive) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await clientApi.get<{ debts: any[]; total: number }>('/debts/my');
+        if (res.data.debts.length === 0) {
+          setDebtData(null);
+          setDebtPixData(null);
+          setDebtPollingActive(false);
+        }
+      } catch {
+        // ignore
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [debtPollingActive]);
 
   useEffect(() => {
     fetchServices();
@@ -183,6 +215,28 @@ export function ClientBooking() {
     await navigator.clipboard.writeText(pixModal.payload);
     setPixCopied(true);
     setTimeout(() => setPixCopied(false), 2000);
+  };
+
+  const handlePayDebtWithPix = async () => {
+    setIsPayingDebt(true);
+    try {
+      const res = await clientApi.post<{ pixData: PixData | null; totalAmount: number }>('/debts/my/pay-pix');
+      if (res.data.pixData) {
+        setDebtPixData(res.data.pixData);
+        setDebtPollingActive(true);
+      }
+    } catch (e: any) {
+      alert(e.response?.data?.message || 'Erro ao gerar PIX. Tente novamente.');
+    } finally {
+      setIsPayingDebt(false);
+    }
+  };
+
+  const handleCopyDebtPix = async () => {
+    if (!debtPixData?.payload) return;
+    await navigator.clipboard.writeText(debtPixData.payload);
+    setDebtPixCopied(true);
+    setTimeout(() => setDebtPixCopied(false), 2000);
   };
 
   useEffect(() => {
@@ -863,6 +917,110 @@ export function ClientBooking() {
       <div className="flex-1 overflow-auto px-5 py-4">
         {renderStepContent()}
       </div>
+
+      {/* Modal de bloqueio por dívida pendente */}
+      {debtData && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+          <div className="relative w-full max-w-sm bg-[var(--bg-primary)] rounded-2xl border border-[var(--border-color)] shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="bg-red-500/10 border-b border-red-500/20 px-6 py-4 flex items-center gap-3">
+              <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="font-bold text-[var(--text-primary)]">Pagamento pendente</h3>
+                <p className="text-xs text-red-400">Você possui uma dívida com o salão</p>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="p-6">
+              {!debtPixData ? (
+                <div className="text-center">
+                  <p className="text-sm text-[var(--text-secondary)] mb-4">
+                    Para fazer um novo agendamento, quite sua dívida primeiro:
+                  </p>
+                  <p className="text-4xl font-extrabold text-red-400 mb-1">
+                    R$ {(debtData.total / 100).toFixed(2).replace('.', ',')}
+                  </p>
+                  <p className="text-xs text-[var(--text-muted)] mb-6">valor total em aberto</p>
+                  <button
+                    onClick={handlePayDebtWithPix}
+                    disabled={isPayingDebt}
+                    className="w-full py-4 bg-[#8B6914] hover:bg-[#725510] text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-colors disabled:opacity-50 shadow-lg shadow-[#8B6914]/20 mb-3"
+                  >
+                    {isPayingDebt ? (
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
+                        </svg>
+                        Pagar com PIX
+                      </>
+                    )}
+                  </button>
+                </div>
+              ) : (
+                <div className="text-center">
+                  <p className="text-sm font-medium text-[var(--text-secondary)] mb-4">
+                    Escaneie o QR Code ou copie o código para quitar sua dívida
+                  </p>
+                  <div className="flex justify-center mb-4">
+                    <div className="relative">
+                      <div className="absolute -inset-1 bg-gradient-to-r from-[#C8923A] to-[#8B6914] rounded-xl blur opacity-25"></div>
+                      <div className="relative bg-white p-3 rounded-xl shadow-inner">
+                        <img
+                          src={`data:image/png;base64,${debtPixData.encodedImage}`}
+                          alt="QR Code PIX"
+                          className="h-44 w-44"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleCopyDebtPix}
+                    className="w-full py-3 rounded-xl border-2 border-[#C8923A] text-[#C8923A] font-semibold hover:bg-[#C8923A]/10 flex items-center justify-center gap-2 transition-colors mb-4"
+                  >
+                    {debtPixCopied ? (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Copiado!
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        Copiar código PIX
+                      </>
+                    )}
+                  </button>
+                  <div className="flex items-center justify-center gap-2 text-xs text-[var(--text-muted)]">
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-[#C8923A]"></div>
+                    <span>Aguardando confirmação do pagamento...</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 pb-5">
+              <button
+                onClick={() => navigate(CLIENT_PATHS.home)}
+                className="w-full py-2.5 text-sm text-[var(--text-muted)] font-medium hover:text-[var(--text-secondary)] transition-colors"
+              >
+                Voltar ao início
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal PIX após assinar plano */}
       {pixModal && (

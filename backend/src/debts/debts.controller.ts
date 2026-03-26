@@ -10,10 +10,18 @@ import {
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
+  UseGuards,
+  Req,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { DebtsService } from './debts.service';
 import { CreateDebtDto, UpdateDebtDto, PayDebtDto, QueryDebtDto } from './dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
+
+interface RequestWithUser extends Request {
+  user: AuthenticatedUser;
+}
 
 @ApiTags('Debts')
 @Controller('debts')
@@ -56,6 +64,21 @@ export class DebtsController {
   async getClientTotal(@Param('clientId', ParseUUIDPipe) clientId: string) {
     const total = await this.debtsService.calculateClientTotalDebt(clientId);
     return { clientId, totalDebt: total };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('my')
+  async getMyOutstandingDebts(@Req() req: RequestWithUser) {
+    const debts = await this.debtsService.findOutstandingByClient(req.user.id);
+    const total = debts.reduce((sum: number, d: any) => sum + d.remainingBalance, 0);
+    return { debts, total };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('my/pay-pix')
+  @HttpCode(HttpStatus.CREATED)
+  async payMyDebtsViaPix(@Req() req: RequestWithUser) {
+    return this.debtsService.createPixChargeForDebts(req.user.id);
   }
 
   @Get(':id')

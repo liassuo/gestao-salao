@@ -463,15 +463,6 @@ export function ClientPlans() {
               </p>
             </div>
 
-            {pixModal && (
-              <button
-                onClick={() => setPixModal(pixModal)}
-                className="w-full py-2.5 rounded-xl bg-amber-500/20 text-amber-400 text-sm font-medium mb-3 hover:bg-amber-500/30 transition-colors"
-              >
-                Ver QR Code PIX
-              </button>
-            )}
-
             {!pixModal && mySubscription.latestPayment?.invoiceUrl && (
               <button
                 onClick={() => window.open(mySubscription.latestPayment?.invoiceUrl, '_blank')}
@@ -507,12 +498,25 @@ export function ClientPlans() {
                 </div>
               </div>
             ) : (
-              <button
-                onClick={() => setShowCancelConfirm(true)}
-                className="w-full py-2.5 rounded-xl border border-[var(--card-border)] text-[var(--text-secondary)] text-sm font-medium transition-colors hover:bg-[var(--hover-bg)]"
-              >
-                Cancelar assinatura
-              </button>
+              <div className="flex gap-2">
+                {pixModal && (
+                  <button
+                    onClick={() => setPixModal(pixModal)}
+                    className="flex-1 py-2.5 rounded-xl bg-amber-500/20 text-amber-400 text-sm font-medium hover:bg-amber-500/30 transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                    </svg>
+                    Ver QR Code
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowCancelConfirm(true)}
+                  className="flex-1 py-2.5 rounded-xl border border-[var(--card-border)] text-[var(--text-secondary)] text-sm font-medium transition-colors hover:bg-[var(--hover-bg)]"
+                >
+                  Cancelar assinatura
+                </button>
+              </div>
             )}
           </div>
         )}
