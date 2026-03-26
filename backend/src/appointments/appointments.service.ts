@@ -139,7 +139,7 @@ export class AppointmentsService {
       .from('appointments')
       .select('scheduledAt, totalDuration')
       .eq('professionalId', dto.professionalId)
-      .in('status', ['SCHEDULED', 'ATTENDED'])
+      .in('status', ['SCHEDULED', 'ATTENDED', 'PENDING_PAYMENT'])
       .gte('scheduledAt', startOfDay)
       .lte('scheduledAt', endOfDay);
 
@@ -155,6 +155,12 @@ export class AppointmentsService {
     }
 
     // 5. Criar o agendamento
+    // Pagamentos online via app (PIX/cartão) ficam PENDING_PAYMENT até confirmação do Asaas
+    const requiresOnlinePayment =
+      dto.source === 'CLIENT' &&
+      (dto.billingType === 'PIX' || dto.billingType === 'CREDIT_CARD');
+    const initialStatus = requiresOnlinePayment ? 'PENDING_PAYMENT' : 'SCHEDULED';
+
     const now = new Date().toISOString();
     const appointmentId = randomUUID();
     const { data: appointment, error: apptError } = await this.supabase
@@ -166,7 +172,7 @@ export class AppointmentsService {
         scheduledAt: String(dto.scheduledAt),
         totalPrice: totalPrice,
         totalDuration: totalDuration,
-        status: 'SCHEDULED',
+        status: initialStatus,
         notes: dto.notes,
         source: dto.source || 'ADMIN',
         usedSubscriptionCut: !!dto.useSubscriptionCut,

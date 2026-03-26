@@ -128,12 +128,19 @@ export class AsaasWebhookController {
       })
       .eq('id', localPayment.id);
 
-    // Se vinculado a agendamento, marcar como pago
+    // Se vinculado a agendamento, marcar como pago e confirmar se estava pendente
     if (localPayment.appointmentId) {
       await this.supabase
         .from('appointments')
-        .update({ isPaid: true })
+        .update({ isPaid: true, updatedAt: new Date().toISOString() })
         .eq('id', localPayment.appointmentId);
+
+      // Promover PENDING_PAYMENT → SCHEDULED após pagamento confirmado
+      await this.supabase
+        .from('appointments')
+        .update({ status: 'SCHEDULED', updatedAt: new Date().toISOString() })
+        .eq('id', localPayment.appointmentId)
+        .eq('status', 'PENDING_PAYMENT');
     }
 
     // Vincular ao caixa aberto (se existir)
