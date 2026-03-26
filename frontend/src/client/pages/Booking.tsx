@@ -747,7 +747,7 @@ export function ClientBooking() {
                     : 'border-[var(--card-border)] bg-[var(--card-bg)] text-[var(--text-secondary)]'
                 }`}
               >
-                Dinheiro
+                No local
               </button>
             </div>
             <p className="text-xs text-[var(--text-muted)] mt-2">
@@ -755,7 +755,7 @@ export function ClientBooking() {
                 ? 'Você verá o QR Code após confirmar.'
                 : appointmentBillingType === 'CREDIT_CARD'
                 ? 'Abriremos o link seguro do Asaas para pagar com cartão.'
-                : 'Pagamento em dinheiro no local. O agendamento é confirmado agora.'}
+                : 'Pague na hora do serviço (dinheiro, cartão ou PIX na maquininha).'}
             </p>
           </div>
         )}
