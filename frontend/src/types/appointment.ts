@@ -21,6 +21,9 @@ export interface Appointment {
   totalPrice: number;
   totalDuration: number;
   notes?: string;
+  usedSubscriptionCut?: boolean;
+  rating?: number;
+  ratingComment?: string;
   client: Pick<Client, 'id' | 'name' | 'phone' | 'email'>;
   professional: Pick<Professional, 'id' | 'name'>;
   services: AppointmentService[];

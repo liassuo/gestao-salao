@@ -7,13 +7,21 @@ import { subscribeToPushNotifications } from '../services/notifications';
 import { AppointmentCard } from '../components/AppointmentCard';
 import { LoadingState, EmptyState } from '../components/ui';
 import { PromotionBanners } from '../components/PromotionBanners';
+import { clientApi } from '../services/api';
 import type { Appointment } from '../types';
 
 const PLANS_POPUP_KEY = 'hasSeenPlansPopup';
 
+export interface ActiveSubscriptionInfo {
+  planName: string;
+  cutsPerMonth: number;
+  cutsUsedThisMonth: number;
+}
+
 export function ClientHome() {
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [showPlansPopup, setShowPlansPopup] = useState(false);
+  const [activeSubscription, setActiveSubscription] = useState<ActiveSubscriptionInfo | null>(null);
   const navigate = useNavigate();
   const { user } = useClientAuth();
 
@@ -55,6 +63,20 @@ export function ClientHome() {
   useEffect(() => {
     fetchAppointments();
   }, [fetchAppointments]);
+
+  useEffect(() => {
+    clientApi.get<{ id: string; status: string; cutsUsedThisMonth: number; plan: { name: string; cutsPerMonth: number } } | null>('/subscriptions/me')
+      .then((res) => {
+        if (res.data && res.data.status === 'ACTIVE') {
+          setActiveSubscription({
+            planName: res.data.plan.name,
+            cutsPerMonth: res.data.plan.cutsPerMonth,
+            cutsUsedThisMonth: res.data.cutsUsedThisMonth,
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleCancel = useCallback(
     async (appointment: Appointment) => {
@@ -135,6 +157,7 @@ export function ClientHome() {
                   variant="highlight"
                   onCancel={handleCancel}
                   isCancelling={cancellingId === nextAppointment.id}
+                  subscription={activeSubscription}
                 />
               </div>
             )}
@@ -157,6 +180,7 @@ export function ClientHome() {
                       appointment={appointment}
                       onCancel={handleCancel}
                       isCancelling={cancellingId === appointment.id}
+                      subscription={activeSubscription}
                     />
                   ))}
                 </div>
@@ -179,6 +203,7 @@ export function ClientHome() {
                     <AppointmentCard
                       key={appointment.id}
                       appointment={appointment}
+                      subscription={activeSubscription}
                     />
                   ))}
                 </div>

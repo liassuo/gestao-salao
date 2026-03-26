@@ -28,11 +28,18 @@ const STATUS_CONFIG: Record<AppointmentStatus, { label: string; bgColor: string;
   PENDING_PAYMENT: { label: 'Aguard. Pagamento', bgColor: 'bg-amber-500/20', textColor: 'text-amber-500' },
 };
 
+interface SubscriptionInfo {
+  planName: string;
+  cutsPerMonth: number;
+  cutsUsedThisMonth: number;
+}
+
 interface AppointmentCardProps {
   appointment: Appointment;
   onCancel?: (appointment: Appointment) => void;
   isCancelling?: boolean;
   variant?: 'default' | 'highlight';
+  subscription?: SubscriptionInfo | null;
 }
 
 export function AppointmentCard({
@@ -40,6 +47,7 @@ export function AppointmentCard({
   onCancel,
   isCancelling = false,
   variant = 'default',
+  subscription = null,
 }: AppointmentCardProps) {
   const status = STATUS_CONFIG[appointment.status] || STATUS_CONFIG.SCHEDULED;
   const hours = hoursUntil(appointment.scheduledAt);
@@ -137,12 +145,47 @@ export function AppointmentCard({
           </svg>
           <span className="text-sm">{appointment.professional?.name || 'Profissional'}</span>
         </div>
-        <div className="flex items-center gap-2 text-[var(--text-secondary)]">
-          <svg className="w-4 h-4 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-          </svg>
-          <span className="text-sm">{formatPrice(appointment.totalPrice)}</span>
-        </div>
+
+        {appointment.usedSubscriptionCut && subscription ? (
+          <div className="mt-1 rounded-xl bg-[#8B6914]/10 border border-[#C8923A]/30 px-3 py-2.5 flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <svg className="w-3.5 h-3.5 text-[#C8923A]" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                <span className="text-xs font-semibold text-[#C8923A]">Coberto pela assinatura</span>
+              </div>
+              <span className="text-xs font-medium text-[var(--text-muted)] line-through">{formatPrice(appointment.totalPrice)}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-[var(--text-muted)]">{subscription.planName}</span>
+              <span className="text-[var(--border-color)]">·</span>
+              {subscription.cutsPerMonth === 99 ? (
+                <span className="text-xs text-[var(--text-muted)]">Cortes ilimitados</span>
+              ) : (
+                <span className="text-xs text-[var(--text-muted)]">
+                  <span className="font-semibold text-[var(--text-secondary)]">{subscription.cutsUsedThisMonth}</span>
+                  /{subscription.cutsPerMonth} cortes usados este mês
+                </span>
+              )}
+            </div>
+            {subscription.cutsPerMonth !== 99 && (
+              <div className="w-full bg-[var(--border-color)] rounded-full h-1">
+                <div
+                  className="bg-[#C8923A] rounded-full h-1 transition-all"
+                  style={{ width: `${Math.min(Math.round((subscription.cutsUsedThisMonth / subscription.cutsPerMonth) * 100), 100)}%` }}
+                />
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-[var(--text-secondary)]">
+            <svg className="w-4 h-4 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            <span className="text-sm">{formatPrice(appointment.totalPrice)}</span>
+          </div>
+        )}
       </div>
 
       {(canCancel && onCancel) || isPendingPayment ? (
