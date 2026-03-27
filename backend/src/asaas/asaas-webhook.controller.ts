@@ -190,15 +190,28 @@ export class AsaasWebhookController {
       );
     }
 
-    // Se for pagamento de dívida, quitar todas as dívidas pendentes do cliente
+    // Se for pagamento de dívida, quitar dívidas apenas se o valor pago cobre o total pendente
     if (localPayment.notes === 'DEBT_PAYMENT' && localPayment.clientId) {
       const debtNow = new Date().toISOString();
 
       const { data: pendingDebts } = await this.supabase
         .from('debts')
-        .select('id, amount')
+        .select('id, amount, remainingBalance')
         .eq('clientId', localPayment.clientId)
         .eq('isSettled', false);
+
+      const totalPending = (pendingDebts || []).reduce(
+        (sum, d) => sum + (d.remainingBalance ?? d.amount),
+        0,
+      );
+
+      if (localPayment.amount < totalPending) {
+        this.logger.warn(
+          `Pagamento de dívida insuficiente para cliente ${localPayment.clientId}: ` +
+          `pago ${localPayment.amount}, total pendente atual ${totalPending}. Dívidas não quitadas.`,
+        );
+        return;
+      }
 
       for (const debt of pendingDebts || []) {
         await this.supabase
