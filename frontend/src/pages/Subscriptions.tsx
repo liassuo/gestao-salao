@@ -46,7 +46,7 @@ export function Subscriptions() {
   const [subscribeError, setSubscribeError] = useState<string | null>(null);
   
   // Pix Payment state
-  const [pixModalData, setPixModalData] = useState<{ pixData: any; amount: number; description?: string } | null>(null);
+  const [pixModalData, setPixModalData] = useState<{ pixData: any; amount: number; description?: string; subscriptionId?: string } | null>(null);
 
   // Hooks
   const { data: plans, isLoading: isLoadingPlans, isError: isPlansError, error: plansError } = useSubscriptionPlans(true);
@@ -140,7 +140,8 @@ export function Subscriptions() {
         setPixModalData({
           pixData: response.pixData,
           amount: response.subscription?.plan?.price || 0,
-          description: `Assinatura: ${response.subscription?.plan?.name}`
+          description: `Assinatura: ${response.subscription?.plan?.name}`,
+          subscriptionId: response.subscription?.id,
         });
       }
     } catch (err) {
@@ -373,6 +374,16 @@ export function Subscriptions() {
       <PixPaymentModal
         isOpen={!!pixModalData}
         onClose={() => setPixModalData(null)}
+        onExpire={async () => {
+          if (pixModalData?.subscriptionId) {
+            try {
+              await cancelSubscription.mutateAsync(pixModalData.subscriptionId);
+              toast.warning('PIX expirado', 'O prazo de pagamento venceu e a assinatura foi cancelada automaticamente.');
+            } catch {
+              // silently ignore
+            }
+          }
+        }}
         pixData={pixModalData?.pixData}
         amount={pixModalData?.amount ?? 0}
         description={pixModalData?.description}

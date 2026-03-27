@@ -107,6 +107,9 @@ export function ClientBooking() {
   const [subscribingPlanId, setSubscribingPlanId] = useState<string | null>(null);
   const [pixModal, setPixModal] = useState<PixData | null>(null);
   const [pixCopied, setPixCopied] = useState(false);
+  const [pixCountdown, setPixCountdown] = useState(600);
+  const [pixEntityId, setPixEntityId] = useState<string | null>(null);
+  const [pixEntityType, setPixEntityType] = useState<'appointment' | 'subscription' | null>(null);
   const [debtData, setDebtData] = useState<{ total: number; debts: any[] } | null>(null);
   const [debtPixData, setDebtPixData] = useState<PixData | null>(null);
   const [isPayingDebt, setIsPayingDebt] = useState(false);
@@ -161,6 +164,44 @@ export function ClientBooking() {
   }, [debtPollingActive]);
 
   useEffect(() => {
+    if (!pixModal) {
+      setPixCountdown(600);
+      return;
+    }
+    const entityId = pixEntityId;
+    const entityType = pixEntityType;
+    const shouldLeave = leaveAfterPixClose;
+    setPixCountdown(600);
+
+    const timer = setInterval(() => {
+      setPixCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          // Cancelar o agendamento ou assinatura ao expirar
+          (async () => {
+            if (entityType === 'appointment' && entityId) {
+              await clientApi.patch(`/appointments/${entityId}/cancel`).catch(() => {});
+            } else if (entityType === 'subscription') {
+              await clientApi.post('/subscriptions/me/cancel').catch(() => {});
+            }
+            setPixModal(null);
+            setPixEntityId(null);
+            setPixEntityType(null);
+            if (shouldLeave) {
+              navigate(CLIENT_PATHS.home);
+            }
+          })();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pixModal]);
+
+  useEffect(() => {
     fetchServices();
     clientApi.get<ActivePromotion[]>('/promotions/active')
       .then((res) => setActivePromotions(res.data))
@@ -197,6 +238,8 @@ export function ClientBooking() {
       setUseSubscriptionCut(remaining > 0);
       if (res.data.pixData) {
         setLeaveAfterPixClose(false);
+        setPixEntityId(res.data.subscription.id);
+        setPixEntityType('subscription');
         setPixModal(res.data.pixData);
       } else if (res.data.invoiceUrl) {
         window.location.href = res.data.invoiceUrl;
@@ -311,6 +354,8 @@ export function ClientBooking() {
         navigate(CLIENT_PATHS.home);
       } else if (result.payment?.pixData) {
         setLeaveAfterPixClose(true);
+        setPixEntityId(result.id);
+        setPixEntityType('appointment');
         setPixModal(result.payment.pixData);
       } else if (result.payment?.invoiceUrl) {
         window.location.href = result.payment.invoiceUrl;
@@ -1028,23 +1073,41 @@ export function ClientBooking() {
           <div className="bg-[var(--bg-primary)] rounded-2xl w-full max-w-sm p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-[var(--text-primary)]">Pagar com PIX</h3>
-              <button
-                onClick={() => {
-                  setPixModal(null);
-                  if (leaveAfterPixClose) {
-                    setLeaveAfterPixClose(false);
-                    navigate(CLIENT_PATHS.home);
-                  }
-                }}
-                className="p-1 text-[var(--text-muted)]"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`text-sm font-bold px-2 py-0.5 rounded-lg ${
+                    pixCountdown <= 60
+                      ? 'bg-red-500/10 text-red-500'
+                      : 'bg-orange-500/10 text-orange-500'
+                  }`}
+                >
+                  {`${Math.floor(pixCountdown / 60)}:${String(pixCountdown % 60).padStart(2, '0')}`}
+                </span>
+                <button
+                  onClick={() => {
+                    setPixModal(null);
+                    setPixEntityId(null);
+                    setPixEntityType(null);
+                    if (leaveAfterPixClose) {
+                      setLeaveAfterPixClose(false);
+                      navigate(CLIENT_PATHS.home);
+                    }
+                  }}
+                  className="p-1 text-[var(--text-muted)]"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
-            <p className="text-sm text-[var(--text-muted)] text-center mb-4">
+            <p className="text-sm text-[var(--text-muted)] text-center mb-2">
               Escaneie o QR Code ou copie o código PIX para ativar seu plano
+            </p>
+            <p className={`text-xs text-center mb-4 font-medium ${pixCountdown <= 60 ? 'text-red-500' : 'text-[var(--text-muted)]'}`}>
+              {pixCountdown <= 60
+                ? `Atenção! Expira em ${Math.floor(pixCountdown / 60)}:${String(pixCountdown % 60).padStart(2, '0')} — pedido será cancelado.`
+                : 'Código válido por 10 minutos. Após isso, o pedido é cancelado automaticamente.'}
             </p>
             {pixModal.encodedImage && (
               <div className="flex justify-center mb-4">

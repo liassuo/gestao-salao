@@ -34,7 +34,7 @@ export function Appointments() {
   const [debtFormError, setDebtFormError] = useState<string | null>(null);
   
   // Pix Payment state
-  const [pixModalData, setPixModalData] = useState<{ pixData: any; amount: number; description?: string } | null>(null);
+  const [pixModalData, setPixModalData] = useState<{ pixData: any; amount: number; description?: string; appointmentId?: string } | null>(null);
 
   const { data: appointments, isLoading, isError, error } = useAppointments(filters);
   const { data: professionals = [] } = useProfessionals();
@@ -77,6 +77,7 @@ export function Appointments() {
           pixData: response.payment.pixData,
           amount: response.totalPrice,
           description: `Agendamento: ${response.id}`,
+          appointmentId: response.id,
         });
       } else if (response?.payment?.invoiceUrl) {
         window.location.href = response.payment.invoiceUrl;
@@ -276,6 +277,16 @@ export function Appointments() {
       <PixPaymentModal
         isOpen={!!pixModalData}
         onClose={() => setPixModalData(null)}
+        onExpire={async () => {
+          if (pixModalData?.appointmentId) {
+            try {
+              await cancel(pixModalData.appointmentId);
+              toast.warning('PIX expirado', 'O prazo de pagamento venceu e o agendamento foi cancelado automaticamente.');
+            } catch {
+              // silently ignore
+            }
+          }
+        }}
         pixData={pixModalData?.pixData}
         amount={pixModalData?.amount ?? 0}
         description={pixModalData?.description}

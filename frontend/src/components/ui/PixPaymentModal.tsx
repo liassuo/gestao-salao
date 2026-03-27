@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import { X, Copy, Check, QrCode, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { X, Copy, Check, QrCode, AlertCircle, Clock } from 'lucide-react';
 import { useToast } from './ToastContext';
 
 interface PixPaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onExpire?: () => void;
   pixData: {
     encodedImage: string;
     payload: string;
@@ -14,17 +15,53 @@ interface PixPaymentModalProps {
   description?: string;
 }
 
+const EXPIRY_SECONDS = 600; // 10 minutos
+
 export function PixPaymentModal({
   isOpen,
   onClose,
+  onExpire,
   pixData,
   amount,
   description,
 }: PixPaymentModalProps) {
   const toast = useToast();
   const [copied, setCopied] = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState(EXPIRY_SECONDS);
+
+  const onExpireRef = useRef(onExpire);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onExpireRef.current = onExpire; }, [onExpire]);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+
+  useEffect(() => {
+    if (!isOpen || !pixData) return;
+    setSecondsLeft(EXPIRY_SECONDS);
+
+    const timer = setInterval(() => {
+      setSecondsLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          onExpireRef.current?.();
+          onCloseRef.current();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [isOpen, pixData]);
 
   if (!isOpen || !pixData) return null;
+
+  const formatTime = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m}:${sec.toString().padStart(2, '0')}`;
+  };
+
+  const isExpiringSoon = secondsLeft <= 60;
 
   const handleCopyPayload = () => {
     navigator.clipboard.writeText(pixData.payload);
@@ -55,12 +92,25 @@ export function PixPaymentModal({
               Pagamento PIX
             </h2>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)] transition-colors"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-3">
+            <div
+              className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-sm font-bold transition-colors ${
+                isExpiringSoon
+                  ? 'bg-red-500/10 text-red-500'
+                  : 'bg-[#C8923A]/10 text-[#C8923A]'
+              }`}
+              title="Tempo restante para pagamento"
+            >
+              <Clock className="h-3.5 w-3.5" />
+              <span>{formatTime(secondsLeft)}</span>
+            </div>
+            <button
+              onClick={onClose}
+              className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)] transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
@@ -125,9 +175,13 @@ export function PixPaymentModal({
 
         {/* Footer */}
         <div className="bg-[var(--hover-bg)] px-6 py-4 flex flex-col gap-3 border-t border-[var(--border-color)]">
-          <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] justify-center">
-            <AlertCircle className="h-3.5 w-3.5 text-[#C8923A]" />
-            <span>O pagamento será confirmado automaticamente</span>
+          <div className="flex items-center gap-2 text-xs justify-center">
+            <AlertCircle className={`h-3.5 w-3.5 flex-shrink-0 ${isExpiringSoon ? 'text-red-500' : 'text-[#C8923A]'}`} />
+            <span className={isExpiringSoon ? 'text-red-500 font-semibold' : 'text-[var(--text-muted)]'}>
+              {isExpiringSoon
+                ? `Atenção! Expira em ${formatTime(secondsLeft)} — após isso, o pedido será cancelado.`
+                : 'O pagamento será confirmado automaticamente. Código válido por 10 minutos.'}
+            </span>
           </div>
           <button
             onClick={onClose}

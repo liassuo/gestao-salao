@@ -63,15 +63,15 @@ function formatCurrency(cents: number): string {
 const statusColors: Record<string, { bg: string; border: string; text: string }> = {
   // variantes de SCHEDULED (agendado)
   SUBSCRIPTION: { bg: 'bg-[#C8923A]/20', border: 'border-[#C8923A]/40', text: 'text-[#D4A85C]' }, // âmbar — assinatura
-  CASH_PENDING: { bg: 'bg-green-500/15',  border: 'border-green-500/30',  text: 'text-green-400' }, // verde — pagar no local
-  PAID:         { bg: 'bg-yellow-400/15', border: 'border-yellow-400/30', text: 'text-yellow-300' }, // amarelo — já pagou
+  CASH_PENDING: { bg: 'bg-yellow-400/15', border: 'border-yellow-400/30', text: 'text-yellow-300' }, // amarelo — agendado, pagar no local
+  PAID:         { bg: 'bg-green-500/25',  border: 'border-green-500/50',  text: 'text-green-300' }, // verde forte — pago
   // status de agendamento
   PENDING_PAYMENT: { bg: 'bg-blue-500/15', border: 'border-blue-500/30',  text: 'text-blue-400'  }, // azul — aguardando PIX/cartão
-  ATTENDED:        { bg: 'bg-green-500/15', border: 'border-green-500/30', text: 'text-green-400' },
+  ATTENDED:        { bg: 'bg-green-500/10', border: 'border-green-500/20', text: 'text-green-500/80' }, // verde suave — atendido
   CANCELLED:       { bg: 'bg-red-500/15',   border: 'border-[#A63030]/30', text: 'text-[#C45050]' },
   CANCELED:        { bg: 'bg-red-500/15',   border: 'border-[#A63030]/30', text: 'text-[#C45050]' },
   NO_SHOW:         { bg: 'bg-amber-500/15', border: 'border-amber-500/30', text: 'text-amber-400' },
-  SCHEDULED:       { bg: 'bg-green-500/15', border: 'border-green-500/30', text: 'text-green-400' }, // fallback
+  SCHEDULED:       { bg: 'bg-yellow-400/15', border: 'border-yellow-400/30', text: 'text-yellow-300' }, // fallback
 };
 
 function generateTimeSlots(): string[] {
