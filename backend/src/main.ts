@@ -1,24 +1,44 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { ConfigService } from '@nestjs/config';
 import * as compression from 'compression';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { TimeoutInterceptor } from './common/interceptors/timeout.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const configService = app.get(ConfigService);
+
+  // Segurança: headers HTTP (XSS, clickjacking, MIME sniffing, etc.)
+  app.use(helmet());
 
   // Habilita validação global dos DTOs
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // Remove campos não declarados no DTO
-      forbidNonWhitelisted: true, // Retorna erro se enviar campo não declarado
-      transform: true, // Transforma tipos automaticamente
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
     }),
   );
 
+  // Timeout global de 30s para evitar requests pendurados no free tier
+  app.useGlobalInterceptors(new TimeoutInterceptor(30000));
+
   app.use(compression());
   app.setGlobalPrefix('api', { exclude: ['health'] });
-  app.enableCors();
+
+  // CORS restrito: aceita apenas origens configuradas
+  const frontendUrl = configService.get<string>('FRONTEND_URL', 'http://localhost:5173');
+  const allowedOrigins = frontendUrl.split(',').map((origin) => origin.trim());
+  app.enableCors({
+    origin: allowedOrigins,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+    maxAge: 86400, // Cache preflight por 24h — reduz OPTIONS requests
+  });
 
   // Health check — usado por serviços de keep-alive para evitar cold start
   const httpAdapter = app.getHttpAdapter();

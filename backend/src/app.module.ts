@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { CacheModule } from '@nestjs/cache-manager';
 import { APP_GUARD } from '@nestjs/core';
 import * as path from 'path';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -50,6 +51,11 @@ import { MailModule } from './mail/mail.module';
         limit: 100,
       },
     ]),
+    CacheModule.register({
+      isGlobal: true,
+      ttl: 30000, // 30s padrão — suficiente para evitar recálculos em rajadas de requests
+      max: 100,   // Máximo de 100 itens em memória
+    }),
     ScheduleModule.forRoot(),
     SupabaseModule,
     AuthModule,

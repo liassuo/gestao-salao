@@ -1,9 +1,11 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, UseInterceptors } from '@nestjs/common';
+import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 import { ApiTags } from '@nestjs/swagger';
 import { DashboardService } from './dashboard.service';
 
 @ApiTags('Dashboard')
 @Controller('dashboard')
+@UseInterceptors(CacheInterceptor)
 export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
@@ -88,6 +90,7 @@ export class DashboardController {
    * Returns most popular services
    */
   @Get('services-popularity')
+  @CacheTTL(120000) // 2 min
   async getServicesPopularity(@Query('limit') limit?: string) {
     const limitNum = limit ? parseInt(limit, 10) : 10;
     return this.dashboardService.getServicesPopularity(limitNum);
@@ -98,6 +101,7 @@ export class DashboardController {
    * Returns operational dashboard data (professionals, orders, top clients, stock, unpaid)
    */
   @Get('operational')
+  @CacheTTL(60000) // 1 min
   async getOperationalData() {
     return this.dashboardService.getOperationalData();
   }
@@ -107,6 +111,7 @@ export class DashboardController {
    * Returns strategic dashboard data (subscriptions, revenue, history, occupancy)
    */
   @Get('strategic')
+  @CacheTTL(120000) // 2 min — dados históricos mudam pouco
   async getStrategicData() {
     return this.dashboardService.getStrategicData();
   }

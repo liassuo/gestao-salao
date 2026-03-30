@@ -25,69 +25,63 @@ export class DashboardService {
     const now = new Date();
     const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01T00:00:00`;
 
-    // Today's appointments
-    const { count: todayAppointments } = await this.supabase
-      .from('appointments')
-      .select('id', { count: 'exact', head: true })
-      .gte('scheduledAt', todayStart)
-      .lte('scheduledAt', todayEnd)
-      .in('status', ['SCHEDULED', 'ATTENDED']);
-
-    // Today's revenue
-    const { data: todayPayments } = await this.supabase
-      .from('payments')
-      .select('amount')
-      .gte('paidAt', todayStart)
-      .lte('paidAt', todayEnd);
+    // Paraleliza todas as 9 queries independentes (era sequencial)
+    const [
+      { count: todayAppointments },
+      { data: todayPayments },
+      { data: monthPayments },
+      { count: totalClients },
+      { count: clientsWithDebts },
+      { data: debts },
+      { count: pendingAppointments },
+      { count: totalProfessionals },
+      { count: activeClients },
+    ] = await Promise.all([
+      this.supabase
+        .from('appointments')
+        .select('id', { count: 'exact', head: true })
+        .gte('scheduledAt', todayStart)
+        .lte('scheduledAt', todayEnd)
+        .in('status', ['SCHEDULED', 'ATTENDED']),
+      this.supabase
+        .from('payments')
+        .select('amount')
+        .gte('paidAt', todayStart)
+        .lte('paidAt', todayEnd),
+      this.supabase
+        .from('payments')
+        .select('amount')
+        .gte('paidAt', monthStart),
+      this.supabase
+        .from('clients')
+        .select('id', { count: 'exact', head: true }),
+      this.supabase
+        .from('clients')
+        .select('id', { count: 'exact', head: true })
+        .eq('hasDebts', true),
+      this.supabase
+        .from('debts')
+        .select('remainingBalance')
+        .eq('isSettled', false),
+      this.supabase
+        .from('appointments')
+        .select('id', { count: 'exact', head: true })
+        .gte('scheduledAt', todayStart)
+        .lte('scheduledAt', todayEnd)
+        .eq('status', 'SCHEDULED'),
+      this.supabase
+        .from('professionals')
+        .select('id', { count: 'exact', head: true })
+        .eq('isActive', true),
+      this.supabase
+        .from('clients')
+        .select('id', { count: 'exact', head: true })
+        .eq('isActive', true),
+    ]);
 
     const todayRevenue = (todayPayments || []).reduce((sum, p) => sum + p.amount, 0);
-
-    // Month revenue
-    const { data: monthPayments } = await this.supabase
-      .from('payments')
-      .select('amount')
-      .gte('paidAt', monthStart);
-
     const monthRevenue = (monthPayments || []).reduce((sum, p) => sum + p.amount, 0);
-
-    // Total clients
-    const { count: totalClients } = await this.supabase
-      .from('clients')
-      .select('id', { count: 'exact', head: true });
-
-    // Clients with debts
-    const { count: clientsWithDebts } = await this.supabase
-      .from('clients')
-      .select('id', { count: 'exact', head: true })
-      .eq('hasDebts', true);
-
-    // Total debts
-    const { data: debts } = await this.supabase
-      .from('debts')
-      .select('remainingBalance')
-      .eq('isSettled', false);
-
     const totalDebts = (debts || []).reduce((sum, d) => sum + d.remainingBalance, 0);
-
-    // Pending appointments
-    const { count: pendingAppointments } = await this.supabase
-      .from('appointments')
-      .select('id', { count: 'exact', head: true })
-      .gte('scheduledAt', todayStart)
-      .lte('scheduledAt', todayEnd)
-      .eq('status', 'SCHEDULED');
-
-    // Active professionals
-    const { count: totalProfessionals } = await this.supabase
-      .from('professionals')
-      .select('id', { count: 'exact', head: true })
-      .eq('isActive', true);
-
-    // Active clients
-    const { count: activeClients } = await this.supabase
-      .from('clients')
-      .select('id', { count: 'exact', head: true })
-      .eq('isActive', true);
 
     return {
       todayAppointments: todayAppointments || 0,
@@ -181,26 +175,46 @@ export class DashboardService {
   }
 
   async getOperationalData() {
-    const { count: activeProfessionals } = await this.supabase
-      .from('professionals')
-      .select('id', { count: 'exact', head: true })
-      .eq('isActive', true);
+    const now = new Date();
+    const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
 
-    const { count: openOrders } = await this.supabase
-      .from('orders')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'PENDING');
+    // Paraleliza todas as 6 queries independentes
+    const [
+      { count: activeProfessionals },
+      { count: openOrders },
+      { count: totalClients },
+      { data: allAttended },
+      { data: allClients },
+      { data: debts },
+    ] = await Promise.all([
+      this.supabase
+        .from('professionals')
+        .select('id', { count: 'exact', head: true })
+        .eq('isActive', true),
+      this.supabase
+        .from('orders')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'PENDING'),
+      this.supabase
+        .from('clients')
+        .select('id', { count: 'exact', head: true }),
+      this.supabase
+        .from('appointments')
+        .select('clientId, totalPrice, client:clients(id, name, phone)')
+        .eq('status', 'ATTENDED'),
+      this.supabase
+        .from('clients')
+        .select('id, name, phone, birthDate')
+        .eq('isActive', true)
+        .not('birthDate', 'is', null),
+      this.supabase
+        .from('debts')
+        .select('clientId, remainingBalance, client:clients(id, name, phone)')
+        .eq('isSettled', false)
+        .gt('remainingBalance', 0),
+    ]);
 
-    const { count: totalClients } = await this.supabase
-      .from('clients')
-      .select('id', { count: 'exact', head: true });
-
-    // Top 5 clientes por gasto (agendamentos atendidos)
-    const { data: allAttended } = await this.supabase
-      .from('appointments')
-      .select('clientId, totalPrice, client:clients(id, name, phone)')
-      .eq('status', 'ATTENDED');
-
+    // Top 5 clientes por gasto
     const clientSpending: Record<string, { name: string; phone: string; total: number; count: number }> = {};
     for (const a of allAttended as any[] || []) {
       if (!clientSpending[a.clientId]) {
@@ -220,15 +234,6 @@ export class DashboardService {
       .slice(0, 5);
 
     // Aniversariantes do mês
-    const now = new Date();
-    const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
-
-    const { data: allClients } = await this.supabase
-      .from('clients')
-      .select('id, name, phone, birthDate')
-      .eq('isActive', true)
-      .not('birthDate', 'is', null);
-
     const birthdayClients = (allClients || [])
       .filter((c: any) => {
         if (!c.birthDate) return false;
@@ -242,13 +247,7 @@ export class DashboardService {
       .sort((a, b) => a.day - b.day)
       .slice(0, 10);
 
-    // Clientes com dividas em aberto (agrupados por cliente)
-    const { data: debts } = await this.supabase
-      .from('debts')
-      .select('clientId, remainingBalance, client:clients(id, name, phone)')
-      .eq('isSettled', false)
-      .gt('remainingBalance', 0);
-
+    // Clientes com dívidas em aberto
     const clientDebtMap = new Map<string, { id: string; name: string; phone: string; unpaidAmount: number; unpaidCount: number }>();
     for (const d of debts || []) {
       const clientId = d.clientId;
@@ -379,73 +378,81 @@ export class DashboardService {
   async getStrategicData() {
     const now = new Date();
     const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01T00:00:00`;
+
+    // Busca o range completo de 12 meses em UMA query ao invés de 12 sequenciais
+    const oldestMonth = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+    const yearHistoryStart = `${oldestMonth.getFullYear()}-${String(oldestMonth.getMonth() + 1).padStart(2, '0')}-01T00:00:00`;
+
+    // Paraleliza todas as queries independentes (era sequencial: ~16 queries → 4 paralelas)
+    const [
+      { count: activePlans },
+      { data: allPayments12m },
+      { data: professionals },
+      { data: monthAppointments },
+    ] = await Promise.all([
+      this.supabase
+        .from('client_subscriptions')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'ACTIVE'),
+      this.supabase
+        .from('payments')
+        .select('amount, paidAt')
+        .gte('paidAt', yearHistoryStart),
+      this.supabase
+        .from('professionals')
+        .select('id, name')
+        .eq('isActive', true),
+      this.supabase
+        .from('appointments')
+        .select('professionalId, status')
+        .gte('scheduledAt', monthStart)
+        .in('status', ['SCHEDULED', 'ATTENDED', 'NO_SHOW']),
+    ]);
+
+    // Calcula receita mensal e anual a partir dos dados já em memória
     const yearStart = `${now.getFullYear()}-01-01T00:00:00`;
+    let monthlyRevenue = 0;
+    let yearlyRevenue = 0;
+    const monthlyBuckets: Record<string, number> = {};
 
-    const { count: activePlans } = await this.supabase
-      .from('client_subscriptions')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'ACTIVE');
+    for (const p of allPayments12m || []) {
+      const paidMonth = String(p.paidAt).substring(0, 7); // "YYYY-MM"
+      monthlyBuckets[paidMonth] = (monthlyBuckets[paidMonth] || 0) + p.amount;
 
-    const { data: monthPayments } = await this.supabase
-      .from('payments')
-      .select('amount')
-      .gte('paidAt', monthStart);
+      if (p.paidAt >= yearStart) yearlyRevenue += p.amount;
+      if (p.paidAt >= monthStart) monthlyRevenue += p.amount;
+    }
 
-    const monthlyRevenue = (monthPayments || []).reduce((sum, p) => sum + p.amount, 0);
-
-    const { data: yearPayments } = await this.supabase
-      .from('payments')
-      .select('amount')
-      .gte('paidAt', yearStart);
-
-    const yearlyRevenue = (yearPayments || []).reduce((sum, p) => sum + p.amount, 0);
-
-    // Histórico de faturamento mensal (últimos 12 meses)
+    // Histórico mensal — monta a partir do bucket (sem queries adicionais)
     const monthlyRevenueHistory: { month: string; amount: number }[] = [];
     for (let i = 11; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const mStart = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01T00:00:00`;
-      const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-      const mEnd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}T23:59:59`;
-
-      const { data: mPayments } = await this.supabase
-        .from('payments')
-        .select('amount')
-        .gte('paidAt', mStart)
-        .lte('paidAt', mEnd);
-
+      const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       monthlyRevenueHistory.push({
-        month: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
-        amount: (mPayments || []).reduce((sum, p) => sum + p.amount, 0),
+        month: monthKey,
+        amount: monthlyBuckets[monthKey] || 0,
       });
     }
 
-    // Ocupação dos profissionais (mês atual)
-    const { data: professionals } = await this.supabase
-      .from('professionals')
-      .select('id, name')
-      .eq('isActive', true);
+    // Ocupação — agrega em memória (sem N+1 queries por profissional)
+    const profMap = new Map<string, { total: number; attended: number }>();
+    for (const a of monthAppointments || []) {
+      const entry = profMap.get(a.professionalId) || { total: 0, attended: 0 };
+      entry.total++;
+      if (a.status === 'ATTENDED') entry.attended++;
+      profMap.set(a.professionalId, entry);
+    }
 
-    const professionalOccupancy: { id: string; name: string; totalAppointments: number; attendedAppointments: number; occupancyRate: number }[] = [];
-    for (const prof of professionals || []) {
-      const { data: profAppts } = await this.supabase
-        .from('appointments')
-        .select('status')
-        .eq('professionalId', prof.id)
-        .gte('scheduledAt', monthStart)
-        .in('status', ['SCHEDULED', 'ATTENDED', 'NO_SHOW']);
-
-      const total = (profAppts || []).length;
-      const attended = (profAppts || []).filter((a) => a.status === 'ATTENDED').length;
-
-      professionalOccupancy.push({
+    const professionalOccupancy = (professionals || []).map((prof) => {
+      const stats = profMap.get(prof.id) || { total: 0, attended: 0 };
+      return {
         id: prof.id,
         name: prof.name,
-        totalAppointments: total,
-        attendedAppointments: attended,
-        occupancyRate: total > 0 ? Math.round((attended / total) * 100) : 0,
-      });
-    }
+        totalAppointments: stats.total,
+        attendedAppointments: stats.attended,
+        occupancyRate: stats.total > 0 ? Math.round((stats.attended / stats.total) * 100) : 0,
+      };
+    });
 
     return {
       plans: {
