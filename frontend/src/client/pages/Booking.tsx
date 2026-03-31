@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CLIENT_PATHS } from '../utils/paths';
 import { useClientServices, useClientProfessionals, useAvailableSlots, useClientAppointments } from '../hooks';
@@ -163,43 +163,72 @@ export function ClientBooking() {
     return () => clearInterval(interval);
   }, [debtPollingActive]);
 
+  const pixExpiresAtRef = useRef<number | null>(null);
+
+  // Quando novo pixModal aparece, fixar a data de expiração
   useEffect(() => {
-    if (!pixModal) {
-      setPixCountdown(600);
-      return;
+    if (pixModal && !pixExpiresAtRef.current) {
+      pixExpiresAtRef.current = pixModal.expirationDate
+        ? new Date(pixModal.expirationDate).getTime()
+        : Date.now() + 600 * 1000;
     }
+    if (!pixModal) return;
+
     const entityId = pixEntityId;
     const entityType = pixEntityType;
     const shouldLeave = leaveAfterPixClose;
-    setPixCountdown(600);
 
-    const timer = setInterval(() => {
-      setPixCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          // Cancelar o agendamento ou assinatura ao expirar
-          (async () => {
-            if (entityType === 'appointment' && entityId) {
-              await clientApi.patch(`/appointments/${entityId}/cancel`).catch(() => {});
-            } else if (entityType === 'subscription') {
-              await clientApi.post('/subscriptions/me/cancel').catch(() => {});
-            }
-            setPixModal(null);
-            setPixEntityId(null);
-            setPixEntityType(null);
-            if (shouldLeave) {
-              navigate(CLIENT_PATHS.home);
-            }
-          })();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    const updateCountdown = () => {
+      const remaining = Math.max(0, Math.floor((pixExpiresAtRef.current! - Date.now()) / 1000));
+      setPixCountdown(remaining);
+      if (remaining <= 0) {
+        clearInterval(timer);
+        pixExpiresAtRef.current = null;
+        (async () => {
+          if (entityType === 'appointment' && entityId) {
+            await clientApi.patch(`/appointments/${entityId}/cancel`).catch(() => {});
+          } else if (entityType === 'subscription') {
+            await clientApi.post('/subscriptions/me/cancel').catch(() => {});
+          }
+          setPixModal(null);
+          setPixEntityId(null);
+          setPixEntityType(null);
+          if (shouldLeave) {
+            navigate(CLIENT_PATHS.home);
+          }
+        })();
+      }
+    };
+
+    updateCountdown();
+    const timer = setInterval(updateCountdown, 1000);
 
     return () => clearInterval(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pixModal]);
+
+  // Polling para detectar pagamento PIX confirmado
+  useEffect(() => {
+    if (!pixModal || !pixEntityId || pixEntityType !== 'appointment') return;
+
+    const poll = setInterval(async () => {
+      try {
+        const res = await clientApi.get(`/appointments/${pixEntityId}`);
+        if (res.data.status !== 'PENDING_PAYMENT') {
+          clearInterval(poll);
+          setPixModal(null);
+          pixExpiresAtRef.current = null;
+          alert('Pagamento confirmado! Seu agendamento está confirmado.');
+          navigate(CLIENT_PATHS.home);
+        }
+      } catch {
+        // ignore
+      }
+    }, 5000);
+
+    return () => clearInterval(poll);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pixModal, pixEntityId, pixEntityType]);
 
   useEffect(() => {
     fetchServices();
@@ -240,6 +269,7 @@ export function ClientBooking() {
         setLeaveAfterPixClose(false);
         setPixEntityId(res.data.subscription.id);
         setPixEntityType('subscription');
+        pixExpiresAtRef.current = null;
         setPixModal(res.data.pixData);
       } else if (res.data.invoiceUrl) {
         window.location.href = res.data.invoiceUrl;
@@ -356,6 +386,7 @@ export function ClientBooking() {
         setLeaveAfterPixClose(true);
         setPixEntityId(result.id);
         setPixEntityType('appointment');
+        pixExpiresAtRef.current = null;
         setPixModal(result.payment.pixData);
       } else if (result.payment?.invoiceUrl) {
         window.location.href = result.payment.invoiceUrl;
@@ -1086,8 +1117,6 @@ export function ClientBooking() {
                 <button
                   onClick={() => {
                     setPixModal(null);
-                    setPixEntityId(null);
-                    setPixEntityType(null);
                     if (leaveAfterPixClose) {
                       setLeaveAfterPixClose(false);
                       navigate(CLIENT_PATHS.home);

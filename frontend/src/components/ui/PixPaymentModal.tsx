@@ -28,27 +28,42 @@ export function PixPaymentModal({
   const toast = useToast();
   const [copied, setCopied] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(EXPIRY_SECONDS);
+  const expiresAtRef = useRef<number | null>(null);
 
   const onExpireRef = useRef(onExpire);
   const onCloseRef = useRef(onClose);
   useEffect(() => { onExpireRef.current = onExpire; }, [onExpire]);
   useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
+  // Quando pixData muda (nova cobrança), inicializar a data de expiração
   useEffect(() => {
-    if (!isOpen || !pixData) return;
-    setSecondsLeft(EXPIRY_SECONDS);
+    if (pixData) {
+      if (pixData.expirationDate) {
+        expiresAtRef.current = new Date(pixData.expirationDate).getTime();
+      } else if (!expiresAtRef.current) {
+        expiresAtRef.current = Date.now() + EXPIRY_SECONDS * 1000;
+      }
+    } else {
+      expiresAtRef.current = null;
+    }
+  }, [pixData]);
 
-    const timer = setInterval(() => {
-      setSecondsLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          onExpireRef.current?.();
-          onCloseRef.current();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+  // Timer baseado na data de expiração real (não reseta ao fechar/reabrir)
+  useEffect(() => {
+    if (!isOpen || !pixData || !expiresAtRef.current) return;
+
+    const updateCountdown = () => {
+      const remaining = Math.max(0, Math.floor((expiresAtRef.current! - Date.now()) / 1000));
+      setSecondsLeft(remaining);
+      if (remaining <= 0) {
+        clearInterval(timer);
+        onExpireRef.current?.();
+        onCloseRef.current();
+      }
+    };
+
+    updateCountdown();
+    const timer = setInterval(updateCountdown, 1000);
 
     return () => clearInterval(timer);
   }, [isOpen, pixData]);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { formatDate, formatTime, formatEndTime, formatPrice, hoursUntil } from '../utils/format';
 import { clientApi } from '../services/api';
 import { appointmentsApi } from '../services/appointments';
@@ -37,6 +37,7 @@ interface SubscriptionInfo {
 interface AppointmentCardProps {
   appointment: Appointment;
   onCancel?: (appointment: Appointment) => void;
+  onStatusChange?: () => void;
   isCancelling?: boolean;
   variant?: 'default' | 'highlight';
   subscription?: SubscriptionInfo | null;
@@ -45,6 +46,7 @@ interface AppointmentCardProps {
 export function AppointmentCard({
   appointment,
   onCancel,
+  onStatusChange,
   isCancelling = false,
   variant = 'default',
   subscription = null,
@@ -63,11 +65,34 @@ export function AppointmentCard({
   const [showPixModal, setShowPixModal] = useState(false);
   const [loadingPix, setLoadingPix] = useState(false);
 
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+
   useEffect(() => {
     if (showContactButton) {
       getWhatsapp().then(setWhatsapp);
     }
   }, [showContactButton]);
+
+  // Polling para detectar pagamento PIX confirmado
+  useEffect(() => {
+    if (!showPixModal || !isPendingPayment) return;
+
+    const poll = setInterval(async () => {
+      try {
+        const res = await clientApi.get(`/appointments/${appointment.id}`);
+        if (res.data.status !== 'PENDING_PAYMENT') {
+          clearInterval(poll);
+          setShowPixModal(false);
+          setPaymentConfirmed(true);
+          onStatusChange?.();
+        }
+      } catch {
+        // ignore
+      }
+    }, 5000);
+
+    return () => clearInterval(poll);
+  }, [showPixModal, isPendingPayment, appointment.id, onStatusChange]);
 
   const handleViewPixQrCode = async () => {
     if (pendingPixData) {
@@ -191,7 +216,16 @@ export function AppointmentCard({
         )}
       </div>
 
-      {(canCancel && onCancel) || isPendingPayment ? (
+      {paymentConfirmed && (
+        <div className="mt-3 flex items-center gap-2 py-2.5 px-3 rounded-lg bg-green-500/10 text-green-600 text-sm font-medium">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+          Pagamento confirmado!
+        </div>
+      )}
+
+      {(canCancel && onCancel) || (isPendingPayment && !paymentConfirmed) ? (
         <div className="flex gap-2 mt-4">
           {isPendingPayment && (
             <button
@@ -237,10 +271,7 @@ export function AppointmentCard({
       {showPixModal && pendingPixData && (
         <PixPaymentModal
           isOpen={showPixModal}
-          onClose={() => {
-            setShowPixModal(false);
-            setPendingPixData(null);
-          }}
+          onClose={() => setShowPixModal(false)}
           pixData={pendingPixData}
           amount={appointment.totalPrice}
           description="Pagamento do agendamento"

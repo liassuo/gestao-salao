@@ -156,6 +156,7 @@ export function ClientHome() {
                   appointment={nextAppointment}
                   variant="highlight"
                   onCancel={handleCancel}
+                  onStatusChange={fetchAppointments}
                   isCancelling={cancellingId === nextAppointment.id}
                   subscription={activeSubscription}
                 />
@@ -179,6 +180,7 @@ export function ClientHome() {
                       key={appointment.id}
                       appointment={appointment}
                       onCancel={handleCancel}
+                      onStatusChange={fetchAppointments}
                       isCancelling={cancellingId === appointment.id}
                       subscription={activeSubscription}
                     />
