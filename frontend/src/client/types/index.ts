@@ -1,5 +1,5 @@
 // Status do backend: SCHEDULED, ATTENDED, CANCELED, NO_SHOW
-export type AppointmentStatus = 'SCHEDULED' | 'ATTENDED' | 'CANCELED' | 'NO_SHOW';
+export type AppointmentStatus = 'SCHEDULED' | 'ATTENDED' | 'CANCELED' | 'NO_SHOW' | 'PENDING_PAYMENT';
 
 export interface Service {
   id: string;
@@ -32,6 +32,7 @@ export interface Appointment {
   totalDuration: number; // Em minutos
   isPaid: boolean;
   notes?: string;
+  usedSubscriptionCut?: boolean;
   rating?: number;
   ratingComment?: string;
   services: AppointmentService[];
