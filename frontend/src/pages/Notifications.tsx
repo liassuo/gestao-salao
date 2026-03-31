@@ -11,7 +11,6 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useNotifications } from '@/contexts';
-import { inAppNotificationService } from '@/services/inAppNotifications';
 import type { Notification } from '@/types/notification';
 import { NOTIFICATION_TYPE_LABELS } from '@/types/notification';
 
@@ -34,22 +33,6 @@ export function Notifications() {
 
   const [filter, setFilter] = useState<FilterTab>('all');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-
-  const handleFetchFiltered = async (page: number, filterValue: FilterTab) => {
-    // Re-fetch via API com filtro
-    try {
-      const response = await inAppNotificationService.getNotifications({
-        page,
-        limit: 20,
-        filter: filterValue,
-      });
-      // O context será atualizado pelo fetch geral, mas usamos os dados filtrados localmente
-      // Na prática, re-carregamos tudo e filtramos no frontend
-      await fetchNotifications(page);
-    } catch {
-      // silently fail
-    }
-  };
 
   const handleFilterChange = (newFilter: FilterTab) => {
     setFilter(newFilter);
