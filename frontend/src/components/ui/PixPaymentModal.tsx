@@ -38,9 +38,9 @@ export function PixPaymentModal({
   // Quando pixData muda (nova cobrança), inicializar a data de expiração
   useEffect(() => {
     if (pixData) {
-      if (pixData.expirationDate) {
-        expiresAtRef.current = new Date(pixData.expirationDate).getTime();
-      } else if (!expiresAtRef.current) {
+      if (!expiresAtRef.current) {
+        // Limitar a 10 minutos independente do expirationDate do Asaas
+        // (expirationDate do Asaas é a data de vencimento da cobrança, não do QR)
         expiresAtRef.current = Date.now() + EXPIRY_SECONDS * 1000;
       }
     } else {

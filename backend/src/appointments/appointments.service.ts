@@ -288,6 +288,13 @@ export class AppointmentsService {
 
           if (billingType === AsaasBillingType.PIX) {
             pixData = await this.asaasService.getPixQrCode(asaasCharge.id);
+            // Salvar QR code no banco para reutilizar sem chamar Asaas novamente
+            if (pixData) {
+              await this.supabase.from('payments').update({
+                pixQrCodeBase64: pixData.encodedImage,
+                pixCopyPaste: pixData.payload,
+              }).eq('asaasPaymentId', asaasCharge.id);
+            }
           }
         }
       } catch (error) {
@@ -603,10 +610,10 @@ export class AppointmentsService {
       throw new BadRequestException('Integração PIX não configurada');
     }
 
-    // Buscar pagamento PIX pendente (pode não existir se a criação original falhou)
+    // Buscar pagamento PIX pendente com QR code salvo
     const { data: payments } = await this.supabase
       .from('payments')
-      .select('id, asaasPaymentId')
+      .select('id, asaasPaymentId, pixQrCodeBase64, pixCopyPaste')
       .eq('appointmentId', appointmentId)
       .is('paidAt', null)
       .eq('method', 'PIX');
@@ -619,27 +626,49 @@ export class AppointmentsService {
       return await this.recreatePixCharge(appointment, null);
     }
 
-    // Verificar status da cobrança no Asaas
+    // Se já tem QR code salvo no banco, retornar direto (sem chamar Asaas)
+    if (payment.pixQrCodeBase64 && payment.pixCopyPaste) {
+      return {
+        pixData: {
+          encodedImage: payment.pixQrCodeBase64,
+          payload: payment.pixCopyPaste,
+          expirationDate: null,
+        },
+        totalPrice: appointment.totalPrice,
+      };
+    }
+
+    // Não tem QR salvo — buscar no Asaas
     try {
       const charge = await this.asaasService.getCharge(payment.asaasPaymentId);
 
-      // Só recriar se a cobrança está definitivamente morta
       if (['OVERDUE', 'REFUNDED', 'RECEIVED_IN_CASH'].includes(charge.status)) {
         this.logger.log(`Cobrança ${payment.asaasPaymentId} com status ${charge.status}, recriando`);
         return await this.recreatePixCharge(appointment, payment);
       }
 
-      // Cobrança ativa — buscar QR Code existente
       const pixData = await this.asaasService.getPixQrCode(payment.asaasPaymentId);
+
+      // Salvar para próxima vez
+      if (pixData) {
+        await this.supabase.from('payments').update({
+          pixQrCodeBase64: pixData.encodedImage,
+          pixCopyPaste: pixData.payload,
+        }).eq('id', payment.id);
+      }
+
       return { pixData, totalPrice: appointment.totalPrice };
     } catch (error) {
-      // Diferenciar: erro ao buscar a cobrança vs erro ao buscar QR Code
-      // Tentar buscar só o QR Code diretamente (a cobrança pode existir mas getCharge falhou)
       try {
         const pixData = await this.asaasService.getPixQrCode(payment.asaasPaymentId);
+        if (pixData) {
+          await this.supabase.from('payments').update({
+            pixQrCodeBase64: pixData.encodedImage,
+            pixCopyPaste: pixData.payload,
+          }).eq('id', payment.id);
+        }
         return { pixData, totalPrice: appointment.totalPrice };
       } catch {
-        // Só recriar como último recurso
         this.logger.warn(`Cobrança ${payment.asaasPaymentId} inacessível, recriando: ${error}`);
         return await this.recreatePixCharge(appointment, payment);
       }
@@ -718,8 +747,14 @@ export class AppointmentsService {
       });
     }
 
-    // Buscar QR Code da nova cobrança
+    // Buscar QR Code da nova cobrança e salvar no banco
     const pixData = await this.asaasService.getPixQrCode(newCharge.id);
+    if (pixData) {
+      await this.supabase.from('payments').update({
+        pixQrCodeBase64: pixData.encodedImage,
+        pixCopyPaste: pixData.payload,
+      }).eq('asaasPaymentId', newCharge.id);
+    }
     return { pixData, totalPrice: appointment.totalPrice };
   }
 
