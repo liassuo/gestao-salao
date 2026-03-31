@@ -9,10 +9,12 @@ interface PixPaymentModalProps {
   pixData: {
     encodedImage: string;
     payload: string;
-    expirationDate: string;
+    expirationDate?: string | null;
   } | null;
   amount: number;
   description?: string;
+  /** Timestamp (ms) de quando o QR foi gerado. Usado para calcular tempo restante. */
+  createdAt?: number | null;
 }
 
 const EXPIRY_SECONDS = 600; // 10 minutos
@@ -24,36 +26,25 @@ export function PixPaymentModal({
   pixData,
   amount,
   description,
+  createdAt,
 }: PixPaymentModalProps) {
   const toast = useToast();
   const [copied, setCopied] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(EXPIRY_SECONDS);
-  const expiresAtRef = useRef<number | null>(null);
 
   const onExpireRef = useRef(onExpire);
   const onCloseRef = useRef(onClose);
   useEffect(() => { onExpireRef.current = onExpire; }, [onExpire]);
   useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
-  // Quando pixData muda (nova cobrança), inicializar a data de expiração
+  // Timer: calcula tempo restante a partir de createdAt
   useEffect(() => {
-    if (pixData) {
-      if (!expiresAtRef.current) {
-        // Limitar a 10 minutos independente do expirationDate do Asaas
-        // (expirationDate do Asaas é a data de vencimento da cobrança, não do QR)
-        expiresAtRef.current = Date.now() + EXPIRY_SECONDS * 1000;
-      }
-    } else {
-      expiresAtRef.current = null;
-    }
-  }, [pixData]);
+    if (!isOpen || !pixData) return;
 
-  // Timer baseado na data de expiração real (não reseta ao fechar/reabrir)
-  useEffect(() => {
-    if (!isOpen || !pixData || !expiresAtRef.current) return;
+    const expiresAt = (createdAt || Date.now()) + EXPIRY_SECONDS * 1000;
 
     const updateCountdown = () => {
-      const remaining = Math.max(0, Math.floor((expiresAtRef.current! - Date.now()) / 1000));
+      const remaining = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
       setSecondsLeft(remaining);
       if (remaining <= 0) {
         clearInterval(timer);
@@ -66,7 +57,7 @@ export function PixPaymentModal({
     const timer = setInterval(updateCountdown, 1000);
 
     return () => clearInterval(timer);
-  }, [isOpen, pixData]);
+  }, [isOpen, pixData, createdAt]);
 
   if (!isOpen || !pixData) return null;
 

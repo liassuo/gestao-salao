@@ -165,12 +165,10 @@ export function ClientBooking() {
 
   const pixExpiresAtRef = useRef<number | null>(null);
 
-  // Quando novo pixModal aparece, fixar a data de expiração
+  // Quando novo pixModal aparece, fixar a data de expiração (sempre 10 min)
   useEffect(() => {
     if (pixModal && !pixExpiresAtRef.current) {
-      pixExpiresAtRef.current = pixModal.expirationDate
-        ? new Date(pixModal.expirationDate).getTime()
-        : Date.now() + 600 * 1000;
+      pixExpiresAtRef.current = Date.now() + 600 * 1000;
     }
     if (!pixModal) return;
 

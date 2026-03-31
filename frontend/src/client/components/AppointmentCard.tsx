@@ -62,6 +62,7 @@ export function AppointmentCard({
   const isHighlight = variant === 'highlight';
   const [whatsapp, setWhatsapp] = useState('');
   const [pendingPixData, setPendingPixData] = useState<{ encodedImage: string; payload: string; expirationDate: string } | null>(null);
+  const [pixFetchedAt, setPixFetchedAt] = useState<number | null>(null);
   const [showPixModal, setShowPixModal] = useState(false);
   const [loadingPix, setLoadingPix] = useState(false);
 
@@ -106,6 +107,7 @@ export function AppointmentCard({
       );
       if (res.data.pixData) {
         setPendingPixData(res.data.pixData);
+        if (!pixFetchedAt) setPixFetchedAt(Date.now());
         setShowPixModal(true);
       } else {
         alert('QR Code não disponível. Tente novamente em alguns segundos.');
@@ -272,10 +274,11 @@ export function AppointmentCard({
         <PixPaymentModal
           isOpen={showPixModal}
           onClose={() => setShowPixModal(false)}
-          onExpire={() => setPendingPixData(null)}
+          onExpire={() => { setPendingPixData(null); setPixFetchedAt(null); }}
           pixData={pendingPixData}
           amount={appointment.totalPrice}
           description="Pagamento do agendamento"
+          createdAt={pixFetchedAt}
         />
       )}
 
