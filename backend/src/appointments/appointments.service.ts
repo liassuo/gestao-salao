@@ -599,9 +599,13 @@ export class AppointmentsService {
       throw new BadRequestException('Este agendamento não possui pagamento PIX pendente');
     }
 
+    if (!this.asaasService.configured) {
+      throw new BadRequestException('Integração PIX não configurada');
+    }
+
     const { data: payment } = await this.supabase
       .from('payments')
-      .select('asaasPaymentId')
+      .select('id, asaasPaymentId')
       .eq('appointmentId', appointmentId)
       .is('paidAt', null)
       .eq('method', 'PIX')
@@ -611,11 +615,63 @@ export class AppointmentsService {
       throw new NotFoundException('Cobrança PIX não encontrada para este agendamento');
     }
 
-    if (!this.asaasService.configured) {
-      throw new BadRequestException('Integração PIX não configurada');
+    // Verificar se a cobrança no Asaas ainda está ativa
+    try {
+      const charge = await this.asaasService.getCharge(payment.asaasPaymentId);
+
+      if (charge.status === 'OVERDUE' || charge.status === 'REFUNDED' || charge.status === 'RECEIVED_IN_CASH') {
+        // Cobrança expirou — recriar
+        return await this.recreatePixCharge(appointment, payment);
+      }
+
+      const pixData = await this.asaasService.getPixQrCode(payment.asaasPaymentId);
+      return { pixData, totalPrice: appointment.totalPrice };
+    } catch (error) {
+      // Se falhar ao buscar QR Code, tentar recriar a cobrança
+      this.logger.warn(`QR Code falhou para ${payment.asaasPaymentId}, recriando cobrança: ${error}`);
+      return await this.recreatePixCharge(appointment, payment);
+    }
+  }
+
+  private async recreatePixCharge(
+    appointment: { id: string; clientId: string; totalPrice: number },
+    oldPayment: { id: string; asaasPaymentId: string },
+  ) {
+    // Buscar cliente Asaas
+    const { data: clientData } = await this.supabase
+      .from('clients')
+      .select('asaasCustomerId')
+      .eq('id', appointment.clientId)
+      .single();
+
+    if (!clientData?.asaasCustomerId) {
+      throw new BadRequestException('Cliente não possui cadastro no Asaas');
     }
 
-    const pixData = await this.asaasService.getPixQrCode(payment.asaasPaymentId);
+    // Cancelar cobrança antiga (ignora erro se já cancelada)
+    try { await this.asaasService.cancelCharge(oldPayment.asaasPaymentId); } catch {}
+
+    // Criar nova cobrança
+    const today = new Date().toISOString().substring(0, 10);
+    const newCharge = await this.asaasService.createCharge({
+      customer: clientData.asaasCustomerId,
+      billingType: 'PIX' as any,
+      value: this.asaasService.centavosToReais(appointment.totalPrice),
+      dueDate: today,
+      description: `Agendamento: ${appointment.id}`,
+      externalReference: appointment.id,
+    });
+
+    // Atualizar pagamento local
+    await this.supabase.from('payments').update({
+      asaasPaymentId: newCharge.id,
+      asaasStatus: newCharge.status,
+      invoiceUrl: newCharge.invoiceUrl || null,
+      updatedAt: new Date().toISOString(),
+    }).eq('id', oldPayment.id);
+
+    // Buscar QR Code da nova cobrança
+    const pixData = await this.asaasService.getPixQrCode(newCharge.id);
     return { pixData, totalPrice: appointment.totalPrice };
   }
 

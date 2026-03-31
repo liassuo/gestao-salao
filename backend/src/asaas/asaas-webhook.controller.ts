@@ -253,22 +253,66 @@ export class AsaasWebhookController {
       .update({ asaasStatus: AsaasChargeStatus.OVERDUE })
       .eq('asaasPaymentId', asaasPaymentId);
 
-    // Suspender assinatura vinculada
+    // Buscar pagamento local com dados do cliente
     const { data: localPayment } = await this.supabase
       .from('payments')
-      .select('subscriptionId')
+      .select('id, clientId, amount, subscriptionId')
       .eq('asaasPaymentId', asaasPaymentId)
       .single();
 
-    if (localPayment?.subscriptionId) {
-      const now = new Date().toISOString();
-      await this.supabase
-        .from('client_subscriptions')
-        .update({ status: 'SUSPENDED', updatedAt: now })
-        .eq('id', localPayment.subscriptionId)
-        .in('status', ['ACTIVE', 'PENDING_PAYMENT']);
+    if (!localPayment) return;
 
-      this.logger.log(`Assinatura ${localPayment.subscriptionId} suspensa por falta de pagamento`);
+    const now = new Date().toISOString();
+
+    // Suspender assinatura vinculada
+    if (localPayment.subscriptionId) {
+      // Buscar nome do plano para descrição da dívida
+      const { data: sub } = await this.supabase
+        .from('client_subscriptions')
+        .select('id, status, plan:subscription_plans(name)')
+        .eq('id', localPayment.subscriptionId)
+        .single();
+
+      if (sub && ['ACTIVE', 'PENDING_PAYMENT'].includes(sub.status)) {
+        await this.supabase
+          .from('client_subscriptions')
+          .update({ status: 'SUSPENDED', updatedAt: now })
+          .eq('id', localPayment.subscriptionId);
+
+        this.logger.log(`Assinatura ${localPayment.subscriptionId} suspensa por falta de pagamento`);
+      }
+
+      // Criar dívida para o cliente (inadimplente)
+      const planName = (sub?.plan as any)?.name || 'Assinatura';
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + 7);
+
+      const { error: debtError } = await this.supabase
+        .from('debts')
+        .insert({
+          id: require('crypto').randomUUID(),
+          clientId: localPayment.clientId,
+          amount: localPayment.amount,
+          amountPaid: 0,
+          remainingBalance: localPayment.amount,
+          description: `Cobrança não paga — ${planName}`,
+          dueDate: dueDate.toISOString(),
+          isSettled: false,
+          createdAt: now,
+          updatedAt: now,
+        });
+
+      if (!debtError) {
+        // Marcar cliente como inadimplente
+        await this.supabase
+          .from('clients')
+          .update({ hasDebts: true })
+          .eq('id', localPayment.clientId);
+
+        this.logger.log(`Dívida criada para cliente ${localPayment.clientId} — valor: ${localPayment.amount}`);
+      } else {
+        this.logger.error(`Erro ao criar dívida: ${JSON.stringify(debtError)}`);
+      }
     }
   }
 

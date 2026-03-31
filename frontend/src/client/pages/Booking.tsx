@@ -1148,26 +1148,21 @@ export function ClientBooking() {
       {subscribePlanModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-4">
           <div className="bg-[var(--bg-primary)] rounded-2xl w-full max-w-sm p-6 border border-[var(--card-border)] shadow-xl">
-            <h3 className="text-lg font-bold text-[var(--text-primary)] mb-2">Forma de pagamento</h3>
+            <h3 className="text-lg font-bold text-[var(--text-primary)] mb-2">Assinar plano</h3>
             <p className="text-sm text-[var(--text-muted)] mb-4">
-              Como deseja pagar a assinatura mensal?
+              A assinatura será cobrada automaticamente no cartão de crédito todo mês.
             </p>
             <div className="space-y-2">
               <button
                 type="button"
-                onClick={() => subscribeFromBooking(subscribePlanModal, 'PIX')}
-                disabled={!!subscribingPlanId}
-                className="w-full py-3 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] text-[var(--text-primary)] font-semibold hover:border-[#C8923A] disabled:opacity-50"
-              >
-                PIX
-              </button>
-              <button
-                type="button"
                 onClick={() => subscribeFromBooking(subscribePlanModal, 'CREDIT_CARD')}
                 disabled={!!subscribingPlanId}
-                className="w-full py-3 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] text-[var(--text-primary)] font-semibold hover:border-[#C8923A] disabled:opacity-50"
+                className="w-full py-3 rounded-xl bg-[#8B6914] text-white font-semibold hover:bg-[#725510] disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                Cartão de crédito
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                </svg>
+                Pagar com cartão de crédito
               </button>
               <button
                 type="button"

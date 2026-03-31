@@ -161,7 +161,7 @@ export function ClientPlans() {
     }
   };
 
-  const handleSubscribe = async (planId: string, billingType: string = 'PIX', cardData?: CreditCardFormData) => {
+  const handleSubscribe = async (planId: string, billingType: string = 'CREDIT_CARD', cardData?: CreditCardFormData) => {
     setSubscribingId(planId);
     setPaymentMethodModal(null);
     setCreditCardModal(null);
@@ -220,7 +220,7 @@ export function ClientPlans() {
     }
   };
 
-  const handleReactivate = async (billingType: string = 'PIX', cardData?: CreditCardFormData) => {
+  const handleReactivate = async (billingType: string = 'CREDIT_CARD', cardData?: CreditCardFormData) => {
     setIsReactivating(true);
     setPaymentMethodModal(null);
     setCreditCardModal(null);
@@ -666,32 +666,10 @@ export function ClientPlans() {
             </div>
 
             <p className="text-sm text-[var(--text-muted)] mb-5">
-              Escolha como deseja pagar sua assinatura mensal:
+              A assinatura será cobrada automaticamente no cartão de crédito todo mês.
             </p>
 
             <div className="space-y-3">
-              <button
-                onClick={() => {
-                  const id = paymentMethodModal;
-                  if (id === 'REACTIVATE') {
-                    handleReactivate('PIX');
-                  } else {
-                    handleSubscribe(id, 'PIX');
-                  }
-                }}
-                className="w-full p-4 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] hover:border-[#C8923A] transition-all flex items-center gap-4 group"
-              >
-                <div className="w-10 h-10 rounded-lg bg-[#C8923A]/10 flex items-center justify-center text-[#C8923A] group-hover:bg-[#C8923A] group-hover:text-white transition-colors">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h-2m-6 0H9m11-4V7a2 2 0 00-2-2h-3m-1 0H7a2 2 0 00-2 2v10a2 2 0 002 2h3" />
-                  </svg>
-                </div>
-                <div className="text-left">
-                  <p className="font-bold text-[var(--text-primary)]">PIX</p>
-                  <p className="text-xs text-[var(--text-muted)]">Liberação imediata dos créditos</p>
-                </div>
-              </button>
-
               <button
                 onClick={() => {
                   const id = paymentMethodModal;

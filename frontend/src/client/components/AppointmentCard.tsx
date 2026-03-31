@@ -82,9 +82,12 @@ export function AppointmentCard({
       if (res.data.pixData) {
         setPendingPixData(res.data.pixData);
         setShowPixModal(true);
+      } else {
+        alert('QR Code não disponível. Tente novamente em alguns segundos.');
       }
-    } catch {
-      alert('Não foi possível carregar o QR Code. Tente novamente.');
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || 'Erro ao carregar QR Code';
+      alert(msg);
     } finally {
       setLoadingPix(false);
     }
@@ -234,7 +237,10 @@ export function AppointmentCard({
       {showPixModal && pendingPixData && (
         <PixPaymentModal
           isOpen={showPixModal}
-          onClose={() => setShowPixModal(false)}
+          onClose={() => {
+            setShowPixModal(false);
+            setPendingPixData(null);
+          }}
           pixData={pendingPixData}
           amount={appointment.totalPrice}
           description="Pagamento do agendamento"
