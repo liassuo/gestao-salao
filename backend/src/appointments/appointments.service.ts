@@ -174,11 +174,71 @@ export class AppointmentsService {
       }
     }
 
-    // 5. Criar o agendamento
-    // Pagamentos online via app (PIX/cartão) ficam PENDING_PAYMENT até confirmação do Asaas
+    // 5. Verificar se já existe PIX pendente ativo (< 10 min) para este cliente
     const requiresOnlinePayment =
       dto.source === 'CLIENT' &&
       (dto.billingType === 'PIX' || dto.billingType === 'CREDIT_CARD');
+
+    if (requiresOnlinePayment && dto.billingType === 'PIX') {
+      const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+      const { data: pendingAppts } = await this.supabase
+        .from('appointments')
+        .select('id')
+        .eq('clientId', dto.clientId)
+        .eq('status', 'PENDING_PAYMENT')
+        .limit(1);
+
+      if (pendingAppts?.length) {
+        const { data: activePix } = await this.supabase
+          .from('payments')
+          .select('id, asaasPaymentId, amount, createdAt')
+          .eq('appointmentId', pendingAppts[0].id)
+          .eq('method', 'PIX')
+          .is('paidAt', null)
+          .gte('createdAt', tenMinAgo)
+          .limit(1);
+
+        if (activePix?.length) {
+          // Se o valor mudou (serviços diferentes), cancelar o antigo e deixar criar novo
+          if (activePix[0].amount !== totalPrice) {
+            this.logger.log(
+              `Valor mudou (${activePix[0].amount} -> ${totalPrice}). Cancelando agendamento pendente ${pendingAppts[0].id}`,
+            );
+            // Cancelar cobrança Asaas antiga
+            if (activePix[0].asaasPaymentId) {
+              try { await this.asaasService.cancelCharge(activePix[0].asaasPaymentId); } catch {}
+            }
+            // Cancelar agendamento antigo
+            await this.supabase
+              .from('appointments')
+              .update({ status: 'CANCELED', canceledAt: new Date().toISOString() })
+              .eq('id', pendingAppts[0].id);
+          } else {
+            // Mesmo valor: retornar o agendamento existente com QR code
+            const { data: existingAppt } = await this.supabase
+              .from('appointments')
+              .select(this.APPOINTMENT_SELECT)
+              .eq('id', pendingAppts[0].id)
+              .single();
+
+            if (existingAppt) {
+              const qrData = await this.getPendingPixQrCode(existingAppt.id, dto.clientId);
+              return {
+                ...existingAppt,
+                existingPendingPayment: true,
+                paymentCreatedAt: activePix[0].createdAt,
+                payment: qrData.pixData
+                  ? { pixData: qrData.pixData }
+                  : null,
+              };
+            }
+          }
+        }
+      }
+    }
+
+    // 6. Criar o agendamento
+    // Pagamentos online via app (PIX/cartão) ficam PENDING_PAYMENT até confirmação do Asaas
     const initialStatus = requiresOnlinePayment ? 'PENDING_PAYMENT' : 'SCHEDULED';
 
     const now = new Date().toISOString();

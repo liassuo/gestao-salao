@@ -70,6 +70,8 @@ export type AppointmentPaymentPayload = {
 
 export type CreatedAppointmentResponse = Appointment & {
   payment?: AppointmentPaymentPayload | null;
+  existingPendingPayment?: boolean;
+  paymentCreatedAt?: string;
 };
 
 export interface ClientUser {

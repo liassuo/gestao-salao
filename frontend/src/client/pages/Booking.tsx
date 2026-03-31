@@ -5,7 +5,7 @@ import { useClientServices, useClientProfessionals, useAvailableSlots, useClient
 import { LoadingState, EmptyState } from '../components/ui';
 import { formatPrice, formatDuration, formatDateISO, formatDateLong } from '../utils/format';
 import { clientApi } from '../services/api';
-import type { Service, Professional, TimeSlot, AppointmentBillingType } from '../types';
+import type { Service, Professional, TimeSlot, AppointmentBillingType, Appointment } from '../types';
 
 interface ActivePromotion {
   id: string;
@@ -247,6 +247,35 @@ export function ClientBooking() {
     clientApi.get<SubscriptionPlan[]>('/subscriptions/plans')
       .then((res) => setPlans(res.data))
       .catch(() => {});
+
+    // Verificar se já existe agendamento PENDING_PAYMENT com PIX ativo (< 10 min)
+    clientApi.get<Appointment[]>('/appointments/me')
+      .then(async (res) => {
+        const pending = res.data.find((a) => a.status === 'PENDING_PAYMENT');
+        if (!pending) return;
+        try {
+          const pixRes = await clientApi.get<{
+            pixData: { encodedImage: string; payload: string } | null;
+            totalPrice: number;
+            paymentCreatedAt?: string;
+          }>(`/appointments/${pending.id}/pending-pix`);
+          if (pixRes.data.pixData && pixRes.data.paymentCreatedAt) {
+            const createdMs = new Date(pixRes.data.paymentCreatedAt).getTime();
+            const elapsed = Date.now() - createdMs;
+            if (elapsed < 600 * 1000) {
+              // PIX ainda ativo: restaurar modal
+              setPixEntityId(pending.id);
+              setPixEntityType('appointment');
+              setLeaveAfterPixClose(true);
+              pixExpiresAtRef.current = createdMs + 600 * 1000;
+              setPixModal(pixRes.data.pixData as PixData);
+            }
+          }
+        } catch {
+          // ignore
+        }
+      })
+      .catch(() => {});
   }, [fetchServices]);
 
   const subscribeFromBooking = async (planId: string, billing: AppointmentBillingType) => {
@@ -384,7 +413,12 @@ export function ClientBooking() {
         setLeaveAfterPixClose(true);
         setPixEntityId(result.id);
         setPixEntityType('appointment');
-        pixExpiresAtRef.current = null;
+        // Se é um pagamento existente, calcular expiração a partir do createdAt do servidor
+        if (result.existingPendingPayment && result.paymentCreatedAt) {
+          pixExpiresAtRef.current = new Date(result.paymentCreatedAt).getTime() + 600 * 1000;
+        } else {
+          pixExpiresAtRef.current = null;
+        }
         setPixModal(result.payment.pixData);
       } else if (result.payment?.invoiceUrl) {
         window.location.href = result.payment.invoiceUrl;
