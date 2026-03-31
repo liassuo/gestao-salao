@@ -102,12 +102,18 @@ export function AppointmentCard({
     }
     setLoadingPix(true);
     try {
-      const res = await clientApi.get<{ pixData: { encodedImage: string; payload: string; expirationDate: string }; totalPrice: number }>(
+      const res = await clientApi.get<{ pixData: { encodedImage: string; payload: string }; totalPrice: number; paymentCreatedAt?: string }>(
         `/appointments/${appointment.id}/pending-pix`,
       );
       if (res.data.pixData) {
-        setPendingPixData(res.data.pixData);
-        if (!pixFetchedAt) setPixFetchedAt(Date.now());
+        setPendingPixData(res.data.pixData as any);
+        if (!pixFetchedAt) {
+          // Usar timestamp do servidor (quando o pagamento foi criado)
+          const serverCreatedAt = res.data.paymentCreatedAt
+            ? new Date(res.data.paymentCreatedAt).getTime()
+            : Date.now();
+          setPixFetchedAt(serverCreatedAt);
+        }
         setShowPixModal(true);
       } else {
         alert('QR Code não disponível. Tente novamente em alguns segundos.');

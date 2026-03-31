@@ -5,6 +5,7 @@ import {
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
 import { CreateAppointmentDto, CreateTimeBlockDto, UpdateAppointmentDto } from './dto';
@@ -613,12 +614,13 @@ export class AppointmentsService {
     // Buscar pagamento PIX pendente (só colunas que sempre existem)
     const { data: payments } = await this.supabase
       .from('payments')
-      .select('id, asaasPaymentId')
+      .select('id, asaasPaymentId, createdAt')
       .eq('appointmentId', appointmentId)
       .is('paidAt', null)
       .eq('method', 'PIX');
 
     const payment = payments?.[0];
+    const paymentCreatedAt = payment?.createdAt || null;
 
     // Se não existe pagamento, criar cobrança do zero
     if (!payment?.asaasPaymentId) {
@@ -639,9 +641,9 @@ export class AppointmentsService {
           pixData: {
             encodedImage: cached.pixQrCodeBase64,
             payload: cached.pixCopyPaste,
-            expirationDate: null,
           },
           totalPrice: appointment.totalPrice,
+          paymentCreatedAt,
         };
       }
     } catch {
@@ -663,7 +665,7 @@ export class AppointmentsService {
       }
     }
 
-    return { pixData, totalPrice: appointment.totalPrice };
+    return { pixData, totalPrice: appointment.totalPrice, paymentCreatedAt };
   }
 
   private async recreatePixCharge(
@@ -911,7 +913,7 @@ export class AppointmentsService {
       .from('appointments')
       .select('scheduledAt, totalDuration')
       .eq('professionalId', professionalId)
-      .in('status', ['SCHEDULED', 'ATTENDED'])
+      .in('status', ['SCHEDULED', 'ATTENDED', 'PENDING_PAYMENT'])
       .gte('scheduledAt', startOfDay)
       .lte('scheduledAt', endOfDay);
 
@@ -1001,5 +1003,48 @@ export class AppointmentsService {
     }
 
     return slots;
+  }
+
+  /**
+   * Cron: cancelar agendamentos PENDING_PAYMENT com mais de 10 minutos.
+   * Roda a cada 2 minutos para garantir que horários sejam liberados
+   * mesmo se o cliente fechar o navegador.
+   */
+  @Cron(CronExpression.EVERY_10_MINUTES)
+  async expirePendingPayments() {
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+
+    const { data: stale } = await this.supabase
+      .from('appointments')
+      .select('id')
+      .eq('status', 'PENDING_PAYMENT')
+      .lt('createdAt', tenMinutesAgo);
+
+    if (!stale?.length) return;
+
+    const now = new Date().toISOString();
+    for (const appt of stale) {
+      await this.supabase
+        .from('appointments')
+        .update({ status: 'CANCELED', updatedAt: now })
+        .eq('id', appt.id)
+        .eq('status', 'PENDING_PAYMENT');
+
+      // Cancelar cobrança no Asaas se existir
+      if (this.asaasService.configured) {
+        const { data: payment } = await this.supabase
+          .from('payments')
+          .select('asaasPaymentId')
+          .eq('appointmentId', appt.id)
+          .is('paidAt', null)
+          .single();
+
+        if (payment?.asaasPaymentId) {
+          try { await this.asaasService.cancelCharge(payment.asaasPaymentId); } catch {}
+        }
+      }
+
+      this.logger.log(`Agendamento ${appt.id} cancelado automaticamente (PENDING_PAYMENT expirado)`);
+    }
   }
 }
