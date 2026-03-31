@@ -25,6 +25,7 @@ import {
 } from './dto';
 import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 import { NotificationsService } from '../notifications/notifications.service';
+import { InAppNotificationsService } from '../in-app-notifications/in-app-notifications.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 
 interface RequestWithUser extends Request {
@@ -37,6 +38,7 @@ export class AppointmentsController {
   constructor(
     private readonly appointmentsService: AppointmentsService,
     private readonly notificationsService: NotificationsService,
+    private readonly inAppNotificationsService: InAppNotificationsService,
     private readonly subscriptionsService: SubscriptionsService,
   ) {}
 
@@ -99,7 +101,20 @@ export class AppointmentsController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() createAppointmentDto: CreateAppointmentDto) {
-    return this.appointmentsService.create(createAppointmentDto);
+    const appointment = await this.appointmentsService.create(createAppointmentDto);
+
+    // Notificar admins sobre novo agendamento (fire-and-forget)
+    this.inAppNotificationsService.send({
+      type: 'appointment_created',
+      title: 'Novo agendamento',
+      message: `Agendamento criado para ${new Date(appointment.scheduledAt).toLocaleDateString('pt-BR')} às ${new Date(appointment.scheduledAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
+      targets: [{ type: 'role', role: 'ADMIN' }],
+      action_url: '/agendamentos',
+      entity_type: 'appointment',
+      entity_id: appointment.id,
+    }).catch(() => {});
+
+    return appointment;
   }
 
   /**
@@ -137,8 +152,22 @@ export class AppointmentsController {
       }
     }
 
-    // Notificar admin/profissional do novo agendamento (fire-and-forget)
+    // Push notification (fire-and-forget)
     this.notificationsService.notifyNewBooking(appointment).catch(() => {});
+
+    // In-app notification para admins (fire-and-forget)
+    this.inAppNotificationsService.send({
+      type: 'appointment_created',
+      title: 'Novo agendamento pelo app',
+      message: `Cliente agendou para ${new Date(scheduledAt).toLocaleDateString('pt-BR')} às ${new Date(scheduledAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
+      targets: [{ type: 'role', role: 'ADMIN' }],
+      actor_id: req.user.id,
+      action_url: '/agendamentos',
+      entity_type: 'appointment',
+      entity_id: appointment.id,
+      group_key: `appointment_created`,
+      anti_spam: 'aggregate',
+    }).catch(() => {});
 
     return appointment;
   }
@@ -168,7 +197,20 @@ export class AppointmentsController {
 
   @Patch(':id/cancel')
   async cancel(@Param('id', ParseUUIDPipe) id: string) {
-    return this.appointmentsService.cancel(id);
+    const result = await this.appointmentsService.cancel(id);
+
+    // Notificar admins sobre cancelamento (fire-and-forget)
+    this.inAppNotificationsService.send({
+      type: 'appointment_canceled',
+      title: 'Agendamento cancelado',
+      message: `Um agendamento foi cancelado`,
+      targets: [{ type: 'role', role: 'ADMIN' }],
+      action_url: '/agendamentos',
+      entity_type: 'appointment',
+      entity_id: id,
+    }).catch(() => {});
+
+    return result;
   }
 
   @Patch(':id/attend')

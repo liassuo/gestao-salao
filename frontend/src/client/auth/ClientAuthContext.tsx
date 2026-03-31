@@ -14,6 +14,7 @@ interface ClientAuthContextType {
   register: (name: string, email: string, password: string, phone: string, birthDate?: string) => Promise<void>;
   setupPassword: (password: string) => Promise<void>;
   logout: () => void;
+  updateUser: (data: Partial<ClientUser>) => void;
 }
 
 export const ClientAuthContext = createContext<ClientAuthContextType | null>(null);
@@ -104,6 +105,15 @@ export function ClientAuthProvider({ children }: ClientAuthProviderProps) {
     storage.setUser(userData);
   }, []);
 
+  const updateUser = useCallback((data: Partial<ClientUser>) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, ...data };
+      storage.setUser(updated);
+      return updated;
+    });
+  }, []);
+
   const value = useMemo(
     () => ({
       user,
@@ -116,8 +126,9 @@ export function ClientAuthProvider({ children }: ClientAuthProviderProps) {
       register,
       setupPassword,
       logout,
+      updateUser,
     }),
-    [user, accessToken, isLoading, mustChangePassword, login, loginWithGoogle, register, setupPassword, logout]
+    [user, accessToken, isLoading, mustChangePassword, login, loginWithGoogle, register, setupPassword, logout, updateUser]
   );
 
   return (

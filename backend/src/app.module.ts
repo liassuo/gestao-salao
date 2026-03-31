@@ -27,6 +27,7 @@ import { OrdersModule } from './orders/orders.module';
 import { AsaasModule } from './asaas/asaas.module';
 import { PromotionsModule } from './promotions/promotions.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { InAppNotificationsModule } from './in-app-notifications/in-app-notifications.module';
 import { SettingsModule } from './settings/settings.module';
 import { MailModule } from './mail/mail.module';
 
@@ -79,6 +80,7 @@ import { MailModule } from './mail/mail.module';
     AsaasModule,
     PromotionsModule,
     NotificationsModule,
+    InAppNotificationsModule,
     SettingsModule,
     MailModule,
   ],

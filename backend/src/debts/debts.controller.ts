@@ -18,6 +18,7 @@ import { DebtsService } from './debts.service';
 import { CreateDebtDto, UpdateDebtDto, PayDebtDto, QueryDebtDto } from './dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
+import { InAppNotificationsService } from '../in-app-notifications/in-app-notifications.service';
 
 interface RequestWithUser extends Request {
   user: AuthenticatedUser;
@@ -26,12 +27,28 @@ interface RequestWithUser extends Request {
 @ApiTags('Debts')
 @Controller('debts')
 export class DebtsController {
-  constructor(private readonly debtsService: DebtsService) {}
+  constructor(
+    private readonly debtsService: DebtsService,
+    private readonly inAppNotificationsService: InAppNotificationsService,
+  ) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() createDebtDto: CreateDebtDto) {
-    return this.debtsService.createDebt(createDebtDto);
+    const debt = await this.debtsService.createDebt(createDebtDto);
+
+    // Notificar admins sobre nova dívida (fire-and-forget)
+    this.inAppNotificationsService.send({
+      type: 'debt_created',
+      title: 'Nova dívida registrada',
+      message: `Dívida de R$ ${Number(createDebtDto.amount || 0).toFixed(2)} registrada`,
+      targets: [{ type: 'role', role: 'ADMIN' }],
+      action_url: '/dividas',
+      entity_type: 'debt',
+      entity_id: debt?.id,
+    }).catch(() => {});
+
+    return debt;
   }
 
   @Get()
@@ -99,7 +116,20 @@ export class DebtsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body?: { method?: string },
   ) {
-    return this.debtsService.settleDebt(id, body?.method);
+    const result = await this.debtsService.settleDebt(id, body?.method);
+
+    // Notificar admins sobre dívida quitada (fire-and-forget)
+    this.inAppNotificationsService.send({
+      type: 'debt_paid',
+      title: 'Dívida quitada',
+      message: `Uma dívida foi quitada`,
+      targets: [{ type: 'role', role: 'ADMIN' }],
+      action_url: '/dividas',
+      entity_type: 'debt',
+      entity_id: id,
+    }).catch(() => {});
+
+    return result;
   }
 
   @Patch(':id')

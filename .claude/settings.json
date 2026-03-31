@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /c/Users/liass/Downloads/gestao-salao -type f \\\\\\(-name *.sql -o -name *.supabase* \\\\\\))",
+      "WebFetch(domain:gestao-salao-backend-jiss.onrender.com)",
+      "Read(//c/Users/gestao-salao/backend/src/common/interceptors/**)",
+      "Bash(git log:*)"
+    ]
+  }
+}

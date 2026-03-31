@@ -14,16 +14,35 @@ import {
 import { ApiTags } from '@nestjs/swagger';
 import { PaymentsService } from './payments.service';
 import { CreatePaymentDto, UpdatePaymentDto, QueryPaymentDto } from './dto';
+import { InAppNotificationsService } from '../in-app-notifications/in-app-notifications.service';
 
 @ApiTags('Payments')
 @Controller('payments')
 export class PaymentsController {
-  constructor(private readonly paymentsService: PaymentsService) {}
+  constructor(
+    private readonly paymentsService: PaymentsService,
+    private readonly inAppNotificationsService: InAppNotificationsService,
+  ) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() createPaymentDto: CreatePaymentDto) {
-    return this.paymentsService.registerPayment(createPaymentDto);
+    const payment = await this.paymentsService.registerPayment(createPaymentDto);
+
+    // Notificar admins sobre pagamento recebido (fire-and-forget)
+    this.inAppNotificationsService.send({
+      type: 'payment_received',
+      title: 'Pagamento registrado',
+      message: `Pagamento de R$ ${Number(createPaymentDto.amount || 0).toFixed(2)} registrado`,
+      targets: [{ type: 'role', role: 'ADMIN' }],
+      action_url: '/pagamentos',
+      entity_type: 'payment',
+      entity_id: payment?.id,
+      group_key: 'payment_received',
+      anti_spam: 'aggregate',
+    }).catch(() => {});
+
+    return payment;
   }
 
   @Get()

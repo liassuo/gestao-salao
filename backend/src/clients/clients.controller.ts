@@ -14,6 +14,7 @@ import {
 import { ApiTags } from '@nestjs/swagger';
 import { ClientsService, ClientFilters } from './clients.service';
 import { CreateClientDto, UpdateClientDto } from './dto';
+import { InAppNotificationsService } from '../in-app-notifications/in-app-notifications.service';
 
 interface ClientQueryFilters {
   search?: string;
@@ -24,7 +25,10 @@ interface ClientQueryFilters {
 @ApiTags('Clients')
 @Controller('clients')
 export class ClientsController {
-  constructor(private readonly clientsService: ClientsService) {}
+  constructor(
+    private readonly clientsService: ClientsService,
+    private readonly inAppNotificationsService: InAppNotificationsService,
+  ) {}
 
   /**
    * GET /clients
@@ -66,7 +70,22 @@ export class ClientsController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() dto: CreateClientDto) {
-    return this.clientsService.create(dto);
+    const client = await this.clientsService.create(dto);
+
+    // Notificar admins sobre novo cliente (fire-and-forget)
+    this.inAppNotificationsService.send({
+      type: 'client_registered',
+      title: 'Novo cliente cadastrado',
+      message: `${dto.name} foi cadastrado no sistema`,
+      targets: [{ type: 'role', role: 'ADMIN' }],
+      action_url: '/clientes',
+      entity_type: 'client',
+      entity_id: client?.id,
+      group_key: 'client_registered',
+      anti_spam: 'aggregate',
+    }).catch(() => {});
+
+    return client;
   }
 
   /**

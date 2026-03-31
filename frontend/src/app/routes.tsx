@@ -27,6 +27,7 @@ import {
   Subscriptions,
   ForgotPassword,
   ResetPassword,
+  Notifications,
 } from '@/pages';
 import { getRolesForPath } from '@/config/permissions';
 import {
@@ -163,6 +164,10 @@ export const router = createBrowserRouter([
       {
         path: 'financeiro/formas-pagamento',
         element: withRoleProtection('/financeiro/formas-pagamento', <PaymentMethods />),
+      },
+      {
+        path: 'notificacoes',
+        element: <Notifications />,
       },
       {
         path: 'configuracoes',

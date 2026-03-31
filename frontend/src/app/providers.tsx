@@ -3,7 +3,7 @@ import { RouterProvider } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider } from '@/auth';
 import { ToastProvider } from '@/components/ui';
-import { ThemeProvider, SidebarProvider } from '@/contexts';
+import { ThemeProvider, SidebarProvider, NotificationProvider } from '@/contexts';
 import { router, clientRouter } from './routes';
 import { IS_CLIENT_DOMAIN } from '@/client/utils/paths';
 
@@ -27,7 +27,9 @@ export function Providers() {
       <SidebarProvider>
         <AuthProvider>
           <ToastProvider>
-            <RouterProvider router={activeRouter} />
+            <NotificationProvider>
+              <RouterProvider router={activeRouter} />
+            </NotificationProvider>
           </ToastProvider>
         </AuthProvider>
       </SidebarProvider>
