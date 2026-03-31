@@ -603,16 +603,20 @@ export class AppointmentsService {
       throw new BadRequestException('Integração PIX não configurada');
     }
 
-    const { data: payment } = await this.supabase
+    // Buscar pagamento PIX pendente (pode não existir se a criação original falhou)
+    const { data: payments } = await this.supabase
       .from('payments')
       .select('id, asaasPaymentId')
       .eq('appointmentId', appointmentId)
       .is('paidAt', null)
-      .eq('method', 'PIX')
-      .single();
+      .eq('method', 'PIX');
 
+    const payment = payments?.[0];
+
+    // Se não existe pagamento, criar cobrança do zero
     if (!payment?.asaasPaymentId) {
-      throw new NotFoundException('Cobrança PIX não encontrada para este agendamento');
+      this.logger.warn(`Nenhum pagamento PIX encontrado para agendamento ${appointmentId}, criando cobrança`);
+      return await this.recreatePixCharge(appointment, null);
     }
 
     // Verificar se a cobrança no Asaas ainda está ativa
@@ -620,14 +624,12 @@ export class AppointmentsService {
       const charge = await this.asaasService.getCharge(payment.asaasPaymentId);
 
       if (charge.status === 'OVERDUE' || charge.status === 'REFUNDED' || charge.status === 'RECEIVED_IN_CASH') {
-        // Cobrança expirou — recriar
         return await this.recreatePixCharge(appointment, payment);
       }
 
       const pixData = await this.asaasService.getPixQrCode(payment.asaasPaymentId);
       return { pixData, totalPrice: appointment.totalPrice };
     } catch (error) {
-      // Se falhar ao buscar QR Code, tentar recriar a cobrança
       this.logger.warn(`QR Code falhou para ${payment.asaasPaymentId}, recriando cobrança: ${error}`);
       return await this.recreatePixCharge(appointment, payment);
     }
@@ -635,26 +637,43 @@ export class AppointmentsService {
 
   private async recreatePixCharge(
     appointment: { id: string; clientId: string; totalPrice: number },
-    oldPayment: { id: string; asaasPaymentId: string },
+    oldPayment: { id: string; asaasPaymentId: string } | null,
   ) {
     // Buscar cliente Asaas
     const { data: clientData } = await this.supabase
       .from('clients')
-      .select('asaasCustomerId')
+      .select('id, name, email, phone, cpf, asaasCustomerId')
       .eq('id', appointment.clientId)
       .single();
 
-    if (!clientData?.asaasCustomerId) {
+    let asaasCustomerId = clientData?.asaasCustomerId;
+
+    // Criar customer no Asaas se não existir
+    if (!asaasCustomerId && clientData) {
+      const newCustomer = await this.asaasService.createCustomer({
+        name: clientData.name,
+        email: clientData.email || undefined,
+        cpfCnpj: clientData.cpf || undefined,
+        mobilePhone: clientData.phone || undefined,
+        externalReference: clientData.id,
+      });
+      asaasCustomerId = newCustomer.id;
+      await this.supabase.from('clients').update({ asaasCustomerId }).eq('id', clientData.id);
+    }
+
+    if (!asaasCustomerId) {
       throw new BadRequestException('Cliente não possui cadastro no Asaas');
     }
 
     // Cancelar cobrança antiga (ignora erro se já cancelada)
-    try { await this.asaasService.cancelCharge(oldPayment.asaasPaymentId); } catch {}
+    if (oldPayment?.asaasPaymentId) {
+      try { await this.asaasService.cancelCharge(oldPayment.asaasPaymentId); } catch {}
+    }
 
     // Criar nova cobrança
     const today = new Date().toISOString().substring(0, 10);
     const newCharge = await this.asaasService.createCharge({
-      customer: clientData.asaasCustomerId,
+      customer: asaasCustomerId,
       billingType: 'PIX' as any,
       value: this.asaasService.centavosToReais(appointment.totalPrice),
       dueDate: today,
@@ -662,13 +681,31 @@ export class AppointmentsService {
       externalReference: appointment.id,
     });
 
-    // Atualizar pagamento local
-    await this.supabase.from('payments').update({
-      asaasPaymentId: newCharge.id,
-      asaasStatus: newCharge.status,
-      invoiceUrl: newCharge.invoiceUrl || null,
-      updatedAt: new Date().toISOString(),
-    }).eq('id', oldPayment.id);
+    const now = new Date().toISOString();
+
+    if (oldPayment) {
+      // Atualizar pagamento existente
+      await this.supabase.from('payments').update({
+        asaasPaymentId: newCharge.id,
+        asaasStatus: newCharge.status,
+        invoiceUrl: newCharge.invoiceUrl || null,
+        updatedAt: now,
+      }).eq('id', oldPayment.id);
+    } else {
+      // Criar novo registro de pagamento
+      await this.supabase.from('payments').insert({
+        id: randomUUID(),
+        clientId: appointment.clientId,
+        appointmentId: appointment.id,
+        amount: appointment.totalPrice,
+        method: 'PIX',
+        asaasPaymentId: newCharge.id,
+        asaasStatus: newCharge.status,
+        invoiceUrl: newCharge.invoiceUrl || null,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
 
     // Buscar QR Code da nova cobrança
     const pixData = await this.asaasService.getPixQrCode(newCharge.id);

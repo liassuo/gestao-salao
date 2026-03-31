@@ -48,14 +48,16 @@ export function useClientAppointments() {
   const { upcomingAppointments, pastAppointments, nextAppointment } = useMemo(() => {
     const now = new Date();
 
+    const activeStatuses = ['SCHEDULED', 'PENDING_PAYMENT'];
+
     const upcoming = appointments.filter((a) => {
       const date = new Date(a.scheduledAt);
-      return date >= now && a.status === 'SCHEDULED';
+      return date >= now && activeStatuses.includes(a.status);
     }).sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
 
     const past = appointments.filter((a) => {
       const date = new Date(a.scheduledAt);
-      return date < now || a.status !== 'SCHEDULED';
+      return date < now || !activeStatuses.includes(a.status);
     }).sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime());
 
     return {
