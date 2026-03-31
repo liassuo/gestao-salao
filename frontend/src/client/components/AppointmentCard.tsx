@@ -272,6 +272,7 @@ export function AppointmentCard({
         <PixPaymentModal
           isOpen={showPixModal}
           onClose={() => setShowPixModal(false)}
+          onExpire={() => setPendingPixData(null)}
           pixData={pendingPixData}
           amount={appointment.totalPrice}
           description="Pagamento do agendamento"

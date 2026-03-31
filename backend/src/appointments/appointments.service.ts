@@ -619,19 +619,30 @@ export class AppointmentsService {
       return await this.recreatePixCharge(appointment, null);
     }
 
-    // Verificar se a cobrança no Asaas ainda está ativa
+    // Verificar status da cobrança no Asaas
     try {
       const charge = await this.asaasService.getCharge(payment.asaasPaymentId);
 
-      if (charge.status === 'OVERDUE' || charge.status === 'REFUNDED' || charge.status === 'RECEIVED_IN_CASH') {
+      // Só recriar se a cobrança está definitivamente morta
+      if (['OVERDUE', 'REFUNDED', 'RECEIVED_IN_CASH'].includes(charge.status)) {
+        this.logger.log(`Cobrança ${payment.asaasPaymentId} com status ${charge.status}, recriando`);
         return await this.recreatePixCharge(appointment, payment);
       }
 
+      // Cobrança ativa — buscar QR Code existente
       const pixData = await this.asaasService.getPixQrCode(payment.asaasPaymentId);
       return { pixData, totalPrice: appointment.totalPrice };
     } catch (error) {
-      this.logger.warn(`QR Code falhou para ${payment.asaasPaymentId}, recriando cobrança: ${error}`);
-      return await this.recreatePixCharge(appointment, payment);
+      // Diferenciar: erro ao buscar a cobrança vs erro ao buscar QR Code
+      // Tentar buscar só o QR Code diretamente (a cobrança pode existir mas getCharge falhou)
+      try {
+        const pixData = await this.asaasService.getPixQrCode(payment.asaasPaymentId);
+        return { pixData, totalPrice: appointment.totalPrice };
+      } catch {
+        // Só recriar como último recurso
+        this.logger.warn(`Cobrança ${payment.asaasPaymentId} inacessível, recriando: ${error}`);
+        return await this.recreatePixCharge(appointment, payment);
+      }
     }
   }
 
