@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { formatDate, formatTime, formatEndTime, formatPrice, hoursUntil } from '../utils/format';
 import { clientApi } from '../services/api';
 import { appointmentsApi } from '../services/appointments';
