@@ -610,10 +610,10 @@ export class AppointmentsService {
       throw new BadRequestException('Integração PIX não configurada');
     }
 
-    // Buscar pagamento PIX pendente com QR code salvo
+    // Buscar pagamento PIX pendente (só colunas que sempre existem)
     const { data: payments } = await this.supabase
       .from('payments')
-      .select('id, asaasPaymentId, pixQrCodeBase64, pixCopyPaste')
+      .select('id, asaasPaymentId')
       .eq('appointmentId', appointmentId)
       .is('paidAt', null)
       .eq('method', 'PIX');
@@ -626,53 +626,44 @@ export class AppointmentsService {
       return await this.recreatePixCharge(appointment, null);
     }
 
-    // Se já tem QR code salvo no banco, retornar direto (sem chamar Asaas)
-    if (payment.pixQrCodeBase64 && payment.pixCopyPaste) {
-      return {
-        pixData: {
-          encodedImage: payment.pixQrCodeBase64,
-          payload: payment.pixCopyPaste,
-          expirationDate: null,
-        },
-        totalPrice: appointment.totalPrice,
-      };
+    // Tentar buscar QR salvo no banco (colunas podem não existir ainda)
+    try {
+      const { data: cached } = await this.supabase
+        .from('payments')
+        .select('pixQrCodeBase64, pixCopyPaste')
+        .eq('id', payment.id)
+        .single();
+
+      if (cached?.pixQrCodeBase64 && cached?.pixCopyPaste) {
+        return {
+          pixData: {
+            encodedImage: cached.pixQrCodeBase64,
+            payload: cached.pixCopyPaste,
+            expirationDate: null,
+          },
+          totalPrice: appointment.totalPrice,
+        };
+      }
+    } catch {
+      // Colunas provavelmente não existem — seguir para buscar no Asaas
     }
 
-    // Não tem QR salvo — buscar no Asaas
-    try {
-      const charge = await this.asaasService.getCharge(payment.asaasPaymentId);
+    // Buscar QR Code no Asaas para a cobrança EXISTENTE
+    const pixData = await this.asaasService.getPixQrCode(payment.asaasPaymentId);
 
-      if (['OVERDUE', 'REFUNDED', 'RECEIVED_IN_CASH'].includes(charge.status)) {
-        this.logger.log(`Cobrança ${payment.asaasPaymentId} com status ${charge.status}, recriando`);
-        return await this.recreatePixCharge(appointment, payment);
-      }
-
-      const pixData = await this.asaasService.getPixQrCode(payment.asaasPaymentId);
-
-      // Salvar para próxima vez
-      if (pixData) {
+    // Tentar salvar cache (ignora se colunas não existem)
+    if (pixData) {
+      try {
         await this.supabase.from('payments').update({
           pixQrCodeBase64: pixData.encodedImage,
           pixCopyPaste: pixData.payload,
         }).eq('id', payment.id);
-      }
-
-      return { pixData, totalPrice: appointment.totalPrice };
-    } catch (error) {
-      try {
-        const pixData = await this.asaasService.getPixQrCode(payment.asaasPaymentId);
-        if (pixData) {
-          await this.supabase.from('payments').update({
-            pixQrCodeBase64: pixData.encodedImage,
-            pixCopyPaste: pixData.payload,
-          }).eq('id', payment.id);
-        }
-        return { pixData, totalPrice: appointment.totalPrice };
       } catch {
-        this.logger.warn(`Cobrança ${payment.asaasPaymentId} inacessível, recriando: ${error}`);
-        return await this.recreatePixCharge(appointment, payment);
+        // Colunas podem não existir — ignorar
       }
     }
+
+    return { pixData, totalPrice: appointment.totalPrice };
   }
 
   private async recreatePixCharge(
