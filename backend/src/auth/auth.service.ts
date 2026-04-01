@@ -425,6 +425,21 @@ export class AuthService {
     };
   }
 
+  async verifyPassword(userId: string, password: string): Promise<{ valid: boolean }> {
+    const { data: user } = await this.supabase
+      .from('users')
+      .select('id, password')
+      .eq('id', userId)
+      .single();
+
+    if (!user) {
+      return { valid: false };
+    }
+
+    const valid = await bcrypt.compare(password, user.password);
+    return { valid };
+  }
+
   async changePassword(
     userId: string,
     currentPassword: string,

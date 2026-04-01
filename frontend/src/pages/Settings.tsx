@@ -116,6 +116,10 @@ export function Settings() {
   const [savingPin, setSavingPin] = useState(false);
   const [pinVerified, setPinVerified] = useState(false);
   const [pinVerifyError, setPinVerifyError] = useState('');
+  const [pinPasswordInput, setPinPasswordInput] = useState('');
+  const [pinPasswordVerified, setPinPasswordVerified] = useState(false);
+  const [pinPasswordError, setPinPasswordError] = useState('');
+  const [verifyingPassword, setVerifyingPassword] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'business' | 'notifications' | 'security' | 'appearance'>('business');
 
@@ -210,6 +214,25 @@ export function Settings() {
       setPinVerifyError('Erro ao verificar PIN.');
     } finally {
       setSavingPin(false);
+    }
+  };
+
+  const handleVerifyPasswordForPin = async () => {
+    if (!pinPasswordInput) return;
+    setVerifyingPassword(true);
+    setPinPasswordError('');
+    try {
+      const { data } = await api.post('/auth/verify-password', { password: pinPasswordInput });
+      if (data.valid) {
+        setPinPasswordVerified(true);
+      } else {
+        setPinPasswordError('Senha incorreta.');
+        setPinPasswordInput('');
+      }
+    } catch {
+      setPinPasswordError('Erro ao verificar senha.');
+    } finally {
+      setVerifyingPassword(false);
     }
   };
 
@@ -646,6 +669,38 @@ export function Settings() {
                     >
                       {savingPin ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                       Alterar PIN
+                    </button>
+                  </div>
+                </div>
+              ) : !pinPasswordVerified ? (
+                <div className="space-y-4">
+                  <p className="text-sm text-[var(--text-muted)]">
+                    Para definir um PIN, confirme a senha da sua conta.
+                  </p>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">
+                      Senha da conta
+                    </label>
+                    <input
+                      type="password"
+                      value={pinPasswordInput}
+                      onChange={(e) => { setPinPasswordInput(e.target.value); setPinPasswordError(''); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleVerifyPasswordForPin(); }}
+                      placeholder="Digite sua senha"
+                      className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] px-4 py-2 text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none"
+                    />
+                    {pinPasswordError && (
+                      <p className="mt-1 text-xs text-[#A63030]">{pinPasswordError}</p>
+                    )}
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      onClick={handleVerifyPasswordForPin}
+                      disabled={verifyingPassword || !pinPasswordInput}
+                      className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-4 py-2 text-sm font-medium text-white hover:bg-[#725510] disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {verifyingPassword ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                      Confirmar
                     </button>
                   </div>
                 </div>

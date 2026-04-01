@@ -20,6 +20,16 @@ export class AuthController {
     return { message: 'Senha alterada com sucesso' };
   }
 
+  @Post('verify-password')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Verificar senha do usuário autenticado' })
+  async verifyPassword(
+    @Req() req: any,
+    @Body() body: { password: string },
+  ) {
+    return this.authService.verifyPassword(req.user.id || req.user.sub, body.password);
+  }
+
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
