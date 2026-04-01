@@ -46,4 +46,8 @@ export class UpdateSettingsDto {
   @IsOptional()
   @IsNumber()
   reminderHoursBefore?: number;
+
+  @IsOptional()
+  @IsString()
+  commissionPin?: string;
 }

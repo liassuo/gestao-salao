@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Percent } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Percent, Lock, ShieldCheck } from 'lucide-react';
 import {
   useCommissions,
   useGenerateCommissions,
@@ -10,9 +10,10 @@ import {
 import { CommissionFilters } from '@/components/financial/CommissionFilters';
 import { CommissionsTable } from '@/components/financial/CommissionsTable';
 import { SkeletonTable, ConfirmModal, useToast } from '@/components/ui';
+import { api } from '@/services/api';
 import type { Commission, CommissionFilters as CommissionFiltersType } from '@/types';
 
-export function Commissions() {
+function CommissionsContent() {
   const [filters, setFilters] = useState<CommissionFiltersType>({});
   const [payingCommission, setPayingCommission] = useState<Commission | null>(null);
   const [deletingCommission, setDeletingCommission] = useState<Commission | null>(null);
@@ -120,6 +121,105 @@ export function Commissions() {
         variant="danger"
         isLoading={deleteCommission.isPending}
       />
+    </div>
+  );
+}
+
+export function Commissions() {
+  const [pinRequired, setPinRequired] = useState<boolean | null>(null);
+  const [pinUnlocked, setPinUnlocked] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState('');
+  const [verifyingPin, setVerifyingPin] = useState(false);
+
+  useEffect(() => {
+    api.get('/settings').then(({ data }) => {
+      setPinRequired(!!data.hasCommissionPin);
+    }).catch(() => {
+      setPinRequired(false);
+    });
+  }, []);
+
+  const handleVerifyPin = async () => {
+    if (!pinInput) return;
+    setVerifyingPin(true);
+    setPinError('');
+    try {
+      const { data } = await api.post('/settings/verify-commission-pin', { pin: pinInput });
+      if (data.valid) {
+        setPinUnlocked(true);
+      } else {
+        setPinError('PIN incorreto. Tente novamente.');
+        setPinInput('');
+      }
+    } catch {
+      setPinError('Erro ao verificar PIN. Tente novamente.');
+    } finally {
+      setVerifyingPin(false);
+    }
+  };
+
+  // Loading
+  if (pinRequired === null) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#C8923A]" />
+      </div>
+    );
+  }
+
+  // No PIN configured or already unlocked
+  if (!pinRequired || pinUnlocked) {
+    return <CommissionsContent />;
+  }
+
+  // PIN gate
+  return (
+    <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="w-full max-w-sm text-center">
+        <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#C8923A]/20">
+          <Lock className="h-8 w-8 text-[#C8923A]" />
+        </div>
+        <h1 className="text-2xl font-bold text-[var(--text-primary)] mb-2">Acesso Restrito</h1>
+        <p className="text-sm text-[var(--text-muted)] mb-6">
+          Digite o PIN para acessar a gestão de comissões.
+        </p>
+
+        <input
+          type="password"
+          inputMode="numeric"
+          maxLength={6}
+          placeholder="Digite o PIN"
+          value={pinInput}
+          onChange={(e) => {
+            const v = e.target.value.replace(/\D/g, '').slice(0, 6);
+            setPinInput(v);
+            setPinError('');
+          }}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleVerifyPin(); }}
+          autoFocus
+          className="w-full px-4 py-3 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] text-[var(--text-primary)] text-center text-2xl tracking-[0.5em] font-mono focus:outline-none focus:border-[#C8923A] transition-colors"
+        />
+
+        {pinError && (
+          <p className="mt-2 text-sm text-[#A63030]">{pinError}</p>
+        )}
+
+        <button
+          onClick={handleVerifyPin}
+          disabled={verifyingPin || pinInput.length < 4}
+          className="mt-4 w-full py-3 bg-[#8B6914] hover:bg-[#725510] text-white font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+        >
+          {verifyingPin ? (
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
+          ) : (
+            <>
+              <ShieldCheck className="h-5 w-5" />
+              Desbloquear
+            </>
+          )}
+        </button>
+      </div>
     </div>
   );
 }

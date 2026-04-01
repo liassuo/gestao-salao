@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Body } from '@nestjs/common';
+import { Controller, Get, Patch, Post, Delete, Body } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { SettingsService } from './settings.service';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
@@ -21,6 +21,27 @@ export class SettingsController {
   @ApiBearerAuth('JWT-auth')
   async update(@Body() dto: UpdateSettingsDto) {
     return this.settings.update(dto);
+  }
+
+  /** Define ou altera o PIN de comissões */
+  @Patch('commission-pin')
+  @ApiBearerAuth('JWT-auth')
+  async setCommissionPin(@Body() body: { pin: string }) {
+    return this.settings.setCommissionPin(body.pin);
+  }
+
+  /** Remove o PIN de comissões */
+  @Delete('commission-pin')
+  @ApiBearerAuth('JWT-auth')
+  async removeCommissionPin() {
+    return this.settings.removeCommissionPin();
+  }
+
+  /** Verifica o PIN de comissões */
+  @Post('verify-commission-pin')
+  @ApiBearerAuth('JWT-auth')
+  async verifyCommissionPin(@Body() body: { pin: string }) {
+    return this.settings.verifyCommissionPin(body.pin);
   }
 
   /** Retorna WhatsApp da barbearia (público, para app do cliente) */

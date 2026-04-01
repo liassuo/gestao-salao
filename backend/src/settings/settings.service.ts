@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 import { SupabaseService } from '../supabase/supabase.service';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
 
@@ -28,6 +29,12 @@ export class SettingsService {
         appointmentReminders: true,
         reminderHoursBefore: 24,
       };
+    }
+
+    // Nunca retornar o hash do PIN
+    if (data) {
+      const { commissionPin, ...safe } = data;
+      return { ...safe, hasCommissionPin: !!commissionPin };
     }
 
     return data;
@@ -65,6 +72,71 @@ export class SettingsService {
       if (error) throw error;
       return data;
     }
+  }
+
+  async setCommissionPin(pin: string) {
+    if (!pin || pin.length < 4 || pin.length > 6) {
+      throw new BadRequestException('O PIN deve ter entre 4 e 6 dígitos');
+    }
+    if (!/^\d+$/.test(pin)) {
+      throw new BadRequestException('O PIN deve conter apenas números');
+    }
+
+    const hashedPin = await bcrypt.hash(pin, 6);
+
+    const { data: existing } = await this.supabase
+      .from('settings')
+      .select('id')
+      .limit(1)
+      .single();
+
+    if (existing) {
+      await this.supabase
+        .from('settings')
+        .update({ commissionPin: hashedPin, updatedAt: new Date().toISOString() })
+        .eq('id', existing.id);
+    } else {
+      await this.supabase.from('settings').insert({
+        commissionPin: hashedPin,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
+    return { success: true };
+  }
+
+  async removeCommissionPin() {
+    const { data: existing } = await this.supabase
+      .from('settings')
+      .select('id')
+      .limit(1)
+      .single();
+
+    if (existing) {
+      await this.supabase
+        .from('settings')
+        .update({ commissionPin: null, updatedAt: new Date().toISOString() })
+        .eq('id', existing.id);
+    }
+
+    return { success: true };
+  }
+
+  async verifyCommissionPin(pin: string): Promise<{ valid: boolean }> {
+    const { data } = await this.supabase
+      .from('settings')
+      .select('commissionPin')
+      .limit(1)
+      .single();
+
+    if (!data?.commissionPin) {
+      // Se não tem PIN configurado, acesso livre
+      return { valid: true };
+    }
+
+    const valid = await bcrypt.compare(pin, data.commissionPin);
+    return { valid };
   }
 
   /** Retorna só o WhatsApp (endpoint público para o app do cliente) */

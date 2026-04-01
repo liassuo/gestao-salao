@@ -108,6 +108,12 @@ export function Settings() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [savingPassword, setSavingPassword] = useState(false);
 
+  // Commission PIN state
+  const [hasCommissionPin, setHasCommissionPin] = useState(false);
+  const [commissionPin, setCommissionPin] = useState('');
+  const [confirmCommissionPin, setConfirmCommissionPin] = useState('');
+  const [savingPin, setSavingPin] = useState(false);
+
   const [activeTab, setActiveTab] = useState<'business' | 'notifications' | 'security' | 'appearance'>('business');
 
   useEffect(() => {
@@ -129,6 +135,7 @@ export function Settings() {
         appointmentReminders: data.appointmentReminders ?? true,
         reminderHoursBefore: data.reminderHoursBefore ?? 24,
       }));
+      setHasCommissionPin(!!data.hasCommissionPin);
     }).catch(() => {});
   }, []);
 
@@ -181,6 +188,43 @@ export function Settings() {
       showToast('error', msg);
     } finally {
       setSavingPassword(false);
+    }
+  };
+
+  const handleSaveCommissionPin = async () => {
+    if (commissionPin.length < 4 || commissionPin.length > 6) {
+      showToast('error', 'O PIN deve ter entre 4 e 6 dígitos');
+      return;
+    }
+    if (commissionPin !== confirmCommissionPin) {
+      showToast('error', 'Os PINs não conferem');
+      return;
+    }
+    setSavingPin(true);
+    try {
+      await api.patch('/settings/commission-pin', { pin: commissionPin });
+      setHasCommissionPin(true);
+      setCommissionPin('');
+      setConfirmCommissionPin('');
+      showToast('success', 'PIN de comissões definido com sucesso!');
+    } catch (err: any) {
+      const msg = err.response?.data?.message || 'Erro ao definir PIN';
+      showToast('error', msg);
+    } finally {
+      setSavingPin(false);
+    }
+  };
+
+  const handleRemoveCommissionPin = async () => {
+    setSavingPin(true);
+    try {
+      await api.delete('/settings/commission-pin');
+      setHasCommissionPin(false);
+      showToast('success', 'PIN de comissões removido.');
+    } catch {
+      showToast('error', 'Erro ao remover PIN');
+    } finally {
+      setSavingPin(false);
     }
   };
 
@@ -482,6 +526,87 @@ export function Settings() {
                   {savingPassword ? 'Alterando...' : 'Atualizar Senha'}
                 </button>
               </div>
+            </div>
+
+            <div className="rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-4">
+              <h3 className="mb-4 font-medium text-[var(--text-primary)]">PIN de Comissões</h3>
+              <p className="mb-4 text-sm text-[var(--text-muted)]">
+                Proteja a página de comissões com um PIN numérico. Apenas quem souber o PIN poderá acessar.
+              </p>
+
+              {hasCommissionPin ? (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 rounded-xl bg-[var(--bg-secondary)] p-3">
+                    <Shield className="h-5 w-5 text-[#2D8B4E]" />
+                    <div className="flex-1">
+                      <p className="font-medium text-[var(--text-primary)]">PIN ativo</p>
+                      <p className="text-sm text-[var(--text-muted)]">A página de comissões está protegida</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setHasCommissionPin(false)}
+                      className="flex-1 rounded-xl border border-[var(--border-color)] px-4 py-2 text-sm font-medium text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+                    >
+                      Alterar PIN
+                    </button>
+                    <button
+                      onClick={handleRemoveCommissionPin}
+                      disabled={savingPin}
+                      className="flex items-center gap-2 rounded-xl border border-[#A63030]/30 px-4 py-2 text-sm font-medium text-[#A63030] hover:bg-[#A63030]/10 disabled:opacity-50"
+                    >
+                      {savingPin ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                      Remover PIN
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">
+                        Novo PIN (4-6 dígitos)
+                      </label>
+                      <input
+                        type="password"
+                        inputMode="numeric"
+                        maxLength={6}
+                        value={commissionPin}
+                        onChange={(e) => setCommissionPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        placeholder="Ex: 1234"
+                        className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] px-4 py-2 text-[var(--text-primary)] text-center font-mono tracking-widest focus:border-[#C8923A] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">
+                        Confirmar PIN
+                      </label>
+                      <input
+                        type="password"
+                        inputMode="numeric"
+                        maxLength={6}
+                        value={confirmCommissionPin}
+                        onChange={(e) => setConfirmCommissionPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        placeholder="Repita o PIN"
+                        className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] px-4 py-2 text-[var(--text-primary)] text-center font-mono tracking-widest focus:border-[#C8923A] focus:outline-none"
+                      />
+                      {confirmCommissionPin && commissionPin !== confirmCommissionPin && (
+                        <p className="mt-1 text-xs text-[#A63030]">Os PINs não conferem</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      onClick={handleSaveCommissionPin}
+                      disabled={savingPin || commissionPin.length < 4 || commissionPin !== confirmCommissionPin}
+                      className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-4 py-2 text-sm font-medium text-white hover:bg-[#725510] disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {savingPin ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                      {savingPin ? 'Salvando...' : 'Definir PIN'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-4">
