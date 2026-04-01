@@ -10,10 +10,10 @@ function formatCurrency(cents: number): string {
 export function DPote() {
   const today = new Date();
   const firstDay = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
-  const lastDay = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()).padStart(2, '0')}`;
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
   const [startDate, setStartDate] = useState(firstDay);
-  const [endDate, setEndDate] = useState(lastDay);
+  const [endDate, setEndDate] = useState(todayStr);
   const { data: branches } = useActiveBranches();
   const [branchId, setBranchId] = useState<string>('');
 
