@@ -26,7 +26,7 @@ export function AppointmentActions({
   const [menuPos, setMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
   const btnRef = useRef<HTMLButtonElement>(null);
 
-  const canModify = appointment.status === 'SCHEDULED';
+  const canModify = appointment.status === 'SCHEDULED' || appointment.status === 'PENDING_PAYMENT';
   const canGenerateDebt = !appointment.isPaid && appointment.status !== 'CANCELED';
 
   const handleAction = async (action: () => Promise<unknown>) => {
