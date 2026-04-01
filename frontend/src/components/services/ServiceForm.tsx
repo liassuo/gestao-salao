@@ -155,6 +155,7 @@ export function ServiceForm({ service, onSubmit, isLoading, error }: ServiceForm
               errors.duration ? 'border-[#A63030]' : 'border-[var(--border-color)]'
             }`}
           >
+            <option value={10}>10 minutos</option>
             <option value={15}>15 minutos</option>
             <option value={20}>20 minutos</option>
             <option value={30}>30 minutos</option>
