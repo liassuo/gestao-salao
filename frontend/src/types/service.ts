@@ -5,6 +5,7 @@ export interface Service {
   price: number; // centavos
   duration: number; // minutos (backend usa 'duration')
   durationMinutes?: number; // alias para compatibilidade
+  fichas?: number; // fichas para cálculo de comissão de assinatura
   isActive?: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -15,6 +16,7 @@ export interface CreateServicePayload {
   description?: string;
   price: number; // centavos
   duration: number; // minutos
+  fichas?: number;
 }
 
 export interface UpdateServicePayload {
@@ -22,5 +24,6 @@ export interface UpdateServicePayload {
   description?: string;
   price?: number;
   duration?: number;
+  fichas?: number;
   isActive?: boolean;
 }

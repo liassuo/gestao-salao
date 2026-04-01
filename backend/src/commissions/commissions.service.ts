@@ -28,10 +28,10 @@ export class CommissionsService {
       .gte('scheduledAt', startStr)
       .lte('scheduledAt', endStr);
 
-    // 2) Serviços por assinatura (valor proporcional do plano por corte realizado)
+    // 2) Serviços por assinatura (sistema de pote com fichas)
     const { data: subscriptionAppointments } = await this.supabase
       .from('appointments')
-      .select('professionalId, clientId, totalPrice')
+      .select('professionalId, clientId, services:appointment_services(service:services(fichas))')
       .eq('status', 'ATTENDED')
       .eq('usedSubscriptionCut', true)
       .gte('scheduledAt', startStr)
@@ -68,36 +68,42 @@ export class CommissionsService {
       getEntry(appt.professionalId).services += appt.totalPrice;
     }
 
-    // Para assinaturas: cada corte vale planPrice / cutsPerMonth (proporcional)
-    // Cache dos planos por clientId para evitar queries repetidas
-    const clientPlanCache = new Map<string, { price: number; cutsPerMonth: number } | null>();
+    // Sistema de pote com fichas para assinaturas:
+    // 1. Somar todas as fichas geradas por cada profissional
+    // 2. Somar o valor total das assinaturas ativas no período (o "pote")
+    // 3. Distribuir o pote proporcionalmente pelas fichas de cada profissional
+
+    // Calcular fichas por profissional
+    const fichasByProfessional = new Map<string, number>();
+    let totalFichas = 0;
 
     for (const appt of subscriptionAppointments || []) {
-      if (!clientPlanCache.has(appt.clientId)) {
-        // Busca a assinatura mais recente do cliente (qualquer status, pois pode ter expirado após o uso)
-        const { data: subscription } = await this.supabase
-          .from('client_subscriptions')
-          .select('plan:subscription_plans(price, cutsPerMonth)')
-          .eq('clientId', appt.clientId)
-          .order('createdAt', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+      const apptFichas = ((appt as any).services || []).reduce(
+        (sum: number, as_: any) => sum + (as_.service?.fichas || 0),
+        0,
+      );
+      const existing = fichasByProfessional.get(appt.professionalId) || 0;
+      fichasByProfessional.set(appt.professionalId, existing + apptFichas);
+      totalFichas += apptFichas;
+    }
 
-        const plan = (subscription as any)?.plan;
-        clientPlanCache.set(
-          appt.clientId,
-          plan && plan.cutsPerMonth > 0 ? { price: plan.price, cutsPerMonth: plan.cutsPerMonth } : null,
-        );
-      }
+    // Calcular o pote: valor total das assinaturas ativas no período
+    if (totalFichas > 0) {
+      const { data: activeSubscriptions } = await this.supabase
+        .from('client_subscriptions')
+        .select('plan:subscription_plans(price)')
+        .in('status', ['ACTIVE', 'SUSPENDED'])
+        .lte('startDate', endStr);
 
-      const plan = clientPlanCache.get(appt.clientId);
-      if (plan) {
-        // Plano ilimitado (99): usa o preço do serviço realizado (totalPrice do appointment)
-        // Plano normal: valor proporcional = planPrice / cutsPerMonth
-        const valuePerCut = plan.cutsPerMonth === 99
-          ? appt.totalPrice
-          : Math.round(plan.price / plan.cutsPerMonth);
-        getEntry(appt.professionalId).subscription += valuePerCut;
+      const totalSubscriptionValue = (activeSubscriptions || []).reduce(
+        (sum: number, sub: any) => sum + (sub.plan?.price || 0),
+        0,
+      );
+
+      // Distribuir o pote proporcionalmente pelas fichas
+      for (const [profId, profFichas] of fichasByProfessional) {
+        const subscriptionShare = Math.round((profFichas / totalFichas) * totalSubscriptionValue);
+        getEntry(profId).subscription += subscriptionShare;
       }
     }
 

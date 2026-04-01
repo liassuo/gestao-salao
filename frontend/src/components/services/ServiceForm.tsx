@@ -8,6 +8,7 @@ interface ServiceFormData {
   description: string;
   price: string;
   duration: number;
+  fichas: number;
 }
 
 interface ServiceFormProps {
@@ -53,6 +54,7 @@ export function ServiceForm({ service, onSubmit, isLoading, error }: ServiceForm
       description: service?.description || '',
       price: service?.price ? String(service.price) : '',
       duration: service?.duration || 30,
+      fichas: service?.fichas || 0,
     },
   });
 
@@ -76,6 +78,7 @@ export function ServiceForm({ service, onSubmit, isLoading, error }: ServiceForm
       description: data.description || undefined,
       price: priceInCents,
       duration: data.duration,
+      fichas: data.fichas || 0,
     });
   };
 
@@ -120,7 +123,7 @@ export function ServiceForm({ service, onSubmit, isLoading, error }: ServiceForm
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <div>
           <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
             Preço *
@@ -167,6 +170,18 @@ export function ServiceForm({ service, onSubmit, isLoading, error }: ServiceForm
           {errors.duration && (
             <p className="mt-1 text-sm text-[#A63030]">{errors.duration.message}</p>
           )}
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
+            Fichas (assinatura)
+          </label>
+          <input
+            type="number"
+            {...register('fichas', { valueAsNumber: true, min: 0 })}
+            placeholder="0"
+            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A]"
+          />
         </div>
       </div>
 

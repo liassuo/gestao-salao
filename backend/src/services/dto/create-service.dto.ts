@@ -15,4 +15,9 @@ export class CreateServiceDto {
   @IsNumber()
   @Min(1)
   duration: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  fichas?: number;
 }
