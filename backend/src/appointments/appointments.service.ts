@@ -395,6 +395,26 @@ export class AppointmentsService {
       throw new BadRequestException('Agendamento já está cancelado');
     }
 
+    // Cancelar cobrança Asaas pendente (se existir)
+    if (appointment.status === 'PENDING_PAYMENT' && this.asaasService.configured) {
+      const { data: pendingPayment } = await this.supabase
+        .from('payments')
+        .select('id, asaasPaymentId')
+        .eq('appointmentId', id)
+        .is('paidAt', null)
+        .in('method', ['PIX', 'CARD'])
+        .single();
+
+      if (pendingPayment?.asaasPaymentId) {
+        try {
+          await this.asaasService.cancelCharge(pendingPayment.asaasPaymentId);
+          this.logger.log(`Cobrança Asaas ${pendingPayment.asaasPaymentId} cancelada (agendamento ${id} cancelado)`);
+        } catch (e) {
+          this.logger.warn(`Falha ao cancelar cobrança Asaas ${pendingPayment.asaasPaymentId}: ${e}`);
+        }
+      }
+    }
+
     const { data: updated, error: updateError } = await this.supabase
       .from('appointments')
       .update({ status: 'CANCELED', canceledAt: new Date().toISOString() })
@@ -711,21 +731,27 @@ export class AppointmentsService {
     }
 
     // Buscar QR Code no Asaas para a cobrança EXISTENTE
-    const pixData = await this.asaasService.getPixQrCode(payment.asaasPaymentId);
+    try {
+      const pixData = await this.asaasService.getPixQrCode(payment.asaasPaymentId);
 
-    // Tentar salvar cache (ignora se colunas não existem)
-    if (pixData) {
-      try {
-        await this.supabase.from('payments').update({
-          pixQrCodeBase64: pixData.encodedImage,
-          pixCopyPaste: pixData.payload,
-        }).eq('id', payment.id);
-      } catch {
-        // Colunas podem não existir — ignorar
+      // Tentar salvar cache (ignora se colunas não existem)
+      if (pixData) {
+        try {
+          await this.supabase.from('payments').update({
+            pixQrCodeBase64: pixData.encodedImage,
+            pixCopyPaste: pixData.payload,
+          }).eq('id', payment.id);
+        } catch {
+          // Colunas podem não existir — ignorar
+        }
       }
-    }
 
-    return { pixData, totalPrice: appointment.totalPrice, paymentCreatedAt };
+      return { pixData, totalPrice: appointment.totalPrice, paymentCreatedAt };
+    } catch (e) {
+      // Cobrança cancelada/expirada no Asaas — recriar
+      this.logger.warn(`Falha ao buscar QR Code da cobrança ${payment.asaasPaymentId}, recriando: ${e}`);
+      return await this.recreatePixCharge(appointment, payment);
+    }
   }
 
   private async recreatePixCharge(

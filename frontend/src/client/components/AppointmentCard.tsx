@@ -54,10 +54,9 @@ export function AppointmentCard({
   const status = STATUS_CONFIG[appointment.status] || STATUS_CONFIG.SCHEDULED;
   const hours = hoursUntil(appointment.scheduledAt);
   const isScheduled = appointment.status === 'SCHEDULED';
-  const canCancel = isScheduled && hours > CANCELLATION_HOURS_LIMIT;
-  const showContactButton = isScheduled && hours > 0 && hours <= CANCELLATION_HOURS_LIMIT;
-
   const isPendingPayment = appointment.status === 'PENDING_PAYMENT';
+  const canCancel = (isScheduled && hours > CANCELLATION_HOURS_LIMIT) || isPendingPayment;
+  const showContactButton = isScheduled && hours > 0 && hours <= CANCELLATION_HOURS_LIMIT;
 
   const isHighlight = variant === 'highlight';
   const [whatsapp, setWhatsapp] = useState('');
