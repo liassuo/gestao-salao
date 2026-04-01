@@ -1,4 +1,4 @@
-import { Cake } from 'lucide-react';
+import { Cake, MessageCircle } from 'lucide-react';
 import { formatPhone } from '@/utils/format';
 import type { BirthdayClient } from '@/types/dashboard';
 
@@ -48,6 +48,15 @@ export function BirthdayClientsCard({ clients = [] }: BirthdayClientsCardProps) 
                   <p className="text-xs text-[var(--text-muted)]">{formatPhone(client.phone)}</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                  <a
+                    href={`https://wa.me/55${client.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá ${client.name.split(' ')[0]}! 🎂 A equipe da barbearia deseja a você um Feliz Aniversário! Que seu dia seja incrível! 🎉`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-lg p-1.5 text-green-500 hover:bg-green-500/10"
+                    title="Enviar parabéns pelo WhatsApp"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                  </a>
                   {isToday && (
                     <span className="rounded-full bg-pink-500/20 px-2 py-0.5 text-xs font-medium text-pink-400">
                       Hoje!
