@@ -1,5 +1,6 @@
 import { RefreshCw } from 'lucide-react';
 import { useActiveBranches, useProfessionals } from '@/hooks';
+import { PeriodShortcuts } from '@/components/ui';
 import type { CommissionFilters as CommissionFiltersType } from '@/types';
 
 interface CommissionFiltersProps {
@@ -93,6 +94,10 @@ export function CommissionFilters({ filters, onChange, onGenerate, isGenerating 
           <RefreshCw className={`h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
           Gerar Comissões
         </button>
+      </div>
+
+      <div className="w-full">
+        <PeriodShortcuts onSelect={(s, e) => onChange({ ...filters, startDate: s, endDate: e })} />
       </div>
 
       {/* Limpar Filtros */}

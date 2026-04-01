@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { PieChart, Users, Hash, DollarSign } from 'lucide-react';
 import { usePoteReport, useActiveBranches } from '@/hooks';
-import { SkeletonTable } from '@/components/ui';
+import { SkeletonTable, PeriodShortcuts } from '@/components/ui';
 
 function formatCurrency(cents: number): string {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100);
@@ -69,6 +69,9 @@ export function DPote() {
             </select>
           </div>
         )}
+        <div className="w-full">
+          <PeriodShortcuts onSelect={(s, e) => { setStartDate(s); setEndDate(e); }} />
+        </div>
       </div>
 
       {isLoading ? (
