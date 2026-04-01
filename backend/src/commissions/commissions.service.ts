@@ -87,13 +87,14 @@ export class CommissionsService {
       totalFichas += apptFichas;
     }
 
-    // Calcular o pote: valor total das assinaturas ativas no período
+    // Calcular o pote: valor total das assinaturas que se sobrepõem ao período
     if (totalFichas > 0) {
       const { data: activeSubscriptions } = await this.supabase
         .from('client_subscriptions')
         .select('plan:subscription_plans(price)')
         .in('status', ['ACTIVE', 'SUSPENDED'])
-        .lte('startDate', endStr);
+        .lte('startDate', endStr)
+        .gte('endDate', startStr);
 
       const totalSubscriptionValue = (activeSubscriptions || []).reduce(
         (sum: number, sub: any) => sum + (sub.plan?.price || 0),
@@ -182,12 +183,13 @@ export class CommissionsService {
       .gte('scheduledAt', startStr)
       .lte('scheduledAt', endStr);
 
-    // Buscar assinaturas ativas
+    // Buscar assinaturas que se sobrepõem ao período
     const { data: activeSubscriptions } = await this.supabase
       .from('client_subscriptions')
       .select('plan:subscription_plans(name, price)')
       .in('status', ['ACTIVE', 'SUSPENDED'])
-      .lte('startDate', endStr);
+      .lte('startDate', endStr)
+      .gte('endDate', startStr);
 
     const totalSubscriptionValue = (activeSubscriptions || []).reduce(
       (sum: number, sub: any) => sum + (sub.plan?.price || 0),

@@ -594,7 +594,7 @@ export class AppointmentsService {
   async markAsNoShow(id: string) {
     const { data: appointment, error } = await this.supabase
       .from('appointments')
-      .select('id, status')
+      .select('id, status, usedSubscriptionCut, clientId')
       .eq('id', id)
       .single();
 
@@ -602,8 +602,48 @@ export class AppointmentsService {
       throw new NotFoundException('Agendamento não encontrado');
     }
 
-    if (appointment.status !== 'SCHEDULED') {
-      throw new BadRequestException('Só é possível marcar como no-show agendamentos com status SCHEDULED');
+    if (!['SCHEDULED', 'PENDING_PAYMENT'].includes(appointment.status)) {
+      throw new BadRequestException('Só é possível marcar como no-show agendamentos com status SCHEDULED ou PENDING_PAYMENT');
+    }
+
+    // Cancelar cobrança pendente no Asaas (se existir)
+    if (this.asaasService.configured) {
+      const { data: pendingPayment } = await this.supabase
+        .from('payments')
+        .select('id, asaasPaymentId')
+        .eq('appointmentId', id)
+        .is('paidAt', null)
+        .in('method', ['PIX', 'CARD'])
+        .maybeSingle();
+
+      if (pendingPayment?.asaasPaymentId) {
+        try {
+          await this.asaasService.cancelCharge(pendingPayment.asaasPaymentId);
+          this.logger.log(`Cobrança Asaas ${pendingPayment.asaasPaymentId} cancelada (no-show ${id})`);
+        } catch (e) {
+          this.logger.warn(`Falha ao cancelar cobrança Asaas no no-show: ${e}`);
+        }
+      }
+    }
+
+    // Devolver corte de assinatura (se usou)
+    if (appointment.usedSubscriptionCut) {
+      const { data: subscription } = await this.supabase
+        .from('client_subscriptions')
+        .select('id, cutsUsedThisMonth')
+        .eq('clientId', appointment.clientId)
+        .in('status', ['ACTIVE', 'SUSPENDED'])
+        .order('createdAt', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (subscription && subscription.cutsUsedThisMonth > 0) {
+        await this.supabase
+          .from('client_subscriptions')
+          .update({ cutsUsedThisMonth: subscription.cutsUsedThisMonth - 1 })
+          .eq('id', subscription.id);
+        this.logger.log(`Corte de assinatura devolvido para cliente ${appointment.clientId} (no-show ${id})`);
+      }
     }
 
     const { data: updated, error: updateError } = await this.supabase
@@ -628,8 +668,8 @@ export class AppointmentsService {
       throw new NotFoundException('Agendamento não encontrado');
     }
 
-    if (appointment.status !== 'SCHEDULED') {
-      throw new BadRequestException('Só é possível editar agendamentos com status SCHEDULED');
+    if (!['SCHEDULED', 'PENDING_PAYMENT'].includes(appointment.status)) {
+      throw new BadRequestException('Só é possível editar agendamentos com status SCHEDULED ou PENDING_PAYMENT');
     }
 
     const updateData: any = {};
