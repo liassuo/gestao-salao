@@ -179,7 +179,7 @@ export function ServiceForm({ service, onSubmit, isLoading, error }: ServiceForm
           <input
             type="number"
             {...register('fichas', { valueAsNumber: true, min: 0 })}
-            placeholder="0"
+            placeholder="0 = usa duração"
             className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A]"
           />
         </div>

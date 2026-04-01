@@ -5,7 +5,7 @@ export interface Service {
   price: number; // centavos
   duration: number; // minutos (backend usa 'duration')
   durationMinutes?: number; // alias para compatibilidade
-  fichas?: number; // fichas para cálculo de comissão de assinatura
+  fichas?: number; // fichas para comissão de assinatura (0 = usa duration)
   isActive?: boolean;
   createdAt?: string;
   updatedAt?: string;

@@ -31,7 +31,7 @@ export class CommissionsService {
     // 2) Serviços por assinatura (sistema de pote com fichas)
     const { data: subscriptionAppointments } = await this.supabase
       .from('appointments')
-      .select('professionalId, clientId, services:appointment_services(service:services(fichas))')
+      .select('professionalId, clientId, services:appointment_services(service:services(fichas, duration))')
       .eq('status', 'ATTENDED')
       .eq('usedSubscriptionCut', true)
       .gte('scheduledAt', startStr)
@@ -73,13 +73,13 @@ export class CommissionsService {
     // 2. Somar o valor total das assinaturas ativas no período (o "pote")
     // 3. Distribuir o pote proporcionalmente pelas fichas de cada profissional
 
-    // Calcular fichas por profissional
+    // Calcular fichas por profissional (fichas do serviço, ou duration como fallback)
     const fichasByProfessional = new Map<string, number>();
     let totalFichas = 0;
 
     for (const appt of subscriptionAppointments || []) {
       const apptFichas = ((appt as any).services || []).reduce(
-        (sum: number, as_: any) => sum + (as_.service?.fichas || 0),
+        (sum: number, as_: any) => sum + (as_.service?.fichas || as_.service?.duration || 0),
         0,
       );
       const existing = fichasByProfessional.get(appt.professionalId) || 0;

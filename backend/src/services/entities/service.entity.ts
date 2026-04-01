@@ -22,8 +22,7 @@ export class Service {
 
   /**
    * Fichas (tokens) for subscription commission calculation
-   * Used in the "pote" system: subscription revenue is distributed
-   * proportionally based on fichas each professional generated
+   * If 0, defaults to duration (minutes) as fallback
    */
   fichas: number;
 
