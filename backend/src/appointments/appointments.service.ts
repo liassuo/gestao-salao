@@ -280,12 +280,14 @@ export class AppointmentsService {
     }
 
     // 6. Criar cobrança no Asaas (se configurado, valor > 0 e não for pago só com crédito do plano)
+    // Agendamentos feitos pelo admin/barbeiro são sempre "pagamento no local" (CASH)
+    const effectiveBillingType = dto.source === 'CLIENT' ? dto.billingType : 'CASH';
     let pixData = null;
     let asaasCharge = null;
-    const billingType = parseAsaasBillingType(dto.billingType);
+    const billingType = parseAsaasBillingType(effectiveBillingType);
     const skipAsaasForSubscriptionCut = !!dto.useSubscriptionCut;
 
-    if (this.asaasService.configured && totalPrice > 0 && !skipAsaasForSubscriptionCut && dto.billingType !== 'CASH') {
+    if (this.asaasService.configured && totalPrice > 0 && !skipAsaasForSubscriptionCut && effectiveBillingType !== 'CASH') {
       try {
         // Buscar/Criar cliente no Asaas (valida se o ID existente é do ambiente correto)
         const { data: clientData } = await this.supabase

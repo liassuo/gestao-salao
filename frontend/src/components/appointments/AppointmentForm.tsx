@@ -34,7 +34,6 @@ interface AppointmentFormProps {
 
 export function AppointmentForm({ onSubmit, isLoading, error, prefill }: AppointmentFormProps) {
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
-  const [billingType, setBillingType] = useState<'PIX' | 'CREDIT_CARD'>('PIX');
 
   const { data: clients = [], isLoading: isLoadingClients } = useClients();
   const { data: professionals = [], isLoading: isLoadingProfessionals } = useProfessionals();
@@ -94,7 +93,6 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
       serviceIds: selectedServiceIds,
       scheduledAt,
       notes: data.notes || undefined,
-      billingType,
     });
   };
 
@@ -232,40 +230,6 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
             <p className="mt-1 text-sm text-[#A63030]">{errors.time.message}</p>
           )}
         </div>
-      </div>
-
-      {/* Pagamento Asaas (cobrança gerada quando valor &gt; 0) */}
-      <div>
-        <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
-          Cobrança online (Asaas)
-        </label>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => setBillingType('PIX')}
-            className={`rounded-xl border py-2.5 text-sm font-semibold transition-colors ${
-              billingType === 'PIX'
-                ? 'border-[#C8923A] bg-[#C8923A]/10 text-[#C8923A]'
-                : 'border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-secondary)]'
-            }`}
-          >
-            PIX
-          </button>
-          <button
-            type="button"
-            onClick={() => setBillingType('CREDIT_CARD')}
-            className={`rounded-xl border py-2.5 text-sm font-semibold transition-colors ${
-              billingType === 'CREDIT_CARD'
-                ? 'border-[#C8923A] bg-[#C8923A]/10 text-[#C8923A]'
-                : 'border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-secondary)]'
-            }`}
-          >
-            Cartão
-          </button>
-        </div>
-        <p className="mt-1.5 text-xs text-[var(--text-muted)]">
-          Aplicado quando o serviço tem valor e o Asaas está configurado.
-        </p>
       </div>
 
       {/* Observações */}
