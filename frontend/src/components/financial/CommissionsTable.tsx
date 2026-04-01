@@ -42,7 +42,16 @@ export function CommissionsTable({ commissions, onMarkAsPaid, onDelete, isLoadin
                 Período
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                Valor
+                Serv. Avulsos
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                Serv. Assinatura
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                Produtos
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                Total Líquido
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Status
@@ -62,6 +71,15 @@ export function CommissionsTable({ commissions, onMarkAsPaid, onDelete, isLoadin
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-muted)]">
                   {formatDate(commission.periodStart)} - {formatDate(commission.periodEnd)}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-muted)]">
+                  {formatCurrency(commission.amountServices ?? 0)}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-muted)]">
+                  {formatCurrency(commission.amountSubscription ?? 0)}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-muted)]">
+                  {formatCurrency(commission.amountProducts ?? 0)}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-[var(--text-primary)]">
                   {formatCurrency(commission.amount)}

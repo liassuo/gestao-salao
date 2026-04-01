@@ -15,10 +15,18 @@ export class Commission {
   id: string;
 
   /**
-   * Commission amount in centavos
-   * Calculated from attended appointments in the period
+   * Commission amount in centavos (total = amountServices + amountSubscription + amountProducts)
    */
   amount: number;
+
+  /** Commission from standalone services (serviços avulsos) in centavos */
+  amountServices: number;
+
+  /** Commission from subscription services (serviços por assinatura) in centavos */
+  amountSubscription: number;
+
+  /** Commission from product sales (produtos) in centavos */
+  amountProducts: number;
 
   /**
    * Start of the commission period

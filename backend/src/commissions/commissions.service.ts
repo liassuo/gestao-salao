@@ -19,27 +19,101 @@ export class CommissionsService {
     const startStr = `${dto.periodStart}T00:00:00`;
     const endStr = `${dto.periodEnd}T23:59:59`;
 
-    const { data: appointments } = await this.supabase
+    // 1) Serviços avulsos (appointments sem assinatura)
+    const { data: regularAppointments } = await this.supabase
       .from('appointments')
       .select('professionalId, totalPrice')
       .eq('status', 'ATTENDED')
+      .neq('usedSubscriptionCut', true)
       .gte('scheduledAt', startStr)
       .lte('scheduledAt', endStr);
 
-    if (!appointments || appointments.length === 0) {
-      throw new BadRequestException('Nenhum atendimento encontrado no período informado');
+    // 2) Serviços por assinatura (valor proporcional do plano por corte realizado)
+    const { data: subscriptionAppointments } = await this.supabase
+      .from('appointments')
+      .select('professionalId, clientId, totalPrice')
+      .eq('status', 'ATTENDED')
+      .eq('usedSubscriptionCut', true)
+      .gte('scheduledAt', startStr)
+      .lte('scheduledAt', endStr);
+
+    // 3) Produtos (comandas pagas com itens do tipo PRODUCT)
+    const { data: paidOrders } = await this.supabase
+      .from('orders')
+      .select('professionalId, items:order_items(unitPrice, quantity, itemType)')
+      .eq('status', 'PAID')
+      .gte('createdAt', startStr)
+      .lte('createdAt', endStr);
+
+    const hasData =
+      (regularAppointments && regularAppointments.length > 0) ||
+      (subscriptionAppointments && subscriptionAppointments.length > 0) ||
+      (paidOrders && paidOrders.length > 0);
+
+    if (!hasData) {
+      throw new BadRequestException('Nenhum atendimento ou venda encontrado no período informado');
     }
 
-    const groupedByProfessional = new Map<string, number>();
+    // Agrupar por profissional: { services, subscription, products }
+    const grouped = new Map<string, { services: number; subscription: number; products: number }>();
 
-    for (const appointment of appointments) {
-      const existing = groupedByProfessional.get(appointment.professionalId) || 0;
-      groupedByProfessional.set(appointment.professionalId, existing + appointment.totalPrice);
+    const getEntry = (profId: string) => {
+      if (!grouped.has(profId)) {
+        grouped.set(profId, { services: 0, subscription: 0, products: 0 });
+      }
+      return grouped.get(profId)!;
+    };
+
+    for (const appt of regularAppointments || []) {
+      getEntry(appt.professionalId).services += appt.totalPrice;
+    }
+
+    // Para assinaturas: cada corte vale planPrice / cutsPerMonth (proporcional)
+    // Cache dos planos por clientId para evitar queries repetidas
+    const clientPlanCache = new Map<string, { price: number; cutsPerMonth: number } | null>();
+
+    for (const appt of subscriptionAppointments || []) {
+      if (!clientPlanCache.has(appt.clientId)) {
+        // Busca a assinatura mais recente do cliente (qualquer status, pois pode ter expirado após o uso)
+        const { data: subscription } = await this.supabase
+          .from('client_subscriptions')
+          .select('plan:subscription_plans(price, cutsPerMonth)')
+          .eq('clientId', appt.clientId)
+          .order('createdAt', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const plan = (subscription as any)?.plan;
+        clientPlanCache.set(
+          appt.clientId,
+          plan && plan.cutsPerMonth > 0 ? { price: plan.price, cutsPerMonth: plan.cutsPerMonth } : null,
+        );
+      }
+
+      const plan = clientPlanCache.get(appt.clientId);
+      if (plan) {
+        // Plano ilimitado (99): usa o preço do serviço realizado (totalPrice do appointment)
+        // Plano normal: valor proporcional = planPrice / cutsPerMonth
+        const valuePerCut = plan.cutsPerMonth === 99
+          ? appt.totalPrice
+          : Math.round(plan.price / plan.cutsPerMonth);
+        getEntry(appt.professionalId).subscription += valuePerCut;
+      }
+    }
+
+    for (const order of paidOrders || []) {
+      if (!order.professionalId) continue;
+      const productTotal = ((order as any).items || [])
+        .filter((item: any) => item.itemType === 'PRODUCT')
+        .reduce((sum: number, item: any) => sum + item.unitPrice * (item.quantity || 1), 0);
+      if (productTotal > 0) {
+        getEntry(order.professionalId).products += productTotal;
+      }
     }
 
     const createdCommissions = [];
 
-    for (const [professionalId, totalPrice] of groupedByProfessional) {
+    for (const [professionalId, totals] of grouped) {
       const { data: professional } = await this.supabase
         .from('professionals')
         .select('id, commissionRate, branchId')
@@ -48,9 +122,13 @@ export class CommissionsService {
 
       if (!professional || !professional.commissionRate) continue;
 
-      const commissionAmount = Math.round((totalPrice * professional.commissionRate) / 100);
+      const rate = professional.commissionRate;
+      const amountServices = Math.round((totals.services * rate) / 100);
+      const amountSubscription = Math.round((totals.subscription * rate) / 100);
+      const amountProducts = Math.round((totals.products * rate) / 100);
+      const amount = amountServices + amountSubscription + amountProducts;
 
-      if (commissionAmount <= 0) continue;
+      if (amount <= 0) continue;
 
       const d = new Date();
       const comNow = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
@@ -58,7 +136,10 @@ export class CommissionsService {
         .from('commissions')
         .insert({
           id: randomUUID(),
-          amount: commissionAmount,
+          amount,
+          amountServices,
+          amountSubscription,
+          amountProducts,
           periodStart: startStr,
           periodEnd: endStr,
           status: 'PENDING',
