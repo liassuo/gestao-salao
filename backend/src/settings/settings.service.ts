@@ -76,10 +76,7 @@ export class SettingsService {
 
   async setCommissionPin(pin: string) {
     if (!pin || pin.length < 4 || pin.length > 6) {
-      throw new BadRequestException('O PIN deve ter entre 4 e 6 dígitos');
-    }
-    if (!/^\d+$/.test(pin)) {
-      throw new BadRequestException('O PIN deve conter apenas números');
+      throw new BadRequestException('O PIN deve ter entre 4 e 6 caracteres');
     }
 
     const hashedPin = await bcrypt.hash(pin, 6);

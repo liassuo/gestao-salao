@@ -187,13 +187,11 @@ export function Commissions() {
 
         <input
           type="password"
-          inputMode="numeric"
           maxLength={6}
           placeholder="Digite o PIN"
           value={pinInput}
           onChange={(e) => {
-            const v = e.target.value.replace(/\D/g, '').slice(0, 6);
-            setPinInput(v);
+            setPinInput(e.target.value.slice(0, 6));
             setPinError('');
           }}
           onKeyDown={(e) => { if (e.key === 'Enter') handleVerifyPin(); }}
