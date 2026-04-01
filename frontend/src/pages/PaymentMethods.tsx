@@ -9,9 +9,10 @@ import {
 } from '@/hooks';
 import { PaymentMethodsTable, PaymentMethodForm } from '@/components/payment-methods';
 import { Modal, ConfirmModal, SkeletonTable, useToast } from '@/components/ui';
+import { PinGate } from '@/components/auth';
 import type { PaymentMethodConfig, CreatePaymentMethodConfigPayload, UpdatePaymentMethodConfigPayload } from '@/types';
 
-export function PaymentMethods() {
+function PaymentMethodsContent() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingMethod, setEditingMethod] = useState<PaymentMethodConfig | null>(null);
   const [deletingMethod, setDeletingMethod] = useState<PaymentMethodConfig | null>(null);
@@ -166,5 +167,13 @@ export function PaymentMethods() {
         isLoading={deleteMethod.isPending}
       />
     </div>
+  );
+}
+
+export function PaymentMethods() {
+  return (
+    <PinGate description="Digite o PIN para acessar as formas de pagamento.">
+      <PaymentMethodsContent />
+    </PinGate>
   );
 }

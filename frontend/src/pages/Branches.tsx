@@ -9,9 +9,10 @@ import {
 } from '@/hooks';
 import { BranchesTable, BranchForm } from '@/components/branches';
 import { Modal, ConfirmModal, SkeletonTable, useToast } from '@/components/ui';
+import { PinGate } from '@/components/auth';
 import type { Branch, CreateBranchPayload, UpdateBranchPayload } from '@/types';
 
-export function Branches() {
+function BranchesContent() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
   const [deletingBranch, setDeletingBranch] = useState<Branch | null>(null);
@@ -166,5 +167,13 @@ export function Branches() {
         isLoading={deleteBranch.isPending}
       />
     </div>
+  );
+}
+
+export function Branches() {
+  return (
+    <PinGate description="Digite o PIN para acessar a gestão de filiais.">
+      <BranchesContent />
+    </PinGate>
   );
 }
