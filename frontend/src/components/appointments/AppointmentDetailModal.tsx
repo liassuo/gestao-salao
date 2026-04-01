@@ -124,7 +124,7 @@ export function AppointmentDetailModal({
     'w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] border-[var(--card-border)]';
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Detalhes do Agendamento" size="md">
+    <Modal isOpen={isOpen} onClose={onClose} title="Detalhes do Agendamento" size="lg">
       <div className="space-y-4">
         {/* Status row */}
         <div className="flex items-center justify-between">
