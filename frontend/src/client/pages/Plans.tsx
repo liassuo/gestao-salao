@@ -666,10 +666,33 @@ export function ClientPlans() {
             </div>
 
             <p className="text-sm text-[var(--text-muted)] mb-5">
-              A assinatura será cobrada automaticamente no cartão de crédito todo mês.
+              Escolha como deseja pagar a assinatura.
             </p>
 
             <div className="space-y-3">
+              <button
+                onClick={() => {
+                  const id = paymentMethodModal;
+                  if (id === 'REACTIVATE') {
+                    handleReactivate('PIX');
+                  } else {
+                    handleSubscribe(id, 'PIX');
+                  }
+                }}
+                className="w-full p-4 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] hover:border-[#C8923A] transition-all flex items-center gap-4 group"
+              >
+                <div className="w-10 h-10 rounded-lg bg-[#2D8B4E]/10 flex items-center justify-center text-[#2D8B4E] group-hover:bg-[#2D8B4E] group-hover:text-white transition-colors">
+                  <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M9.5 4.5l2.1 2.1L8.8 9.4c-.5.5-.5 1.2 0 1.7l4.1 4.1c.5.5 1.2.5 1.7 0l2.8-2.8 2.1 2.1V4.5H9.5z" />
+                    <path d="M14.5 19.5l-2.1-2.1 2.8-2.8c.5-.5.5-1.2 0-1.7L11.1 8.8c-.5-.5-1.2-.5-1.7 0L6.6 11.6 4.5 9.5V19.5H14.5z" />
+                  </svg>
+                </div>
+                <div className="text-left">
+                  <p className="font-bold text-[var(--text-primary)]">PIX</p>
+                  <p className="text-xs text-[var(--text-muted)]">Pagamento instantâneo via QR Code</p>
+                </div>
+              </button>
+
               <button
                 onClick={() => {
                   const id = paymentMethodModal;
