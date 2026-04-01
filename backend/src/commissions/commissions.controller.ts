@@ -26,6 +26,14 @@ export class CommissionsController {
     return this.commissionsService.generate(generateCommissionDto);
   }
 
+  @Get('pote-report')
+  async getPoteReport(
+    @Query('periodStart') periodStart: string,
+    @Query('periodEnd') periodEnd: string,
+  ) {
+    return this.commissionsService.getPoteReport(periodStart, periodEnd);
+  }
+
   @Get()
   async findAll(@Query() query: QueryCommissionDto) {
     return this.commissionsService.findAll(query);

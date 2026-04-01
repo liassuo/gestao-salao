@@ -32,7 +32,7 @@ export {
 } from './useSubscriptions';
 export { useBranches, useActiveBranches, useBranch, useCreateBranch, useUpdateBranch, useDeleteBranch } from './useBranches';
 export { usePaymentMethodConfigs, usePaymentMethodConfig, useCreatePaymentMethodConfig, useUpdatePaymentMethodConfig, useDeletePaymentMethodConfig } from './usePaymentMethodConfig';
-export { useCommissions, useCommission, useGenerateCommissions, useMarkCommissionAsPaid, useDeleteCommission } from './useCommissions';
+export { useCommissions, useCommission, useGenerateCommissions, useMarkCommissionAsPaid, useDeleteCommission, usePoteReport } from './useCommissions';
 export { useProducts, useProduct, useProductStock, useLowStockProducts, useCreateProduct, useUpdateProduct, useDeleteProduct } from './useProducts';
 export { useStockMovements, useCreateStockMovement } from './useStock';
 export { useOrders, useOrder, useCreateOrder, useAddOrderItem, useRemoveOrderItem, usePayOrder, useCancelOrder, useDeleteOrder } from './useOrders';

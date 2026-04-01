@@ -169,6 +169,101 @@ export class CommissionsService {
     return createdCommissions;
   }
 
+  async getPoteReport(periodStart: string, periodEnd: string) {
+    const startStr = `${periodStart}T00:00:00`;
+    const endStr = `${periodEnd}T23:59:59`;
+
+    // Buscar atendimentos de assinatura no período
+    const { data: subscriptionAppointments } = await this.supabase
+      .from('appointments')
+      .select('professionalId, services:appointment_services(service:services(id, name, fichas, duration))')
+      .eq('status', 'ATTENDED')
+      .eq('usedSubscriptionCut', true)
+      .gte('scheduledAt', startStr)
+      .lte('scheduledAt', endStr);
+
+    // Buscar assinaturas ativas
+    const { data: activeSubscriptions } = await this.supabase
+      .from('client_subscriptions')
+      .select('plan:subscription_plans(name, price)')
+      .in('status', ['ACTIVE', 'SUSPENDED'])
+      .lte('startDate', endStr);
+
+    const totalSubscriptionValue = (activeSubscriptions || []).reduce(
+      (sum: number, sub: any) => sum + (sub.plan?.price || 0),
+      0,
+    );
+
+    // Agrupar fichas por profissional e por serviço
+    const profMap = new Map<string, { fichas: number; services: Map<string, { name: string; count: number; fichas: number }> }>();
+    let totalFichas = 0;
+    let totalServices = 0;
+
+    for (const appt of subscriptionAppointments || []) {
+      if (!profMap.has(appt.professionalId)) {
+        profMap.set(appt.professionalId, { fichas: 0, services: new Map() });
+      }
+      const prof = profMap.get(appt.professionalId)!;
+
+      for (const as_ of (appt as any).services || []) {
+        const svc = as_.service;
+        if (!svc) continue;
+        const svcFichas = svc.fichas || svc.duration || 0;
+        prof.fichas += svcFichas;
+        totalFichas += svcFichas;
+        totalServices++;
+
+        if (!prof.services.has(svc.id)) {
+          prof.services.set(svc.id, { name: svc.name, count: 0, fichas: 0 });
+        }
+        const svcEntry = prof.services.get(svc.id)!;
+        svcEntry.count++;
+        svcEntry.fichas += svcFichas;
+      }
+    }
+
+    // Buscar nomes dos profissionais
+    const profIds = Array.from(profMap.keys());
+    const professionals: { id: string; name: string; commissionRate: number }[] = [];
+    for (const profId of profIds) {
+      const { data: prof } = await this.supabase
+        .from('professionals')
+        .select('id, name, commissionRate')
+        .eq('id', profId)
+        .single();
+      if (prof) professionals.push(prof);
+    }
+
+    // Montar resultado por profissional
+    const byProfessional = professionals.map((prof) => {
+      const entry = profMap.get(prof.id)!;
+      const percentage = totalFichas > 0 ? entry.fichas / totalFichas : 0;
+      const shareOfPot = Math.round(percentage * totalSubscriptionValue);
+      const commission = Math.round((shareOfPot * (prof.commissionRate || 0)) / 100);
+
+      return {
+        professionalId: prof.id,
+        professionalName: prof.name,
+        commissionRate: prof.commissionRate,
+        fichas: entry.fichas,
+        percentage: Math.round(percentage * 10000) / 100,
+        shareOfPot,
+        commission,
+        services: Array.from(entry.services.values()),
+      };
+    }).sort((a, b) => b.fichas - a.fichas);
+
+    return {
+      periodStart,
+      periodEnd,
+      totalServices,
+      totalFichas,
+      totalSubscriptionValue,
+      activeSubscriptions: activeSubscriptions?.length || 0,
+      byProfessional,
+    };
+  }
+
   async findAll(query: QueryCommissionDto) {
     let queryBuilder = this.supabase
       .from('commissions')

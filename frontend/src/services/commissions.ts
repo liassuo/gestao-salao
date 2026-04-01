@@ -32,4 +32,11 @@ export const commissionsService = {
   async delete(id: string): Promise<void> {
     await api.delete(`/commissions/${id}`);
   },
+
+  async getPoteReport(periodStart: string, periodEnd: string) {
+    const response = await api.get('/commissions/pote-report', {
+      params: { periodStart, periodEnd },
+    });
+    return response.data;
+  },
 };

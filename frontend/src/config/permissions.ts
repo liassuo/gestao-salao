@@ -131,6 +131,12 @@ export const menuItems: MenuItem[] = [
     path: '/financeiro/comissoes',
     roles: ['ADMIN'],
   },
+  {
+    icon: DollarSign,
+    label: 'D\'Pote',
+    path: '/financeiro/dpote',
+    roles: ['ADMIN'],
+  },
   // Cadastros group
   {
     icon: Building2,
