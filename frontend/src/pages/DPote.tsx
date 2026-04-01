@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { PieChart, Users, Hash, DollarSign, Percent } from 'lucide-react';
+import { PieChart, Users, Hash, DollarSign } from 'lucide-react';
 import { usePoteReport, useActiveBranches } from '@/hooks';
 import { SkeletonTable } from '@/components/ui';
 
