@@ -308,10 +308,15 @@ export class AppointmentsService {
         }
 
         if (!asaasCustomerId && clientData) {
+          if (!clientData.cpf) {
+            throw new BadRequestException(
+              'CPF é obrigatório para gerar cobranças. Atualize seu perfil com um CPF válido.',
+            );
+          }
           const newCustomer = await this.asaasService.createCustomer({
             name: clientData.name,
             email: clientData.email || undefined,
-            cpfCnpj: clientData.cpf || undefined,
+            cpfCnpj: clientData.cpf,
             mobilePhone: clientData.phone || undefined,
             externalReference: clientData.id,
           });
@@ -769,10 +774,15 @@ export class AppointmentsService {
 
     // Criar customer no Asaas se não existir
     if (!asaasCustomerId && clientData) {
+      if (!clientData.cpf) {
+        throw new BadRequestException(
+          'CPF é obrigatório para gerar cobranças. Atualize seu perfil com um CPF válido.',
+        );
+      }
       const newCustomer = await this.asaasService.createCustomer({
         name: clientData.name,
         email: clientData.email || undefined,
-        cpfCnpj: clientData.cpf || undefined,
+        cpfCnpj: clientData.cpf,
         mobilePhone: clientData.phone || undefined,
         externalReference: clientData.id,
       });

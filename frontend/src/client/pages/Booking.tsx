@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CLIENT_PATHS } from '../utils/paths';
 import { useClientServices, useClientProfessionals, useAvailableSlots, useClientAppointments } from '../hooks';
+import { useClientAuth } from '../auth';
 import { LoadingState, EmptyState } from '../components/ui';
 import { formatPrice, formatDuration, formatDateISO, formatDateLong } from '../utils/format';
 import { clientApi } from '../services/api';
@@ -119,8 +120,13 @@ export function ClientBooking() {
     useState<AppointmentBillingType>('PIX');
   const [subscribePlanModal, setSubscribePlanModal] = useState<string | null>(null);
   const [leaveAfterPixClose, setLeaveAfterPixClose] = useState(false);
+  const [clientCpf, setClientCpf] = useState<string | null>(null);
+  const [cpfInput, setCpfInput] = useState('');
+  const [cpfModalOpen, setCpfModalOpen] = useState(false);
+  const [savingCpf, setSavingCpf] = useState(false);
 
   const navigate = useNavigate();
+  const { user } = useClientAuth();
   const [activePromotions, setActivePromotions] = useState<ActivePromotion[]>([]);
 
   const { services, isLoading: servicesLoading, fetchServices } = useClientServices();
@@ -144,7 +150,15 @@ export function ClientBooking() {
         }
       })
       .catch(() => {});
-  }, []);
+
+    if (user?.id) {
+      clientApi.get(`/clients/${user.id}`)
+        .then((res) => {
+          if (res.data?.cpf) setClientCpf(res.data.cpf);
+        })
+        .catch(() => {});
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     if (!debtPollingActive) return;
@@ -389,7 +403,52 @@ export function ClientBooking() {
     }
   };
 
+  const formatCpfInput = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 11);
+    if (digits.length <= 3) return digits;
+    if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+    if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+    return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+  };
+
+  const handleSaveCpf = async () => {
+    const digits = cpfInput.replace(/\D/g, '');
+    if (digits.length !== 11) {
+      alert('CPF inválido. Digite os 11 dígitos.');
+      return;
+    }
+    setSavingCpf(true);
+    try {
+      await clientApi.patch(`/clients/${user?.id}`, { cpf: digits });
+      setClientCpf(digits);
+      setCpfModalOpen(false);
+      // Prosseguir com o agendamento após salvar CPF
+      doConfirm();
+    } catch (e: unknown) {
+      const error = e as { response?: { data?: { message?: string } } };
+      alert(error.response?.data?.message || 'Erro ao salvar CPF. Tente novamente.');
+    } finally {
+      setSavingCpf(false);
+    }
+  };
+
   const handleConfirm = async () => {
+    if (!selectedProfessional || !selectedDate || !selectedTime) return;
+
+    const usesSubscription = useSubscriptionCut && !!mySubscription;
+    const needsPayment = totalPrice > 0 && !usesSubscription;
+
+    // Se precisa de pagamento online e não tem CPF, pedir antes
+    if (needsPayment && appointmentBillingType !== 'CASH' && !clientCpf) {
+      setCpfInput('');
+      setCpfModalOpen(true);
+      return;
+    }
+
+    doConfirm();
+  };
+
+  const doConfirm = async () => {
     if (!selectedProfessional || !selectedDate || !selectedTime) return;
 
     const usesSubscription = useSubscriptionCut && !!mySubscription;
@@ -1234,6 +1293,51 @@ export function ClientBooking() {
                 Cancelar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de CPF obrigatório */}
+      {cpfModalOpen && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="bg-[var(--bg-primary)] rounded-2xl w-full max-w-sm p-6 shadow-2xl border border-[var(--card-border)] animate-in slide-in-from-bottom duration-300">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-[var(--text-primary)]">CPF Necessário</h3>
+              <button
+                onClick={() => setCpfModalOpen(false)}
+                className="p-1 text-[var(--text-muted)]"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <p className="text-sm text-[var(--text-muted)] mb-4">
+              Para gerar o pagamento, precisamos do seu CPF. Ele será usado apenas para a cobrança.
+            </p>
+
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder="000.000.000-00"
+              value={cpfInput}
+              onChange={e => setCpfInput(formatCpfInput(e.target.value))}
+              className="w-full px-4 py-3 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] text-[var(--text-primary)] text-center text-lg tracking-wider font-mono focus:outline-none focus:border-[#C8923A] transition-colors"
+              maxLength={14}
+            />
+
+            <button
+              onClick={handleSaveCpf}
+              disabled={savingCpf || cpfInput.replace(/\D/g, '').length !== 11}
+              className="mt-4 w-full py-3 bg-[#8B6914] hover:bg-[#725510] text-white font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center"
+            >
+              {savingCpf ? (
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
+              ) : (
+                'Continuar'
+              )}
+            </button>
           </div>
         </div>
       )}
