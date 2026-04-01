@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ClipboardList, Plus, AlertCircle, Eye, Trash2, CreditCard, XCircle, ShoppingCart, X, Package, Scissors, Banknote, Smartphone, CircleDollarSign, Tag, Minus } from 'lucide-react';
 import { useOrders, useCreateOrder, usePayOrder, useCancelOrder, useDeleteOrder, useAddOrderItem, useRemoveOrderItem, useClients, useProducts, useServices, useActivePromotions, getApiErrorMessage } from '@/hooks';
 import { ordersService } from '@/services/orders';
@@ -46,7 +47,15 @@ function applyDiscount(price: number, percent: number): number {
 }
 
 export function Orders() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get('new') === '1') {
+      setIsCreateModalOpen(true);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
   const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
   const [deletingOrder, setDeletingOrder] = useState<Order | null>(null);
   const [isAddItemOpen, setIsAddItemOpen] = useState(false);

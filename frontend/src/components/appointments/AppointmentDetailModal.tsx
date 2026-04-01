@@ -5,6 +5,7 @@ import type { CalendarAppointment } from '@/types';
 
 const statusConfig: Record<string, { label: string; classes: string }> = {
   SCHEDULED: { label: 'Agendado', classes: 'text-[#D4A85C] bg-[#C8923A]/20 border border-[#C8923A]/40' },
+  PENDING_PAYMENT: { label: 'Pagamento Pendente', classes: 'text-blue-400 bg-blue-500/20 border border-blue-500/40' },
   ATTENDED: { label: 'Atendido', classes: 'text-emerald-400 bg-emerald-500/20 border border-emerald-500/40' },
   CANCELLED: { label: 'Cancelado', classes: 'text-[#C45050] bg-red-500/15 border border-[#A63030]/30' },
   NO_SHOW: { label: 'Não Compareceu', classes: 'text-amber-400 bg-amber-500/15 border border-amber-500/30' },
@@ -83,7 +84,7 @@ export function AppointmentDetailModal({
     parseInt(startTime.split(':')[1]) +
     appointment.totalDuration;
   const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
-  const isScheduled = appointment.status === 'SCHEDULED';
+  const isScheduled = appointment.status === 'SCHEDULED' || appointment.status === 'PENDING_PAYMENT';
 
   const handleStartEdit = () => {
     const vals = extractEditValues(appointment.scheduledAt);

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Calendar, AlertCircle, Plus, Table } from 'lucide-react';
+import { Calendar, AlertCircle, Plus, Table, ClipboardList } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import {
   useAppointments,
   useAppointmentActions,
@@ -42,6 +43,7 @@ export function Appointments() {
   const createAppointment = useCreateAppointment();
   const createDebt = useCreateDebt();
   const toast = useToast();
+  const navigate = useNavigate();
 
   const handleClearFilters = () => {
     setFilters(initialFilters);
@@ -191,13 +193,22 @@ export function Appointments() {
             </button>
           </div>
 
-          <button
-            onClick={handleOpenModal}
-            className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-4 py-2.5 font-medium text-white transition-colors hover:bg-[#725510] focus:outline-none focus:ring-2 focus:ring-[#C8923A] focus:ring-offset-2 focus:ring-offset-[var(--bg-primary)]"
-          >
-            <Plus className="h-5 w-5" />
-            Novo Agendamento
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate('/comandas?new=1')}
+              className="flex items-center gap-2 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] px-4 py-2.5 font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--hover-bg)] focus:outline-none focus:ring-2 focus:ring-[#C8923A]"
+            >
+              <ClipboardList className="h-5 w-5" />
+              Nova Comanda
+            </button>
+            <button
+              onClick={handleOpenModal}
+              className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-4 py-2.5 font-medium text-white transition-colors hover:bg-[#725510] focus:outline-none focus:ring-2 focus:ring-[#C8923A] focus:ring-offset-2 focus:ring-offset-[var(--bg-primary)]"
+            >
+              <Plus className="h-5 w-5" />
+              Novo Agendamento
+            </button>
+          </div>
         </div>
       </div>
 
