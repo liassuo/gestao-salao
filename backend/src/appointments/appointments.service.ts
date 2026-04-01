@@ -279,6 +279,38 @@ export class AppointmentsService {
       }
     }
 
+    // 5.1 Criar comanda vinculada ao agendamento (com os serviços como itens)
+    const orderId = randomUUID();
+    const orderItems = services.map((s) => {
+      const discount = getDiscount(s.id);
+      const unitPrice = discount !== null ? Math.round(s.price * (100 - discount) / 100) : s.price;
+      return {
+        id: randomUUID(),
+        orderId,
+        serviceId: s.id,
+        productId: null,
+        quantity: 1,
+        unitPrice,
+        itemType: 'SERVICE' as const,
+      };
+    });
+
+    await this.supabase.from('orders').insert({
+      id: orderId,
+      clientId: dto.clientId,
+      professionalId: dto.professionalId,
+      appointmentId: appointment.id,
+      notes: `Agendamento #${appointment.id.slice(0, 8)}`,
+      totalAmount: totalPrice,
+      status: 'PENDING',
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    for (const item of orderItems) {
+      await this.supabase.from('order_items').insert(item);
+    }
+
     // 6. Criar cobrança no Asaas (se configurado, valor > 0 e não for pago só com crédito do plano)
     // Agendamentos feitos pelo admin/barbeiro são sempre "pagamento no local" (CASH)
     const effectiveBillingType = dto.source === 'CLIENT' ? dto.billingType : 'CASH';

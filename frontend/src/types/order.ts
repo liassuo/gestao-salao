@@ -3,6 +3,7 @@ export interface Order {
   status: OrderStatus;
   totalAmount: number;
   notes?: string | null;
+  appointmentId?: string | null;
   createdAt: string;
   updatedAt: string;
   client?: { id: string; name: string } | null;

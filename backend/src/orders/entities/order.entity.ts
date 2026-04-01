@@ -7,6 +7,7 @@ export class Order {
   professionalId?: string;
   branchId?: string;
   paymentId?: string;
+  appointmentId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
