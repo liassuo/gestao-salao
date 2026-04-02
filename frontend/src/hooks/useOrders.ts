@@ -20,6 +20,14 @@ export function useOrder(id: string) {
   });
 }
 
+export function useOrderByAppointment(appointmentId?: string) {
+  return useQuery({
+    queryKey: [...ORDERS_KEY, 'by-appointment', appointmentId],
+    queryFn: () => ordersService.getByAppointment(appointmentId!),
+    enabled: !!appointmentId,
+  });
+}
+
 export function useCreateOrder() {
   const queryClient = useQueryClient();
 

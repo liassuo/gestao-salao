@@ -108,6 +108,18 @@ export class OrdersService {
     return order;
   }
 
+  async findByAppointment(appointmentId: string) {
+    const { data: order } = await this.supabase
+      .from('orders')
+      .select('*, client:clients(id, name), items:order_items(id, itemType, productId, serviceId, quantity, unitPrice, product:products(id, name), service:services(id, name))')
+      .eq('appointmentId', appointmentId)
+      .order('createdAt', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    return order;
+  }
+
   async addItem(orderId: string, dto: AddOrderItemDto) {
     const { data: order, error } = await this.supabase
       .from('orders')

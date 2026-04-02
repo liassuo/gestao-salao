@@ -35,5 +35,5 @@ export { usePaymentMethodConfigs, usePaymentMethodConfig, useCreatePaymentMethod
 export { useCommissions, useCommission, useGenerateCommissions, useMarkCommissionAsPaid, useDeleteCommission, usePoteReport } from './useCommissions';
 export { useProducts, useProduct, useProductStock, useLowStockProducts, useCreateProduct, useUpdateProduct, useDeleteProduct } from './useProducts';
 export { useStockMovements, useCreateStockMovement } from './useStock';
-export { useOrders, useOrder, useCreateOrder, useAddOrderItem, useRemoveOrderItem, usePayOrder, useCancelOrder, useDeleteOrder } from './useOrders';
+export { useOrders, useOrder, useOrderByAppointment, useCreateOrder, useAddOrderItem, useRemoveOrderItem, usePayOrder, useCancelOrder, useDeleteOrder } from './useOrders';
 export { usePromotions, usePromotion, useActivePromotions, usePromotionTemplates, useCreatePromotion, useUpdatePromotion, useDeletePromotion, useClonePromotion, useUploadBanner } from './usePromotions';

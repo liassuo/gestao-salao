@@ -17,6 +17,11 @@ export class OrdersController {
     return this.ordersService.findAll(query);
   }
 
+  @Get('by-appointment/:appointmentId')
+  async findByAppointment(@Param('appointmentId', ParseUUIDPipe) appointmentId: string) {
+    return this.ordersService.findByAppointment(appointmentId);
+  }
+
   @Get(':id')
   async findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.ordersService.findOne(id);

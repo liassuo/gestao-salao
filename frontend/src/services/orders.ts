@@ -20,6 +20,11 @@ export const ordersService = {
     return response.data;
   },
 
+  async getByAppointment(appointmentId: string): Promise<Order | null> {
+    const response = await api.get<Order | null>(`/orders/by-appointment/${appointmentId}`);
+    return response.data;
+  },
+
   async create(payload: CreateOrderPayload): Promise<Order> {
     const response = await api.post<Order>('/orders', payload);
     return response.data;
