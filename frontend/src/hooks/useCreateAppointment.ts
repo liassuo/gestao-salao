@@ -16,6 +16,7 @@ export function useCreateAppointment() {
       appointmentsService.create(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['appointments-calendar'] });
     },
   });
 }

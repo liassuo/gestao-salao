@@ -10,7 +10,7 @@ const statusConfig: Record<string, { label: string; classes: string }> = {
   ATTENDED: { label: 'Atendido', classes: 'text-emerald-400 bg-emerald-500/20 border border-emerald-500/40' },
   CANCELLED: { label: 'Cancelado', classes: 'text-[#C45050] bg-red-500/15 border border-[#A63030]/30' },
   CANCELED: { label: 'Cancelado', classes: 'text-[#C45050] bg-red-500/15 border border-[#A63030]/30' },
-  NO_SHOW: { label: 'N\u00e3o Compareceu', classes: 'text-amber-400 bg-amber-500/15 border border-amber-500/30' },
+  NO_SHOW: { label: 'Não Compareceu', classes: 'text-amber-400 bg-amber-500/15 border border-amber-500/30' },
 };
 
 function formatDateBR(isoString: string): string {
@@ -209,7 +209,7 @@ export function AppointmentDetailModal({
 
         {/* Date/Time */}
         <div className="rounded-xl border border-[var(--card-border)] bg-[var(--bg-primary)] p-3">
-          <div className="mb-1 text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">Data e Hor\u00e1rio</div>
+          <div className="mb-1 text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">Data e Horário</div>
           {isEditing ? (
             <div className="flex gap-2">
               <input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} className={inputClass} />

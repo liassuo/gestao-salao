@@ -224,6 +224,19 @@ export class OrdersService {
       throw new BadRequestException('Comanda não está pendente');
     }
 
+    // Se a comanda está vinculada a um agendamento já pago, bloquear pagamento duplicado
+    if ((order as any).appointmentId) {
+      const { data: linkedAppt } = await this.supabase
+        .from('appointments')
+        .select('id, isPaid')
+        .eq('id', (order as any).appointmentId)
+        .single();
+
+      if (linkedAppt?.isPaid) {
+        throw new BadRequestException('O agendamento vinculado a esta comanda j\u00e1 est\u00e1 pago');
+      }
+    }
+
     // ============================
     // FLUXO ASAAS (cobrança digital)
     // ============================
@@ -296,6 +309,14 @@ export class OrdersService {
       .from('orders')
       .update({ status: 'PAID', paymentId: paymentId })
       .eq('id', id);
+
+    // Se a comanda está vinculada a um agendamento, marcar agendamento como pago
+    if ((order as any).appointmentId) {
+      await this.supabase
+        .from('appointments')
+        .update({ isPaid: true, updatedAt: payNow })
+        .eq('id', (order as any).appointmentId);
+    }
 
     return this.findOne(id);
   }

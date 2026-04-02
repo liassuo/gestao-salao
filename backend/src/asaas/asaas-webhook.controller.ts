@@ -150,6 +150,28 @@ export class AsaasWebhookController {
         .eq('status', 'PENDING');
     }
 
+    // Se NÃO vinculado a agendamento, verificar se é pagamento de comanda vinculada a agendamento
+    if (!localPayment.appointmentId) {
+      const { data: linkedOrder } = await this.supabase
+        .from('orders')
+        .select('id, appointmentId')
+        .eq('paymentId', localPayment.id)
+        .maybeSingle();
+
+      if (linkedOrder?.appointmentId) {
+        await this.supabase
+          .from('appointments')
+          .update({ isPaid: true, updatedAt: new Date().toISOString() })
+          .eq('id', linkedOrder.appointmentId);
+
+        await this.supabase
+          .from('orders')
+          .update({ status: 'PAID', updatedAt: new Date().toISOString() })
+          .eq('id', linkedOrder.id)
+          .eq('status', 'PENDING');
+      }
+    }
+
     // Vincular ao caixa aberto (se existir)
     const { data: openRegister } = await this.supabase
       .from('cash_registers')
