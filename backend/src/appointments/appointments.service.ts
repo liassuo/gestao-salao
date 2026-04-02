@@ -462,6 +462,14 @@ export class AppointmentsService {
       .single();
 
     if (updateError) throw updateError;
+
+    // Cancelar comanda vinculada
+    await this.supabase
+      .from('orders')
+      .update({ status: 'CANCELED', updatedAt: new Date().toISOString() })
+      .eq('appointmentId', id)
+      .eq('status', 'PENDING');
+
     return updated;
   }
 
@@ -686,6 +694,14 @@ export class AppointmentsService {
       .single();
 
     if (updateError) throw updateError;
+
+    // Cancelar comanda vinculada
+    await this.supabase
+      .from('orders')
+      .update({ status: 'CANCELED', updatedAt: new Date().toISOString() })
+      .eq('appointmentId', id)
+      .eq('status', 'PENDING');
+
     return updated;
   }
 
@@ -1221,6 +1237,13 @@ export class AppointmentsService {
           try { await this.asaasService.cancelCharge(payment.asaasPaymentId); } catch {}
         }
       }
+
+      // Cancelar comanda vinculada
+      await this.supabase
+        .from('orders')
+        .update({ status: 'CANCELED', updatedAt: now })
+        .eq('appointmentId', appt.id)
+        .eq('status', 'PENDING');
 
       this.logger.log(`Agendamento ${appt.id} cancelado automaticamente (PENDING_PAYMENT expirado)`);
     }
