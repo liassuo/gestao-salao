@@ -75,8 +75,8 @@ export function AppointmentDetailModal({
   // Comanda
   const [showAddItem, setShowAddItem] = useState(false);
   const [addItemType, setAddItemType] = useState<'SERVICE' | 'PRODUCT'>('PRODUCT');
-  const [selectedItemId, setSelectedItemId] = useState('');
-  const [itemQuantity, setItemQuantity] = useState(1);
+  const [selectedItems, setSelectedItems] = useState<Map<string, number>>(new Map());
+  const [isAdding, setIsAdding] = useState(false);
 
   const { data: order, refetch: refetchOrder } = useOrderByAppointment(appointment?.id);
   const { data: products } = useProducts();
@@ -127,33 +127,55 @@ export function AppointmentDetailModal({
     }
   };
 
-  const handleAddItem = async () => {
-    if (!order || !selectedItemId) return;
-    const isProduct = addItemType === 'PRODUCT';
-    const item = isProduct
-      ? products?.find((p) => p.id === selectedItemId)
-      : services?.find((s) => s.id === selectedItemId);
-    if (!item) return;
+  const toggleItem = (id: string) => {
+    setSelectedItems((prev) => {
+      const next = new Map(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.set(id, 1);
+      }
+      return next;
+    });
+  };
 
-    const unitPrice = isProduct ? (item as any).salePrice : (item as any).price;
+  const setItemQty = (id: string, qty: number) => {
+    setSelectedItems((prev) => {
+      const next = new Map(prev);
+      next.set(id, Math.max(1, qty));
+      return next;
+    });
+  };
 
+  const handleAddItems = async () => {
+    if (!order || selectedItems.size === 0) return;
+    setIsAdding(true);
     try {
-      await addOrderItem.mutateAsync({
-        orderId: order.id,
-        payload: {
-          productId: isProduct ? selectedItemId : undefined,
-          serviceId: !isProduct ? selectedItemId : undefined,
-          quantity: itemQuantity,
-          unitPrice,
-          itemType: addItemType,
-        },
-      });
+      const isProduct = addItemType === 'PRODUCT';
+      for (const [itemId, qty] of selectedItems) {
+        const item = isProduct
+          ? products?.find((p) => p.id === itemId)
+          : services?.find((s) => s.id === itemId);
+        if (!item) continue;
+
+        const unitPrice = isProduct ? (item as any).salePrice : (item as any).price;
+
+        await addOrderItem.mutateAsync({
+          orderId: order.id,
+          payload: {
+            productId: isProduct ? itemId : undefined,
+            serviceId: !isProduct ? itemId : undefined,
+            quantity: qty,
+            unitPrice,
+            itemType: addItemType,
+          },
+        });
+      }
       await refetchOrder();
       setShowAddItem(false);
-      setSelectedItemId('');
-      setItemQuantity(1);
-    } catch {
-      // handled by mutation
+      setSelectedItems(new Map());
+    } finally {
+      setIsAdding(false);
     }
   };
 
@@ -306,8 +328,8 @@ export function AppointmentDetailModal({
           {showAddItem && canEditOrder && (
             <div className="mt-3 rounded-xl border border-[#C8923A]/30 bg-[#C8923A]/5 p-4 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-[var(--text-primary)]">Adicionar item</span>
-                <button onClick={() => setShowAddItem(false)} className="rounded-lg p-1 text-[var(--text-muted)] hover:bg-[var(--hover-bg)]">
+                <span className="text-sm font-medium text-[var(--text-primary)]">Adicionar itens</span>
+                <button onClick={() => { setShowAddItem(false); setSelectedItems(new Map()); }} className="rounded-lg p-1 text-[var(--text-muted)] hover:bg-[var(--hover-bg)]">
                   <XCircle className="h-4 w-4" />
                 </button>
               </div>
@@ -315,64 +337,74 @@ export function AppointmentDetailModal({
               {/* Tipo toggle */}
               <div className="flex rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-1">
                 <button
-                  onClick={() => { setAddItemType('PRODUCT'); setSelectedItemId(''); }}
+                  onClick={() => { setAddItemType('PRODUCT'); setSelectedItems(new Map()); }}
                   className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors ${addItemType === 'PRODUCT' ? 'bg-[#C8923A] text-white shadow-sm' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
                 >
                   <Package className="h-4 w-4" />
-                  Produto
+                  Produtos
                 </button>
                 <button
-                  onClick={() => { setAddItemType('SERVICE'); setSelectedItemId(''); }}
+                  onClick={() => { setAddItemType('SERVICE'); setSelectedItems(new Map()); }}
                   className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors ${addItemType === 'SERVICE' ? 'bg-[#C8923A] text-white shadow-sm' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
                 >
                   <Scissors className="h-4 w-4" />
-                  Servi\u00e7o
+                  Servi\u00e7os
                 </button>
               </div>
 
-              {/* Select + Quantidade */}
-              <div>
-                <label className="mb-1 block text-xs font-medium text-[var(--text-muted)]">
-                  {addItemType === 'PRODUCT' ? 'Selecione o produto' : 'Selecione o servi\u00e7o'}
-                </label>
-                <select
-                  value={selectedItemId}
-                  onChange={(e) => setSelectedItemId(e.target.value)}
-                  className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#C8923A]"
-                >
-                  <option value="">Selecione...</option>
-                  {addItemType === 'PRODUCT'
-                    ? (products || []).filter((p) => p.isActive).map((p) => (
-                        <option key={p.id} value={p.id}>{p.name} - {formatCurrency((p as any).salePrice)}</option>
-                      ))
-                    : (services || []).filter((s: any) => s.isActive).map((s: any) => (
-                        <option key={s.id} value={s.id}>{s.name} - {formatCurrency(s.price)}</option>
-                      ))
-                  }
-                </select>
+              {/* Lista com checkboxes */}
+              <div className="max-h-48 space-y-1 overflow-y-auto">
+                {(addItemType === 'PRODUCT'
+                  ? (products || []).filter((p) => p.isActive)
+                  : (services || []).filter((s: any) => s.isActive)
+                ).map((item: any) => {
+                  const isSelected = selectedItems.has(item.id);
+                  const price = addItemType === 'PRODUCT' ? item.salePrice : item.price;
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => toggleItem(item.id)}
+                      className={`flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2.5 transition-colors ${isSelected ? 'border-[#C8923A]/50 bg-[#C8923A]/10' : 'border-transparent bg-[var(--card-bg)] hover:bg-[var(--hover-bg)]'}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${isSelected ? 'border-[#C8923A] bg-[#C8923A]' : 'border-[var(--border-color)]'}`}>
+                          {isSelected && <Check className="h-3 w-3 text-white" />}
+                        </div>
+                        <div>
+                          <span className="text-sm text-[var(--text-primary)]">{item.name}</span>
+                          {addItemType === 'SERVICE' && item.duration && (
+                            <span className="ml-2 text-xs text-[var(--text-muted)]">{item.duration}min</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-[var(--text-muted)]">{formatCurrency(price)}</span>
+                        {isSelected && addItemType === 'PRODUCT' && (
+                          <input
+                            type="number"
+                            min={1}
+                            value={selectedItems.get(item.id) || 1}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => { e.stopPropagation(); setItemQty(item.id, parseInt(e.target.value) || 1); }}
+                            className="w-14 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] px-2 py-1 text-center text-xs text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[#C8923A]"
+                          />
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
-              {addItemType === 'PRODUCT' && (
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Quantidade</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={itemQuantity}
-                    onChange={(e) => setItemQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="w-24 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] px-3 py-2.5 text-center text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#C8923A]"
-                  />
-                </div>
+              {selectedItems.size > 0 && (
+                <button
+                  onClick={handleAddItems}
+                  disabled={isAdding}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#8B6914] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#725510] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isAdding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                  Adicionar {selectedItems.size} {selectedItems.size === 1 ? 'item' : 'itens'}
+                </button>
               )}
-
-              <button
-                onClick={handleAddItem}
-                disabled={!selectedItemId || addOrderItem.isPending}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#8B6914] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#725510] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {addOrderItem.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                Adicionar {addItemType === 'PRODUCT' ? 'Produto' : 'Servi\u00e7o'}
-              </button>
             </div>
           )}
         </div>

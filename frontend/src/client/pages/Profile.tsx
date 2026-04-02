@@ -40,7 +40,9 @@ function formatCpf(cpf: string): string {
 }
 
 function formatDate(date: string): string {
-  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(date));
+  const clean = date.replace(/Z$/, '').replace(/[+-]\d{2}:\d{2}$/, '');
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(clean) ? new Date(clean + 'T12:00:00') : new Date(clean);
+  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(parsed);
 }
 
 function maskPhone(value: string): string {

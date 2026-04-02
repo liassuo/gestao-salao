@@ -159,11 +159,41 @@ export class OrdersService {
       .update({ totalAmount: newTotal })
       .eq('id', orderId);
 
-    // Sincronizar totalPrice do agendamento vinculado
+    // Sincronizar agendamento vinculado (totalPrice + totalDuration se for serviço)
     if (order.appointmentId) {
+      const updateData: any = { totalPrice: newTotal, updatedAt: new Date().toISOString() };
+
+      if (dto.itemType === 'SERVICE' && dto.serviceId) {
+        const { data: svc } = await this.supabase
+          .from('services')
+          .select('duration')
+          .eq('id', dto.serviceId)
+          .single();
+
+        if (svc) {
+          const { data: appt } = await this.supabase
+            .from('appointments')
+            .select('totalDuration')
+            .eq('id', order.appointmentId)
+            .single();
+
+          if (appt) {
+            updateData.totalDuration = appt.totalDuration + svc.duration;
+          }
+        }
+
+        // Vincular serviço ao agendamento (appointment_services)
+        await this.supabase.from('appointment_services').insert({
+          id: randomUUID(),
+          appointmentId: order.appointmentId,
+          serviceId: dto.serviceId,
+          createdAt: new Date().toISOString(),
+        });
+      }
+
       await this.supabase
         .from('appointments')
-        .update({ totalPrice: newTotal, updatedAt: new Date().toISOString() })
+        .update(updateData)
         .eq('id', order.appointmentId);
     }
 
@@ -187,12 +217,12 @@ export class OrdersService {
 
     const { data: item, error: itemError } = await this.supabase
       .from('order_items')
-      .select('id, unitPrice, quantity, orderId')
+      .select('id, unitPrice, quantity, orderId, itemType, serviceId')
       .eq('id', itemId)
       .single();
 
     if (itemError || !item || item.orderId !== orderId) {
-      throw new NotFoundException('Item não encontrado nesta comanda');
+      throw new NotFoundException('Item n\u00e3o encontrado nesta comanda');
     }
 
     const lineTotal = item.unitPrice * item.quantity;
@@ -205,11 +235,40 @@ export class OrdersService {
       .update({ totalAmount: newTotal })
       .eq('id', orderId);
 
-    // Sincronizar totalPrice do agendamento vinculado
+    // Sincronizar agendamento vinculado
     if (order.appointmentId) {
+      const updateData: any = { totalPrice: newTotal, updatedAt: new Date().toISOString() };
+
+      if (item.itemType === 'SERVICE' && item.serviceId) {
+        const { data: svc } = await this.supabase
+          .from('services')
+          .select('duration')
+          .eq('id', item.serviceId)
+          .single();
+
+        if (svc) {
+          const { data: appt } = await this.supabase
+            .from('appointments')
+            .select('totalDuration')
+            .eq('id', order.appointmentId)
+            .single();
+
+          if (appt) {
+            updateData.totalDuration = Math.max(0, appt.totalDuration - svc.duration);
+          }
+        }
+
+        // Remover vínculo do serviço com o agendamento
+        await this.supabase
+          .from('appointment_services')
+          .delete()
+          .eq('appointmentId', order.appointmentId)
+          .eq('serviceId', item.serviceId);
+      }
+
       await this.supabase
         .from('appointments')
-        .update({ totalPrice: newTotal, updatedAt: new Date().toISOString() })
+        .update(updateData)
         .eq('id', order.appointmentId);
     }
   }
