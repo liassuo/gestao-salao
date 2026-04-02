@@ -141,6 +141,13 @@ export class AsaasWebhookController {
         .update({ status: 'SCHEDULED', updatedAt: new Date().toISOString() })
         .eq('id', localPayment.appointmentId)
         .eq('status', 'PENDING_PAYMENT');
+
+      // Pagar comanda vinculada ao agendamento
+      await this.supabase
+        .from('orders')
+        .update({ status: 'PAID', updatedAt: new Date().toISOString() })
+        .eq('appointmentId', localPayment.appointmentId)
+        .eq('status', 'PENDING');
     }
 
     // Vincular ao caixa aberto (se existir)

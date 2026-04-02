@@ -926,6 +926,13 @@ export class AppointmentsService {
       .from('appointments')
       .update({ isPaid: true })
       .eq('id', appointmentId);
+
+    // Pagar comanda vinculada ao agendamento
+    await this.supabase
+      .from('orders')
+      .update({ status: 'PAID', updatedAt: new Date().toISOString() })
+      .eq('appointmentId', appointmentId)
+      .eq('status', 'PENDING');
   }
 
   async getCalendarData(date: string) {

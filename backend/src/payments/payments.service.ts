@@ -77,12 +77,19 @@ export class PaymentsService {
 
     if (payError) throw payError;
 
-    // 5. Se vinculado a agendamento, marcar como pago
+    // 5. Se vinculado a agendamento, marcar como pago + pagar comanda vinculada
     if (dto.appointmentId) {
       await this.supabase
         .from('appointments')
         .update({ isPaid: true })
         .eq('id', dto.appointmentId);
+
+      // Pagar comanda vinculada ao agendamento
+      await this.supabase
+        .from('orders')
+        .update({ status: 'PAID', updatedAt: new Date().toISOString() })
+        .eq('appointmentId', dto.appointmentId)
+        .eq('status', 'PENDING');
     }
 
     // 6. Vincular ao caixa aberto (se houver)
