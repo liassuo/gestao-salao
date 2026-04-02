@@ -13,6 +13,8 @@ import { reportsService } from '../services/reports';
 import type { SalesReport, ProfessionalReport, ServicesReport, ClientsReport, DebtsReport, CashRegisterReport } from '../services/reports';
 import { formatCurrency, formatDate, formatPhone } from '../utils/format';
 import { Spinner } from '../components/ui';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 type ReportType = 'sales' | 'professionals' | 'services' | 'clients' | 'debts' | 'cash-register';
 
@@ -68,18 +70,10 @@ export function Reports() {
     }
   };
 
-  const exportToCSV = () => {
+  const exportToPDF = () => {
     if (!data) return;
-    let csvContent = '';
     const reportLabel = reportOptions.find((r) => r.id === selectedReport)?.label || selectedReport;
 
-    const formatValue = (v: any) => {
-      if (typeof v === 'number') return v.toString();
-      if (typeof v === 'string' && v.includes(',')) return `"${v}"`;
-      return String(v ?? '');
-    };
-
-    // Extrai dados tabulares de cada tipo de relatório
     let rows: Record<string, any>[] = [];
     switch (selectedReport) {
       case 'sales':
@@ -104,19 +98,25 @@ export function Reports() {
 
     if (rows.length === 0) return;
 
-    const headers = Object.keys(rows[0]);
-    csvContent = headers.join(';') + '\n';
-    for (const row of rows) {
-      csvContent += headers.map((h) => formatValue(row[h])).join(';') + '\n';
-    }
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text(`Relatorio - ${reportLabel}`, 14, 18);
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Periodo: ${startDate} a ${endDate}`, 14, 26);
 
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `relatorio-${reportLabel}-${startDate}-${endDate}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+    const headers = Object.keys(rows[0]);
+    const bodyRows = rows.map((row) => headers.map((h) => String(row[h] ?? '')));
+
+    autoTable(doc, {
+      startY: 32,
+      head: [headers],
+      body: bodyRows,
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [139, 105, 20] },
+    });
+
+    doc.save(`relatorio-${reportLabel}-${startDate}-${endDate}.pdf`);
   };
 
   const renderSalesReport = (report: SalesReport) => (
@@ -585,11 +585,11 @@ export function Reports() {
             </button>
             {data && (
               <button
-                onClick={exportToCSV}
+                onClick={exportToPDF}
                 className="flex items-center gap-2 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] px-4 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]"
               >
                 <Download className="h-4 w-4" />
-                Exportar CSV
+                Exportar PDF
               </button>
             )}
           </div>

@@ -157,12 +157,12 @@ export function Sidebar() {
       )}
 
       <aside
-        className={`fixed left-0 top-0 z-50 h-screen border-r border-[var(--border-sidebar)] bg-[var(--bg-sidebar)] transition-all duration-300 ${
+        className={`fixed left-0 top-0 z-50 flex h-screen flex-col border-r border-[var(--border-sidebar)] bg-[var(--bg-sidebar)] transition-all duration-300 ${
           isMobileOpen ? 'w-64 translate-x-0' : '-translate-x-full'
         } lg:translate-x-0 ${isCollapsed ? 'lg:w-20' : 'lg:w-64'}`}
       >
         {/* Logo + fechar mobile */}
-        <div className="flex h-20 items-center justify-between border-b border-[var(--border-sidebar)] px-4">
+        <div className="flex h-20 shrink-0 items-center justify-between border-b border-[var(--border-sidebar)] px-4">
           <div className="flex items-center justify-center flex-1">
             {showExpanded ? (
               <img
@@ -202,7 +202,7 @@ export function Sidebar() {
           )}
         </button>
 
-        <nav className="mt-6 overflow-y-auto px-3 pb-14" style={{ maxHeight: 'calc(100vh - 100px)' }}>
+        <nav className="mt-6 flex-1 overflow-y-auto px-3 pb-4">
           <ul className="space-y-1">
             {/* Ungrouped items before config */}
             {beforeConfig.map((item) => renderNavItem(item))}
@@ -216,7 +216,7 @@ export function Sidebar() {
         </nav>
 
         {/* Footer da sidebar */}
-        <div className="absolute bottom-0 left-0 right-0 border-t border-[var(--border-sidebar)] p-4">
+        <div className="shrink-0 border-t border-[var(--border-sidebar)] p-4">
           {showExpanded && (
             <p className="text-center text-xs text-[#8B7D6B]">
               Barbearia America
