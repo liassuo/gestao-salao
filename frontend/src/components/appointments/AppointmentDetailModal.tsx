@@ -348,7 +348,7 @@ export function AppointmentDetailModal({
                   className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors ${addItemType === 'SERVICE' ? 'bg-[#C8923A] text-white shadow-sm' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
                 >
                   <Scissors className="h-4 w-4" />
-                  Servi\u00e7os
+                  Serviços
                 </button>
               </div>
 
