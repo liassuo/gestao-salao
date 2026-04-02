@@ -322,6 +322,17 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
   const handleDetailUpdate = async (id: string, data: { scheduledAt?: string; notes?: string }) => {
     try {
       await updateAppointment.mutateAsync({ id, data });
+      // Atualizar o modal com os dados novos
+      if (detailModal) {
+        setDetailModal({
+          ...detailModal,
+          appointment: {
+            ...detailModal.appointment,
+            ...(data.scheduledAt && { scheduledAt: data.scheduledAt }),
+            ...(data.notes !== undefined && { notes: data.notes || null }),
+          },
+        });
+      }
       toast.success('Agendamento atualizado', 'As alterações foram salvas.');
     } catch {
       toast.error('Erro', 'Não foi possível salvar as alterações.');
