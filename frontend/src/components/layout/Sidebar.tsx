@@ -202,7 +202,7 @@ export function Sidebar() {
           )}
         </button>
 
-        <nav className="mt-6 overflow-y-auto px-3" style={{ maxHeight: 'calc(100vh - 140px)' }}>
+        <nav className="mt-6 overflow-y-auto px-3 pb-14" style={{ maxHeight: 'calc(100vh - 100px)' }}>
           <ul className="space-y-1">
             {/* Ungrouped items before config */}
             {beforeConfig.map((item) => renderNavItem(item))}
