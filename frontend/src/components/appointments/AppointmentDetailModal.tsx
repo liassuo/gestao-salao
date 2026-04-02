@@ -171,7 +171,7 @@ export function AppointmentDetailModal({
     'w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] border-[var(--card-border)]';
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Detalhes do Agendamento" size="lg">
+    <Modal isOpen={isOpen} onClose={onClose} title="Detalhes do Agendamento" size="xl">
       <div className="space-y-4">
         {/* Status + Edit */}
         <div className="flex items-center justify-between">
@@ -220,7 +220,7 @@ export function AppointmentDetailModal({
               <div className="text-sm font-medium capitalize text-[var(--text-primary)]">{formatDateBR(appointment.scheduledAt)}</div>
               <div className="flex items-center gap-1 text-sm text-[var(--text-muted)]">
                 <Clock className="h-3.5 w-3.5" />
-                {startTime} \u2013 {endTime} ({formatDuration(appointment.totalDuration)})
+                {startTime} - {endTime} ({formatDuration(appointment.totalDuration)})
               </div>
             </div>
           )}
