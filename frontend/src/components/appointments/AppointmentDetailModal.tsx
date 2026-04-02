@@ -229,8 +229,8 @@ export function AppointmentDetailModal({
         {/* Notes (editing) */}
         {isEditing && (
           <div className="rounded-xl border border-[var(--card-border)] bg-[var(--bg-primary)] p-3">
-            <div className="mb-1 text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">Observa\u00e7\u00f5es</div>
-            <textarea value={editNotes} onChange={(e) => setEditNotes(e.target.value)} placeholder="Adicionar observa\u00e7\u00f5es..." rows={2} className="w-full resize-none rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A]" />
+            <div className="mb-1 text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">Observações</div>
+            <textarea value={editNotes} onChange={(e) => setEditNotes(e.target.value)} placeholder="Adicionar observações..." rows={2} className="w-full resize-none rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A]" />
           </div>
         )}
 
@@ -310,7 +310,7 @@ export function AppointmentDetailModal({
                   <Package className="mr-1 inline h-3.5 w-3.5" />Produto
                 </button>
                 <button onClick={() => { setAddItemType('SERVICE'); setSelectedItemId(''); }} className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${addItemType === 'SERVICE' ? 'bg-[#C8923A]/20 text-[#C8923A]' : 'text-[var(--text-muted)] hover:bg-[var(--hover-bg)]'}`}>
-                  <Scissors className="mr-1 inline h-3.5 w-3.5" />Servi\u00e7o
+                  <Scissors className="mr-1 inline h-3.5 w-3.5" />Serviço
                 </button>
               </div>
               <div className="flex gap-2">
@@ -343,7 +343,7 @@ export function AppointmentDetailModal({
         {/* Notes (view mode) */}
         {!isEditing && appointment.notes && (
           <div className="rounded-xl border border-[var(--card-border)] bg-[var(--bg-primary)] p-3">
-            <div className="mb-1 text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">Observa\u00e7\u00f5es</div>
+            <div className="mb-1 text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">Observações</div>
             <p className="text-sm text-[var(--text-secondary)]">{appointment.notes}</p>
           </div>
         )}
@@ -356,7 +356,7 @@ export function AppointmentDetailModal({
                 Confirmar cancelamento do agendamento de <strong>{appointment.client?.name}</strong>?
               </p>
               <div className="flex justify-end gap-2">
-                <button onClick={() => setIsConfirmingCancel(false)} disabled={isActing} className="rounded-xl border border-[var(--card-border)] px-3 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] disabled:opacity-50">N\u00e3o</button>
+                <button onClick={() => setIsConfirmingCancel(false)} disabled={isActing} className="rounded-xl border border-[var(--card-border)] px-3 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] disabled:opacity-50">Não</button>
                 <button onClick={() => handleAction(() => onCancel(appointment.id))} disabled={isActing} className="flex items-center gap-1.5 rounded-xl bg-[#A63030] px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[#8B2020] disabled:opacity-50">
                   {isActing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   Confirmar Cancelamento
@@ -371,7 +371,7 @@ export function AppointmentDetailModal({
               </button>
               <button onClick={() => handleAction(() => onNoShow(appointment.id))} disabled={isActing} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-amber-500/15 px-3 py-2 text-sm font-medium text-amber-400 transition-colors hover:bg-amber-500/25 disabled:opacity-50">
                 {isActing ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserX className="h-4 w-4" />}
-                N\u00e3o Compareceu
+                Não Compareceu
               </button>
               <button onClick={() => setIsConfirmingCancel(true)} disabled={isActing} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-500/15 px-3 py-2 text-sm font-medium text-[#C45050] transition-colors hover:bg-red-500/25 disabled:opacity-50">
                 <XCircle className="h-4 w-4" />

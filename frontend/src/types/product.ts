@@ -82,7 +82,7 @@ export interface StockMovementFilters {
 
 export const stockMovementTypeLabels: Record<StockMovementType, string> = {
   ENTRY: 'Entrada',
-  EXIT: 'Sa\u00edda',
+  EXIT: 'Saída',
 };
 
 export const stockMovementTypeColors: Record<StockMovementType, string> = {

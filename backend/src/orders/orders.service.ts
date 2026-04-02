@@ -123,7 +123,7 @@ export class OrdersService {
   async addItem(orderId: string, dto: AddOrderItemDto) {
     const { data: order, error } = await this.supabase
       .from('orders')
-      .select('id, status, totalAmount')
+      .select('id, status, totalAmount, appointmentId')
       .eq('id', orderId)
       .single();
 
@@ -152,10 +152,20 @@ export class OrdersService {
       throw insertError;
     }
 
+    const newTotal = order.totalAmount + lineTotal;
+
     await this.supabase
       .from('orders')
-      .update({ totalAmount: order.totalAmount + lineTotal })
+      .update({ totalAmount: newTotal })
       .eq('id', orderId);
+
+    // Sincronizar totalPrice do agendamento vinculado
+    if (order.appointmentId) {
+      await this.supabase
+        .from('appointments')
+        .update({ totalPrice: newTotal, updatedAt: new Date().toISOString() })
+        .eq('id', order.appointmentId);
+    }
 
     return this.findOne(orderId);
   }
@@ -163,7 +173,7 @@ export class OrdersService {
   async removeItem(orderId: string, itemId: string) {
     const { data: order, error } = await this.supabase
       .from('orders')
-      .select('id, status, totalAmount')
+      .select('id, status, totalAmount, appointmentId')
       .eq('id', orderId)
       .single();
 
@@ -186,13 +196,22 @@ export class OrdersService {
     }
 
     const lineTotal = item.unitPrice * item.quantity;
+    const newTotal = order.totalAmount - lineTotal;
 
     await this.supabase.from('order_items').delete().eq('id', itemId);
 
     await this.supabase
       .from('orders')
-      .update({ totalAmount: order.totalAmount - lineTotal })
+      .update({ totalAmount: newTotal })
       .eq('id', orderId);
+
+    // Sincronizar totalPrice do agendamento vinculado
+    if (order.appointmentId) {
+      await this.supabase
+        .from('appointments')
+        .update({ totalPrice: newTotal, updatedAt: new Date().toISOString() })
+        .eq('id', order.appointmentId);
+    }
   }
 
   async update(id: string, dto: UpdateOrderDto) {

@@ -42,7 +42,7 @@ export function PeriodShortcuts({ onSelect }: PeriodShortcutsProps) {
       },
     },
     {
-      label: 'M\u00eas atual',
+      label: 'Mês atual',
       get: () => {
         const start = new Date(today.getFullYear(), today.getMonth(), 1);
         const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
@@ -50,7 +50,7 @@ export function PeriodShortcuts({ onSelect }: PeriodShortcutsProps) {
       },
     },
     {
-      label: 'M\u00eas passado',
+      label: 'Mês passado',
       get: () => {
         const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
         const end = new Date(today.getFullYear(), today.getMonth(), 0);
@@ -58,7 +58,7 @@ export function PeriodShortcuts({ onSelect }: PeriodShortcutsProps) {
       },
     },
     {
-      label: '\u00daltimos 15 dias',
+      label: 'Últimos 15 dias',
       get: () => {
         const start = new Date(today);
         start.setDate(today.getDate() - 14);
@@ -66,7 +66,7 @@ export function PeriodShortcuts({ onSelect }: PeriodShortcutsProps) {
       },
     },
     {
-      label: '\u00daltimos 30 dias',
+      label: 'Últimos 30 dias',
       get: () => {
         const start = new Date(today);
         start.setDate(today.getDate() - 29);
