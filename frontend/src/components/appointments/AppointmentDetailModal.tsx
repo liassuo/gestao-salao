@@ -291,7 +291,7 @@ export function AppointmentDetailModal({
                 </span>
               )}
               {canEditOrder && (
-                <button onClick={() => { setShowAddItem(!showAddItem); setSelectedItemId(''); }} className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-[#C8923A] transition-colors hover:bg-[#C8923A]/10">
+                <button onClick={() => { setShowAddItem(!showAddItem); setSelectedItems(new Map()); }} className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-[#C8923A] transition-colors hover:bg-[#C8923A]/10">
                   <Plus className="h-3.5 w-3.5" />
                   Adicionar
                 </button>
