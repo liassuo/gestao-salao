@@ -14,16 +14,29 @@ const statusConfig: Record<string, { label: string; classes: string }> = {
 };
 
 function formatDateBR(isoString: string): string {
+  // Forçar parse sem timezone para evitar shift de +/-3h
+  const match = isoString.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    const d = new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]));
+    return d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+  }
   const d = new Date(isoString);
   return d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
 }
 
 function extractTime(isoString: string): string {
+  const match = isoString.match(/T(\d{2}):(\d{2})/);
+  if (match) return `${match[1]}:${match[2]}`;
   const d = new Date(isoString);
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 function extractEditValues(isoString: string): { date: string; time: string } {
+  // Extrair direto da string sem new Date() para evitar conversão de timezone
+  const match = isoString.match(/(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/);
+  if (match) {
+    return { date: match[1], time: match[2] };
+  }
   const d = new Date(isoString);
   return {
     date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
