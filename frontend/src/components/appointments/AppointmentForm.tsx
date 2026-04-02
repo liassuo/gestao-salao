@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, Loader2, Search, X } from 'lucide-react';
 import { useClients, useProfessionals, useServices } from '@/hooks';
 import { formatPhone } from '@/utils/format';
 import { AppointmentSummary } from './AppointmentSummary';
@@ -43,6 +43,7 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
     register,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<AppointmentFormData>({
     defaultValues: {
@@ -53,6 +54,50 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
   });
 
   const watchedProfessionalId = watch('professionalId');
+
+  // Client autocomplete
+  const [clientSearch, setClientSearch] = useState('');
+  const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<{ id: string; name: string; phone: string } | null>(null);
+  const clientInputRef = useRef<HTMLInputElement>(null);
+  const clientDropdownRef = useRef<HTMLDivElement>(null);
+
+  const filteredClients = useMemo(() => {
+    if (!clientSearch.trim()) return clients.slice(0, 10);
+    const q = clientSearch.toLowerCase();
+    return clients.filter(
+      (c) => c.name.toLowerCase().includes(q) || c.phone.includes(q),
+    ).slice(0, 10);
+  }, [clients, clientSearch]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        clientDropdownRef.current &&
+        !clientDropdownRef.current.contains(e.target as Node) &&
+        clientInputRef.current &&
+        !clientInputRef.current.contains(e.target as Node)
+      ) {
+        setClientDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSelectClient = (client: typeof clients[0]) => {
+    setSelectedClient({ id: client.id, name: client.name, phone: client.phone });
+    setClientSearch('');
+    setClientDropdownOpen(false);
+    setValue('clientId', client.id, { shouldValidate: true });
+  };
+
+  const handleClearClient = () => {
+    setSelectedClient(null);
+    setClientSearch('');
+    setValue('clientId', '', { shouldValidate: true });
+    clientInputRef.current?.focus();
+  };
 
   const availableServices = useMemo(() => {
     if (!watchedProfessionalId) return services;
@@ -124,19 +169,53 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
         <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
           Cliente *
         </label>
-        <select
-          {...register('clientId', { required: 'Selecione um cliente' })}
-          className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] ${
-            errors.clientId ? 'border-[#A63030]' : 'border-[var(--border-color)]'
-          }`}
-        >
-          <option value="">Selecione um cliente</option>
-          {clients.map((client) => (
-            <option key={client.id} value={client.id}>
-              {client.name} - {formatPhone(client.phone)}
-            </option>
-          ))}
-        </select>
+        <input type="hidden" {...register('clientId', { required: 'Selecione um cliente' })} />
+        {selectedClient ? (
+          <div className={`flex items-center justify-between rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 ${errors.clientId ? 'border-[#A63030]' : 'border-[var(--border-color)]'}`}>
+            <div>
+              <span className="text-sm font-medium text-[var(--text-primary)]">{selectedClient.name}</span>
+              <span className="ml-2 text-xs text-[var(--text-muted)]">{formatPhone(selectedClient.phone)}</span>
+            </div>
+            <button type="button" onClick={handleClearClient} className="rounded-lg p-1 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
+            <input
+              ref={clientInputRef}
+              type="text"
+              value={clientSearch}
+              onChange={(e) => { setClientSearch(e.target.value); setClientDropdownOpen(true); }}
+              onFocus={() => setClientDropdownOpen(true)}
+              placeholder="Buscar cliente por nome ou telefone..."
+              className={`w-full rounded-xl border bg-[var(--hover-bg)] py-2.5 pl-10 pr-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] ${
+                errors.clientId ? 'border-[#A63030]' : 'border-[var(--border-color)]'
+              }`}
+            />
+            {clientDropdownOpen && filteredClients.length > 0 && (
+              <div ref={clientDropdownRef} className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-1 shadow-lg">
+                {filteredClients.map((client) => (
+                  <button
+                    key={client.id}
+                    type="button"
+                    onClick={() => handleSelectClient(client)}
+                    className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-[var(--hover-bg)]"
+                  >
+                    <span className="font-medium text-[var(--text-primary)]">{client.name}</span>
+                    <span className="text-xs text-[var(--text-muted)]">{formatPhone(client.phone)}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {clientDropdownOpen && clientSearch && filteredClients.length === 0 && (
+              <div ref={clientDropdownRef} className="absolute z-20 mt-1 w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-3 shadow-lg">
+                <p className="text-sm text-[var(--text-muted)]">Nenhum cliente encontrado</p>
+              </div>
+            )}
+          </div>
+        )}
         {errors.clientId && (
           <p className="mt-1 text-sm text-[#A63030]">{errors.clientId.message}</p>
         )}

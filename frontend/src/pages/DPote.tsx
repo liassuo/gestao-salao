@@ -1,10 +1,45 @@
 import { useState } from 'react';
-import { PieChart, Users, Hash, DollarSign } from 'lucide-react';
+import { PieChart, Users, Hash, DollarSign, Download } from 'lucide-react';
 import { usePoteReport, useActiveBranches } from '@/hooks';
 import { SkeletonTable, PeriodShortcuts } from '@/components/ui';
 
 function formatCurrency(cents: number): string {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100);
+}
+
+function exportDPoteCSV(report: any, startDate: string, endDate: string) {
+  if (!report || report.byProfessional.length === 0) return;
+
+  let csv = `D'Pote - ${startDate} a ${endDate}\n`;
+  csv += `Serviços Realizados;${report.totalServices}\n`;
+  csv += `Total de Fichas;${report.totalFichas}\n`;
+  csv += `Assinaturas Ativas;${report.activeSubscriptions}\n`;
+  csv += `Valor do Pote;${formatCurrency(report.totalSubscriptionValue)}\n\n`;
+
+  csv += ['Profissional', 'Serviços', 'Fichas', '%', 'Parte do Pote', 'Comissão'].join(';') + '\n';
+
+  for (const prof of report.byProfessional) {
+    const servicesCount = prof.services.reduce((s: number, sv: any) => s + sv.count, 0);
+    csv += [
+      prof.professionalName,
+      servicesCount,
+      prof.fichas,
+      prof.percentage.toFixed(1) + '%',
+      formatCurrency(prof.shareOfPot),
+      formatCurrency(prof.commission),
+    ].join(';') + '\n';
+  }
+
+  const totalCommission = report.byProfessional.reduce((s: number, p: any) => s + p.commission, 0);
+  csv += ['TOTAL', report.totalServices, report.totalFichas, '100%', formatCurrency(report.totalSubscriptionValue), formatCurrency(totalCommission)].join(';') + '\n';
+
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `dpote-${startDate}-${endDate}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 export function DPote() {
@@ -22,16 +57,27 @@ export function DPote() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#C8923A]/20">
-          <PieChart className="h-5 w-5 text-[#C8923A]" />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#C8923A]/20">
+            <PieChart className="h-5 w-5 text-[#C8923A]" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-[var(--text-primary)]">D'Pote</h1>
+            <p className="text-sm text-[var(--text-muted)]">
+              Distribuição do pote de assinaturas entre os profissionais
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">D'Pote</h1>
-          <p className="text-sm text-[var(--text-muted)]">
-            Distribuição do pote de assinaturas entre os profissionais
-          </p>
-        </div>
+        {report && report.byProfessional.length > 0 && (
+          <button
+            onClick={() => exportDPoteCSV(report, startDate, endDate)}
+            className="flex items-center gap-2 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] px-4 py-2.5 text-sm font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--hover-bg)]"
+          >
+            <Download className="h-4 w-4" />
+            Exportar CSV
+          </button>
+        )}
       </div>
 
       {/* Filtros */}

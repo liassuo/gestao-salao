@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Percent } from 'lucide-react';
+import { Percent, Download } from 'lucide-react';
 import {
   useCommissions,
   useGenerateCommissions,
@@ -11,7 +11,48 @@ import { CommissionFilters } from '@/components/financial/CommissionFilters';
 import { CommissionsTable } from '@/components/financial/CommissionsTable';
 import { SkeletonTable, ConfirmModal, useToast } from '@/components/ui';
 import { PinGate } from '@/components/auth';
+import { formatCurrency } from '@/utils/format';
 import type { Commission, CommissionFilters as CommissionFiltersType } from '@/types';
+
+function formatDateBR(date: string): string {
+  const clean = date.replace(/Z$/, '').replace(/[+-]\d{2}:\d{2}$/, '');
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(clean) ? new Date(clean + 'T12:00:00') : new Date(clean);
+  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(parsed);
+}
+
+function exportCommissionsCSV(commissions: Commission[], filters: CommissionFiltersType) {
+  if (commissions.length === 0) return;
+
+  const headers = ['Profissional', 'Período Início', 'Período Fim', 'Serv. Avulsos', 'Serv. Assinatura', 'Produtos', 'Total Líquido', 'Status'];
+  let csv = headers.join(';') + '\n';
+
+  for (const c of commissions) {
+    csv += [
+      c.professional?.name || '',
+      formatDateBR(c.periodStart),
+      formatDateBR(c.periodEnd),
+      formatCurrency(c.amountServices ?? 0),
+      formatCurrency(c.amountSubscription ?? 0),
+      formatCurrency(c.amountProducts ?? 0),
+      formatCurrency(c.amount),
+      c.status === 'PAID' ? 'Pago' : 'Pendente',
+    ].join(';') + '\n';
+  }
+
+  const totalServices = commissions.reduce((s, c) => s + (c.amountServices ?? 0), 0);
+  const totalSub = commissions.reduce((s, c) => s + (c.amountSubscription ?? 0), 0);
+  const totalProducts = commissions.reduce((s, c) => s + (c.amountProducts ?? 0), 0);
+  const totalAmount = commissions.reduce((s, c) => s + c.amount, 0);
+  csv += ['TOTAL', '', '', formatCurrency(totalServices), formatCurrency(totalSub), formatCurrency(totalProducts), formatCurrency(totalAmount), ''].join(';') + '\n';
+
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `comissoes-${filters.startDate || 'all'}-${filters.endDate || 'all'}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
 
 function CommissionsContent() {
   const [filters, setFilters] = useState<CommissionFiltersType>({});
@@ -66,16 +107,27 @@ function CommissionsContent() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#C8923A]/20">
-          <Percent className="h-5 w-5 text-[#C8923A]" />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#C8923A]/20">
+            <Percent className="h-5 w-5 text-[#C8923A]" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-[var(--text-primary)]">Comissões</h1>
+            <p className="text-sm text-[var(--text-muted)]">
+              Gerencie as comissões dos profissionais
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">Comissões</h1>
-          <p className="text-sm text-[var(--text-muted)]">
-            Gerencie as comissões dos profissionais
-          </p>
-        </div>
+        {(commissions?.length ?? 0) > 0 && (
+          <button
+            onClick={() => exportCommissionsCSV(commissions!, filters)}
+            className="flex items-center gap-2 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] px-4 py-2.5 text-sm font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--hover-bg)]"
+          >
+            <Download className="h-4 w-4" />
+            Exportar CSV
+          </button>
+        )}
       </div>
 
       {/* Filtros */}
