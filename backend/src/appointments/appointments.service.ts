@@ -721,7 +721,7 @@ export class AppointmentsService {
     }
 
     const updateData: any = {};
-    if (dto.scheduledAt) updateData.scheduledAt = new Date(dto.scheduledAt).toISOString();
+    if (dto.scheduledAt) updateData.scheduledAt = String(dto.scheduledAt);
     if (dto.notes !== undefined) updateData.notes = dto.notes;
 
     const { data: updated, error: updateError } = await this.supabase
