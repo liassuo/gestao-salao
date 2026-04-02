@@ -49,7 +49,7 @@ export function BirthdayClientsCard({ clients = [] }: BirthdayClientsCardProps) 
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <a
-                    href={`https://wa.me/55${client.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá ${client.name.split(' ')[0]}! 🎂 A equipe da barbearia deseja a você um Feliz Aniversário! Que seu dia seja incrível! 🎉`)}`}
+                    href={`https://wa.me/55${client.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Ol\u00e1 ${client.name.split(' ')[0]}! \u{1F382} A equipe da Barbearia Am\u00e9tica deseja a voc\u00ea um Feliz Anivers\u00e1rio! Que seu dia seja incr\u00edvel! \u{1F389}`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="rounded-lg p-1.5 text-green-500 hover:bg-green-500/10"

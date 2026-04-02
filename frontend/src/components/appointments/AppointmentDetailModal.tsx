@@ -304,17 +304,42 @@ export function AppointmentDetailModal({
 
           {/* Add item form */}
           {showAddItem && canEditOrder && (
-            <div className="mt-3 space-y-2 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] p-3">
-              <div className="flex gap-2">
-                <button onClick={() => { setAddItemType('PRODUCT'); setSelectedItemId(''); }} className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${addItemType === 'PRODUCT' ? 'bg-[#C8923A]/20 text-[#C8923A]' : 'text-[var(--text-muted)] hover:bg-[var(--hover-bg)]'}`}>
-                  <Package className="mr-1 inline h-3.5 w-3.5" />Produto
-                </button>
-                <button onClick={() => { setAddItemType('SERVICE'); setSelectedItemId(''); }} className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${addItemType === 'SERVICE' ? 'bg-[#C8923A]/20 text-[#C8923A]' : 'text-[var(--text-muted)] hover:bg-[var(--hover-bg)]'}`}>
-                  <Scissors className="mr-1 inline h-3.5 w-3.5" />Serviço
+            <div className="mt-3 rounded-xl border border-[#C8923A]/30 bg-[#C8923A]/5 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-[var(--text-primary)]">Adicionar item</span>
+                <button onClick={() => setShowAddItem(false)} className="rounded-lg p-1 text-[var(--text-muted)] hover:bg-[var(--hover-bg)]">
+                  <XCircle className="h-4 w-4" />
                 </button>
               </div>
-              <div className="flex gap-2">
-                <select value={selectedItemId} onChange={(e) => setSelectedItemId(e.target.value)} className="flex-1 rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#C8923A]">
+
+              {/* Tipo toggle */}
+              <div className="flex rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-1">
+                <button
+                  onClick={() => { setAddItemType('PRODUCT'); setSelectedItemId(''); }}
+                  className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors ${addItemType === 'PRODUCT' ? 'bg-[#C8923A] text-white shadow-sm' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                >
+                  <Package className="h-4 w-4" />
+                  Produto
+                </button>
+                <button
+                  onClick={() => { setAddItemType('SERVICE'); setSelectedItemId(''); }}
+                  className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors ${addItemType === 'SERVICE' ? 'bg-[#C8923A] text-white shadow-sm' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                >
+                  <Scissors className="h-4 w-4" />
+                  Servi\u00e7o
+                </button>
+              </div>
+
+              {/* Select + Quantidade */}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-[var(--text-muted)]">
+                  {addItemType === 'PRODUCT' ? 'Selecione o produto' : 'Selecione o servi\u00e7o'}
+                </label>
+                <select
+                  value={selectedItemId}
+                  onChange={(e) => setSelectedItemId(e.target.value)}
+                  className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#C8923A]"
+                >
                   <option value="">Selecione...</option>
                   {addItemType === 'PRODUCT'
                     ? (products || []).filter((p) => p.isActive).map((p) => (
@@ -325,17 +350,29 @@ export function AppointmentDetailModal({
                       ))
                   }
                 </select>
-                {addItemType === 'PRODUCT' && (
-                  <input type="number" min={1} value={itemQuantity} onChange={(e) => setItemQuantity(Math.max(1, parseInt(e.target.value) || 1))} className="w-16 rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-2 py-2 text-center text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#C8923A]" />
-                )}
               </div>
-              <div className="flex justify-end gap-2">
-                <button onClick={() => setShowAddItem(false)} className="rounded-lg px-3 py-1.5 text-xs text-[var(--text-muted)] hover:bg-[var(--hover-bg)]">Cancelar</button>
-                <button onClick={handleAddItem} disabled={!selectedItemId || addOrderItem.isPending} className="flex items-center gap-1 rounded-lg bg-[#8B6914] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#725510] disabled:opacity-50">
-                  {addOrderItem.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-                  Adicionar
-                </button>
-              </div>
+
+              {addItemType === 'PRODUCT' && (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Quantidade</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={itemQuantity}
+                    onChange={(e) => setItemQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-24 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] px-3 py-2.5 text-center text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#C8923A]"
+                  />
+                </div>
+              )}
+
+              <button
+                onClick={handleAddItem}
+                disabled={!selectedItemId || addOrderItem.isPending}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#8B6914] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#725510] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {addOrderItem.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                Adicionar {addItemType === 'PRODUCT' ? 'Produto' : 'Servi\u00e7o'}
+              </button>
             </div>
           )}
         </div>
