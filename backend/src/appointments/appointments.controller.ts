@@ -22,6 +22,7 @@ import {
   CreateTimeBlockDto,
   UpdateAppointmentDto,
   QueryAppointmentDto,
+  MarkAsAttendedDto,
 } from './dto';
 import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -214,8 +215,12 @@ export class AppointmentsController {
   }
 
   @Patch(':id/attend')
-  async markAsAttended(@Param('id', ParseUUIDPipe) id: string) {
-    return this.appointmentsService.markAsAttended(id);
+  async markAsAttended(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: MarkAsAttendedDto,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.appointmentsService.markAsAttended(id, dto.paymentMethod, req.user.id);
   }
 
   @Patch(':id/no-show')

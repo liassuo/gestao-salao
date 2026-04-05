@@ -25,7 +25,8 @@ export function useAppointmentActions() {
   });
 
   const attendMutation = useMutation({
-    mutationFn: appointmentsService.attend,
+    mutationFn: ({ id, paymentMethod }: { id: string; paymentMethod?: string }) =>
+      appointmentsService.attend(id, paymentMethod),
     onSuccess: invalidate,
   });
 

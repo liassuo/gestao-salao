@@ -473,10 +473,10 @@ export class AppointmentsService {
     return updated;
   }
 
-  async markAsAttended(id: string) {
+  async markAsAttended(id: string, paymentMethod?: string, registeredBy?: string) {
     const { data: appointment, error } = await this.supabase
       .from('appointments')
-      .select('id, status')
+      .select('id, status, clientId, totalPrice')
       .eq('id', id)
       .single();
 
@@ -492,6 +492,8 @@ export class AppointmentsService {
       throw new BadRequestException('Agendamento já foi marcado como atendido');
     }
 
+    const now = new Date().toISOString();
+
     // Converter pagamento online não pago para pagamento no local
     const { data: pendingPayment } = await this.supabase
       .from('payments')
@@ -502,12 +504,12 @@ export class AppointmentsService {
       .single();
 
     if (pendingPayment) {
-      const now = new Date().toISOString();
       await this.supabase
         .from('payments')
         .update({
-          method: 'CASH',
+          method: paymentMethod || 'CASH',
           asaasStatus: null,
+          paidAt: paymentMethod ? now : null,
           notes: `Convertido para pagamento no local (original: ${pendingPayment.method})`,
           updatedAt: now,
         })
@@ -522,11 +524,79 @@ export class AppointmentsService {
           this.logger.warn(`Falha ao cancelar cobrança Asaas ${pendingPayment.asaasPaymentId}: ${e}`);
         }
       }
+
+      // Se paymentMethod foi informado, marcar como pago e vincular ao caixa
+      if (paymentMethod) {
+        await this.supabase
+          .from('appointments')
+          .update({ isPaid: true })
+          .eq('id', id);
+
+        await this.supabase
+          .from('orders')
+          .update({ status: 'PAID', updatedAt: now })
+          .eq('appointmentId', id)
+          .eq('status', 'PENDING');
+
+        const { data: openRegister } = await this.supabase
+          .from('cash_registers')
+          .select('id')
+          .eq('isOpen', true)
+          .single();
+
+        if (openRegister) {
+          await this.supabase
+            .from('payments')
+            .update({ cashRegisterId: openRegister.id })
+            .eq('id', pendingPayment.id);
+        }
+      }
+    } else if (paymentMethod) {
+      // Não tinha pagamento pendente online — criar um novo registro de pagamento
+      const paymentId = randomUUID();
+      await this.supabase
+        .from('payments')
+        .insert({
+          id: paymentId,
+          clientId: appointment.clientId,
+          appointmentId: id,
+          amount: appointment.totalPrice,
+          method: paymentMethod,
+          paidAt: now,
+          registeredBy: registeredBy || null,
+          createdAt: now,
+          updatedAt: now,
+        });
+
+      await this.supabase
+        .from('appointments')
+        .update({ isPaid: true })
+        .eq('id', id);
+
+      await this.supabase
+        .from('orders')
+        .update({ status: 'PAID', updatedAt: now })
+        .eq('appointmentId', id)
+        .eq('status', 'PENDING');
+
+      // Vincular ao caixa aberto
+      const { data: openRegister } = await this.supabase
+        .from('cash_registers')
+        .select('id')
+        .eq('isOpen', true)
+        .single();
+
+      if (openRegister) {
+        await this.supabase
+          .from('payments')
+          .update({ cashRegisterId: openRegister.id })
+          .eq('id', paymentId);
+      }
     }
 
     const { data: updated, error: updateError } = await this.supabase
       .from('appointments')
-      .update({ status: 'ATTENDED', attendedAt: new Date().toISOString() })
+      .update({ status: 'ATTENDED', attendedAt: now })
       .eq('id', id)
       .select(this.APPOINTMENT_SELECT)
       .single();

@@ -1,11 +1,11 @@
 import { useState, useRef } from 'react';
-import { MoreVertical, Check, X, UserX, Receipt } from 'lucide-react';
+import { MoreVertical, Check, X, UserX, Receipt, Banknote, QrCode, CreditCard, ChevronLeft } from 'lucide-react';
 import { ConfirmModal } from '@/components/ui';
 import type { Appointment } from '@/types';
 
 interface AppointmentActionsProps {
   appointment: Appointment;
-  onAttend: (id: string) => Promise<unknown>;
+  onAttend: (id: string, paymentMethod?: string) => Promise<unknown>;
   onCancel: (id: string) => Promise<unknown>;
   onNoShow: (id: string) => Promise<unknown>;
   onGenerateDebt?: (appointment: Appointment) => void;
@@ -23,6 +23,7 @@ export function AppointmentActions({
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [showPaymentSubmenu, setShowPaymentSubmenu] = useState(false);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
   const btnRef = useRef<HTMLButtonElement>(null);
 
@@ -82,7 +83,7 @@ export function AppointmentActions({
             {/* Backdrop */}
             <div
               className="fixed inset-0 z-10"
-              onClick={() => setIsOpen(false)}
+              onClick={() => { setIsOpen(false); setShowPaymentSubmenu(false); }}
             />
 
             {/* Dropdown */}
@@ -90,10 +91,10 @@ export function AppointmentActions({
               className="fixed z-20 w-48 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-1 shadow-lg"
               style={{ top: menuPos.top, left: menuPos.left }}
             >
-              {canModify && (
+              {canModify && !showPaymentSubmenu && (
                 <>
                   <button
-                    onClick={() => handleAction(() => onAttend(appointment.id))}
+                    onClick={() => setShowPaymentSubmenu(true)}
                     disabled={isLoading}
                     className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] disabled:opacity-50"
                   >
@@ -117,6 +118,43 @@ export function AppointmentActions({
                   >
                     <X className="h-4 w-4" />
                     Cancelar
+                  </button>
+                </>
+              )}
+
+              {canModify && showPaymentSubmenu && (
+                <>
+                  <button
+                    onClick={() => setShowPaymentSubmenu(false)}
+                    className="flex w-full items-center gap-2 px-4 py-2 text-left text-xs font-medium text-[var(--text-muted)] hover:bg-[var(--hover-bg)]"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                    Forma de pagamento
+                  </button>
+                  <div className="mx-2 my-1 border-t border-[var(--border-color)]" />
+                  <button
+                    onClick={() => handleAction(() => onAttend(appointment.id, 'CASH'))}
+                    disabled={isLoading}
+                    className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] disabled:opacity-50"
+                  >
+                    <Banknote className="h-4 w-4 text-emerald-400" />
+                    Dinheiro
+                  </button>
+                  <button
+                    onClick={() => handleAction(() => onAttend(appointment.id, 'PIX'))}
+                    disabled={isLoading}
+                    className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] disabled:opacity-50"
+                  >
+                    <QrCode className="h-4 w-4 text-blue-400" />
+                    PIX
+                  </button>
+                  <button
+                    onClick={() => handleAction(() => onAttend(appointment.id, 'CARD'))}
+                    disabled={isLoading}
+                    className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] disabled:opacity-50"
+                  >
+                    <CreditCard className="h-4 w-4 text-blue-400" />
+                    Cartão
                   </button>
                 </>
               )}

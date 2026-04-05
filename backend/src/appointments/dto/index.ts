@@ -4,3 +4,4 @@ export * from './create-time-block.dto';
 export * from './update-appointment.dto';
 export * from './query-appointment.dto';
 export * from './rate-appointment.dto';
+export * from './mark-attended.dto';

@@ -292,9 +292,9 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
     setDetailModal({ appointment, professionalName });
   };
 
-  const handleDetailAttend = async (id: string) => {
+  const handleDetailAttend = async (id: string, paymentMethod?: string) => {
     try {
-      await attend(id);
+      await attend({ id, paymentMethod });
       toast.success('Status atualizado', 'Agendamento marcado como atendido.');
     } catch {
       toast.error('Erro', 'Não foi possível atualizar o status.');

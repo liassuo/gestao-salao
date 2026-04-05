@@ -30,8 +30,10 @@ export const appointmentsService = {
     return response.data;
   },
 
-  async attend(id: string): Promise<Appointment> {
-    const response = await api.patch<Appointment>(`/appointments/${id}/attend`);
+  async attend(id: string, paymentMethod?: string): Promise<Appointment> {
+    const response = await api.patch<Appointment>(`/appointments/${id}/attend`, {
+      paymentMethod,
+    });
     return response.data;
   },
 

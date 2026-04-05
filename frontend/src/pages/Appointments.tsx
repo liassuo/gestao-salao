@@ -93,9 +93,9 @@ export function Appointments() {
     }
   };
 
-  const handleAttend = async (id: string) => {
+  const handleAttend = async (id: string, paymentMethod?: string) => {
     try {
-      await attend(id);
+      await attend({ id, paymentMethod });
       toast.success('Status atualizado', 'Agendamento marcado como atendido.');
     } catch {
       toast.error('Erro', 'Não foi possível atualizar o status.');

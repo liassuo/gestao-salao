@@ -7,7 +7,7 @@ import { AppointmentActions } from './AppointmentActions';
 
 interface AppointmentsTableProps {
   appointments: Appointment[];
-  onAttend: (id: string) => Promise<unknown>;
+  onAttend: (id: string, paymentMethod?: string) => Promise<unknown>;
   onCancel: (id: string) => Promise<unknown>;
   onNoShow: (id: string) => Promise<unknown>;
   onGenerateDebt?: (appointment: Appointment) => void;

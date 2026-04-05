@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Clock, Phone, Check, UserX, Edit2, Save, XCircle, Loader2, Plus, Trash2, Package, Scissors } from 'lucide-react';
+import { Clock, Phone, Check, UserX, Edit2, Save, XCircle, Loader2, Plus, Trash2, Package, Scissors, Banknote, QrCode, CreditCard } from 'lucide-react';
 import { Modal } from '@/components/ui';
 import { useOrderByAppointment, useAddOrderItem, useRemoveOrderItem, useProducts, useServices } from '@/hooks';
 import type { CalendarAppointment } from '@/types';
@@ -61,7 +61,7 @@ interface AppointmentDetailModalProps {
   professionalName: string;
   isOpen: boolean;
   onClose: () => void;
-  onAttend: (id: string) => Promise<void>;
+  onAttend: (id: string, paymentMethod?: string) => Promise<void>;
   onCancel: (id: string) => Promise<void>;
   onNoShow: (id: string) => Promise<void>;
   onUpdate: (id: string, data: { scheduledAt?: string; notes?: string }) => Promise<void>;
@@ -84,6 +84,7 @@ export function AppointmentDetailModal({
   const [isSaving, setIsSaving] = useState(false);
   const [isConfirmingCancel, setIsConfirmingCancel] = useState(false);
   const [isActing, setIsActing] = useState(false);
+  const [showPaymentOptions, setShowPaymentOptions] = useState(false);
 
   // Comanda
   const [showAddItem, setShowAddItem] = useState(false);
@@ -445,9 +446,44 @@ export function AppointmentDetailModal({
                 </button>
               </div>
             </div>
+          ) : showPaymentOptions ? (
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-[var(--text-primary)]">Forma de pagamento</span>
+                <button onClick={() => setShowPaymentOptions(false)} className="rounded-lg p-1 text-[var(--text-muted)] hover:bg-[var(--hover-bg)]">
+                  <XCircle className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={() => handleAction(() => onAttend(appointment.id, 'CASH'))}
+                  disabled={isActing}
+                  className="flex flex-col items-center gap-1.5 rounded-xl border border-[var(--card-border)] bg-[var(--bg-primary)] px-3 py-3 text-sm font-medium text-[var(--text-primary)] transition-colors hover:border-emerald-500/50 hover:bg-emerald-500/10 disabled:opacity-50"
+                >
+                  {isActing ? <Loader2 className="h-5 w-5 animate-spin" /> : <Banknote className="h-5 w-5 text-emerald-400" />}
+                  Dinheiro
+                </button>
+                <button
+                  onClick={() => handleAction(() => onAttend(appointment.id, 'PIX'))}
+                  disabled={isActing}
+                  className="flex flex-col items-center gap-1.5 rounded-xl border border-[var(--card-border)] bg-[var(--bg-primary)] px-3 py-3 text-sm font-medium text-[var(--text-primary)] transition-colors hover:border-emerald-500/50 hover:bg-emerald-500/10 disabled:opacity-50"
+                >
+                  {isActing ? <Loader2 className="h-5 w-5 animate-spin" /> : <QrCode className="h-5 w-5 text-blue-400" />}
+                  PIX
+                </button>
+                <button
+                  onClick={() => handleAction(() => onAttend(appointment.id, 'CARD'))}
+                  disabled={isActing}
+                  className="flex flex-col items-center gap-1.5 rounded-xl border border-[var(--card-border)] bg-[var(--bg-primary)] px-3 py-3 text-sm font-medium text-[var(--text-primary)] transition-colors hover:border-emerald-500/50 hover:bg-emerald-500/10 disabled:opacity-50"
+                >
+                  {isActing ? <Loader2 className="h-5 w-5 animate-spin" /> : <CreditCard className="h-5 w-5 text-blue-400" />}
+                  Cartão
+                </button>
+              </div>
+            </div>
           ) : (
             <div className="flex flex-wrap gap-2 pt-1">
-              <button onClick={() => handleAction(() => onAttend(appointment.id))} disabled={isActing} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-500/20 px-3 py-2 text-sm font-medium text-emerald-400 transition-colors hover:bg-emerald-500/30 disabled:opacity-50">
+              <button onClick={() => setShowPaymentOptions(true)} disabled={isActing} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-500/20 px-3 py-2 text-sm font-medium text-emerald-400 transition-colors hover:bg-emerald-500/30 disabled:opacity-50">
                 {isActing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                 Atendido
               </button>
