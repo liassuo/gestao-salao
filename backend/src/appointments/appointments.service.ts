@@ -37,7 +37,7 @@ export class AppointmentsService {
     // 1. Verificar se o profissional existe e está ativo
     const { data: professional, error: profError } = await this.supabase
       .from('professionals')
-      .select('id, isActive')
+      .select('id, isActive, workingHours')
       .eq('id', dto.professionalId)
       .single();
 
@@ -47,6 +47,40 @@ export class AppointmentsService {
 
     if (!professional.isActive) {
       throw new BadRequestException('Profissional não está ativo');
+    }
+
+    // 1.1 Verificar se o profissional trabalha neste dia e horário
+    if (professional.workingHours && Array.isArray(professional.workingHours) && professional.workingHours.length > 0) {
+      const scheduledStr = String(dto.scheduledAt);
+      const datePart = scheduledStr.substring(0, 10);
+      const [sy, sm, sd] = datePart.split('-').map(Number);
+      const dayOfWeek = new Date(sy, sm - 1, sd).getDay();
+
+      const daySchedule = (professional.workingHours as any[]).find(
+        (wh: any) => wh.dayOfWeek === dayOfWeek,
+      );
+
+      if (!daySchedule) {
+        throw new BadRequestException(
+          'O profissional não trabalha neste dia (folga)',
+        );
+      }
+
+      // Verificar se o horário está dentro do expediente
+      const timePart = scheduledStr.substring(11, 16);
+      const [apptH, apptM] = timePart.split(':').map(Number);
+      const apptMinutes = (apptH || 0) * 60 + (apptM || 0);
+
+      const [whStartH, whStartM] = (daySchedule.startTime || '00:00').split(':').map(Number);
+      const [whEndH, whEndM] = (daySchedule.endTime || '23:59').split(':').map(Number);
+      const whStart = (whStartH || 0) * 60 + (whStartM || 0);
+      const whEnd = (whEndH || 0) * 60 + (whEndM || 0);
+
+      if (apptMinutes < whStart || apptMinutes >= whEnd) {
+        throw new BadRequestException(
+          `O horário selecionado está fora do expediente do profissional (${daySchedule.startTime} - ${daySchedule.endTime})`,
+        );
+      }
     }
 
     // 2. Buscar os serviços e calcular duração total
@@ -89,6 +123,31 @@ export class AppointmentsService {
       }
       return sum + s.price;
     }, 0);
+
+    // 2.2 Verificar se o serviço cabe dentro do expediente do profissional
+    if (professional.workingHours && Array.isArray(professional.workingHours) && professional.workingHours.length > 0) {
+      const scheduledStr = String(dto.scheduledAt);
+      const timePart = scheduledStr.substring(11, 16);
+      const [apptH, apptM] = timePart.split(':').map(Number);
+      const apptEndMinutes = (apptH || 0) * 60 + (apptM || 0) + totalDuration;
+
+      const datePart = scheduledStr.substring(0, 10);
+      const [sy, sm, sd] = datePart.split('-').map(Number);
+      const dayOfWeek = new Date(sy, sm - 1, sd).getDay();
+      const daySchedule = (professional.workingHours as any[]).find(
+        (wh: any) => wh.dayOfWeek === dayOfWeek,
+      );
+
+      if (daySchedule?.endTime) {
+        const [whEndH, whEndM] = daySchedule.endTime.split(':').map(Number);
+        const whEnd = (whEndH || 0) * 60 + (whEndM || 0);
+        if (apptEndMinutes > whEnd) {
+          throw new BadRequestException(
+            `O serviço ultrapassa o fim do expediente do profissional (${daySchedule.endTime})`,
+          );
+        }
+      }
+    }
 
     // 3. Verificar se o cliente existe
     const { data: client, error: clientError } = await this.supabase
