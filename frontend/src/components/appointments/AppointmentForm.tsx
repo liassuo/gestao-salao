@@ -182,7 +182,7 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
     const now = new Date();
     const selected = new Date(`${data.date}T${data.time}:00`);
     if (selected < now) {
-      toast.showError('Não é possível agendar em um horário que já passou');
+      toast.error('Horário inválido', 'Não é possível agendar em um horário que já passou');
       return;
     }
 
