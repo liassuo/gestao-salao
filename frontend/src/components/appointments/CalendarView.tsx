@@ -319,14 +319,12 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
   const timeSlots = useMemo(() => generateTimeSlots(startHour, endHour), [startHour, endHour]);
   const totalGridHeight = totalHours * HOUR_HEIGHT;
 
-  // Scroll to opening time on mount / date change
+  // Scroll to top on mount / date change
   useEffect(() => {
     if (scrollRef.current) {
-      const openingHour = settings?.openingTime ? parseInt(settings.openingTime.split(':')[0], 10) : 9;
-      const offsetToOpening = (openingHour - startHour) * HOUR_HEIGHT;
-      scrollRef.current.scrollTop = offsetToOpening;
+      scrollRef.current.scrollTop = 0;
     }
-  }, [selectedDate, startHour, settings?.openingTime]);
+  }, [selectedDate]);
 
   const handlePrevDay = () => setSelectedDate((d) => addDays(d, -1));
   const handleNextDay = () => setSelectedDate((d) => addDays(d, 1));
