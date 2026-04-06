@@ -75,11 +75,10 @@ export function CloseCashRegisterModal({
 
   const expectedBalance = cashRegister.openingBalance + cashRegister.totalCash;
   const discrepancy = closingBalanceCents - expectedBalance;
-  const hasInput = closingBalanceCents > 0;
+  const hasInput = closingBalanceCents > 0 || closingBalanceDisplay !== '';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!closingBalanceCents) return;
     await onSubmit({
       closingBalance: closingBalanceCents,
       notes: notes || undefined,
@@ -90,7 +89,7 @@ export function CloseCashRegisterModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)] shadow-2xl">
+      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)] shadow-2xl">
         {/* Header */}
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border-color)] bg-[var(--card-bg)] px-6 py-4 rounded-t-2xl">
           <div>
@@ -115,66 +114,69 @@ export function CloseCashRegisterModal({
             </div>
           )}
 
-          {/* Resumo do dia - visual */}
-          <div className="rounded-xl bg-[var(--hover-bg)] p-4 space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-              Resumo do dia
-            </p>
+          {/* Resumo do dia + Caixa físico lado a lado */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {/* Resumo do dia */}
+            <div className="rounded-xl bg-[var(--hover-bg)] p-4 space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                Resumo do dia
+              </p>
 
-            <div className="grid grid-cols-3 gap-3">
-              <div className="text-center rounded-lg bg-[var(--card-bg)] p-3">
-                <Banknote className="h-4 w-4 mx-auto text-green-500 mb-1" />
-                <p className="text-xs text-[var(--text-muted)]">Dinheiro</p>
-                <p className="text-sm font-bold text-[var(--text-primary)]">
-                  {formatCurrency(cashRegister.totalCash)}
-                </p>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="text-center rounded-lg bg-[var(--card-bg)] p-3">
+                  <Banknote className="h-4 w-4 mx-auto text-green-500 mb-1" />
+                  <p className="text-xs text-[var(--text-muted)]">Dinheiro</p>
+                  <p className="text-sm font-bold text-[var(--text-primary)]">
+                    {formatCurrency(cashRegister.totalCash)}
+                  </p>
+                </div>
+                <div className="text-center rounded-lg bg-[var(--card-bg)] p-3">
+                  <Smartphone className="h-4 w-4 mx-auto text-purple-500 mb-1" />
+                  <p className="text-xs text-[var(--text-muted)]">PIX</p>
+                  <p className="text-sm font-bold text-[var(--text-primary)]">
+                    {formatCurrency(cashRegister.totalPix)}
+                  </p>
+                </div>
+                <div className="text-center rounded-lg bg-[var(--card-bg)] p-3">
+                  <CreditCard className="h-4 w-4 mx-auto text-blue-500 mb-1" />
+                  <p className="text-xs text-[var(--text-muted)]">Cartão</p>
+                  <p className="text-sm font-bold text-[var(--text-primary)]">
+                    {formatCurrency(cashRegister.totalCard)}
+                  </p>
+                </div>
               </div>
-              <div className="text-center rounded-lg bg-[var(--card-bg)] p-3">
-                <Smartphone className="h-4 w-4 mx-auto text-purple-500 mb-1" />
-                <p className="text-xs text-[var(--text-muted)]">PIX</p>
-                <p className="text-sm font-bold text-[var(--text-primary)]">
-                  {formatCurrency(cashRegister.totalPix)}
-                </p>
-              </div>
-              <div className="text-center rounded-lg bg-[var(--card-bg)] p-3">
-                <CreditCard className="h-4 w-4 mx-auto text-blue-500 mb-1" />
-                <p className="text-xs text-[var(--text-muted)]">Cartão</p>
-                <p className="text-sm font-bold text-[var(--text-primary)]">
-                  {formatCurrency(cashRegister.totalCard)}
-                </p>
+
+              <div className="flex items-center justify-between border-t border-[var(--border-color)] pt-3">
+                <span className="text-sm text-[var(--text-secondary)]">Receita total</span>
+                <span className="text-base font-bold text-[var(--text-primary)]">
+                  {formatCurrency(cashRegister.totalRevenue)}
+                </span>
               </div>
             </div>
 
-            <div className="flex items-center justify-between border-t border-[var(--border-color)] pt-3">
-              <span className="text-sm text-[var(--text-secondary)]">Receita total</span>
-              <span className="text-base font-bold text-[var(--text-primary)]">
-                {formatCurrency(cashRegister.totalRevenue)}
-              </span>
-            </div>
-          </div>
-
-          {/* Cálculo do caixa físico */}
-          <div className="rounded-xl border border-[var(--border-color)] p-4 space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">
-              Caixa físico (dinheiro)
-            </p>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-[var(--text-secondary)]">Saldo inicial</span>
-              <span className="text-[var(--text-primary)]">
-                {formatCurrency(cashRegister.openingBalance)}
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-[var(--text-secondary)]">+ Dinheiro recebido</span>
-              <span className="text-green-500">
-                +{formatCurrency(cashRegister.totalCash)}
-              </span>
-            </div>
-            <div className="flex items-center justify-between border-t border-dashed border-[var(--border-color)] pt-2">
-              <span className="text-sm font-semibold text-[var(--text-primary)]">Esperado</span>
-              <span className="text-base font-bold text-[#C8923A]">
-                {formatCurrency(expectedBalance)}
-              </span>
+            {/* Cálculo do caixa físico */}
+            <div className="rounded-xl border border-[var(--border-color)] p-4 space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">
+                Caixa físico (dinheiro)
+              </p>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-[var(--text-secondary)]">Saldo inicial</span>
+                <span className="text-[var(--text-primary)]">
+                  {formatCurrency(cashRegister.openingBalance)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-[var(--text-secondary)]">+ Dinheiro recebido</span>
+                <span className="text-green-500">
+                  +{formatCurrency(cashRegister.totalCash)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between border-t border-dashed border-[var(--border-color)] pt-2">
+                <span className="text-sm font-semibold text-[var(--text-primary)]">Esperado</span>
+                <span className="text-base font-bold text-[#C8923A]">
+                  {formatCurrency(expectedBalance)}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -199,7 +201,6 @@ export function CloseCashRegisterModal({
                 placeholder="0,00"
                 className="w-full rounded-xl border-2 border-[var(--border-color)] bg-[var(--hover-bg)] py-3.5 pl-14 pr-4 text-2xl font-bold text-[var(--text-primary)] placeholder:text-[var(--text-muted)]/40 focus:border-[#C8923A] focus:outline-none transition-colors"
                 autoFocus
-                required
               />
             </div>
             <p className="mt-1.5 text-xs text-[var(--text-muted)]">
@@ -291,7 +292,7 @@ export function CloseCashRegisterModal({
             </button>
             <button
               type="submit"
-              disabled={isLoading || !closingBalanceCents}
+              disabled={isLoading}
               className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-[#8B6914] px-4 py-3 text-sm font-semibold text-white hover:bg-[#725510] disabled:cursor-not-allowed disabled:opacity-50 transition-all active:scale-[0.98]"
             >
               {isLoading ? (
