@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Clock, Lock, Trash2, AlertCircle, Loader2, User, CalendarPlus, Smartphone, Monitor } from 'lucide-react';
-import { useCalendarData, useDeleteTimeBlock, useAppointmentActions, useUpdateAppointment } from '@/hooks';
+import { ChevronLeft, ChevronRight, Clock, Lock, Trash2, AlertCircle, Loader2, User, CalendarPlus, Smartphone, Monitor, CalendarDays } from 'lucide-react';
+import { useCalendarData, useDeleteTimeBlock, useAppointmentActions, useUpdateAppointment, useSettings } from '@/hooks';
 import { useToast, ConfirmModal } from '@/components/ui';
 import { BlockTimeModal } from './BlockTimeModal';
 import { AppointmentDetailModal } from './AppointmentDetailModal';
@@ -8,9 +8,8 @@ import type { CalendarAppointment, CalendarTimeBlock, CalendarProfessional } fro
 
 const SLOT_HEIGHT = 20; // px per 10-min slot
 const HOUR_HEIGHT = SLOT_HEIGHT * 6; // 120px per hour
-const START_HOUR = 7;
-const END_HOUR = 21;
-const TOTAL_HOURS = END_HOUR - START_HOUR; // 14 hours
+const DEFAULT_START_HOUR = 8;
+const DEFAULT_END_HOUR = 21;
 const TIME_LABEL_WIDTH = 60; // px
 
 function formatDateBR(dateStr: string): string {
@@ -41,9 +40,9 @@ function timeToMinutes(time: string): number {
   return h * 60 + m;
 }
 
-function getTopPosition(time: string): number {
+function getTopPosition(time: string, startHour = DEFAULT_START_HOUR): number {
   const minutes = timeToMinutes(time);
-  const startMinutes = START_HOUR * 60;
+  const startMinutes = startHour * 60;
   return ((minutes - startMinutes) / 10) * SLOT_HEIGHT;
 }
 
@@ -80,9 +79,9 @@ const statusColors: Record<string, { bg: string; border: string; text: string }>
   SCHEDULED:       { bg: 'bg-yellow-400/15', border: 'border-yellow-400/30', text: 'text-yellow-300' }, // fallback
 };
 
-function generateTimeSlots(): string[] {
+function generateTimeSlots(startHour: number, endHour: number): string[] {
   const slots: string[] = [];
-  for (let h = START_HOUR; h < END_HOUR; h++) {
+  for (let h = startHour; h < endHour; h++) {
     for (let m = 0; m < 60; m += 10) {
       slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
     }
@@ -95,11 +94,12 @@ interface AppointmentBlockProps {
   onAppointmentClick: (appointment: CalendarAppointment) => void;
   onDragStart?: (e: React.PointerEvent<HTMLDivElement>, appointment: CalendarAppointment) => void;
   isDragging?: boolean;
+  startHour: number;
 }
 
-function AppointmentBlock({ appointment, onAppointmentClick, onDragStart, isDragging }: AppointmentBlockProps) {
+function AppointmentBlock({ appointment, onAppointmentClick, onDragStart, isDragging, startHour }: AppointmentBlockProps) {
   const time = extractTime(appointment.scheduledAt);
-  const top = getTopPosition(time);
+  const top = getTopPosition(time, startHour);
   const height = getBlockHeight(appointment.totalDuration);
   const isSubscription = !!appointment.usedSubscriptionCut && appointment.status === 'SCHEDULED';
   const colorKey = appointment.status !== 'SCHEDULED'
@@ -167,12 +167,13 @@ interface TimeBlockItemProps {
   block: CalendarTimeBlock;
   onDelete: (id: string) => void;
   isDeleting: boolean;
+  startHour: number;
 }
 
-function TimeBlockItem({ block, onDelete, isDeleting }: TimeBlockItemProps) {
+function TimeBlockItem({ block, onDelete, isDeleting, startHour }: TimeBlockItemProps) {
   const startTime = extractTime(block.startTime);
   const endTime = extractTime(block.endTime);
-  const top = getTopPosition(startTime);
+  const top = getTopPosition(startTime, startHour);
   const durationMinutes = timeToMinutes(endTime) - timeToMinutes(startTime);
   const height = getBlockHeight(durationMinutes);
 
@@ -220,9 +221,11 @@ function TimeBlockItem({ block, onDelete, isDeleting }: TimeBlockItemProps) {
 
 interface CurrentTimeLineProps {
   isToday: boolean;
+  startHour: number;
+  endHour: number;
 }
 
-function CurrentTimeLine({ isToday }: CurrentTimeLineProps) {
+function CurrentTimeLine({ isToday, startHour, endHour }: CurrentTimeLineProps) {
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -234,8 +237,8 @@ function CurrentTimeLine({ isToday }: CurrentTimeLineProps) {
   if (!isToday) return null;
 
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
-  const startMinutes = START_HOUR * 60;
-  const endMinutes = END_HOUR * 60;
+  const startMinutes = startHour * 60;
+  const endMinutes = endHour * 60;
 
   if (currentMinutes < startMinutes || currentMinutes > endMinutes) return null;
 
@@ -260,6 +263,7 @@ interface CalendarViewProps {
 
 export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
   const [selectedDate, setSelectedDate] = useState(getTodayStr);
+  const dateInputRef = useRef<HTMLInputElement>(null);
   const [blockModalOpen, setBlockModalOpen] = useState(false);
   const [blockModalProfessionalId, setBlockModalProfessionalId] = useState<string | null>(null);
   const [blockModalDefaultTime, setBlockModalDefaultTime] = useState<string | null>(null);
@@ -272,10 +276,26 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
   } | null>(null);
 
   const { data: professionals, isLoading, isError, error } = useCalendarData(selectedDate);
+  const { data: settings } = useSettings();
   const deleteTimeBlock = useDeleteTimeBlock();
   const { cancel, attend, noShow } = useAppointmentActions();
   const updateAppointment = useUpdateAppointment();
   const toast = useToast();
+
+  // Horários dinâmicos baseados nas configurações
+  const startHour = useMemo(() => {
+    if (!settings?.openingTime) return DEFAULT_START_HOUR;
+    const h = parseInt(settings.openingTime.split(':')[0], 10);
+    return Math.max(0, h - 1); // 1 hora antes do início
+  }, [settings?.openingTime]);
+
+  const endHour = useMemo(() => {
+    if (!settings?.closingTime) return DEFAULT_END_HOUR;
+    const h = parseInt(settings.closingTime.split(':')[0], 10);
+    return Math.min(24, h + 2); // 2 horas depois do fim
+  }, [settings?.closingTime]);
+
+  const totalHours = endHour - startHour;
 
   // Drag-and-drop state
   const [dragConfirm, setDragConfirm] = useState<{
@@ -296,16 +316,17 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
   const rafId = useRef(0);
 
   const isToday = selectedDate === getTodayStr();
-  const timeSlots = useMemo(() => generateTimeSlots(), []);
-  const totalGridHeight = TOTAL_HOURS * HOUR_HEIGHT;
+  const timeSlots = useMemo(() => generateTimeSlots(startHour, endHour), [startHour, endHour]);
+  const totalGridHeight = totalHours * HOUR_HEIGHT;
 
-  // Scroll to 8am on mount / date change
+  // Scroll to opening time on mount / date change
   useEffect(() => {
     if (scrollRef.current) {
-      const offset8am = (1) * HOUR_HEIGHT; // 8:00 is 1 hour from start (7:00)
-      scrollRef.current.scrollTop = offset8am;
+      const openingHour = settings?.openingTime ? parseInt(settings.openingTime.split(':')[0], 10) : 9;
+      const offsetToOpening = (openingHour - startHour) * HOUR_HEIGHT;
+      scrollRef.current.scrollTop = offsetToOpening;
     }
-  }, [selectedDate]);
+  }, [selectedDate, startHour, settings?.openingTime]);
 
   const handlePrevDay = () => setSelectedDate((d) => addDays(d, -1));
   const handleNextDay = () => setSelectedDate((d) => addDays(d, 1));
@@ -382,7 +403,7 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
     if (appointment.status !== 'SCHEDULED' || dragConfirm) return;
 
     const time = extractTime(appointment.scheduledAt);
-    const top = getTopPosition(time);
+    const top = getTopPosition(time, startHour);
     const height = getBlockHeight(appointment.totalDuration);
 
     dragStartY.current = e.clientY;
@@ -412,7 +433,7 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
       rafId.current = requestAnimationFrame(() => {
         const rawTop = dragOriginalTop.current + deltaY;
         const snappedTop = Math.round(rawTop / SLOT_HEIGHT) * SLOT_HEIGHT;
-        const maxTop = TOTAL_HOURS * HOUR_HEIGHT - height;
+        const maxTop = totalHours * HOUR_HEIGHT - height;
         const clampedTop = Math.max(0, Math.min(snappedTop, maxTop));
         setDragGhostTop(clampedTop);
         dragGhostTopRef.current = clampedTop;
@@ -437,7 +458,7 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
 
         if (dragAppointmentRef.current) {
           const finalTop = dragGhostTopRef.current;
-          const newMinutes = START_HOUR * 60 + (finalTop / SLOT_HEIGHT) * 10;
+          const newMinutes = startHour * 60 + (finalTop / SLOT_HEIGHT) * 10;
           const newTime = minutesToTimeStr(newMinutes);
           const oldTime = extractTime(dragAppointmentRef.current.scheduledAt);
 
@@ -563,6 +584,25 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
           >
             Hoje
           </button>
+          <div className="relative">
+            <button
+              onClick={() => dateInputRef.current?.showPicker()}
+              className="rounded-lg p-2 text-[var(--text-muted)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
+              title="Escolher data"
+            >
+              <CalendarDays className="h-5 w-5" />
+            </button>
+            <input
+              ref={dateInputRef}
+              type="date"
+              value={selectedDate}
+              onChange={(e) => {
+                if (e.target.value) setSelectedDate(e.target.value);
+              }}
+              className="pointer-events-none absolute inset-0 h-full w-full opacity-0"
+              tabIndex={-1}
+            />
+          </div>
           <h2 className="text-lg font-semibold capitalize text-[var(--text-primary)]">
             {formatDateBR(selectedDate)}
           </h2>
@@ -632,7 +672,7 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
                   const isHalfHour = m === '30';
                   if (!isFullHour && !isHalfHour) return null;
 
-                  const top = getTopPosition(slot);
+                  const top = getTopPosition(slot, startHour);
                   return (
                     <div
                       key={slot}
@@ -662,6 +702,8 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
                   totalGridHeight={totalGridHeight}
                   isToday={isToday}
                   selectedDate={selectedDate}
+                  startHour={startHour}
+                  endHour={endHour}
                   onDeleteBlock={handleDeleteBlock}
                   isDeletingBlock={deleteTimeBlock.isPending}
                   onSlotClick={handleSlotClick}
@@ -807,6 +849,8 @@ interface ProfessionalColumnProps {
   totalGridHeight: number;
   isToday: boolean;
   selectedDate: string;
+  startHour: number;
+  endHour: number;
   onDeleteBlock: (id: string) => void;
   isDeletingBlock: boolean;
   onSlotClick: (professionalId: string, time: string) => void;
@@ -823,6 +867,8 @@ function ProfessionalColumn({
   totalGridHeight,
   isToday,
   selectedDate,
+  startHour,
+  endHour,
   onDeleteBlock,
   isDeletingBlock,
   onSlotClick,
@@ -839,7 +885,7 @@ function ProfessionalColumn({
         const [, m] = slot.split(':');
         const isFullHour = m === '00';
         const isHalfHour = m === '30';
-        const top = getTopPosition(slot);
+        const top = getTopPosition(slot, startHour);
 
         return (
           <div
@@ -863,6 +909,7 @@ function ProfessionalColumn({
         workingHours={professional.workingHours}
         selectedDate={selectedDate}
         totalGridHeight={totalGridHeight}
+        startHour={startHour}
       />
 
       {/* Appointments */}
@@ -873,6 +920,7 @@ function ProfessionalColumn({
           onAppointmentClick={(a) => onAppointmentClick(a, professional.name)}
           onDragStart={onAppointmentDragStart ? (e, a) => onAppointmentDragStart(e, a, professional.id) : undefined}
           isDragging={draggingAppointmentId === apt.id}
+          startHour={startHour}
         />
       ))}
 
@@ -883,11 +931,12 @@ function ProfessionalColumn({
           block={block}
           onDelete={onDeleteBlock}
           isDeleting={isDeletingBlock}
+          startHour={startHour}
         />
       ))}
 
       {/* Current time line */}
-      <CurrentTimeLine isToday={isToday} />
+      <CurrentTimeLine isToday={isToday} startHour={startHour} endHour={endHour} />
 
       {/* Drag ghost */}
       {draggingAppointmentId && dragGhostTop !== undefined && dragGhostHeight !== undefined && (
@@ -897,7 +946,7 @@ function ProfessionalColumn({
         >
           <div className="flex h-full items-center gap-1 text-xs font-semibold text-[#C8923A]">
             <Clock className="h-3 w-3" />
-            {minutesToTimeStr(START_HOUR * 60 + (dragGhostTop / SLOT_HEIGHT) * 10)}
+            {minutesToTimeStr(startHour * 60 + (dragGhostTop / SLOT_HEIGHT) * 10)}
           </div>
         </div>
       )}
@@ -914,9 +963,10 @@ interface WorkingHoursOverlayProps {
   workingHours: { dayOfWeek: number; startTime: string; endTime: string }[] | null;
   selectedDate: string;
   totalGridHeight: number;
+  startHour: number;
 }
 
-function WorkingHoursOverlay({ workingHours, selectedDate, totalGridHeight }: WorkingHoursOverlayProps) {
+function WorkingHoursOverlay({ workingHours, selectedDate, totalGridHeight, startHour }: WorkingHoursOverlayProps) {
   // Get day of week for the selected date (0 = Sunday)
   const [y, m, d] = selectedDate.split('-').map(Number);
   const dayOfWeek = new Date(y, m - 1, d).getDay();
@@ -943,8 +993,8 @@ function WorkingHoursOverlay({ workingHours, selectedDate, totalGridHeight }: Wo
     );
   }
 
-  const workStart = getTopPosition(startTime);
-  const workEnd = getTopPosition(endTime);
+  const workStart = getTopPosition(startTime, startHour);
+  const workEnd = getTopPosition(endTime, startHour);
 
   return (
     <>
