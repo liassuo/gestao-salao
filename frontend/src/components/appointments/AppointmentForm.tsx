@@ -4,6 +4,7 @@ import { AlertCircle, Loader2, Search, X } from 'lucide-react';
 import { useClients, useProfessionals, useServices } from '@/hooks';
 import { formatPhone } from '@/utils/format';
 import { AppointmentSummary } from './AppointmentSummary';
+import { useToast } from '@/components/ui/ToastContext';
 import type { Service } from '@/types';
 
 interface AppointmentFormData {
@@ -34,6 +35,7 @@ interface AppointmentFormProps {
 
 export function AppointmentForm({ onSubmit, isLoading, error, prefill }: AppointmentFormProps) {
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
+  const toast = useToast();
 
   const { data: clients = [], isLoading: isLoadingClients } = useClients();
   const { data: professionals = [], isLoading: isLoadingProfessionals } = useProfessionals();
@@ -54,6 +56,27 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
   });
 
   const watchedProfessionalId = watch('professionalId');
+  const watchedClientId = watch('clientId');
+  const watchedDate = watch('date');
+  const watchedTime = watch('time');
+
+  const isFormComplete =
+    !!watchedClientId &&
+    !!watchedProfessionalId &&
+    selectedServiceIds.length > 0 &&
+    !!watchedDate &&
+    !!watchedTime;
+
+  const handleDisabledClick = () => {
+    if (isFormComplete || isLoading) return;
+    const missing: string[] = [];
+    if (!watchedClientId) missing.push('Cliente');
+    if (!watchedProfessionalId) missing.push('Profissional');
+    if (selectedServiceIds.length === 0) missing.push('Serviço');
+    if (!watchedDate) missing.push('Data');
+    if (!watchedTime) missing.push('Hora');
+    toast.warning('Preencha os campos obrigatórios', `Faltam: ${missing.join(', ')}`);
+  };
 
   // Client autocomplete
   const [clientSearch, setClientSearch] = useState('');
@@ -326,14 +349,16 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
 
       {/* Botão de submit */}
       <div className="flex justify-end gap-3 border-t border-[var(--border-color)] pt-4">
-        <button
-          type="submit"
-          disabled={isLoading || selectedServiceIds.length === 0}
-          className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-6 py-2.5 font-medium text-white transition-colors hover:bg-[#725510] disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-          {isLoading ? 'Criando...' : 'Criar Agendamento'}
-        </button>
+        <div onClick={!isFormComplete ? handleDisabledClick : undefined}>
+          <button
+            type="submit"
+            disabled={isLoading || !isFormComplete}
+            className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-6 py-2.5 font-medium text-white transition-colors hover:bg-[#725510] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+            {isLoading ? 'Criando...' : 'Criar Agendamento'}
+          </button>
+        </div>
       </div>
     </form>
   );
