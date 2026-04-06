@@ -704,6 +704,16 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
               />
               <span className="text-xs text-[var(--text-muted)]">Bloqueado</span>
             </div>
+            <div className="flex items-center gap-1.5">
+              <div
+                className="h-3 w-3 rounded border border-gray-500/20 bg-gray-500/[0.08]"
+                style={{
+                  backgroundImage:
+                    'repeating-linear-gradient(135deg, transparent, transparent 2px, rgba(128, 128, 128, 0.1) 2px, rgba(128, 128, 128, 0.1) 4px)',
+                }}
+              />
+              <span className="text-xs text-[var(--text-muted)]">Fora do expediente</span>
+            </div>
           </div>
         </div>
       )}
@@ -849,13 +859,11 @@ function ProfessionalColumn({
       })}
 
       {/* Working hours shading (outside hours) */}
-      {professional.workingHours && professional.workingHours.length > 0 && (
-        <WorkingHoursOverlay
-          workingHours={professional.workingHours}
-          selectedDate={selectedDate}
-          totalGridHeight={totalGridHeight}
-        />
-      )}
+      <WorkingHoursOverlay
+        workingHours={professional.workingHours}
+        selectedDate={selectedDate}
+        totalGridHeight={totalGridHeight}
+      />
 
       {/* Appointments */}
       {(professional.appointments || []).map((apt) => (
@@ -897,8 +905,13 @@ function ProfessionalColumn({
   );
 }
 
+const CLOSED_OVERLAY_STYLE = {
+  backgroundImage:
+    'repeating-linear-gradient(135deg, transparent, transparent 4px, rgba(128, 128, 128, 0.06) 4px, rgba(128, 128, 128, 0.06) 8px)',
+};
+
 interface WorkingHoursOverlayProps {
-  workingHours: { dayOfWeek: number; startTime: string; endTime: string }[];
+  workingHours: { dayOfWeek: number; startTime: string; endTime: string }[] | null;
   selectedDate: string;
   totalGridHeight: number;
 }
@@ -908,34 +921,45 @@ function WorkingHoursOverlay({ workingHours, selectedDate, totalGridHeight }: Wo
   const [y, m, d] = selectedDate.split('-').map(Number);
   const dayOfWeek = new Date(y, m - 1, d).getDay();
 
-  const todayHours = workingHours.find((wh) => wh.dayOfWeek === dayOfWeek);
-  if (!todayHours) {
-    // Professional doesn't work this day - shade the whole column
+  const todayHours = workingHours?.find((wh) => wh.dayOfWeek === dayOfWeek);
+
+  // Fallback para horário padrão se o profissional não tem workingHours definidos
+  const startTime = todayHours?.startTime || '09:00';
+  const endTime = todayHours?.endTime || '19:00';
+
+  // Se não tem workingHours e nem horário para esse dia, sombrear tudo
+  if (workingHours && workingHours.length > 0 && !todayHours) {
     return (
       <div
-        className="pointer-events-none absolute inset-x-0 top-0 bg-[var(--text-muted)] opacity-[0.04]"
-        style={{ height: `${totalGridHeight}px` }}
-      />
+        className="pointer-events-none absolute inset-x-0 top-0 bg-gray-500/[0.08]"
+        style={{ height: `${totalGridHeight}px`, ...CLOSED_OVERLAY_STYLE }}
+      >
+        <div className="flex h-full items-center justify-center">
+          <span className="rounded-md bg-[var(--card-bg)]/80 px-3 py-1 text-xs font-medium text-[var(--text-muted)]">
+            Folga
+          </span>
+        </div>
+      </div>
     );
   }
 
-  const workStart = getTopPosition(todayHours.startTime);
-  const workEnd = getTopPosition(todayHours.endTime);
+  const workStart = getTopPosition(startTime);
+  const workEnd = getTopPosition(endTime);
 
   return (
     <>
-      {/* Before working hours */}
+      {/* Antes do expediente */}
       {workStart > 0 && (
         <div
-          className="pointer-events-none absolute inset-x-0 top-0 bg-[var(--text-muted)] opacity-[0.04]"
-          style={{ height: `${workStart}px` }}
+          className="pointer-events-none absolute inset-x-0 top-0 bg-gray-500/[0.08]"
+          style={{ height: `${workStart}px`, ...CLOSED_OVERLAY_STYLE }}
         />
       )}
-      {/* After working hours */}
+      {/* Depois do expediente */}
       {workEnd < totalGridHeight && (
         <div
-          className="pointer-events-none absolute inset-x-0 bg-[var(--text-muted)] opacity-[0.04]"
-          style={{ top: `${workEnd}px`, height: `${totalGridHeight - workEnd}px` }}
+          className="pointer-events-none absolute inset-x-0 bg-gray-500/[0.08]"
+          style={{ top: `${workEnd}px`, height: `${totalGridHeight - workEnd}px`, ...CLOSED_OVERLAY_STYLE }}
         />
       )}
     </>

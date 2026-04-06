@@ -49,7 +49,8 @@
       "Bash(grep:*)",
       "Bash(find /c/Users/liass/Downloads/gestao-salao -type f \\\\\\(-name *.sql -o -name *reset* -o -name *seed* \\\\\\))",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f''''{len\\(d\\)} professionals''''\\)\")",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npx vite:*)"
     ]
   }
 }

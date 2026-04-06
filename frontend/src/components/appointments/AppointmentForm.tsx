@@ -33,6 +33,26 @@ interface AppointmentFormProps {
   };
 }
 
+function getDefaultDateTime(): { date: string; time: string } {
+  const now = new Date();
+  const minutes = now.getMinutes();
+  // Arredondar para os próximos 30 minutos
+  const roundedMinutes = minutes < 30 ? 30 : 0;
+  const hours = roundedMinutes === 0 ? now.getHours() + 1 : now.getHours();
+
+  if (hours >= 21 || hours < 9) {
+    // Fora do horário de funcionamento: avançar para 09:00 do próximo dia
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return { date: tomorrow.toISOString().split('T')[0], time: '09:00' };
+  }
+
+  return {
+    date: now.toISOString().split('T')[0],
+    time: `${String(hours).padStart(2, '0')}:${String(roundedMinutes).padStart(2, '0')}`,
+  };
+}
+
 export function AppointmentForm({ onSubmit, isLoading, error, prefill }: AppointmentFormProps) {
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
   const toast = useToast();
@@ -48,11 +68,14 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
     setValue,
     formState: { errors },
   } = useForm<AppointmentFormData>({
-    defaultValues: {
-      date: prefill?.date || new Date().toISOString().split('T')[0],
-      time: prefill?.time || '09:00',
-      professionalId: prefill?.professionalId || '',
-    },
+    defaultValues: (() => {
+      const defaults = getDefaultDateTime();
+      return {
+        date: prefill?.date || defaults.date,
+        time: prefill?.time || defaults.time,
+        professionalId: prefill?.professionalId || '',
+      };
+    })(),
   });
 
   const watchedProfessionalId = watch('professionalId');
@@ -151,7 +174,18 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
     );
   };
 
+  const todayStr = new Date().toISOString().split('T')[0];
+  const isToday = watchedDate === todayStr;
+
   const handleFormSubmit = async (data: AppointmentFormData) => {
+    // Validar se o horário não é no passado
+    const now = new Date();
+    const selected = new Date(`${data.date}T${data.time}:00`);
+    if (selected < now) {
+      toast.showError('Não é possível agendar em um horário que já passou');
+      return;
+    }
+
     // Enviar como string local sem converter para UTC, evitando deslocamento de fuso
     const scheduledAt = `${data.date}T${data.time}:00`;
 
@@ -324,6 +358,7 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
           <input
             type="time"
             {...register('time', { required: 'Selecione um horário' })}
+            min={isToday ? `${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}` : undefined}
             className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] ${
               errors.time ? 'border-[#A63030]' : 'border-[var(--border-color)]'
             }`}
