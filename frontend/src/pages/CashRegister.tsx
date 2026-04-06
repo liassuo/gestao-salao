@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import {
   useCashRegisterToday,
+  useCashRegisterOpen,
   useOpenCashRegister,
   useCloseCashRegister,
   useCashRegisters,
@@ -177,6 +178,8 @@ export function CashRegister() {
     error: errorToday,
   } = useCashRegisterToday();
 
+  const { data: openRegister } = useCashRegisterOpen();
+
   const { data: cashRegisters, isLoading: isLoadingHistory } =
     useCashRegisters(historyFilters);
 
@@ -208,11 +211,13 @@ export function CashRegister() {
   };
 
   const handleCloseCashRegister = async (payload: CloseCashRegisterPayload) => {
-    if (!todayCashRegister) return;
+    // Fechar o caixa de hoje ou o caixa antigo aberto
+    const target = todayCashRegister?.isOpen ? todayCashRegister : openRegister;
+    if (!target) return;
     setCloseError(null);
     try {
       await closeCashRegister.mutateAsync({
-        id: todayCashRegister.id,
+        id: target.id,
         payload,
       });
       handleCloseModal();
@@ -225,6 +230,8 @@ export function CashRegister() {
   // Determinar estado do caixa de hoje
   const isClosed = todayCashRegister && !todayCashRegister.isOpen;
   const isOpen = todayCashRegister?.isOpen;
+  // Existe um caixa aberto de outro dia?
+  const hasOldOpenRegister = !todayCashRegister && openRegister && openRegister.isOpen;
 
   const tabs = [
     { id: 'today' as const, label: 'Caixa de Hoje', icon: Wallet },
@@ -296,6 +303,29 @@ export function CashRegister() {
             />
           ) : isClosed ? (
             <ClosedTodaySummary cashRegister={todayCashRegister!} />
+          ) : hasOldOpenRegister ? (
+            <div className="mx-auto max-w-lg space-y-4">
+              <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-5">
+                <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="font-semibold text-amber-500">Caixa anterior aberto</h3>
+                  <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                    O caixa do dia{' '}
+                    <span className="font-medium text-[var(--text-primary)]">
+                      {new Date(openRegister!.date).toLocaleDateString('pt-BR')}
+                    </span>{' '}
+                    ainda está aberto. Feche-o antes de abrir o caixa de hoje.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleOpenCloseModal}
+                    className="mt-3 flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600 transition-colors active:scale-[0.98]"
+                  >
+                    Fechar caixa de {new Date(openRegister!.date).toLocaleDateString('pt-BR')}
+                  </button>
+                </div>
+              </div>
+            </div>
           ) : (
             <OpenCashRegisterForm
               onSubmit={handleOpenCashRegister}
@@ -344,7 +374,7 @@ export function CashRegister() {
         isOpen={isCloseModalOpen}
         onClose={handleCloseModal}
         onSubmit={handleCloseCashRegister}
-        cashRegister={todayCashRegister || null}
+        cashRegister={todayCashRegister?.isOpen ? todayCashRegister : openRegister ?? null}
         isLoading={closeCashRegister.isPending}
         error={closeError}
       />

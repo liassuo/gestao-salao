@@ -177,6 +177,15 @@ export class CashRegisterService {
       .eq('isOpen', true)
       .single();
 
+    // Calcular totais em tempo real para o caixa aberto
+    if (register) {
+      const totals = await this.calculateDailyTotals(register.date);
+      register.totalCash = totals.cash;
+      register.totalPix = totals.pix;
+      register.totalCard = totals.card;
+      register.totalRevenue = totals.total;
+    }
+
     return register;
   }
 
