@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Clock, Lock, Trash2, AlertCircle, Loader2, User, CalendarPlus, Smartphone, Monitor } from 'lucide-react';
 import { useCalendarData, useDeleteTimeBlock, useAppointmentActions, useUpdateAppointment } from '@/hooks';
-import { useToast } from '@/components/ui';
+import { useToast, ConfirmModal } from '@/components/ui';
 import { BlockTimeModal } from './BlockTimeModal';
 import { AppointmentDetailModal } from './AppointmentDetailModal';
 import type { CalendarAppointment, CalendarTimeBlock, CalendarProfessional } from '@/types';
@@ -60,6 +60,12 @@ function formatCurrency(cents: number): string {
   return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
+function minutesToTimeStr(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
 const statusColors: Record<string, { bg: string; border: string; text: string }> = {
   // variantes de SCHEDULED (agendado)
   SUBSCRIPTION: { bg: 'bg-[#C8923A]/20', border: 'border-[#C8923A]/40', text: 'text-[#D4A85C]' }, // âmbar — assinatura
@@ -87,9 +93,11 @@ function generateTimeSlots(): string[] {
 interface AppointmentBlockProps {
   appointment: CalendarAppointment;
   onAppointmentClick: (appointment: CalendarAppointment) => void;
+  onDragStart?: (e: React.PointerEvent<HTMLDivElement>, appointment: CalendarAppointment) => void;
+  isDragging?: boolean;
 }
 
-function AppointmentBlock({ appointment, onAppointmentClick }: AppointmentBlockProps) {
+function AppointmentBlock({ appointment, onAppointmentClick, onDragStart, isDragging }: AppointmentBlockProps) {
   const time = extractTime(appointment.scheduledAt);
   const top = getTopPosition(time);
   const height = getBlockHeight(appointment.totalDuration);
@@ -109,9 +117,14 @@ function AppointmentBlock({ appointment, onAppointmentClick }: AppointmentBlockP
 
   return (
     <div
-      className={`absolute left-1 right-1 cursor-pointer overflow-hidden rounded-lg border ${colors.border} ${colors.bg} px-2 py-1 backdrop-blur-sm transition-all duration-150 hover:z-20 hover:shadow-lg`}
+      className={`absolute left-1 right-1 ${appointment.status === 'SCHEDULED' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} overflow-hidden rounded-lg border ${colors.border} ${colors.bg} px-2 py-1 backdrop-blur-sm transition-all duration-150 hover:z-20 hover:shadow-lg ${isDragging ? '!opacity-30' : ''}`}
       style={{ top: `${top}px`, height: `${Math.max(height, SLOT_HEIGHT)}px` }}
       title={`${appointment.client?.name || 'Cliente'} - ${serviceNames} (${time} - ${endTime})${isFromClient ? ' · App' : ' · Painel'}${isSubscription ? ' · Assinatura' : ''}${appointment.status === 'PENDING_PAYMENT' ? ' · Aguardando pagamento' : ''}`}
+      onPointerDown={(e) => {
+        if (e.button === 0 && appointment.status === 'SCHEDULED') {
+          onDragStart?.(e, appointment);
+        }
+      }}
       onClick={(e) => {
         e.stopPropagation();
         onAppointmentClick(appointment);
@@ -264,6 +277,24 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
   const updateAppointment = useUpdateAppointment();
   const toast = useToast();
 
+  // Drag-and-drop state
+  const [dragConfirm, setDragConfirm] = useState<{
+    appointment: CalendarAppointment;
+    oldTime: string;
+    newTime: string;
+  } | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragProfessionalId, setDragProfessionalId] = useState<string | null>(null);
+  const [dragGhostTop, setDragGhostTop] = useState(0);
+  const [dragGhostHeight, setDragGhostHeight] = useState(0);
+  const dragStartY = useRef(0);
+  const dragStartScrollTop = useRef(0);
+  const dragOriginalTop = useRef(0);
+  const dragAppointmentRef = useRef<CalendarAppointment | null>(null);
+  const dragGhostTopRef = useRef(0);
+  const dragThresholdMet = useRef(false);
+  const rafId = useRef(0);
+
   const isToday = selectedDate === getTodayStr();
   const timeSlots = useMemo(() => generateTimeSlots(), []);
   const totalGridHeight = TOTAL_HOURS * HOUR_HEIGHT;
@@ -289,6 +320,8 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
   };
 
   const handleAppointmentClick = (appointment: CalendarAppointment, professionalName: string) => {
+    // Skip click if it follows a drag
+    if (draggingId) return;
     setDetailModal({ appointment, professionalName });
   };
 
@@ -340,7 +373,110 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
     }
   };
 
+  // Drag-and-drop handlers
+  const handleAppointmentDragStart = (
+    e: React.PointerEvent<HTMLDivElement>,
+    appointment: CalendarAppointment,
+    professionalId: string,
+  ) => {
+    if (appointment.status !== 'SCHEDULED' || dragConfirm) return;
+
+    const time = extractTime(appointment.scheduledAt);
+    const top = getTopPosition(time);
+    const height = getBlockHeight(appointment.totalDuration);
+
+    dragStartY.current = e.clientY;
+    dragStartScrollTop.current = scrollRef.current?.scrollTop ?? 0;
+    dragOriginalTop.current = top;
+    dragAppointmentRef.current = appointment;
+    dragGhostTopRef.current = top;
+    dragThresholdMet.current = false;
+
+    setDragGhostTop(top);
+    setDragGhostHeight(height);
+    setDragProfessionalId(professionalId);
+
+    const handleMove = (ev: PointerEvent) => {
+      const deltaY = (ev.clientY - dragStartY.current)
+        + ((scrollRef.current?.scrollTop ?? 0) - dragStartScrollTop.current);
+
+      if (!dragThresholdMet.current) {
+        if (Math.abs(deltaY) < 5) return;
+        dragThresholdMet.current = true;
+        setDraggingId(appointment.id);
+        document.body.style.userSelect = 'none';
+        document.body.style.cursor = 'grabbing';
+      }
+
+      cancelAnimationFrame(rafId.current);
+      rafId.current = requestAnimationFrame(() => {
+        const rawTop = dragOriginalTop.current + deltaY;
+        const snappedTop = Math.round(rawTop / SLOT_HEIGHT) * SLOT_HEIGHT;
+        const maxTop = TOTAL_HOURS * HOUR_HEIGHT - height;
+        const clampedTop = Math.max(0, Math.min(snappedTop, maxTop));
+        setDragGhostTop(clampedTop);
+        dragGhostTopRef.current = clampedTop;
+      });
+    };
+
+    const handleUp = () => {
+      document.removeEventListener('pointermove', handleMove);
+      document.removeEventListener('pointerup', handleUp);
+      cancelAnimationFrame(rafId.current);
+
+      if (dragThresholdMet.current) {
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+
+        // Prevent the click event that follows pointerup
+        const preventClick = (ev: Event) => {
+          ev.stopPropagation();
+          ev.preventDefault();
+        };
+        document.addEventListener('click', preventClick, { capture: true, once: true });
+
+        if (dragAppointmentRef.current) {
+          const finalTop = dragGhostTopRef.current;
+          const newMinutes = START_HOUR * 60 + (finalTop / SLOT_HEIGHT) * 10;
+          const newTime = minutesToTimeStr(newMinutes);
+          const oldTime = extractTime(dragAppointmentRef.current.scheduledAt);
+
+          if (newTime !== oldTime) {
+            setDragConfirm({
+              appointment: dragAppointmentRef.current,
+              oldTime,
+              newTime,
+            });
+          }
+        }
+      }
+
+      setDraggingId(null);
+      setDragProfessionalId(null);
+      dragAppointmentRef.current = null;
+    };
+
+    document.addEventListener('pointermove', handleMove);
+    document.addEventListener('pointerup', handleUp);
+  };
+
+  const handleDragConfirm = async () => {
+    if (!dragConfirm) return;
+    const { appointment, newTime } = dragConfirm;
+    const [year, month, day] = selectedDate.split('-');
+    const newScheduledAt = `${year}-${month}-${day}T${newTime}:00`;
+
+    try {
+      await updateAppointment.mutateAsync({ id: appointment.id, data: { scheduledAt: newScheduledAt } });
+      toast.success('Horário alterado', `Agendamento movido para ${newTime}.`);
+    } catch {
+      toast.error('Erro', 'Não foi possível alterar o horário.');
+    }
+    setDragConfirm(null);
+  };
+
   const handleSlotClick = (professionalId: string, time: string) => {
+    if (draggingId) return;
     setSlotChoice({ professionalId, time });
   };
 
@@ -530,6 +666,10 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
                   isDeletingBlock={deleteTimeBlock.isPending}
                   onSlotClick={handleSlotClick}
                   onAppointmentClick={handleAppointmentClick}
+                  onAppointmentDragStart={handleAppointmentDragStart}
+                  draggingAppointmentId={dragProfessionalId === prof.id ? draggingId : null}
+                  dragGhostTop={dragProfessionalId === prof.id ? dragGhostTop : undefined}
+                  dragGhostHeight={dragProfessionalId === prof.id ? dragGhostHeight : undefined}
                 />
               ))}
             </div>
@@ -630,6 +770,23 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
         onNoShow={handleDetailNoShow}
         onUpdate={handleDetailUpdate}
       />
+
+      {/* Drag time change confirm modal */}
+      <ConfirmModal
+        isOpen={!!dragConfirm}
+        onClose={() => setDragConfirm(null)}
+        onConfirm={handleDragConfirm}
+        title="Alterar horário"
+        message={
+          dragConfirm
+            ? `Deseja mover o agendamento de ${dragConfirm.appointment.client?.name || 'Cliente'} de ${dragConfirm.oldTime} para ${dragConfirm.newTime}?`
+            : ''
+        }
+        confirmLabel="Confirmar"
+        cancelLabel="Cancelar"
+        variant="info"
+        isLoading={updateAppointment.isPending}
+      />
     </div>
   );
 }
@@ -644,6 +801,10 @@ interface ProfessionalColumnProps {
   isDeletingBlock: boolean;
   onSlotClick: (professionalId: string, time: string) => void;
   onAppointmentClick: (appointment: CalendarAppointment, professionalName: string) => void;
+  onAppointmentDragStart?: (e: React.PointerEvent<HTMLDivElement>, appointment: CalendarAppointment, professionalId: string) => void;
+  draggingAppointmentId?: string | null;
+  dragGhostTop?: number;
+  dragGhostHeight?: number;
 }
 
 function ProfessionalColumn({
@@ -656,6 +817,10 @@ function ProfessionalColumn({
   isDeletingBlock,
   onSlotClick,
   onAppointmentClick,
+  onAppointmentDragStart,
+  draggingAppointmentId,
+  dragGhostTop,
+  dragGhostHeight,
 }: ProfessionalColumnProps) {
   return (
     <div className="relative min-w-[180px] flex-1 border-r border-[var(--card-border)] last:border-r-0">
@@ -698,6 +863,8 @@ function ProfessionalColumn({
           key={apt.id}
           appointment={apt}
           onAppointmentClick={(a) => onAppointmentClick(a, professional.name)}
+          onDragStart={onAppointmentDragStart ? (e, a) => onAppointmentDragStart(e, a, professional.id) : undefined}
+          isDragging={draggingAppointmentId === apt.id}
         />
       ))}
 
@@ -713,6 +880,19 @@ function ProfessionalColumn({
 
       {/* Current time line */}
       <CurrentTimeLine isToday={isToday} />
+
+      {/* Drag ghost */}
+      {draggingAppointmentId && dragGhostTop !== undefined && dragGhostHeight !== undefined && (
+        <div
+          className="pointer-events-none absolute left-1 right-1 z-30 rounded-lg border-2 border-dashed border-[#C8923A] bg-[#C8923A]/10 px-2 py-1"
+          style={{ top: `${dragGhostTop}px`, height: `${Math.max(dragGhostHeight, SLOT_HEIGHT)}px` }}
+        >
+          <div className="flex h-full items-center gap-1 text-xs font-semibold text-[#C8923A]">
+            <Clock className="h-3 w-3" />
+            {minutesToTimeStr(START_HOUR * 60 + (dragGhostTop / SLOT_HEIGHT) * 10)}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
