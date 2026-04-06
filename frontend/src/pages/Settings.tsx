@@ -27,7 +27,6 @@ interface BusinessSettings {
   address: string;
   openingTime: string;
   closingTime: string;
-  slotDuration: number;
 }
 
 interface NotificationSettings {
@@ -90,7 +89,6 @@ export function Settings() {
     address: '',
     openingTime: '09:00',
     closingTime: '19:00',
-    slotDuration: 30,
   });
   const [savingBusiness, setSavingBusiness] = useState(false);
 
@@ -133,7 +131,6 @@ export function Settings() {
         address: data.address || '',
         openingTime: data.openingTime || '09:00',
         closingTime: data.closingTime || '19:00',
-        slotDuration: data.slotDuration || 30,
       }));
       setNotificationSettings((prev) => ({
         ...prev,
@@ -400,21 +397,6 @@ export function Settings() {
               />
             </div>
 
-            <div>
-              <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">
-                Duração do Slot (min)
-              </label>
-              <select
-                value={businessSettings.slotDuration}
-                onChange={(e) => setBusinessSettings({ ...businessSettings, slotDuration: Number(e.target.value) })}
-                className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-4 py-2 text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none"
-              >
-                <option value={15}>15 minutos</option>
-                <option value={30}>30 minutos</option>
-                <option value={45}>45 minutos</option>
-                <option value={60}>60 minutos</option>
-              </select>
-            </div>
           </div>
 
           <div className="mt-8 flex justify-end">

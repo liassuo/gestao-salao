@@ -37,3 +37,4 @@ export { useProducts, useProduct, useProductStock, useLowStockProducts, useCreat
 export { useStockMovements, useCreateStockMovement } from './useStock';
 export { useOrders, useOrder, useOrderByAppointment, useCreateOrder, useAddOrderItem, useRemoveOrderItem, usePayOrder, useCancelOrder, useDeleteOrder } from './useOrders';
 export { usePromotions, usePromotion, useActivePromotions, usePromotionTemplates, useCreatePromotion, useUpdatePromotion, useDeletePromotion, useClonePromotion, useUploadBanner } from './usePromotions';
+export { useSettings } from './useSettings';
