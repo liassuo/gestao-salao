@@ -88,8 +88,9 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
   const [clientSearch, setClientSearch] = useState('');
   const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<{ id: string; name: string; phone: string } | null>(null);
+  const [walkInName, setWalkInName] = useState('');
 
-  const hasClient = !!watchedClientId || !!clientSearch.trim();
+  const hasClient = !!watchedClientId || !!walkInName;
   const isFormComplete =
     hasClient &&
     !!watchedProfessionalId &&
@@ -100,7 +101,7 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
   const handleDisabledClick = () => {
     if (isFormComplete || isLoading) return;
     const missing: string[] = [];
-    if (!watchedClientId && !clientSearch.trim()) missing.push('Cliente');
+    if (!watchedClientId && !walkInName) missing.push('Cliente');
     if (!watchedProfessionalId) missing.push('Profissional');
     if (selectedServiceIds.length === 0) missing.push('Serviço');
     if (!watchedDate) missing.push('Data');
@@ -143,8 +144,18 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
   const handleClearClient = () => {
     setSelectedClient(null);
     setClientSearch('');
+    setWalkInName('');
     setValue('clientId', '', { shouldValidate: true });
     clientInputRef.current?.focus();
+  };
+
+  const handleSelectWalkIn = () => {
+    const name = clientSearch.trim();
+    if (!name) return;
+    setWalkInName(name);
+    setSelectedClient({ id: '', name, phone: '' });
+    setClientSearch('');
+    setClientDropdownOpen(false);
   };
 
   const availableServices = useMemo(() => {
@@ -186,7 +197,7 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
     }
 
     // Validar que tem cliente (cadastrado ou nome avulso)
-    if (!data.clientId && !clientSearch.trim()) {
+    if (!data.clientId && !walkInName) {
       toast.error('Cliente obrigatório', 'Selecione um cliente ou digite o nome');
       return;
     }
@@ -195,7 +206,7 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
     const scheduledAt = `${data.date}T${data.time}:00`;
 
     await onSubmit({
-      ...(data.clientId ? { clientId: data.clientId } : { clientName: clientSearch.trim() }),
+      ...(data.clientId ? { clientId: data.clientId } : { clientName: walkInName }),
       professionalId: data.professionalId,
       serviceIds: selectedServiceIds,
       scheduledAt,
@@ -236,7 +247,7 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
           <div className={`flex items-center justify-between rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 ${errors.clientId ? 'border-[#A63030]' : 'border-[var(--border-color)]'}`}>
             <div>
               <span className="text-sm font-medium text-[var(--text-primary)]">{selectedClient.name}</span>
-              <span className="ml-2 text-xs text-[var(--text-muted)]">{formatPhone(selectedClient.phone)}</span>
+              <span className="ml-2 text-xs text-[var(--text-muted)]">{selectedClient.phone ? formatPhone(selectedClient.phone) : 'Cliente avulso'}</span>
             </div>
             <button type="button" onClick={handleClearClient} className="rounded-lg p-1 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]">
               <X className="h-4 w-4" />
@@ -272,13 +283,19 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
               </div>
             )}
             {clientDropdownOpen && clientSearch && filteredClients.length === 0 && (
-              <div ref={clientDropdownRef} className="absolute z-20 mt-1 w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-3 shadow-lg">
-                <p className="text-sm text-[var(--text-muted)]">Nenhum cliente encontrado — o nome digitado será usado como cliente avulso</p>
+              <div ref={clientDropdownRef} className="absolute z-20 mt-1 w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-1 shadow-lg">
+                <button
+                  type="button"
+                  onClick={handleSelectWalkIn}
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-[var(--hover-bg)]"
+                >
+                  <span className="font-medium text-[#C8923A]">Usar &quot;{clientSearch.trim()}&quot; como cliente avulso</span>
+                </button>
               </div>
             )}
           </div>
         )}
-        {errors.clientId && !clientSearch.trim() && (
+        {errors.clientId && !walkInName && (
           <p className="mt-1 text-sm text-[#A63030]">Selecione um cliente ou digite o nome</p>
         )}
       </div>
