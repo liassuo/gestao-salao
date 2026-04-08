@@ -78,8 +78,7 @@ function validateDropTarget(
   // Horário no passado
   const now = new Date();
   const [y, m, d] = selectedDate.split('-').map(Number);
-  const today = new Date();
-  const isToday = y === today.getFullYear() && m === today.getMonth() + 1 && d === today.getDate();
+  const isToday = y === now.getFullYear() && m === now.getMonth() + 1 && d === now.getDate();
   if (isToday) {
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
     if (newStart < nowMinutes) {
