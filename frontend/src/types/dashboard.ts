@@ -39,7 +39,8 @@ export interface UpcomingAppointment {
   totalPrice: number;
   client: {
     name: string;
-  };
+  } | null;
+  clientName?: string;
   professional: {
     name: string;
   };

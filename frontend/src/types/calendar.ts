@@ -18,7 +18,8 @@ export interface CalendarAppointment {
   notes: string | null;
   source?: 'ADMIN' | 'CLIENT';
   usedSubscriptionCut?: boolean;
-  client: { id: string; name: string; phone: string };
+  client: { id: string; name: string; phone: string } | null;
+  clientName?: string;
   services: { service: { name: string } }[];
 }
 
