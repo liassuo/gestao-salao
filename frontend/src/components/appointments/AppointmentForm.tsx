@@ -257,7 +257,7 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
               }`}
             />
             {clientDropdownOpen && filteredClients.length > 0 && (
-              <div ref={clientDropdownRef} className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-1 shadow-lg">
+              <div ref={clientDropdownRef} className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] py-1 shadow-lg">
                 {filteredClients.map((client) => (
                   <button
                     key={client.id}
@@ -272,7 +272,7 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
               </div>
             )}
             {clientDropdownOpen && clientSearch && filteredClients.length === 0 && (
-              <div ref={clientDropdownRef} className="absolute z-20 mt-1 w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-3 shadow-lg">
+              <div ref={clientDropdownRef} className="absolute z-20 mt-1 w-full rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] px-3 py-3 shadow-lg">
                 <p className="text-sm text-[var(--text-muted)]">Nenhum cliente encontrado — o nome digitado será usado como cliente avulso</p>
               </div>
             )}

@@ -56,7 +56,7 @@ export function useCalendarData(date: string) {
 export function useUpdateAppointment() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: { scheduledAt?: string; notes?: string } }) =>
+    mutationFn: ({ id, data }: { id: string; data: { scheduledAt?: string; notes?: string; professionalId?: string } }) =>
       appointmentsService.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });

@@ -167,10 +167,13 @@ export function Header() {
                     </div>
                   ) : (
                     recentNotifications.map((notification) => (
-                      <button
+                      <div
                         key={notification.id}
                         onClick={() => handleNotificationClick(notification)}
-                        className={`w-full text-left px-4 py-3 border-b border-[var(--border-color)] last:border-b-0 transition-colors hover:bg-[var(--hover-bg)] ${
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => e.key === 'Enter' && handleNotificationClick(notification)}
+                        className={`w-full cursor-pointer text-left px-4 py-3 border-b border-[var(--border-color)] last:border-b-0 transition-colors hover:bg-[var(--hover-bg)] ${
                           !notification.read
                             ? 'bg-[#8B2020]/5'
                             : ''
@@ -215,7 +218,7 @@ export function Header() {
                             </button>
                           )}
                         </div>
-                      </button>
+                      </div>
                     ))
                   )}
                 </div>

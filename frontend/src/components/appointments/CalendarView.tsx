@@ -302,6 +302,8 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
     appointment: CalendarAppointment;
     oldTime: string;
     newTime: string;
+    newProfessionalId?: string;
+    newProfessionalName?: string;
   } | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragProfessionalId, setDragProfessionalId] = useState<string | null>(null);
@@ -313,6 +315,8 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
   const dragAppointmentRef = useRef<CalendarAppointment | null>(null);
   const dragGhostTopRef = useRef(0);
   const dragThresholdMet = useRef(false);
+  const dragSourceProfessionalId = useRef<string | null>(null);
+  const dragTargetProfessionalRef = useRef<string | null>(null);
   const rafId = useRef(0);
 
   const isToday = selectedDate === getTodayStr();
@@ -404,12 +408,15 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
     const top = getTopPosition(time, startHour);
     const height = getBlockHeight(appointment.totalDuration);
 
+    const startClientX = e.clientX;
     dragStartY.current = e.clientY;
     dragStartScrollTop.current = scrollRef.current?.scrollTop ?? 0;
     dragOriginalTop.current = top;
     dragAppointmentRef.current = appointment;
     dragGhostTopRef.current = top;
     dragThresholdMet.current = false;
+    dragSourceProfessionalId.current = professionalId;
+    dragTargetProfessionalRef.current = professionalId;
 
     setDragGhostTop(top);
     setDragGhostHeight(height);
@@ -420,7 +427,8 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
         + ((scrollRef.current?.scrollTop ?? 0) - dragStartScrollTop.current);
 
       if (!dragThresholdMet.current) {
-        if (Math.abs(deltaY) < 5) return;
+        const deltaX = Math.abs(ev.clientX - startClientX);
+        if (Math.abs(deltaY) < 5 && deltaX < 5) return;
         dragThresholdMet.current = true;
         setDraggingId(appointment.id);
         document.body.style.userSelect = 'none';
@@ -429,12 +437,24 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
 
       cancelAnimationFrame(rafId.current);
       rafId.current = requestAnimationFrame(() => {
+        // Vertical: snap to time slots
         const rawTop = dragOriginalTop.current + deltaY;
         const snappedTop = Math.round(rawTop / SLOT_HEIGHT) * SLOT_HEIGHT;
         const maxTop = totalHours * HOUR_HEIGHT - height;
         const clampedTop = Math.max(0, Math.min(snappedTop, maxTop));
         setDragGhostTop(clampedTop);
         dragGhostTopRef.current = clampedTop;
+
+        // Horizontal: detect target professional column
+        const el = document.elementFromPoint(ev.clientX, ev.clientY);
+        const col = el?.closest<HTMLElement>('[data-professional-id]');
+        if (col) {
+          const targetId = col.dataset.professionalId!;
+          if (targetId !== dragTargetProfessionalRef.current) {
+            dragTargetProfessionalRef.current = targetId;
+            setDragProfessionalId(targetId);
+          }
+        }
       });
     };
 
@@ -459,12 +479,22 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
           const newMinutes = startHour * 60 + (finalTop / SLOT_HEIGHT) * 10;
           const newTime = minutesToTimeStr(newMinutes);
           const oldTime = extractTime(dragAppointmentRef.current.scheduledAt);
+          const sourceProf = dragSourceProfessionalId.current;
+          const targetProf = dragTargetProfessionalRef.current;
+          const professionalChanged = targetProf !== sourceProf;
 
-          if (newTime !== oldTime) {
+          if (newTime !== oldTime || professionalChanged) {
+            const targetProfData = professionalChanged
+              ? professionalsData.find((p) => p.id === targetProf)
+              : undefined;
             setDragConfirm({
               appointment: dragAppointmentRef.current,
               oldTime,
               newTime,
+              ...(professionalChanged && targetProf && {
+                newProfessionalId: targetProf,
+                newProfessionalName: targetProfData?.name,
+              }),
             });
           }
         }
@@ -473,6 +503,8 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
       setDraggingId(null);
       setDragProfessionalId(null);
       dragAppointmentRef.current = null;
+      dragSourceProfessionalId.current = null;
+      dragTargetProfessionalRef.current = null;
     };
 
     document.addEventListener('pointermove', handleMove);
@@ -481,15 +513,23 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
 
   const handleDragConfirm = async () => {
     if (!dragConfirm) return;
-    const { appointment, newTime } = dragConfirm;
+    const { appointment, oldTime, newTime, newProfessionalId } = dragConfirm;
     const [year, month, day] = selectedDate.split('-');
     const newScheduledAt = `${year}-${month}-${day}T${newTime}:00`;
+    const timeChanged = newTime !== oldTime;
+
+    const data: { scheduledAt?: string; professionalId?: string } = {};
+    if (timeChanged) data.scheduledAt = newScheduledAt;
+    if (newProfessionalId) data.professionalId = newProfessionalId;
 
     try {
-      await updateAppointment.mutateAsync({ id: appointment.id, data: { scheduledAt: newScheduledAt } });
-      toast.success('Horário alterado', `Agendamento movido para ${newTime}.`);
+      await updateAppointment.mutateAsync({ id: appointment.id, data });
+      const parts: string[] = [];
+      if (timeChanged) parts.push(`horário para ${newTime}`);
+      if (newProfessionalId) parts.push(`profissional para ${dragConfirm.newProfessionalName}`);
+      toast.success('Agendamento movido', `Alterado ${parts.join(' e ')}.`);
     } catch {
-      toast.error('Erro', 'Não foi possível alterar o horário.');
+      toast.error('Erro', 'Não foi possível mover o agendamento.');
     }
     setDragConfirm(null);
   };
@@ -707,7 +747,7 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
                   onSlotClick={handleSlotClick}
                   onAppointmentClick={handleAppointmentClick}
                   onAppointmentDragStart={handleAppointmentDragStart}
-                  draggingAppointmentId={dragProfessionalId === prof.id ? draggingId : null}
+                  draggingAppointmentId={draggingId}
                   dragGhostTop={dragProfessionalId === prof.id ? dragGhostTop : undefined}
                   dragGhostHeight={dragProfessionalId === prof.id ? dragGhostHeight : undefined}
                 />
@@ -826,10 +866,18 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
         isOpen={!!dragConfirm}
         onClose={() => setDragConfirm(null)}
         onConfirm={handleDragConfirm}
-        title="Alterar horário"
+        title="Mover agendamento"
         message={
           dragConfirm
-            ? `Deseja mover o agendamento de ${dragConfirm.appointment.client?.name || dragConfirm.appointment.clientName || 'Cliente'} de ${dragConfirm.oldTime} para ${dragConfirm.newTime}?`
+            ? (() => {
+                const clientName = dragConfirm.appointment.client?.name || dragConfirm.appointment.clientName || 'Cliente';
+                const timeChanged = dragConfirm.oldTime !== dragConfirm.newTime;
+                const profChanged = !!dragConfirm.newProfessionalId;
+                const parts: string[] = [];
+                if (timeChanged) parts.push(`horário de ${dragConfirm.oldTime} para ${dragConfirm.newTime}`);
+                if (profChanged) parts.push(`profissional para ${dragConfirm.newProfessionalName}`);
+                return `Deseja alterar o ${parts.join(' e o ')} do agendamento de ${clientName}?`;
+              })()
             : ''
         }
         confirmLabel="Confirmar"
@@ -877,7 +925,7 @@ function ProfessionalColumn({
   dragGhostHeight,
 }: ProfessionalColumnProps) {
   return (
-    <div className="relative min-w-[180px] flex-1 border-r border-[var(--card-border)] last:border-r-0">
+    <div data-professional-id={professional.id} className="relative min-w-[180px] flex-1 border-r border-[var(--card-border)] last:border-r-0">
       {/* Grid lines and clickable slots */}
       {timeSlots.map((slot) => {
         const [, m] = slot.split(':');

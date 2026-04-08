@@ -854,9 +854,23 @@ export class AppointmentsService {
       throw new BadRequestException('Só é possível editar agendamentos com status SCHEDULED ou PENDING_PAYMENT');
     }
 
+    // Validar profissional se foi alterado
+    if (dto.professionalId) {
+      const { data: prof, error: profError } = await this.supabase
+        .from('professionals')
+        .select('id')
+        .eq('id', dto.professionalId)
+        .single();
+
+      if (profError || !prof) {
+        throw new BadRequestException('Profissional não encontrado');
+      }
+    }
+
     const updateData: any = {};
     if (dto.scheduledAt) updateData.scheduledAt = String(dto.scheduledAt);
     if (dto.notes !== undefined) updateData.notes = dto.notes;
+    if (dto.professionalId) updateData.professionalId = dto.professionalId;
 
     const { data: updated, error: updateError } = await this.supabase
       .from('appointments')
