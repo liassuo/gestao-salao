@@ -183,7 +183,7 @@ export function AppointmentActions({
         onClose={() => setShowCancelConfirm(false)}
         onConfirm={handleConfirmCancel}
         title="Cancelar Agendamento"
-        message={`Tem certeza que deseja cancelar o agendamento de ${appointment.client?.name || 'este cliente'}? Esta ação não pode ser desfeita.`}
+        message={`Tem certeza que deseja cancelar o agendamento de ${appointment.client?.name || appointment.clientName || 'este cliente'}? Esta ação não pode ser desfeita.`}
         confirmLabel="Cancelar Agendamento"
         cancelLabel="Voltar"
         variant="danger"

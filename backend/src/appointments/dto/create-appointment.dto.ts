@@ -7,11 +7,17 @@ import {
   ArrayMinSize,
   IsBoolean,
   IsIn,
+  ValidateIf,
 } from 'class-validator';
 
 export class CreateAppointmentDto {
+  @ValidateIf((o) => !o.clientName)
   @IsUUID()
-  clientId: string;
+  clientId?: string;
+
+  @ValidateIf((o) => !o.clientId)
+  @IsString()
+  clientName?: string;
 
   @IsUUID()
   professionalId: string;

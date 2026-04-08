@@ -173,7 +173,7 @@ export function OperationalDashboard({
                     </div>
                     <div>
                       <p className="font-medium text-[var(--text-primary)]">
-                        {appointment.client?.name || 'Cliente'}
+                        {appointment.client?.name || appointment.clientName || 'Cliente'}
                       </p>
                       <p className="text-sm text-[var(--text-muted)]">
                         {(appointment.services || []).map((s: any) => s.service?.name || s.name).join(', ') || 'Serviço'}

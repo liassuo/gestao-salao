@@ -227,7 +227,7 @@ export function AppointmentDetailModal({
           {/* Client */}
           <div className="rounded-xl border border-[var(--card-border)] bg-[var(--bg-primary)] p-3">
             <div className="mb-1 text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">Cliente</div>
-            <div className="text-sm font-semibold text-[var(--text-primary)]">{appointment.client?.name || '\u2014'}</div>
+            <div className="text-sm font-semibold text-[var(--text-primary)]">{appointment.client?.name || appointment.clientName || '\u2014'}</div>
             {appointment.client?.phone && (
               <div className="mt-0.5 flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
                 <Phone className="h-3 w-3" />
@@ -436,7 +436,7 @@ export function AppointmentDetailModal({
           isConfirmingCancel ? (
             <div className="rounded-xl border border-[#A63030]/30 bg-red-500/10 p-4">
               <p className="mb-3 text-sm text-[var(--text-secondary)]">
-                Confirmar cancelamento do agendamento de <strong>{appointment.client?.name}</strong>?
+                Confirmar cancelamento do agendamento de <strong>{appointment.client?.name || appointment.clientName || 'Cliente'}</strong>?
               </p>
               <div className="flex justify-end gap-2">
                 <button onClick={() => setIsConfirmingCancel(false)} disabled={isActing} className="rounded-xl border border-[var(--card-border)] px-3 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] disabled:opacity-50">Não</button>

@@ -28,7 +28,7 @@ export class AppointmentsService {
   /** Select padrão com joins para client, professional e services */
   private readonly APPOINTMENT_SELECT = `
     *,
-    client:clients(id, name, phone, email),
+    client:clients!left(id, name, phone, email),
     professional:professionals(id, name),
     services:appointment_services(id, service:services(id, name, price, duration))
   `;
@@ -149,34 +149,38 @@ export class AppointmentsService {
       }
     }
 
-    // 3. Verificar se o cliente existe
-    const { data: client, error: clientError } = await this.supabase
-      .from('clients')
-      .select('id')
-      .eq('id', dto.clientId)
-      .single();
+    // 3. Verificar se o cliente existe (apenas quando clientId informado)
+    if (dto.clientId) {
+      const { data: client, error: clientError } = await this.supabase
+        .from('clients')
+        .select('id')
+        .eq('id', dto.clientId)
+        .single();
 
-    if (clientError || !client) {
-      throw new NotFoundException('Cliente não encontrado');
-    }
-
-    // 3.1 Bloquear agendamento se cliente possui dívidas pendentes
-    if (dto.source === 'CLIENT') {
-      const { data: clientDebts } = await this.supabase
-        .from('debts')
-        .select('remainingBalance')
-        .eq('clientId', dto.clientId)
-        .eq('isSettled', false);
-
-      if (clientDebts && clientDebts.length > 0) {
-        const totalDebt = clientDebts.reduce((sum, d) => sum + d.remainingBalance, 0);
-        const reais = Math.floor(totalDebt / 100);
-        const centavos = totalDebt % 100;
-        const formatted = `${reais},${String(centavos).padStart(2, '0')}`;
-        throw new BadRequestException(
-          `Você possui uma dívida pendente de R$ ${formatted}. Quite sua dívida antes de fazer um novo agendamento.`,
-        );
+      if (clientError || !client) {
+        throw new NotFoundException('Cliente não encontrado');
       }
+
+      // 3.1 Bloquear agendamento se cliente possui dívidas pendentes
+      if (dto.source === 'CLIENT') {
+        const { data: clientDebts } = await this.supabase
+          .from('debts')
+          .select('remainingBalance')
+          .eq('clientId', dto.clientId)
+          .eq('isSettled', false);
+
+        if (clientDebts && clientDebts.length > 0) {
+          const totalDebt = clientDebts.reduce((sum, d) => sum + d.remainingBalance, 0);
+          const reais = Math.floor(totalDebt / 100);
+          const centavos = totalDebt % 100;
+          const formatted = `${reais},${String(centavos).padStart(2, '0')}`;
+          throw new BadRequestException(
+            `Você possui uma dívida pendente de R$ ${formatted}. Quite sua dívida antes de fazer um novo agendamento.`,
+          );
+        }
+      }
+    } else if (!dto.clientName) {
+      throw new BadRequestException('Informe o cliente ou o nome do cliente avulso');
     }
 
     // 4. Verificar conflitos com bloqueios de horário e agendamentos existentes
@@ -306,7 +310,8 @@ export class AppointmentsService {
       .from('appointments')
       .insert({
         id: appointmentId,
-        clientId: dto.clientId,
+        clientId: dto.clientId || null,
+        clientName: dto.clientName || null,
         professionalId: dto.professionalId,
         scheduledAt: String(dto.scheduledAt),
         totalPrice: totalPrice,
@@ -356,7 +361,7 @@ export class AppointmentsService {
 
     await this.supabase.from('orders').insert({
       id: orderId,
-      clientId: dto.clientId,
+      clientId: dto.clientId || null,
       professionalId: dto.professionalId,
       appointmentId: appointment.id,
       notes: `Agendamento #${appointment.id.slice(0, 8)}`,

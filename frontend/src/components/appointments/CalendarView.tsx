@@ -119,7 +119,7 @@ function AppointmentBlock({ appointment, onAppointmentClick, onDragStart, isDrag
     <div
       className={`absolute left-1 right-1 ${appointment.status === 'SCHEDULED' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} overflow-hidden rounded-lg border ${colors.border} ${colors.bg} px-2 py-1 backdrop-blur-sm transition-all duration-150 hover:z-20 hover:shadow-lg ${isDragging ? '!opacity-30' : ''}`}
       style={{ top: `${top}px`, height: `${Math.max(height, SLOT_HEIGHT)}px` }}
-      title={`${appointment.client?.name || 'Cliente'} - ${serviceNames} (${time} - ${endTime})${isFromClient ? ' · App' : ' · Painel'}${isSubscription ? ' · Assinatura' : ''}${appointment.status === 'PENDING_PAYMENT' ? ' · Aguardando pagamento' : ''}`}
+      title={`${appointment.client?.name || appointment.clientName || 'Cliente'} - ${serviceNames} (${time} - ${endTime})${isFromClient ? ' · App' : ' · Painel'}${isSubscription ? ' · Assinatura' : ''}${appointment.status === 'PENDING_PAYMENT' ? ' · Aguardando pagamento' : ''}`}
       onPointerDown={(e) => {
         if (e.button === 0 && appointment.status === 'SCHEDULED') {
           onDragStart?.(e, appointment);
@@ -132,7 +132,7 @@ function AppointmentBlock({ appointment, onAppointmentClick, onDragStart, isDrag
     >
       <div className="flex h-full flex-col overflow-hidden">
         <div className={`truncate text-xs font-semibold ${colors.text}`}>
-          {appointment.client?.name || 'Cliente'}
+          {appointment.client?.name || appointment.clientName || 'Cliente'}
         </div>
         {height >= 40 && (
           <div className="flex items-center gap-1 overflow-hidden">
@@ -829,7 +829,7 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
         title="Alterar horário"
         message={
           dragConfirm
-            ? `Deseja mover o agendamento de ${dragConfirm.appointment.client?.name || 'Cliente'} de ${dragConfirm.oldTime} para ${dragConfirm.newTime}?`
+            ? `Deseja mover o agendamento de ${dragConfirm.appointment.client?.name || dragConfirm.appointment.clientName || 'Cliente'} de ${dragConfirm.oldTime} para ${dragConfirm.newTime}?`
             : ''
         }
         confirmLabel="Confirmar"

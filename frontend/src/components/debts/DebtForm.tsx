@@ -90,7 +90,7 @@ export function DebtForm({ onSubmit, isLoading, error, prefill }: DebtFormProps)
             type: 'appointment',
             id: appt.id,
             clientId: appt.client?.id || '',
-            clientName: appt.client?.name || 'Cliente',
+            clientName: appt.client?.name || (appt as any).clientName || 'Cliente',
             amount: appt.totalPrice,
             description: `Agendamento: ${serviceNames}`,
             date: appt.scheduledAt,

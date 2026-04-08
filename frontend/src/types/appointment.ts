@@ -24,7 +24,8 @@ export interface Appointment {
   usedSubscriptionCut?: boolean;
   rating?: number;
   ratingComment?: string;
-  client: Pick<Client, 'id' | 'name' | 'phone' | 'email'>;
+  client: Pick<Client, 'id' | 'name' | 'phone' | 'email'> | null;
+  clientName?: string;
   professional: Pick<Professional, 'id' | 'name'>;
   services: AppointmentService[];
   createdAt: string;
@@ -40,7 +41,8 @@ export interface AppointmentFilters {
 }
 
 export interface CreateAppointmentPayload {
-  clientId: string;
+  clientId?: string;
+  clientName?: string;
   professionalId: string;
   serviceIds: string[];
   scheduledAt: string;

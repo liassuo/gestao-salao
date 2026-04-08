@@ -17,7 +17,8 @@ interface AppointmentFormData {
 
 interface AppointmentFormProps {
   onSubmit: (data: {
-    clientId: string;
+    clientId?: string;
+    clientName?: string;
     professionalId: string;
     serviceIds: string[];
     scheduledAt: string;
@@ -83,8 +84,9 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
   const watchedDate = watch('date');
   const watchedTime = watch('time');
 
+  const hasClient = !!watchedClientId || !!clientSearch.trim();
   const isFormComplete =
-    !!watchedClientId &&
+    hasClient &&
     !!watchedProfessionalId &&
     selectedServiceIds.length > 0 &&
     !!watchedDate &&
@@ -93,7 +95,7 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
   const handleDisabledClick = () => {
     if (isFormComplete || isLoading) return;
     const missing: string[] = [];
-    if (!watchedClientId) missing.push('Cliente');
+    if (!watchedClientId && !clientSearch.trim()) missing.push('Cliente');
     if (!watchedProfessionalId) missing.push('Profissional');
     if (selectedServiceIds.length === 0) missing.push('Serviço');
     if (!watchedDate) missing.push('Data');
@@ -174,9 +176,6 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
     );
   };
 
-  const todayStr = new Date().toISOString().split('T')[0];
-  const isToday = watchedDate === todayStr;
-
   const handleFormSubmit = async (data: AppointmentFormData) => {
     // Validar se o horário não é no passado
     const now = new Date();
@@ -186,11 +185,17 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
       return;
     }
 
+    // Validar que tem cliente (cadastrado ou nome avulso)
+    if (!data.clientId && !clientSearch.trim()) {
+      toast.error('Cliente obrigatório', 'Selecione um cliente ou digite o nome');
+      return;
+    }
+
     // Enviar como string local sem converter para UTC, evitando deslocamento de fuso
     const scheduledAt = `${data.date}T${data.time}:00`;
 
     await onSubmit({
-      clientId: data.clientId,
+      ...(data.clientId ? { clientId: data.clientId } : { clientName: clientSearch.trim() }),
       professionalId: data.professionalId,
       serviceIds: selectedServiceIds,
       scheduledAt,
@@ -224,9 +229,9 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
       {/* Cliente */}
       <div>
         <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
-          Cliente *
+          Cliente
         </label>
-        <input type="hidden" {...register('clientId', { required: 'Selecione um cliente' })} />
+        <input type="hidden" {...register('clientId')} />
         {selectedClient ? (
           <div className={`flex items-center justify-between rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 ${errors.clientId ? 'border-[#A63030]' : 'border-[var(--border-color)]'}`}>
             <div>
@@ -268,13 +273,13 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
             )}
             {clientDropdownOpen && clientSearch && filteredClients.length === 0 && (
               <div ref={clientDropdownRef} className="absolute z-20 mt-1 w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-3 shadow-lg">
-                <p className="text-sm text-[var(--text-muted)]">Nenhum cliente encontrado</p>
+                <p className="text-sm text-[var(--text-muted)]">Nenhum cliente encontrado — o nome digitado será usado como cliente avulso</p>
               </div>
             )}
           </div>
         )}
-        {errors.clientId && (
-          <p className="mt-1 text-sm text-[#A63030]">{errors.clientId.message}</p>
+        {errors.clientId && !clientSearch.trim() && (
+          <p className="mt-1 text-sm text-[#A63030]">Selecione um cliente ou digite o nome</p>
         )}
       </div>
 
@@ -358,7 +363,6 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
           <input
             type="time"
             {...register('time', { required: 'Selecione um horário' })}
-            min={isToday ? `${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}` : undefined}
             className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] ${
               errors.time ? 'border-[#A63030]' : 'border-[var(--border-color)]'
             }`}
