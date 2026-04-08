@@ -65,6 +65,45 @@ function minutesToTimeStr(minutes: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
+function validateDropTarget(
+  newTime: string,
+  durationMinutes: number,
+  professional: CalendarProfessional,
+  selectedDate: string,
+): string | null {
+  const newStart = timeToMinutes(newTime);
+  const newEnd = newStart + durationMinutes;
+
+  // Dia de folga
+  const [y, m, d] = selectedDate.split('-').map(Number);
+  const dayOfWeek = new Date(y, m - 1, d).getDay();
+  const todayHours = professional.workingHours?.find((wh) => wh.dayOfWeek === dayOfWeek);
+
+  if (professional.workingHours && professional.workingHours.length > 0 && !todayHours) {
+    return 'Este profissional está de folga neste dia.';
+  }
+
+  // Fora do expediente
+  if (todayHours) {
+    const workStart = timeToMinutes(todayHours.startTime);
+    const workEnd = timeToMinutes(todayHours.endTime);
+    if (newStart < workStart || newEnd > workEnd) {
+      return 'O horário está fora do expediente deste profissional.';
+    }
+  }
+
+  // Conflito com bloqueio
+  for (const block of professional.timeBlocks || []) {
+    const blockStart = timeToMinutes(extractTime(block.startTime));
+    const blockEnd = timeToMinutes(extractTime(block.endTime));
+    if (newStart < blockEnd && newEnd > blockStart) {
+      return 'O horário conflita com um bloqueio deste profissional.';
+    }
+  }
+
+  return null;
+}
+
 const statusColors: Record<string, { bg: string; border: string; text: string }> = {
   // variantes de SCHEDULED (agendado)
   SUBSCRIPTION: { bg: 'bg-[#C8923A]/20', border: 'border-[#C8923A]/40', text: 'text-[#D4A85C]' }, // âmbar — assinatura
@@ -484,18 +523,26 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
           const professionalChanged = targetProf !== sourceProf;
 
           if (newTime !== oldTime || professionalChanged) {
-            const targetProfData = professionalChanged
-              ? professionalsData.find((p) => p.id === targetProf)
-              : undefined;
-            setDragConfirm({
-              appointment: dragAppointmentRef.current,
-              oldTime,
-              newTime,
-              ...(professionalChanged && targetProf && {
-                newProfessionalId: targetProf,
-                newProfessionalName: targetProfData?.name,
-              }),
-            });
+            const targetProfData = professionalsData.find((p) => p.id === targetProf);
+
+            // Validar destino: folga, fora do expediente, bloqueio
+            const dropError = targetProfData
+              ? validateDropTarget(newTime, dragAppointmentRef.current.totalDuration, targetProfData, selectedDate)
+              : null;
+
+            if (dropError) {
+              toast.warning('Não é possível mover', dropError);
+            } else {
+              setDragConfirm({
+                appointment: dragAppointmentRef.current,
+                oldTime,
+                newTime,
+                ...(professionalChanged && targetProf && {
+                  newProfessionalId: targetProf,
+                  newProfessionalName: targetProfData?.name,
+                }),
+              });
+            }
           }
         }
       }
