@@ -84,6 +84,11 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
   const watchedDate = watch('date');
   const watchedTime = watch('time');
 
+  // Client autocomplete
+  const [clientSearch, setClientSearch] = useState('');
+  const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<{ id: string; name: string; phone: string } | null>(null);
+
   const hasClient = !!watchedClientId || !!clientSearch.trim();
   const isFormComplete =
     hasClient &&
@@ -102,11 +107,6 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
     if (!watchedTime) missing.push('Hora');
     toast.warning('Preencha os campos obrigatórios', `Faltam: ${missing.join(', ')}`);
   };
-
-  // Client autocomplete
-  const [clientSearch, setClientSearch] = useState('');
-  const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
-  const [selectedClient, setSelectedClient] = useState<{ id: string; name: string; phone: string } | null>(null);
   const clientInputRef = useRef<HTMLInputElement>(null);
   const clientDropdownRef = useRef<HTMLDivElement>(null);
 
