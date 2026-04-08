@@ -34,56 +34,7 @@ export class AppointmentsService {
   `;
 
   async create(dto: CreateAppointmentDto) {
-    // 1. Verificar se o profissional existe e está ativo
-    const { data: professional, error: profError } = await this.supabase
-      .from('professionals')
-      .select('id, isActive, workingHours')
-      .eq('id', dto.professionalId)
-      .single();
-
-    if (profError || !professional) {
-      throw new NotFoundException('Profissional não encontrado');
-    }
-
-    if (!professional.isActive) {
-      throw new BadRequestException('Profissional não está ativo');
-    }
-
-    // 1.1 Verificar se o profissional trabalha neste dia e horário
-    if (professional.workingHours && Array.isArray(professional.workingHours) && professional.workingHours.length > 0) {
-      const scheduledStr = String(dto.scheduledAt);
-      const datePart = scheduledStr.substring(0, 10);
-      const [sy, sm, sd] = datePart.split('-').map(Number);
-      const dayOfWeek = new Date(sy, sm - 1, sd).getDay();
-
-      const daySchedule = (professional.workingHours as any[]).find(
-        (wh: any) => wh.dayOfWeek === dayOfWeek,
-      );
-
-      if (!daySchedule) {
-        throw new BadRequestException(
-          'O profissional não trabalha neste dia (folga)',
-        );
-      }
-
-      // Verificar se o horário está dentro do expediente
-      const timePart = scheduledStr.substring(11, 16);
-      const [apptH, apptM] = timePart.split(':').map(Number);
-      const apptMinutes = (apptH || 0) * 60 + (apptM || 0);
-
-      const [whStartH, whStartM] = (daySchedule.startTime || '00:00').split(':').map(Number);
-      const [whEndH, whEndM] = (daySchedule.endTime || '23:59').split(':').map(Number);
-      const whStart = (whStartH || 0) * 60 + (whStartM || 0);
-      const whEnd = (whEndH || 0) * 60 + (whEndM || 0);
-
-      if (apptMinutes < whStart || apptMinutes >= whEnd) {
-        throw new BadRequestException(
-          `O horário selecionado está fora do expediente do profissional (${daySchedule.startTime} - ${daySchedule.endTime})`,
-        );
-      }
-    }
-
-    // 2. Buscar os serviços e calcular duração total
+    // 1. Buscar os serviços e calcular duração total (precisa antes da validação de conflito)
     const { data: services, error: svcError } = await this.supabase
       .from('services')
       .select('id, price, duration')
@@ -124,30 +75,12 @@ export class AppointmentsService {
       return sum + s.price;
     }, 0);
 
-    // 2.2 Verificar se o serviço cabe dentro do expediente do profissional
-    if (professional.workingHours && Array.isArray(professional.workingHours) && professional.workingHours.length > 0) {
-      const scheduledStr = String(dto.scheduledAt);
-      const timePart = scheduledStr.substring(11, 16);
-      const [apptH, apptM] = timePart.split(':').map(Number);
-      const apptEndMinutes = (apptH || 0) * 60 + (apptM || 0) + totalDuration;
-
-      const datePart = scheduledStr.substring(0, 10);
-      const [sy, sm, sd] = datePart.split('-').map(Number);
-      const dayOfWeek = new Date(sy, sm - 1, sd).getDay();
-      const daySchedule = (professional.workingHours as any[]).find(
-        (wh: any) => wh.dayOfWeek === dayOfWeek,
-      );
-
-      if (daySchedule?.endTime) {
-        const [whEndH, whEndM] = daySchedule.endTime.split(':').map(Number);
-        const whEnd = (whEndH || 0) * 60 + (whEndM || 0);
-        if (apptEndMinutes > whEnd) {
-          throw new BadRequestException(
-            `O serviço ultrapassa o fim do expediente do profissional (${daySchedule.endTime})`,
-          );
-        }
-      }
-    }
+    // 2. Validar profissional ativo, expediente, bloqueios e conflitos de agendamento
+    await this.validateScheduleConflicts(
+      dto.professionalId,
+      String(dto.scheduledAt),
+      totalDuration,
+    );
 
     // 3. Verificar se o cliente existe (apenas quando clientId informado)
     if (dto.clientId) {
@@ -183,61 +116,7 @@ export class AppointmentsService {
       throw new BadRequestException('Informe o cliente ou o nome do cliente avulso');
     }
 
-    // 4. Verificar conflitos com bloqueios de horário e agendamentos existentes
-    const scheduledDate = String(dto.scheduledAt).substring(0, 10); // YYYY-MM-DD
-    const startOfDay = `${scheduledDate}T00:00:00`;
-    const endOfDay = `${scheduledDate}T23:59:59`;
-
-    // Extrair horas e minutos de string datetime sem depender de timezone do JS
-    const parseMin = (dateStr: string): number => {
-      const timePart = String(dateStr).substring(11, 16);
-      const [h, m] = timePart.split(':').map(Number);
-      return (h || 0) * 60 + (m || 0);
-    };
-
-    const apptStartMinutes = parseMin(String(dto.scheduledAt));
-    const apptEndMinutes = apptStartMinutes + totalDuration;
-
-    // 4a. Verificar bloqueios de horário
-    const { data: timeBlocks } = await this.supabase
-      .from('time_blocks')
-      .select('startTime, endTime')
-      .eq('professionalId', dto.professionalId)
-      .gte('startTime', startOfDay)
-      .lte('endTime', endOfDay);
-
-    for (const block of timeBlocks || []) {
-      const blockStartMin = parseMin(block.startTime);
-      const blockEndMin = parseMin(block.endTime);
-
-      if (apptStartMinutes < blockEndMin && apptEndMinutes > blockStartMin) {
-        throw new ConflictException(
-          'O horário selecionado conflita com um bloqueio de horário do profissional',
-        );
-      }
-    }
-
-    // 4b. Verificar agendamentos existentes
-    const { data: existingAppts } = await this.supabase
-      .from('appointments')
-      .select('scheduledAt, totalDuration')
-      .eq('professionalId', dto.professionalId)
-      .in('status', ['SCHEDULED', 'ATTENDED', 'PENDING_PAYMENT'])
-      .gte('scheduledAt', startOfDay)
-      .lte('scheduledAt', endOfDay);
-
-    for (const existing of existingAppts || []) {
-      const existStartMin = parseMin(existing.scheduledAt);
-      const existEndMin = existStartMin + (existing.totalDuration || 30);
-
-      if (apptStartMinutes < existEndMin && apptEndMinutes > existStartMin) {
-        throw new ConflictException(
-          'O horário selecionado conflita com outro agendamento existente',
-        );
-      }
-    }
-
-    // 5. Verificar se já existe PIX pendente ativo (< 10 min) para este cliente
+    // 4. Verificar se já existe PIX pendente ativo (< 10 min) para este cliente
     const requiresOnlinePayment =
       dto.source === 'CLIENT' &&
       (dto.billingType === 'PIX' || dto.billingType === 'CREDIT_CARD');
@@ -839,10 +718,133 @@ export class AppointmentsService {
     return updated;
   }
 
+  /**
+   * Valida conflitos de horário para um agendamento (novo ou existente).
+   * Verifica: profissional ativo, expediente, bloqueios e sobreposição com outros agendamentos.
+   */
+  private async validateScheduleConflicts(
+    professionalId: string,
+    scheduledAt: string,
+    totalDuration: number,
+    excludeAppointmentId?: string,
+  ) {
+    // 1. Verificar se o profissional existe e está ativo
+    const { data: professional, error: profError } = await this.supabase
+      .from('professionals')
+      .select('id, isActive, workingHours')
+      .eq('id', professionalId)
+      .single();
+
+    if (profError || !professional) {
+      throw new NotFoundException('Profissional não encontrado');
+    }
+
+    if (!professional.isActive) {
+      throw new BadRequestException('Profissional não está ativo');
+    }
+
+    const scheduledStr = String(scheduledAt);
+    const datePart = scheduledStr.substring(0, 10);
+    const [sy, sm, sd] = datePart.split('-').map(Number);
+    const dayOfWeek = new Date(sy, sm - 1, sd).getDay();
+
+    // 2. Verificar expediente
+    if (professional.workingHours && Array.isArray(professional.workingHours) && professional.workingHours.length > 0) {
+      const daySchedule = (professional.workingHours as any[]).find(
+        (wh: any) => wh.dayOfWeek === dayOfWeek,
+      );
+
+      if (!daySchedule) {
+        throw new BadRequestException('O profissional não trabalha neste dia (folga)');
+      }
+
+      const timePart = scheduledStr.substring(11, 16);
+      const [apptH, apptM] = timePart.split(':').map(Number);
+      const apptMinutes = (apptH || 0) * 60 + (apptM || 0);
+      const apptEndMinutes = apptMinutes + totalDuration;
+
+      const [whStartH, whStartM] = (daySchedule.startTime || '00:00').split(':').map(Number);
+      const [whEndH, whEndM] = (daySchedule.endTime || '23:59').split(':').map(Number);
+      const whStart = (whStartH || 0) * 60 + (whStartM || 0);
+      const whEnd = (whEndH || 0) * 60 + (whEndM || 0);
+
+      if (apptMinutes < whStart || apptMinutes >= whEnd) {
+        throw new BadRequestException(
+          `O horário selecionado está fora do expediente do profissional (${daySchedule.startTime} - ${daySchedule.endTime})`,
+        );
+      }
+
+      if (apptEndMinutes > whEnd) {
+        throw new BadRequestException(
+          `O serviço ultrapassa o fim do expediente do profissional (${daySchedule.endTime})`,
+        );
+      }
+    }
+
+    // 3. Verificar conflitos com bloqueios e agendamentos existentes
+    const scheduledDate = datePart;
+    const startOfDay = `${scheduledDate}T00:00:00`;
+    const endOfDay = `${scheduledDate}T23:59:59`;
+
+    const parseMin = (dateStr: string): number => {
+      const timePart = String(dateStr).substring(11, 16);
+      const [h, m] = timePart.split(':').map(Number);
+      return (h || 0) * 60 + (m || 0);
+    };
+
+    const apptStartMinutes = parseMin(scheduledStr);
+    const apptEndMinutes = apptStartMinutes + totalDuration;
+
+    // 3a. Bloqueios de horário
+    const { data: timeBlocks } = await this.supabase
+      .from('time_blocks')
+      .select('startTime, endTime')
+      .eq('professionalId', professionalId)
+      .gte('startTime', startOfDay)
+      .lte('endTime', endOfDay);
+
+    for (const block of timeBlocks || []) {
+      const blockStartMin = parseMin(block.startTime);
+      const blockEndMin = parseMin(block.endTime);
+
+      if (apptStartMinutes < blockEndMin && apptEndMinutes > blockStartMin) {
+        throw new ConflictException(
+          'O horário selecionado conflita com um bloqueio de horário do profissional',
+        );
+      }
+    }
+
+    // 3b. Agendamentos existentes
+    let apptQuery = this.supabase
+      .from('appointments')
+      .select('id, scheduledAt, totalDuration')
+      .eq('professionalId', professionalId)
+      .in('status', ['SCHEDULED', 'ATTENDED', 'PENDING_PAYMENT'])
+      .gte('scheduledAt', startOfDay)
+      .lte('scheduledAt', endOfDay);
+
+    if (excludeAppointmentId) {
+      apptQuery = apptQuery.neq('id', excludeAppointmentId);
+    }
+
+    const { data: existingAppts } = await apptQuery;
+
+    for (const existing of existingAppts || []) {
+      const existStartMin = parseMin(existing.scheduledAt);
+      const existEndMin = existStartMin + (existing.totalDuration || 30);
+
+      if (apptStartMinutes < existEndMin && apptEndMinutes > existStartMin) {
+        throw new ConflictException(
+          'O horário selecionado conflita com outro agendamento existente',
+        );
+      }
+    }
+  }
+
   async update(id: string, dto: UpdateAppointmentDto) {
     const { data: appointment, error } = await this.supabase
       .from('appointments')
-      .select('id, status')
+      .select('id, status, professionalId, scheduledAt, totalDuration')
       .eq('id', id)
       .single();
 
@@ -854,17 +856,19 @@ export class AppointmentsService {
       throw new BadRequestException('Só é possível editar agendamentos com status SCHEDULED ou PENDING_PAYMENT');
     }
 
-    // Validar profissional se foi alterado
-    if (dto.professionalId) {
-      const { data: prof, error: profError } = await this.supabase
-        .from('professionals')
-        .select('id')
-        .eq('id', dto.professionalId)
-        .single();
+    // Se mudou horário ou profissional, validar conflitos
+    const newProfessionalId = dto.professionalId || appointment.professionalId;
+    const newScheduledAt = dto.scheduledAt ? String(dto.scheduledAt) : appointment.scheduledAt;
+    const scheduledChanged = dto.scheduledAt && String(dto.scheduledAt) !== appointment.scheduledAt;
+    const professionalChanged = dto.professionalId && dto.professionalId !== appointment.professionalId;
 
-      if (profError || !prof) {
-        throw new BadRequestException('Profissional não encontrado');
-      }
+    if (scheduledChanged || professionalChanged) {
+      await this.validateScheduleConflicts(
+        newProfessionalId,
+        newScheduledAt,
+        appointment.totalDuration,
+        id, // excluir o próprio agendamento da checagem de conflito
+      );
     }
 
     const updateData: any = {};
@@ -1155,6 +1159,9 @@ export class AppointmentsService {
   }
 
   async createTimeBlock(dto: CreateTimeBlockDto) {
+    // Validar que endTime > startTime
+    CreateTimeBlockDto.validate(dto);
+
     const { data: professional, error: profError } = await this.supabase
       .from('professionals')
       .select('id')

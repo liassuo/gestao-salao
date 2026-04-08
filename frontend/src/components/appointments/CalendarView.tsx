@@ -70,12 +70,24 @@ function validateDropTarget(
   durationMinutes: number,
   professional: CalendarProfessional,
   selectedDate: string,
+  excludeAppointmentId?: string,
 ): string | null {
   const newStart = timeToMinutes(newTime);
   const newEnd = newStart + durationMinutes;
 
-  // Dia de folga
+  // Horário no passado
+  const now = new Date();
   const [y, m, d] = selectedDate.split('-').map(Number);
+  const today = new Date();
+  const isToday = y === today.getFullYear() && m === today.getMonth() + 1 && d === today.getDate();
+  if (isToday) {
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    if (newStart < nowMinutes) {
+      return 'Não é possível mover para um horário que já passou.';
+    }
+  }
+
+  // Dia de folga
   const dayOfWeek = new Date(y, m - 1, d).getDay();
   const todayHours = professional.workingHours?.find((wh) => wh.dayOfWeek === dayOfWeek);
 
@@ -98,6 +110,17 @@ function validateDropTarget(
     const blockEnd = timeToMinutes(extractTime(block.endTime));
     if (newStart < blockEnd && newEnd > blockStart) {
       return 'O horário conflita com um bloqueio deste profissional.';
+    }
+  }
+
+  // Conflito com outros agendamentos
+  for (const appt of professional.appointments || []) {
+    if (excludeAppointmentId && appt.id === excludeAppointmentId) continue;
+    if (appt.status === 'CANCELED' || appt.status === 'CANCELLED' || appt.status === 'NO_SHOW') continue;
+    const apptStart = timeToMinutes(extractTime(appt.scheduledAt));
+    const apptEnd = apptStart + (appt.totalDuration || 30);
+    if (newStart < apptEnd && newEnd > apptStart) {
+      return 'O horário conflita com outro agendamento existente.';
     }
   }
 
@@ -525,9 +548,9 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
           if (newTime !== oldTime || professionalChanged) {
             const targetProfData = professionalsData.find((p) => p.id === targetProf);
 
-            // Validar destino: folga, fora do expediente, bloqueio
+            // Validar destino: folga, fora do expediente, bloqueio, conflito com agendamentos
             const dropError = targetProfData
-              ? validateDropTarget(newTime, dragAppointmentRef.current.totalDuration, targetProfData, selectedDate)
+              ? validateDropTarget(newTime, dragAppointmentRef.current.totalDuration, targetProfData, selectedDate, dragAppointmentRef.current.id)
               : null;
 
             if (dropError) {
