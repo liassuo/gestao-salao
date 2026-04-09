@@ -177,14 +177,6 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
   };
 
   const handleFormSubmit = async (data: AppointmentFormData) => {
-    // Validar se o horário não é no passado
-    const now = new Date();
-    const selected = new Date(`${data.date}T${data.time}:00`);
-    if (selected < now) {
-      toast.error('Horário inválido', 'Não é possível agendar em um horário que já passou');
-      return;
-    }
-
     // Validar que tem cliente (cadastrado ou nome avulso)
     if (!data.clientId && !clientSearch.trim()) {
       toast.error('Cliente obrigatório', 'Selecione um cliente ou digite o nome');
@@ -346,7 +338,6 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
           <input
             type="date"
             {...register('date', { required: 'Selecione uma data' })}
-            min={new Date().toISOString().split('T')[0]}
             className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] ${
               errors.date ? 'border-[#A63030]' : 'border-[var(--border-color)]'
             }`}

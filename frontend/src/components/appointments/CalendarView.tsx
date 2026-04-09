@@ -75,18 +75,8 @@ function validateDropTarget(
   const newStart = timeToMinutes(newTime);
   const newEnd = newStart + durationMinutes;
 
-  // Horário no passado
-  const now = new Date();
-  const [y, m, d] = selectedDate.split('-').map(Number);
-  const isToday = y === now.getFullYear() && m === now.getMonth() + 1 && d === now.getDate();
-  if (isToday) {
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
-    if (newStart < nowMinutes) {
-      return 'Não é possível mover para um horário que já passou.';
-    }
-  }
-
   // Dia de folga
+  const [y, m, d] = selectedDate.split('-').map(Number);
   const dayOfWeek = new Date(y, m - 1, d).getDay();
   const todayHours = professional.workingHours?.find((wh) => wh.dayOfWeek === dayOfWeek);
 
