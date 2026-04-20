@@ -34,8 +34,11 @@ const mockChain = () => {
   chain.in = jest.fn().mockReturnValue(chain);
   chain.gte = jest.fn().mockReturnValue(chain);
   chain.lte = jest.fn().mockReturnValue(chain);
+  chain.is = jest.fn().mockReturnValue(chain);
+  chain.limit = jest.fn().mockReturnValue(chain);
   chain.order = jest.fn().mockReturnValue(chain);
   chain.single = jest.fn();
+  chain.maybeSingle = jest.fn().mockResolvedValue({ data: null, error: null });
   return chain;
 };
 
@@ -78,19 +81,18 @@ describe('AppointmentsService', () => {
     };
 
     /**
-     * Because `create` calls from('appointments') twice (insert then nothing)
-     * and from('appointment_services') N times, we pre-create all table chains
-     * and configure their terminal resolvers individually.
+     * Cobre o fluxo atual de create():
+     *   1. services.in().eq()  (terminal)
+     *   2. promotions.gte()    (terminal, via getActivePromotions)
+     *   3. client_subscriptions.maybeSingle() (terminal, via getClientPlanDiscount)
+     *   4. validateScheduleConflicts:
+     *        professionals.single() + time_blocks + appointments (conflict)
+     *   5. clients.single()
+     *   6. appointments.insert().select().single()
+     *   7. appointment_services.insert() (N vezes) + orders.insert() + order_items.insert()
      */
     function setupCreateSuccess() {
-      // professionals chain -> .single()
-      chains['professionals'] = mockChain();
-      chains['professionals'].single.mockResolvedValue({
-        data: { id: 'prof-1', isActive: true },
-        error: null,
-      });
-
-      // services chain -> last .eq() resolves (no .single())
+      // services (terminal = .eq())
       chains['services'] = mockChain();
       chains['services'].eq.mockResolvedValue({
         data: [
@@ -100,7 +102,7 @@ describe('AppointmentsService', () => {
         error: null,
       });
 
-      // promotions chain -> last .gte() resolves (no .single())
+      // promotions (terminal = .gte())
       chains['promotions'] = mockChain();
       chains['promotions'].gte.mockResolvedValue({
         data: [
@@ -112,26 +114,55 @@ describe('AppointmentsService', () => {
         error: null,
       });
 
-      // clients chain -> .single()
+      // client_subscriptions — sem assinatura ativa
+      chains['client_subscriptions'] = mockChain();
+      chains['client_subscriptions'].maybeSingle.mockResolvedValue({
+        data: null,
+        error: null,
+      });
+
+      // professionals (usado em validateScheduleConflicts)
+      chains['professionals'] = mockChain();
+      chains['professionals'].single.mockResolvedValue({
+        data: { id: 'prof-1', isActive: true, workingHours: [] },
+        error: null,
+      });
+
+      // time_blocks (terminal = .lte()) — nenhum bloqueio
+      chains['time_blocks'] = mockChain();
+      chains['time_blocks'].lte.mockResolvedValue({ data: [], error: null });
+
+      // clients (.single())
       chains['clients'] = mockChain();
       chains['clients'].single.mockResolvedValue({
         data: { id: 'client-1' },
         error: null,
       });
 
-      // appointments chain -> .single() for insert result
+      // appointments — usado primeiro para conflito (.lte()) e depois para insert (.single())
+      // Não há agendamentos conflitantes, e o insert retorna o mock-uuid-123.
       chains['appointments'] = mockChain();
+      chains['appointments'].lte.mockResolvedValue({ data: [], error: null });
       chains['appointments'].single.mockResolvedValue({
         data: { id: 'mock-uuid-123', status: 'SCHEDULED' },
         error: null,
       });
 
-      // appointment_services chain -> .insert() resolves each time
+      // appointment_services, orders, order_items — inserts sem retorno
       chains['appointment_services'] = mockChain();
-      chains['appointment_services'].insert.mockResolvedValue({
-        data: null,
-        error: null,
-      });
+      chains['appointment_services'].insert.mockReturnValue(
+        Promise.resolve({ data: null, error: null }) as any,
+      );
+
+      chains['orders'] = mockChain();
+      chains['orders'].insert.mockReturnValue(
+        Promise.resolve({ data: null, error: null }) as any,
+      );
+
+      chains['order_items'] = mockChain();
+      chains['order_items'].insert.mockReturnValue(
+        Promise.resolve({ data: null, error: null }) as any,
+      );
     }
 
     it('should create an appointment with promotional pricing', async () => {
@@ -139,10 +170,11 @@ describe('AppointmentsService', () => {
 
       const result = await service.create(dto);
 
-      expect(result).toEqual({ id: 'mock-uuid-123', status: 'SCHEDULED' });
+      // Retorno envolve o appointment em { ...appointment, payment: null } quando Asaas não configurado
+      expect(result).toMatchObject({ id: 'mock-uuid-123', status: 'SCHEDULED', payment: null });
 
-      // Verify professional lookup
-      expect(chains['professionals'].select).toHaveBeenCalledWith('id, isActive');
+      // Verify professional lookup (via validateScheduleConflicts)
+      expect(chains['professionals'].select).toHaveBeenCalledWith('id, isActive, workingHours');
       expect(chains['professionals'].eq).toHaveBeenCalledWith('id', 'prof-1');
 
       // Verify services lookup
@@ -161,6 +193,23 @@ describe('AppointmentsService', () => {
     });
 
     it('should throw NotFoundException when professional not found', async () => {
+      // services precisa passar antes de chegar em validateScheduleConflicts
+      chains['services'] = mockChain();
+      chains['services'].eq.mockResolvedValue({
+        data: [
+          { id: 'svc-1', price: 10000, duration: 30 },
+          { id: 'svc-2', price: 5000, duration: 20 },
+        ],
+        error: null,
+      });
+
+      chains['promotions'] = mockChain();
+      chains['promotions'].gte.mockResolvedValue({ data: [], error: null });
+
+      chains['client_subscriptions'] = mockChain();
+      chains['client_subscriptions'].maybeSingle.mockResolvedValue({ data: null, error: null });
+
+      // Profissional não encontrado → NotFoundException
       chains['professionals'] = mockChain();
       chains['professionals'].single.mockResolvedValue({
         data: null,
@@ -198,12 +247,6 @@ describe('AppointmentsService', () => {
     });
 
     it('should throw NotFoundException when client not found', async () => {
-      chains['professionals'] = mockChain();
-      chains['professionals'].single.mockResolvedValue({
-        data: { id: 'prof-1', isActive: true },
-        error: null,
-      });
-
       chains['services'] = mockChain();
       chains['services'].eq.mockResolvedValue({
         data: [
@@ -215,6 +258,22 @@ describe('AppointmentsService', () => {
 
       chains['promotions'] = mockChain();
       chains['promotions'].gte.mockResolvedValue({ data: [], error: null });
+
+      chains['client_subscriptions'] = mockChain();
+      chains['client_subscriptions'].maybeSingle.mockResolvedValue({ data: null, error: null });
+
+      chains['professionals'] = mockChain();
+      chains['professionals'].single.mockResolvedValue({
+        data: { id: 'prof-1', isActive: true, workingHours: [] },
+        error: null,
+      });
+
+      chains['time_blocks'] = mockChain();
+      chains['time_blocks'].lte.mockResolvedValue({ data: [], error: null });
+
+      // appointments conflict check — sem conflito
+      chains['appointments'] = mockChain();
+      chains['appointments'].lte.mockResolvedValue({ data: [], error: null });
 
       chains['clients'] = mockChain();
       chains['clients'].single.mockResolvedValue({
@@ -299,6 +358,10 @@ describe('AppointmentsService', () => {
           data: { id: 'appt-1', status: 'ATTENDED' },
           error: null,
         });
+
+      // Service agora consulta payments para eventual cobrança online pendente
+      chains['payments'] = mockChain();
+      chains['payments'].single.mockResolvedValue({ data: null, error: null });
 
       const result = await service.markAsAttended('appt-1');
       expect(result).toEqual({ id: 'appt-1', status: 'ATTENDED' });
@@ -479,9 +542,9 @@ describe('AppointmentsService', () => {
         error: null,
       });
 
-      // appointments chain -> .lte() resolves (last in the chain for calendar)
+      // appointments — terminal agora é .neq('status', 'CANCELED') (filtra cancelados)
       chains['appointments'] = mockChain();
-      chains['appointments'].lte.mockResolvedValue({
+      chains['appointments'].neq.mockResolvedValue({
         data: [
           { id: 'appt-1', professionalId: 'prof-1', scheduledAt: '2026-04-01T10:00:00Z' },
           { id: 'appt-2', professionalId: 'prof-2', scheduledAt: '2026-04-01T11:00:00Z' },
@@ -523,7 +586,7 @@ describe('AppointmentsService', () => {
       });
 
       chains['appointments'] = mockChain();
-      chains['appointments'].lte.mockResolvedValue({ data: null, error: null });
+      chains['appointments'].neq.mockResolvedValue({ data: null, error: null });
 
       chains['time_blocks'] = mockChain();
       chains['time_blocks'].lte.mockResolvedValue({ data: null, error: null });

@@ -145,6 +145,13 @@ describe('ProfessionalsService', () => {
       chains['professionals'] = mockChain();
       chains['professionals'].order.mockResolvedValue({ data: raw, error: null });
 
+      // Após os profissionais o service busca os emails dos users vinculados
+      chains['users'] = mockChain();
+      chains['users'].in = jest.fn().mockResolvedValue({
+        data: [{ professionalId: 'prof1', email: 'ana@test.com' }],
+        error: null,
+      });
+
       const result = await service.findAll();
 
       expect(result).toEqual([
@@ -152,6 +159,7 @@ describe('ProfessionalsService', () => {
           id: 'prof1',
           name: 'Ana',
           isActive: true,
+          email: 'ana@test.com',
           services: [
             { id: 'svc1', name: 'Corte' },
             { id: 'svc2', name: 'Barba' },
@@ -174,12 +182,17 @@ describe('ProfessionalsService', () => {
       chains['professionals'] = mockChain();
       chains['professionals'].order.mockResolvedValue({ data: raw, error: null });
 
+      // Nenhum user vinculado → email fica null
+      chains['users'] = mockChain();
+      chains['users'].in = jest.fn().mockResolvedValue({ data: [], error: null });
+
       const result = await service.findAll();
 
       expect(result).toEqual([
         {
           id: 'prof1',
           name: 'Carlos',
+          email: null,
           services: [],
           _count: { appointments: 0 },
         },
@@ -237,9 +250,16 @@ describe('ProfessionalsService', () => {
       chains['professionals'] = mockChain();
       chains['professionals'].single.mockResolvedValue({ data: prof, error: null });
 
+      // Service também consulta o email do user vinculado
+      chains['users'] = mockChain();
+      chains['users'].single.mockResolvedValue({
+        data: { email: 'ana@test.com' },
+        error: null,
+      });
+
       const result = await service.findOne('prof1');
 
-      expect(result).toEqual(prof);
+      expect(result).toEqual({ ...prof, email: 'ana@test.com', services: [] });
       expect(chains['professionals'].eq).toHaveBeenCalledWith('id', 'prof1');
     });
 
