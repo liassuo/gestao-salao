@@ -5,6 +5,8 @@ import { NotFoundException } from '@nestjs/common';
 import * as request from 'supertest';
 import { ProfessionalsController } from './professionals.controller';
 import { ProfessionalsService } from './professionals.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 
 describe('ProfessionalsController (integration)', () => {
   let app: INestApplication;
@@ -32,7 +34,12 @@ describe('ProfessionalsController (integration)', () => {
       providers: [
         { provide: ProfessionalsService, useValue: mockService },
       ],
-    }).compile();
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(RolesGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     app = module.createNestApplication();
     await app.init();

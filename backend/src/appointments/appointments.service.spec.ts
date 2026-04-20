@@ -7,7 +7,18 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { AppointmentsService } from './appointments.service';
 import { SupabaseService } from '../supabase/supabase.service';
+import { AsaasService } from '../asaas/asaas.service';
 import { CreateAppointmentDto } from './dto';
+
+const mockAsaasService = {
+  configured: false,
+  centavosToReais: jest.fn((v: number) => v / 100),
+  createCustomer: jest.fn(),
+  findCustomerByExternalReference: jest.fn(),
+  createCharge: jest.fn(),
+  cancelCharge: jest.fn().mockResolvedValue(undefined),
+  getPixQrCode: jest.fn(),
+};
 
 // ---------------------------------------------------------------------------
 // Helper: build a chainable mock for a single Supabase table
@@ -47,6 +58,7 @@ describe('AppointmentsService', () => {
       providers: [
         AppointmentsService,
         { provide: SupabaseService, useValue: mockSupabase },
+        { provide: AsaasService, useValue: mockAsaasService },
       ],
     }).compile();
 

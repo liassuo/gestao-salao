@@ -4,8 +4,18 @@ import * as request from 'supertest';
 import { AppointmentsController } from './appointments.controller';
 import { AppointmentsService } from './appointments.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { InAppNotificationsService } from '../in-app-notifications/in-app-notifications.service';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ExecutionContext } from '@nestjs/common';
+
+const mockInAppNotifications = {
+  send: jest.fn().mockResolvedValue(undefined),
+};
+const mockSubscriptions = {
+  getActiveByClient: jest.fn().mockResolvedValue(null),
+  consumeCut: jest.fn().mockResolvedValue(undefined),
+};
 
 describe('AppointmentsController (integration)', () => {
   let app: INestApplication;
@@ -59,6 +69,8 @@ describe('AppointmentsController (integration)', () => {
       providers: [
         { provide: AppointmentsService, useValue: mockService },
         { provide: NotificationsService, useValue: { notifyNewBooking: jest.fn().mockResolvedValue(undefined), notifyClient: jest.fn().mockResolvedValue(undefined), notifyStaff: jest.fn().mockResolvedValue(undefined) } },
+        { provide: InAppNotificationsService, useValue: mockInAppNotifications },
+        { provide: SubscriptionsService, useValue: mockSubscriptions },
       ],
     })
       .overrideGuard(JwtAuthGuard)
@@ -72,6 +84,11 @@ describe('AppointmentsController (integration)', () => {
       .compile();
 
     app = module.createNestApplication();
+    // Middleware para garantir req.user em rotas sem JwtAuthGuard explícito
+    app.use((req: any, _res: any, next: any) => {
+      if (!req.user) req.user = { id: CLIENT_UUID, email: 'test@test.com', role: 'CLIENT' };
+      next();
+    });
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
     await app.init();
   });
@@ -376,7 +393,7 @@ describe('AppointmentsController (integration)', () => {
         .expect(200)
         .expect((res) => {
           expect(res.body.status).toBe('ATTENDED');
-          expect(mockService.markAsAttended).toHaveBeenCalledWith(VALID_UUID);
+          expect(mockService.markAsAttended).toHaveBeenCalledWith(VALID_UUID, undefined, CLIENT_UUID);
         });
     });
 

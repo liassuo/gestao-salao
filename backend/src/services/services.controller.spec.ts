@@ -3,6 +3,8 @@ import { INestApplication, ValidationPipe, NotFoundException } from '@nestjs/com
 import * as request from 'supertest';
 import { ServicesController } from './services.controller';
 import { ServicesService } from './services.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 
 describe('ServicesController', () => {
   let app: INestApplication;
@@ -33,7 +35,12 @@ describe('ServicesController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ServicesController],
       providers: [{ provide: ServicesService, useValue: mockService }],
-    }).compile();
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(RolesGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     app = module.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));

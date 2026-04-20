@@ -3,6 +3,11 @@ import { INestApplication, ValidationPipe, NotFoundException } from '@nestjs/com
 import * as request from 'supertest';
 import { ClientsController } from './clients.controller';
 import { ClientsService } from './clients.service';
+import { InAppNotificationsService } from '../in-app-notifications/in-app-notifications.service';
+
+const mockInAppNotifications = {
+  send: jest.fn().mockResolvedValue(undefined),
+};
 
 describe('ClientsController', () => {
   let app: INestApplication;
@@ -33,7 +38,10 @@ describe('ClientsController', () => {
   beforeAll(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ClientsController],
-      providers: [{ provide: ClientsService, useValue: mockService }],
+      providers: [
+        { provide: ClientsService, useValue: mockService },
+        { provide: InAppNotificationsService, useValue: mockInAppNotifications },
+      ],
     }).compile();
 
     app = module.createNestApplication();

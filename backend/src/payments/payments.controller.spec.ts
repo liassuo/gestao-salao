@@ -8,6 +8,11 @@ import {
 import * as request from 'supertest';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
+import { InAppNotificationsService } from '../in-app-notifications/in-app-notifications.service';
+
+const mockInAppNotifications = {
+  send: jest.fn().mockResolvedValue(undefined),
+};
 
 describe('PaymentsController', () => {
   let app: INestApplication;
@@ -50,7 +55,10 @@ describe('PaymentsController', () => {
   beforeAll(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [PaymentsController],
-      providers: [{ provide: PaymentsService, useValue: mockService }],
+      providers: [
+        { provide: PaymentsService, useValue: mockService },
+        { provide: InAppNotificationsService, useValue: mockInAppNotifications },
+      ],
     }).compile();
 
     app = module.createNestApplication();

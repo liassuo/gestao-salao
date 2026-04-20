@@ -11,7 +11,14 @@ import * as bcrypt from 'bcrypt';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
 import { SupabaseService } from '../supabase/supabase.service';
+import { MailService } from '../mail/mail.service';
 import { UserRole } from '../common/enums/user-role.enum';
+
+const mockMailService = {
+  sendPasswordReset: jest.fn().mockResolvedValue(undefined),
+  sendPasswordSetupInvite: jest.fn().mockResolvedValue(undefined),
+  sendWelcomeEmail: jest.fn().mockResolvedValue(undefined),
+};
 
 const mockUsersService = {
   findByEmailWithPassword: jest.fn(),
@@ -54,6 +61,7 @@ describe('AuthService', () => {
         { provide: JwtService, useValue: mockJwtService },
         { provide: SupabaseService, useValue: mockSupabaseService },
         { provide: ConfigService, useValue: mockConfigService },
+        { provide: MailService, useValue: mockMailService },
       ],
     }).compile();
 
