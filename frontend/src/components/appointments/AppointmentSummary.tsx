@@ -72,10 +72,10 @@ export function AppointmentSummary({
           </span>
         </div>
         {hasDiscount && (
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm text-[#C8923A]">
-              <Tag className="h-4 w-4" />
-              <span>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2 text-sm text-[#C8923A]">
+              <Tag className="h-4 w-4 shrink-0" />
+              <span className="truncate">
                 {usedPlan && !usedPromo
                   ? `Desconto ${planLabel ?? 'assinatura'} (${planDiscountPercent}%)`
                   : usedPromo && !usedPlan
@@ -83,24 +83,26 @@ export function AppointmentSummary({
                   : 'Desconto aplicado'}
               </span>
             </div>
-            <span className="text-sm font-medium text-[#8B6914]">
+            <span className="shrink-0 text-sm font-medium text-[#8B6914]">
               -{formatCurrency(originalTotal - discountedTotal)}
             </span>
           </div>
         )}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm text-[#C8923A]">
-            <DollarSign className="h-4 w-4" />
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2 text-sm text-[#C8923A]">
+            <DollarSign className="h-4 w-4 shrink-0" />
             <span>Valor total</span>
           </div>
-          <span className="text-lg font-bold text-[#8B6914]">
+          <div className="flex shrink-0 flex-col items-end leading-tight">
             {hasDiscount && (
-              <span className="mr-2 text-sm font-normal text-[var(--text-muted)] line-through">
+              <span className="text-xs font-normal text-[var(--text-muted)] line-through">
                 {formatCurrency(originalTotal)}
               </span>
             )}
-            {formatCurrency(discountedTotal)}
-          </span>
+            <span className="text-lg font-bold text-[#8B6914]">
+              {formatCurrency(discountedTotal)}
+            </span>
+          </div>
         </div>
       </div>
     </div>

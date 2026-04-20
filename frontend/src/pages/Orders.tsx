@@ -398,20 +398,20 @@ export function Orders() {
                       <button
                         key={p.id}
                         onClick={() => addToCart(p.id, p.name, 'PRODUCT', p.salePrice)}
-                        className={`flex w-full items-center justify-between px-3 py-2.5 text-sm transition-colors hover:bg-[var(--card-bg)] ${inCart ? 'bg-[var(--card-bg)]' : ''}`}
+                        className={`flex w-full items-center justify-between gap-2 px-3 py-2.5 text-sm transition-colors hover:bg-[var(--card-bg)] ${inCart ? 'bg-[var(--card-bg)]' : ''}`}
                       >
-                        <div className="flex items-center gap-2">
+                        <div className="flex min-w-0 items-center gap-2">
                           <Package className="h-3.5 w-3.5 text-purple-400 flex-shrink-0" />
-                          <span className="text-[var(--text-primary)]">{p.name}</span>
-                          {inCart && <span className="text-xs text-[#C8923A] font-medium">x{inCart.quantity}</span>}
+                          <span className="truncate text-[var(--text-primary)]">{p.name}</span>
+                          {inCart && <span className="shrink-0 text-xs text-[#C8923A] font-medium">x{inCart.quantity}</span>}
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex shrink-0 items-center gap-2">
                           {discount ? (
                             <>
-                              <span className="flex items-center gap-1 text-xs text-green-400">
+                              <span className="hidden sm:flex items-center gap-1 text-xs text-green-400">
                                 <Tag className="h-3 w-3" />-{discount.percent}%
                               </span>
-                              <span className="text-xs text-[var(--text-muted)] line-through">{formatCents(p.salePrice)}</span>
+                              <span className="hidden md:inline text-xs text-[var(--text-muted)] line-through">{formatCents(p.salePrice)}</span>
                               <span className="font-medium text-green-400">{formatCents(finalPrice)}</span>
                             </>
                           ) : (
@@ -436,20 +436,20 @@ export function Orders() {
                       <button
                         key={s.id}
                         onClick={() => addToCart(s.id, s.name, 'SERVICE', s.price)}
-                        className={`flex w-full items-center justify-between px-3 py-2.5 text-sm transition-colors hover:bg-[var(--card-bg)] ${inCart ? 'bg-[var(--card-bg)]' : ''}`}
+                        className={`flex w-full items-center justify-between gap-2 px-3 py-2.5 text-sm transition-colors hover:bg-[var(--card-bg)] ${inCart ? 'bg-[var(--card-bg)]' : ''}`}
                       >
-                        <div className="flex items-center gap-2">
+                        <div className="flex min-w-0 items-center gap-2">
                           <Scissors className="h-3.5 w-3.5 text-[#D4A85C] flex-shrink-0" />
-                          <span className="text-[var(--text-primary)]">{s.name}</span>
-                          {inCart && <span className="text-xs text-[#C8923A] font-medium">x{inCart.quantity}</span>}
+                          <span className="truncate text-[var(--text-primary)]">{s.name}</span>
+                          {inCart && <span className="shrink-0 text-xs text-[#C8923A] font-medium">x{inCart.quantity}</span>}
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex shrink-0 items-center gap-2">
                           {discount ? (
                             <>
-                              <span className="flex items-center gap-1 text-xs text-green-400">
+                              <span className="hidden sm:flex items-center gap-1 text-xs text-green-400">
                                 <Tag className="h-3 w-3" />-{discount.percent}%
                               </span>
-                              <span className="text-xs text-[var(--text-muted)] line-through">{formatCents(s.price)}</span>
+                              <span className="hidden md:inline text-xs text-[var(--text-muted)] line-through">{formatCents(s.price)}</span>
                               <span className="font-medium text-green-400">{formatCents(finalPrice)}</span>
                             </>
                           ) : (
@@ -473,12 +473,12 @@ export function Orders() {
               <label className="mb-2 block text-sm font-medium text-[var(--text-secondary)]">Itens selecionados ({cartItems.length})</label>
               <div className="space-y-2">
                 {cartItems.map((item) => (
-                  <div key={`${item.itemType}-${item.id}`} className="flex items-center justify-between rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      {item.itemType === 'PRODUCT' ? <Package className="h-4 w-4 text-purple-400" /> : <Scissors className="h-4 w-4 text-[#D4A85C]" />}
-                      <div>
-                        <p className="text-sm font-medium text-[var(--text-primary)]">{item.name}</p>
-                        <div className="flex items-center gap-1.5">
+                  <div key={`${item.itemType}-${item.id}`} className="flex items-center justify-between gap-2 rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      {item.itemType === 'PRODUCT' ? <Package className="h-4 w-4 shrink-0 text-purple-400" /> : <Scissors className="h-4 w-4 shrink-0 text-[#D4A85C]" />}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-[var(--text-primary)]">{item.name}</p>
+                        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
                           {item.hasPromo && (
                             <span className="text-[10px] text-green-400 flex items-center gap-0.5"><Tag className="h-2.5 w-2.5" />{item.promoName}</span>
                           )}
@@ -486,13 +486,13 @@ export function Orders() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex shrink-0 items-center gap-2">
                       <div className="flex items-center gap-1 rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)]">
                         <button onClick={() => updateCartQty(item.id, item.itemType, -1)} className="px-2 py-1 text-[var(--text-muted)] hover:text-[var(--text-primary)]"><Minus className="h-3 w-3" /></button>
                         <span className="text-sm font-medium text-[var(--text-primary)] min-w-[20px] text-center">{item.quantity}</span>
                         <button onClick={() => updateCartQty(item.id, item.itemType, 1)} className="px-2 py-1 text-[var(--text-muted)] hover:text-[var(--text-primary)]"><Plus className="h-3 w-3" /></button>
                       </div>
-                      <span className="text-sm font-medium text-[var(--text-primary)] min-w-[70px] text-right">{formatCents(item.unitPrice * item.quantity)}</span>
+                      <span className="hidden sm:inline text-sm font-medium text-[var(--text-primary)] min-w-[70px] text-right">{formatCents(item.unitPrice * item.quantity)}</span>
                       <button onClick={() => removeFromCart(item.id, item.itemType)} className="rounded-lg p-1 text-[var(--text-muted)] hover:bg-red-500/20 hover:text-[#C45050]"><X className="h-4 w-4" /></button>
                     </div>
                   </div>

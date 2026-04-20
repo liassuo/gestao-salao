@@ -675,11 +675,11 @@ export function ClientBooking() {
                   : 'border-[var(--card-border)] bg-[var(--card-bg)]'
               }`}
             >
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="font-semibold text-[var(--text-primary)]">{service.name}</p>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <p className="min-w-0 font-semibold text-[var(--text-primary)] break-words">{service.name}</p>
                   {hasPromo && (
-                    <span className="text-[10px] font-bold uppercase tracking-wider bg-[#C8923A] text-[#1c1006] px-1.5 py-0.5 rounded">
+                    <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider bg-[#C8923A] text-[#1c1006] px-1.5 py-0.5 rounded">
                       {discount}% OFF
                     </span>
                   )}
@@ -689,7 +689,7 @@ export function ClientBooking() {
                     {service.description}
                   </p>
                 )}
-                <div className="flex items-center gap-3 mt-2">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
                   {hasPromo ? (
                     <>
                       <span className="text-[var(--text-muted)] text-sm line-through">
@@ -911,8 +911,8 @@ export function ClientBooking() {
             {selectedServices.map((s) => {
               const disc = effectiveServiceDiscount(s.id, activePromotions, activePlanDiscount);
               return (
-                <div key={s.id} className="flex items-center gap-2">
-                  <p className="text-[var(--text-primary)] font-medium">{s.name}</p>
+                <div key={s.id} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <p className="text-[var(--text-primary)] font-medium break-words min-w-0">{s.name}</p>
                   {disc > 0 ? (
                     <>
                       <span className="text-xs text-[var(--text-muted)] line-through">{formatPrice(s.price)}</span>
