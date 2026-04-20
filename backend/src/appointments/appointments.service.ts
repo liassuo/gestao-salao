@@ -15,6 +15,13 @@ import {
   asaasBillingToLocalPaymentMethod,
   parseAsaasBillingType,
 } from '../asaas/asaas.types';
+import {
+  getClientPlanDiscount,
+  getActivePromotions,
+  getPromoDiscountForService,
+  effectiveDiscountPercent,
+  applyDiscount,
+} from '../common/pricing.helper';
 
 @Injectable()
 export class AppointmentsService {
@@ -45,35 +52,22 @@ export class AppointmentsService {
       throw new BadRequestException('Um ou mais serviços não encontrados ou inativos');
     }
 
-    // 2.1 Buscar promoções ativas para aplicar desconto
-    const now2 = new Date().toISOString();
-    const { data: activePromos } = await this.supabase
-      .from('promotions')
-      .select('discountPercent, promotion_services(serviceId)')
-      .eq('isActive', true)
-      .eq('status', 'ACTIVE')
-      .lte('startDate', now2)
-      .gte('endDate', now2);
+    // 2.1 Buscar promoções ativas + desconto da assinatura do cliente.
+    // Quando houver promoção no serviço E desconto da assinatura, prevalece o MAIOR.
+    // Quando o cliente usar crédito do plano (useSubscriptionCut), o serviço fica com preço 0.
+    const activePromos = await getActivePromotions(this.supabase);
+    const planDiscount = await getClientPlanDiscount(this.supabase, dto.clientId);
+    const useCut = !!dto.useSubscriptionCut;
 
-    const getDiscount = (serviceId: string): number | null => {
-      if (!activePromos) return null;
-      for (const promo of activePromos) {
-        const match = (promo.promotion_services as any[])?.find(
-          (ps) => ps.serviceId === serviceId,
-        );
-        if (match) return promo.discountPercent;
-      }
-      return null;
+    const getUnitPrice = (svc: { id: string; price: number }): number => {
+      if (useCut) return 0;
+      const promoPercent = getPromoDiscountForService(activePromos, svc.id);
+      const percent = effectiveDiscountPercent(promoPercent, planDiscount);
+      return applyDiscount(svc.price, percent);
     };
 
     const totalDuration = services.reduce((sum, s) => sum + s.duration, 0);
-    const totalPrice = services.reduce((sum, s) => {
-      const discount = getDiscount(s.id);
-      if (discount !== null) {
-        return sum + Math.round(s.price * (100 - discount) / 100);
-      }
-      return sum + s.price;
-    }, 0);
+    const totalPrice = services.reduce((sum, s) => sum + getUnitPrice(s), 0);
 
     // 2. Validar profissional ativo, expediente, bloqueios e conflitos de agendamento
     await this.validateScheduleConflicts(
@@ -224,19 +218,15 @@ export class AppointmentsService {
 
     // 5.1 Criar comanda vinculada ao agendamento (com os serviços como itens)
     const orderId = randomUUID();
-    const orderItems = services.map((s) => {
-      const discount = getDiscount(s.id);
-      const unitPrice = discount !== null ? Math.round(s.price * (100 - discount) / 100) : s.price;
-      return {
-        id: randomUUID(),
-        orderId,
-        serviceId: s.id,
-        productId: null,
-        quantity: 1,
-        unitPrice,
-        itemType: 'SERVICE' as const,
-      };
-    });
+    const orderItems = services.map((s) => ({
+      id: randomUUID(),
+      orderId,
+      serviceId: s.id,
+      productId: null,
+      quantity: 1,
+      unitPrice: getUnitPrice(s),
+      itemType: 'SERVICE' as const,
+    }));
 
     await this.supabase.from('orders').insert({
       id: orderId,

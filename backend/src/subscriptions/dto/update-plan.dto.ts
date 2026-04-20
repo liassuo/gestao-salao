@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, IsBoolean, Min } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsBoolean, Min, Max } from 'class-validator';
 
 export class UpdatePlanDto {
   @IsOptional()
@@ -18,6 +18,12 @@ export class UpdatePlanDto {
   @IsNumber()
   @Min(1)
   cutsPerMonth?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  discountPercent?: number;
 
   @IsOptional()
   @IsBoolean()

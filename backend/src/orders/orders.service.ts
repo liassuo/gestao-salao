@@ -5,6 +5,15 @@ import { AsaasService } from '../asaas/asaas.service';
 import { StockService } from '../stock/stock.service';
 import { AsaasBillingType } from '../asaas/asaas.types';
 import { CreateOrderDto, UpdateOrderDto, AddOrderItemDto, QueryOrderDto, PayOrderDto } from './dto';
+import {
+  getClientPlanDiscount,
+  getActivePromotions,
+  getPromoDiscountForService,
+  getPromoDiscountForProduct,
+  effectiveDiscountPercent,
+  applyDiscount,
+  type PromotionMatch,
+} from '../common/pricing.helper';
 
 @Injectable()
 export class OrdersService {
@@ -19,11 +28,32 @@ export class OrdersService {
   async create(dto: CreateOrderDto) {
     this.logger.log(`Creating order with ${dto.items?.length ?? 0} items`);
 
+    // Desconto da assinatura ativa do cliente + promoções ativas.
+    // Entre promoção e assinatura, prevalece o MAIOR desconto por item.
+    const planDiscount = await getClientPlanDiscount(this.supabase, dto.clientId);
+    const activePromos = planDiscount >= 0 ? await getActivePromotions(this.supabase) : [];
+
+    const resolvedItems: {
+      productId: string | null;
+      serviceId: string | null;
+      quantity: number;
+      unitPrice: number;
+      itemType: 'PRODUCT' | 'SERVICE';
+    }[] = [];
+
     let totalAmount = 0;
 
     for (const item of dto.items || []) {
-      const lineTotal = item.unitPrice * (item.quantity || 1);
-      totalAmount += lineTotal;
+      const quantity = item.quantity || 1;
+      const unitPrice = await this.resolveUnitPrice(item, planDiscount, activePromos);
+      totalAmount += unitPrice * quantity;
+      resolvedItems.push({
+        productId: item.productId || null,
+        serviceId: item.serviceId || null,
+        quantity,
+        unitPrice,
+        itemType: item.itemType,
+      });
     }
 
     const now = new Date().toISOString();
@@ -45,13 +75,13 @@ export class OrdersService {
 
     if (error) throw error;
 
-    for (const item of dto.items || []) {
+    for (const item of resolvedItems) {
       const { error: itemError } = await this.supabase.from('order_items').insert({
         id: randomUUID(),
         orderId: order.id,
-        productId: item.productId || null,
-        serviceId: item.serviceId || null,
-        quantity: item.quantity || 1,
+        productId: item.productId,
+        serviceId: item.serviceId,
+        quantity: item.quantity,
         unitPrice: item.unitPrice,
         itemType: item.itemType,
       });
@@ -63,6 +93,44 @@ export class OrdersService {
     }
 
     return this.findOne(order.id);
+  }
+
+  /**
+   * Resolve o preço unitário de um item de comanda considerando:
+   * - preço base (products.salePrice / services.price) quando o productId/serviceId é informado
+   * - desconto da assinatura ativa do cliente (se houver)
+   * - desconto de promoção ativa para o item (se houver)
+   * Entre promoção e assinatura, prevalece o MAIOR desconto. Se nenhum id for informado,
+   * cai de volta para o unitPrice enviado.
+   */
+  private async resolveUnitPrice(
+    item: { productId?: string; serviceId?: string; unitPrice: number; itemType: 'PRODUCT' | 'SERVICE' },
+    planDiscount: number,
+    activePromos: PromotionMatch[],
+  ): Promise<number> {
+    let basePrice = item.unitPrice;
+    let promoPercent = 0;
+
+    if (item.itemType === 'PRODUCT' && item.productId) {
+      const { data: product } = await this.supabase
+        .from('products')
+        .select('salePrice')
+        .eq('id', item.productId)
+        .single();
+      if (product?.salePrice != null) basePrice = product.salePrice;
+      promoPercent = getPromoDiscountForProduct(activePromos, item.productId);
+    } else if (item.itemType === 'SERVICE' && item.serviceId) {
+      const { data: service } = await this.supabase
+        .from('services')
+        .select('price')
+        .eq('id', item.serviceId)
+        .single();
+      if (service?.price != null) basePrice = service.price;
+      promoPercent = getPromoDiscountForService(activePromos, item.serviceId);
+    }
+
+    const percent = effectiveDiscountPercent(promoPercent, planDiscount);
+    return applyDiscount(basePrice, percent);
   }
 
   async findAll(query: QueryOrderDto) {
@@ -123,7 +191,7 @@ export class OrdersService {
   async addItem(orderId: string, dto: AddOrderItemDto) {
     const { data: order, error } = await this.supabase
       .from('orders')
-      .select('id, status, totalAmount, appointmentId')
+      .select('id, status, totalAmount, appointmentId, clientId')
       .eq('id', orderId)
       .single();
 
@@ -135,15 +203,20 @@ export class OrdersService {
       throw new BadRequestException('Só é possível adicionar itens a comandas pendentes');
     }
 
-    const lineTotal = dto.unitPrice * (dto.quantity || 1);
+    // Aplica desconto da assinatura do cliente + promoção ativa (o MAIOR vence).
+    const planDiscount = await getClientPlanDiscount(this.supabase, order.clientId);
+    const activePromos = await getActivePromotions(this.supabase);
+    const unitPrice = await this.resolveUnitPrice(dto, planDiscount, activePromos);
+    const quantity = dto.quantity || 1;
+    const lineTotal = unitPrice * quantity;
 
     const { error: insertError } = await this.supabase.from('order_items').insert({
       id: randomUUID(),
       orderId: orderId,
       productId: dto.productId || null,
       serviceId: dto.serviceId || null,
-      quantity: dto.quantity || 1,
-      unitPrice: dto.unitPrice,
+      quantity,
+      unitPrice,
       itemType: dto.itemType,
     });
 

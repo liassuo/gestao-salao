@@ -1,4 +1,4 @@
-import { CreditCard, Scissors, MoreVertical, Edit2, Trash2, Users } from 'lucide-react';
+import { CreditCard, Scissors, MoreVertical, Edit2, Trash2, Users, Tag } from 'lucide-react';
 import { useState, useRef } from 'react';
 import { EmptyState } from '@/components/ui';
 import type { SubscriptionPlan } from '@/types';
@@ -56,6 +56,9 @@ export function SubscriptionPlanTable({
                 Preço
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                Desconto
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Assinantes
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
@@ -95,6 +98,16 @@ export function SubscriptionPlanTable({
                     {formatCurrency(plan.price)}
                   </span>
                   <span className="text-sm text-[var(--text-muted)]">/mês</span>
+                </td>
+                <td className="whitespace-nowrap px-4 py-4">
+                  {plan.discountPercent > 0 ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-green-500/15 px-2.5 py-1 text-xs font-medium text-green-500">
+                      <Tag className="h-3 w-3" />
+                      {plan.discountPercent}% off
+                    </span>
+                  ) : (
+                    <span className="text-sm text-[var(--text-muted)]">—</span>
+                  )}
                 </td>
                 <td className="whitespace-nowrap px-4 py-4">
                   <div className="flex items-center gap-1.5 text-sm text-[var(--text-secondary)]">

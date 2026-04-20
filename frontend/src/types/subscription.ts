@@ -8,6 +8,7 @@ export interface SubscriptionPlan {
   description: string | null;
   price: number; // centavos
   cutsPerMonth: number;
+  discountPercent: number; // 0-100, aplicado em produtos e serviços
   isActive: boolean;
   createdAt: string;
   _count?: {
@@ -34,6 +35,7 @@ export interface ClientSubscription {
     name: string;
     price: number;
     cutsPerMonth: number;
+    discountPercent: number;
   };
 }
 
@@ -42,6 +44,7 @@ export interface CreatePlanPayload {
   description?: string;
   price: number; // centavos
   cutsPerMonth: number;
+  discountPercent?: number;
 }
 
 export interface UpdatePlanPayload {
@@ -49,6 +52,7 @@ export interface UpdatePlanPayload {
   description?: string;
   price?: number;
   cutsPerMonth?: number;
+  discountPercent?: number;
   isActive?: boolean;
 }
 

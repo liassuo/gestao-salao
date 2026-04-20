@@ -8,6 +8,7 @@ interface PlanFormData {
   description: string;
   price: string;
   cutsPerMonth: number;
+  discountPercent: number;
 }
 
 interface SubscriptionPlanFormProps {
@@ -53,6 +54,7 @@ export function SubscriptionPlanForm({ plan, onSubmit, isLoading, error }: Subsc
       description: plan?.description || '',
       price: plan?.price ? String(plan.price) : '',
       cutsPerMonth: plan?.cutsPerMonth || 4,
+      discountPercent: plan?.discountPercent ?? 0,
     },
   });
 
@@ -76,6 +78,7 @@ export function SubscriptionPlanForm({ plan, onSubmit, isLoading, error }: Subsc
       description: data.description || undefined,
       price: priceInCents,
       cutsPerMonth: data.cutsPerMonth,
+      discountPercent: Number.isFinite(data.discountPercent) ? data.discountPercent : 0,
     });
   };
 
@@ -169,6 +172,33 @@ export function SubscriptionPlanForm({ plan, onSubmit, isLoading, error }: Subsc
             <p className="mt-1 text-sm text-[#A63030]">{errors.cutsPerMonth.message}</p>
           )}
         </div>
+      </div>
+
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
+          Desconto para assinantes (%)
+        </label>
+        <input
+          type="number"
+          min={0}
+          max={100}
+          step={1}
+          {...register('discountPercent', {
+            valueAsNumber: true,
+            min: { value: 0, message: 'Mínimo 0%' },
+            max: { value: 100, message: 'Máximo 100%' },
+          })}
+          placeholder="0"
+          className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] ${
+            errors.discountPercent ? 'border-[#A63030]' : 'border-[var(--border-color)]'
+          }`}
+        />
+        <p className="mt-1 text-xs text-[var(--text-muted)]">
+          Aplicado em produtos e serviços enquanto a assinatura estiver ativa. Quando houver promoção ativa no item, prevalece o maior desconto.
+        </p>
+        {errors.discountPercent && (
+          <p className="mt-1 text-sm text-[#A63030]">{errors.discountPercent.message}</p>
+        )}
       </div>
 
       <div className="flex justify-end gap-3 border-t border-[var(--border-color)] pt-4">

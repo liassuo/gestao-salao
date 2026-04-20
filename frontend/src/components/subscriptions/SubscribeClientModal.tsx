@@ -137,7 +137,7 @@ export function SubscribeClientModal({
               <option value="">Selecione um plano</option>
               {activePlans.map((plan) => (
                 <option key={plan.id} value={plan.id}>
-                  {plan.name} - {formatCurrency(plan.price)}/mês ({plan.cutsPerMonth === 99 ? 'Ilimitado' : `${plan.cutsPerMonth} cortes`})
+                  {plan.name} - {formatCurrency(plan.price)}/mês ({plan.cutsPerMonth === 99 ? 'Ilimitado' : `${plan.cutsPerMonth} cortes`}{plan.discountPercent > 0 ? ` · ${plan.discountPercent}% off` : ''})
                 </option>
               ))}
             </select>
@@ -186,6 +186,14 @@ export function SubscribeClientModal({
                 <p><span className="font-medium">Plano:</span> {selectedPlan.name}</p>
                 <p><span className="font-medium">Valor:</span> {formatCurrency(selectedPlan.price)}/mês</p>
                 <p><span className="font-medium">Cortes:</span> {selectedPlan.cutsPerMonth === 99 ? 'Ilimitados' : `${selectedPlan.cutsPerMonth} por mês`}</p>
+                {selectedPlan.discountPercent > 0 && (
+                  <p>
+                    <span className="font-medium">Desconto:</span>{' '}
+                    <span className="font-semibold text-green-500">
+                      {selectedPlan.discountPercent}% em produtos e serviços
+                    </span>
+                  </p>
+                )}
                 <p><span className="font-medium">Pagamento:</span> {billingType === AsaasBillingType.PIX ? 'PIX' : 'Cartão de Crédito'}</p>
               </div>
             </div>

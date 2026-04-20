@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { AlertCircle, Loader2, Search, X } from 'lucide-react';
-import { useClients, useProfessionals, useServices } from '@/hooks';
+import { useClients, useProfessionals, useServices, useActivePromotions, useClientSubscription } from '@/hooks';
 import { formatPhone } from '@/utils/format';
 import { AppointmentSummary } from './AppointmentSummary';
 import { useToast } from '@/components/ui/ToastContext';
@@ -61,6 +61,7 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
   const { data: clients = [], isLoading: isLoadingClients } = useClients();
   const { data: professionals = [], isLoading: isLoadingProfessionals } = useProfessionals();
   const { data: services = [], isLoading: isLoadingServices } = useServices();
+  const { data: activePromotions = [] } = useActivePromotions();
 
   const {
     register,
@@ -83,6 +84,10 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
   const watchedClientId = watch('clientId');
   const watchedDate = watch('date');
   const watchedTime = watch('time');
+
+  const { data: clientSub } = useClientSubscription(watchedClientId || undefined);
+  const planDiscount = clientSub && clientSub.status === 'ACTIVE' ? clientSub.plan?.discountPercent ?? 0 : 0;
+  const planLabel = clientSub?.plan?.name ? `Plano ${clientSub.plan.name}` : undefined;
 
   // Client autocomplete
   const [clientSearch, setClientSearch] = useState('');
@@ -327,7 +332,12 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
       </div>
 
       {/* Resumo */}
-      <AppointmentSummary selectedServices={selectedServices} />
+      <AppointmentSummary
+        selectedServices={selectedServices}
+        promotions={activePromotions}
+        planDiscountPercent={planDiscount}
+        planLabel={planLabel}
+      />
 
       {/* Data e Hora */}
       <div className="grid grid-cols-2 gap-4">

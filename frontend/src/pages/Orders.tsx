@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ClipboardList, Plus, AlertCircle, Eye, Trash2, CreditCard, XCircle, ShoppingCart, X, Package, Scissors, Banknote, Smartphone, CircleDollarSign, Tag, Minus } from 'lucide-react';
-import { useOrders, useCreateOrder, usePayOrder, useCancelOrder, useDeleteOrder, useAddOrderItem, useRemoveOrderItem, useClients, useProducts, useServices, useActivePromotions, getApiErrorMessage } from '@/hooks';
+import { useOrders, useCreateOrder, usePayOrder, useCancelOrder, useDeleteOrder, useAddOrderItem, useRemoveOrderItem, useClients, useProducts, useServices, useActivePromotions, useClientSubscription, getApiErrorMessage } from '@/hooks';
 import { ordersService } from '@/services/orders';
 import { Modal, ConfirmModal, useToast } from '@/components/ui';
 import type { Order, OrderStatus, CreateOrderPayload, AddOrderItemPayload, OrderItemType, Promotion } from '@/types';
@@ -24,22 +24,41 @@ function formatCents(cents: number): string {
   return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-function getProductDiscount(productId: string, promotions: Promotion[]): { percent: number; name: string } | null {
+interface DiscountInfo {
+  percent: number;
+  name: string;
+  source: 'PROMO' | 'PLAN';
+}
+
+function getPromoProductDiscount(productId: string, promotions: Promotion[]): DiscountInfo | null {
   for (const promo of promotions) {
     if (promo.products?.some((p) => p.id === productId)) {
-      return { percent: promo.discountPercent, name: promo.name };
+      return { percent: promo.discountPercent, name: promo.name, source: 'PROMO' };
     }
   }
   return null;
 }
 
-function getServiceDiscount(serviceId: string, promotions: Promotion[]): { percent: number; name: string } | null {
+function getPromoServiceDiscount(serviceId: string, promotions: Promotion[]): DiscountInfo | null {
   for (const promo of promotions) {
     if (promo.services?.some((s) => s.id === serviceId)) {
-      return { percent: promo.discountPercent, name: promo.name };
+      return { percent: promo.discountPercent, name: promo.name, source: 'PROMO' };
     }
   }
   return null;
+}
+
+// Aplica a regra: entre promoção do item e desconto da assinatura do cliente,
+// prevalece o MAIOR. Nunca soma os dois.
+function pickEffectiveDiscount(
+  promo: DiscountInfo | null,
+  planPercent: number,
+  planLabel: string,
+): DiscountInfo | null {
+  const promoPct = promo?.percent ?? 0;
+  if (promoPct <= 0 && planPercent <= 0) return null;
+  if (promoPct >= planPercent) return promo;
+  return { percent: planPercent, name: planLabel, source: 'PLAN' };
 }
 
 function applyDiscount(price: number, percent: number): number {
@@ -80,6 +99,12 @@ export function Orders() {
   const { data: products } = useProducts();
   const { data: services } = useServices();
   const { data: activePromotions } = useActivePromotions();
+  // Quando há cliente selecionado (na criação) ou na comanda em visualização,
+  // buscamos a assinatura ativa dele para aplicar o desconto do plano.
+  const activeClientId = viewingOrder?.clientId || createClientId || undefined;
+  const { data: clientSub } = useClientSubscription(activeClientId);
+  const planDiscount = clientSub && clientSub.status === 'ACTIVE' ? clientSub.plan?.discountPercent ?? 0 : 0;
+  const planLabel = clientSub?.plan?.name ? `Plano ${clientSub.plan.name}` : 'Assinatura';
   const createOrder = useCreateOrder();
   const payOrder = usePayOrder();
   const cancelOrder = useCancelOrder();
@@ -97,7 +122,8 @@ export function Orders() {
         return prev.map((i) => i.id === id && i.itemType === itemType ? { ...i, quantity: i.quantity + 1 } : i);
       }
       const promos = activePromotions || [];
-      const discount = itemType === 'PRODUCT' ? getProductDiscount(id, promos) : getServiceDiscount(id, promos);
+      const promo = itemType === 'PRODUCT' ? getPromoProductDiscount(id, promos) : getPromoServiceDiscount(id, promos);
+      const discount = pickEffectiveDiscount(promo, planDiscount, planLabel);
       const unitPrice = discount ? applyDiscount(originalPrice, discount.percent) : originalPrice;
       return [...prev, { id, name, itemType, originalPrice, unitPrice, quantity: 1, hasPromo: !!discount, promoName: discount?.name }];
     });
@@ -200,13 +226,15 @@ export function Orders() {
       if (itemType === 'PRODUCT') {
         const product = products?.find((p) => p.id === selectedProductId);
         if (!product) return;
-        const discount = getProductDiscount(product.id, promos);
+        const promo = getPromoProductDiscount(product.id, promos);
+        const discount = pickEffectiveDiscount(promo, planDiscount, planLabel);
         const price = discount ? applyDiscount(product.salePrice, discount.percent) : product.salePrice;
         payload = { productId: product.id, quantity: itemQuantity, unitPrice: price, itemType: 'PRODUCT' };
       } else {
         const service = services?.find((s) => s.id === selectedServiceId);
         if (!service) return;
-        const discount = getServiceDiscount(service.id, promos);
+        const promo = getPromoServiceDiscount(service.id, promos);
+        const discount = pickEffectiveDiscount(promo, planDiscount, planLabel);
         const price = discount ? applyDiscount(service.price, discount.percent) : service.price;
         payload = { serviceId: service.id, quantity: itemQuantity, unitPrice: price, itemType: 'SERVICE' };
       }
@@ -362,7 +390,8 @@ export function Orders() {
               {createItemTab === 'PRODUCT' ? (
                 products?.filter((p) => p.isActive !== false).length ? (
                   products.filter((p) => p.isActive !== false).map((p) => {
-                    const discount = getProductDiscount(p.id, activePromotions || []);
+                    const promo = getPromoProductDiscount(p.id, activePromotions || []);
+                    const discount = pickEffectiveDiscount(promo, planDiscount, planLabel);
                     const finalPrice = discount ? applyDiscount(p.salePrice, discount.percent) : p.salePrice;
                     const inCart = cartItems.find((i) => i.id === p.id && i.itemType === 'PRODUCT');
                     return (
@@ -399,7 +428,8 @@ export function Orders() {
               ) : (
                 services?.filter((s) => s.isActive !== false).length ? (
                   services.filter((s) => s.isActive !== false).map((s) => {
-                    const discount = getServiceDiscount(s.id, activePromotions || []);
+                    const promo = getPromoServiceDiscount(s.id, activePromotions || []);
+                    const discount = pickEffectiveDiscount(promo, planDiscount, planLabel);
                     const finalPrice = discount ? applyDiscount(s.price, discount.percent) : s.price;
                     const inCart = cartItems.find((i) => i.id === s.id && i.itemType === 'SERVICE');
                     return (

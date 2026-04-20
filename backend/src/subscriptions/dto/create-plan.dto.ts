@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, Min } from 'class-validator';
+import { IsString, IsOptional, IsNumber, Min, Max } from 'class-validator';
 
 export class CreatePlanDto {
   @IsString()
@@ -15,4 +15,10 @@ export class CreatePlanDto {
   @IsNumber()
   @Min(1)
   cutsPerMonth: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  discountPercent?: number;
 }

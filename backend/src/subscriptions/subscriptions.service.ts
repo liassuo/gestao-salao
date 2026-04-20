@@ -55,6 +55,7 @@ export class SubscriptionsService {
         description: dto.description,
         price: dto.price,
         cutsPerMonth: dto.cutsPerMonth,
+        discountPercent: dto.discountPercent ?? 0,
         isActive: true,
         createdAt: now,
         updatedAt: now,
@@ -129,6 +130,7 @@ export class SubscriptionsService {
     if (dto.description !== undefined) updateData.description = dto.description;
     if (dto.price !== undefined) updateData.price = dto.price;
     if (dto.cutsPerMonth !== undefined) updateData.cutsPerMonth = dto.cutsPerMonth;
+    if (dto.discountPercent !== undefined) updateData.discountPercent = dto.discountPercent;
     if (dto.isActive !== undefined) updateData.isActive = dto.isActive;
 
     const { data: updated, error } = await this.supabase
@@ -329,7 +331,7 @@ export class SubscriptionsService {
     // Re-fetch com relações (fallback se o select com join falhar)
     const { data: subscription, error: refetchError } = await this.supabase
       .from('client_subscriptions')
-      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth)')
+      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent)')
       .eq('id', insertedSub.id)
       .single();
 
@@ -356,7 +358,7 @@ export class SubscriptionsService {
   async findSubscription(id: string) {
     const { data: subscription, error } = await this.supabase
       .from('client_subscriptions')
-      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth)')
+      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent)')
       .eq('id', id)
       .single();
 
@@ -387,7 +389,7 @@ export class SubscriptionsService {
   async findAllSubscriptions(status?: string) {
     let queryBuilder = this.supabase
       .from('client_subscriptions')
-      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth)')
+      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent)')
       .order('createdAt', { ascending: false });
 
     if (status) {
@@ -406,7 +408,7 @@ export class SubscriptionsService {
     // não tiverem sido adicionados ao banco (PENDING_PAYMENT, SUSPENDED)
     const { data: results } = await this.supabase
       .from('client_subscriptions')
-      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth)')
+      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent)')
       .eq('clientId', clientId)
       .order('createdAt', { ascending: false })
       .limit(1);
@@ -453,7 +455,7 @@ export class SubscriptionsService {
           .from('client_subscriptions')
           .update({ status: 'SUSPENDED', updatedAt: now })
           .eq('id', subscription.id)
-          .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth)')
+          .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent)')
           .single();
         this.logger.log(`Assinatura ${subscription.id} suspensa automaticamente (endDate ${subscription.endDate} vencido)`);
         return suspended ?? subscription;
@@ -469,7 +471,7 @@ export class SubscriptionsService {
           .from('client_subscriptions')
           .update({ status: 'CANCELED', updatedAt: now })
           .eq('id', subscription.id)
-          .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth)')
+          .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent)')
           .single();
         this.logger.log(`Assinatura ${subscription.id} cancelada automaticamente (PENDING_PAYMENT expirado, endDate ${subscription.endDate})`);
         return canceled ?? subscription;
@@ -545,7 +547,7 @@ export class SubscriptionsService {
       .from('client_subscriptions')
       .update({ cutsUsedThisMonth: cutsUsed + 1 })
       .eq('id', subscription.id)
-      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth)')
+      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent)')
       .single();
 
     if (error) throw error;
@@ -564,7 +566,7 @@ export class SubscriptionsService {
       .from('client_subscriptions')
       .update({ cutsUsedThisMonth: 0, lastResetDate: now })
       .eq('id', subscription.id)
-      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth)')
+      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent)')
       .single();
 
     if (error) throw error;
@@ -780,7 +782,7 @@ export class SubscriptionsService {
     // Buscar assinatura suspensa
     const { data: results } = await this.supabase
       .from('client_subscriptions')
-      .select('*, client:clients(id, name, phone, asaasCustomerId, email), plan:subscription_plans(id, name, price, cutsPerMonth)')
+      .select('*, client:clients(id, name, phone, asaasCustomerId, email), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent)')
       .eq('clientId', clientId)
       .eq('status', 'SUSPENDED')
       .order('createdAt', { ascending: false })
@@ -883,7 +885,7 @@ export class SubscriptionsService {
     // Re-fetch atualizado
     const { data: updated } = await this.supabase
       .from('client_subscriptions')
-      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth)')
+      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent)')
       .eq('id', subscription.id)
       .single();
 
