@@ -653,8 +653,8 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
   return (
     <div className="space-y-4">
       {/* Calendar header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-4 backdrop-blur-sm transition-colors duration-200">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-3 rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-3 backdrop-blur-sm transition-colors duration-200 sm:p-4 md:flex-row md:flex-wrap md:items-center md:justify-between">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <div className="flex items-center gap-1">
             <button
               onClick={handlePrevDay}
@@ -700,14 +700,14 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
               tabIndex={-1}
             />
           </div>
-          <h2 className="text-lg font-semibold capitalize text-[var(--text-primary)]">
+          <h2 className="basis-full text-base font-semibold capitalize text-[var(--text-primary)] sm:text-lg md:basis-auto">
             {formatDateBR(selectedDate)}
           </h2>
         </div>
 
         <button
           onClick={handleOpenBlockModal}
-          className="flex items-center gap-2 rounded-lg border border-[#A63030]/30 px-3 py-1.5 text-sm font-medium text-[#C45050] transition-colors hover:bg-red-500/10"
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#A63030]/30 px-3 py-2 text-sm font-medium text-[#C45050] transition-colors hover:bg-red-500/10 sm:w-auto sm:py-1.5"
         >
           <Lock className="h-4 w-4" />
           Bloquear Horário
@@ -734,7 +734,7 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
             {professionalsData.map((prof) => (
               <div
                 key={prof.id}
-                className="flex min-w-[180px] flex-1 items-center justify-center gap-2 border-r border-[var(--card-border)] bg-[var(--bg-primary)] px-3 py-3 last:border-r-0"
+                className="flex min-w-[140px] sm:min-w-[180px] flex-1 items-center justify-center gap-2 border-r border-[var(--card-border)] bg-[var(--bg-primary)] px-3 py-3 last:border-r-0"
               >
                 {prof.avatarUrl ? (
                   <img src={prof.avatarUrl} alt={prof.name} className="h-7 w-7 rounded-full object-cover" />
@@ -815,7 +815,7 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
           </div>
 
           {/* Legend */}
-          <div className="flex flex-wrap items-center gap-4 border-t border-[var(--card-border)] bg-[var(--bg-primary)] px-4 py-2.5">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-[var(--card-border)] bg-[var(--bg-primary)] px-3 py-2.5 sm:gap-4 sm:px-4">
             <span className="text-xs text-[var(--text-muted)]">Legenda:</span>
             <div className="flex items-center gap-1.5">
               <div className="h-3 w-3 rounded border border-[#C8923A]/40 bg-[#C8923A]/20" />
@@ -984,7 +984,7 @@ function ProfessionalColumn({
   dragGhostHeight,
 }: ProfessionalColumnProps) {
   return (
-    <div data-professional-id={professional.id} className="relative min-w-[180px] flex-1 border-r border-[var(--card-border)] last:border-r-0">
+    <div data-professional-id={professional.id} className="relative min-w-[140px] sm:min-w-[180px] flex-1 border-r border-[var(--card-border)] last:border-r-0">
       {/* Grid lines and clickable slots */}
       {timeSlots.map((slot) => {
         const [, m] = slot.split(':');

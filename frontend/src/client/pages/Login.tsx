@@ -9,6 +9,7 @@ import { clientAuthApi, storage } from '../services/api';
 import { formatPhoneInput } from '@/utils/format';
 import { GOOGLE_CLIENT_ID } from '@/app/providers';
 import type { CheckEmailResponse } from '../services/api';
+import { BrandWordmark } from '../components';
 
 type Step = 'email' | 'login' | 'register' | 'setup_password';
 
@@ -242,11 +243,7 @@ export function ClientLogin() {
           <div className="mb-6 text-center">
             <div className="relative inline-block">
               <div className="absolute -inset-6 rounded-full bg-[#C8923A]/8 blur-2xl" />
-              <img
-                src="/barbearia-america.png"
-                alt="Barbearia America"
-                className="relative mx-auto h-28 w-auto drop-shadow-2xl"
-              />
+              <BrandWordmark size="lg" className="relative" />
             </div>
             <p className="mt-5 text-sm font-medium tracking-widest uppercase text-[#8B7D6B]">
               {getStepTitle()}

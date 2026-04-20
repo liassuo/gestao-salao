@@ -153,25 +153,25 @@ export function Appointments() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#C8923A]/20">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#C8923A]/20">
             <Calendar className="h-5 w-5 text-[#C8923A]" />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-[var(--text-primary)]">Agendamentos</h1>
-            <p className="text-sm text-[var(--text-muted)]">
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold text-[var(--text-primary)] sm:text-2xl">Agendamentos</h1>
+            <p className="text-xs text-[var(--text-muted)] sm:text-sm">
               Gerencie todos os agendamentos da barbearia
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
           {/* View toggle */}
-          <div className="flex gap-1 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] p-1">
+          <div className="flex w-full gap-1 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] p-1 sm:w-auto">
             <button
               onClick={() => setActiveView('calendar')}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none ${
                 activeView === 'calendar'
                   ? 'bg-[#8B6914] text-white'
                   : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
@@ -182,7 +182,7 @@ export function Appointments() {
             </button>
             <button
               onClick={() => setActiveView('table')}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none ${
                 activeView === 'table'
                   ? 'bg-[#8B6914] text-white'
                   : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
@@ -193,20 +193,20 @@ export function Appointments() {
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
             <button
               onClick={() => navigate('/comandas?new=1')}
-              className="flex items-center gap-2 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] px-4 py-2.5 font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--hover-bg)] focus:outline-none focus:ring-2 focus:ring-[#C8923A]"
+              className="flex items-center justify-center gap-2 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-2.5 text-sm font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--hover-bg)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] sm:px-4 sm:text-base"
             >
-              <ClipboardList className="h-5 w-5" />
-              Nova Comanda
+              <ClipboardList className="h-5 w-5 shrink-0" />
+              <span className="truncate">Nova Comanda</span>
             </button>
             <button
               onClick={handleOpenModal}
-              className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-4 py-2.5 font-medium text-white transition-colors hover:bg-[#725510] focus:outline-none focus:ring-2 focus:ring-[#C8923A] focus:ring-offset-2 focus:ring-offset-[var(--bg-primary)]"
+              className="flex items-center justify-center gap-2 rounded-xl bg-[#8B6914] px-3 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#725510] focus:outline-none focus:ring-2 focus:ring-[#C8923A] focus:ring-offset-2 focus:ring-offset-[var(--bg-primary)] sm:px-4 sm:text-base"
             >
-              <Plus className="h-5 w-5" />
-              Novo Agendamento
+              <Plus className="h-5 w-5 shrink-0" />
+              <span className="truncate">Novo Agendamento</span>
             </button>
           </div>
         </div>

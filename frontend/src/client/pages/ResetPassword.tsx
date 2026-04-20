@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { Lock, Eye, EyeOff, CheckCircle } from 'lucide-react';
 import { clientAuthApi } from '../services/api';
 import { CLIENT_PATHS } from '../utils/paths';
+import { BrandWordmark } from '../components';
 
 export function ClientResetPassword() {
   const [searchParams] = useSearchParams();
@@ -67,7 +68,7 @@ export function ClientResetPassword() {
           <div className="mb-8 text-center">
             <div className="relative inline-block">
               <div className="absolute -inset-6 rounded-full bg-[#C8923A]/8 blur-2xl" />
-              <img src="/barbearia-america.png" alt="Barbearia América" className="relative mx-auto h-24 w-auto drop-shadow-2xl" />
+              <BrandWordmark size="lg" className="relative" />
             </div>
             <p className="mt-5 text-sm font-medium tracking-widest uppercase text-[#8B7D6B]">
               Nova Senha

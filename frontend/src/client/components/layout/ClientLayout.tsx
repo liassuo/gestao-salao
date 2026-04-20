@@ -1,9 +1,10 @@
 import { Outlet } from 'react-router-dom';
 import { useClientAuth } from '../../auth';
 import { IOSInstallBanner } from '../IOSInstallBanner';
+import { BrandWordmark } from '../BrandWordmark';
 
 export function ClientLayout() {
-  const { isLoading } = useClientAuth();
+  const { isLoading, isAuthenticated } = useClientAuth();
 
   if (isLoading) {
     return (
@@ -15,6 +16,12 @@ export function ClientLayout() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
+      {isAuthenticated && (
+        <div className="relative border-b border-[#3D2B1F]/60 bg-gradient-to-b from-[#1E1610]/60 to-transparent px-5 pt-4 pb-3">
+          <div className="absolute -bottom-px left-8 right-8 h-px bg-gradient-to-r from-transparent via-[#C8923A]/30 to-transparent" />
+          <BrandWordmark size="sm" />
+        </div>
+      )}
       <Outlet />
       <IOSInstallBanner />
     </div>
