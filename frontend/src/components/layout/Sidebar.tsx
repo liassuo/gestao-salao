@@ -7,6 +7,7 @@ import { menuItems } from '@/config/permissions';
 import type { MenuItem } from '@/config/permissions';
 import { useSidebar } from '@/contexts';
 import { useLowStockProducts } from '@/hooks';
+import { BrandWordmark } from '@/components/ui';
 
 const groupIcons: Record<string, React.ElementType> = {
   Estoque: Package,
@@ -165,27 +166,7 @@ export function Sidebar() {
         <div className="flex h-24 shrink-0 items-center justify-between border-b border-[var(--border-sidebar)] px-4">
           <div className="flex items-center justify-center flex-1 min-w-0">
             {showExpanded ? (
-              <div
-                className="relative text-center leading-[1.05] select-none"
-                style={{ fontFamily: "'Rye', serif" }}
-              >
-                <div
-                  className="text-[24px] tracking-[0.14em] text-transparent bg-clip-text bg-gradient-to-b from-[#F2D68A] via-[#D4A556] to-[#8B6914] drop-shadow-[0_1px_0_rgba(0,0,0,0.6)]"
-                >
-                  BARBEARIA
-                </div>
-                {/* separador ornamental */}
-                <div className="flex items-center justify-center gap-1.5 my-1">
-                  <span className="h-px w-6 bg-gradient-to-r from-transparent to-[#C8923A]/60" />
-                  <span className="text-[#C8923A] text-[8px]">◆</span>
-                  <span className="h-px w-6 bg-gradient-to-l from-transparent to-[#C8923A]/60" />
-                </div>
-                <div
-                  className="text-[20px] tracking-[0.22em] text-transparent bg-clip-text bg-gradient-to-b from-[#D85050] via-[#A63030] to-[#6B1A1A] drop-shadow-[0_1px_0_rgba(0,0,0,0.6)]"
-                >
-                  AMÉRICA
-                </div>
-              </div>
+              <BrandWordmark size="md" />
             ) : (
               <img
                 src="/barbearia-america.png"

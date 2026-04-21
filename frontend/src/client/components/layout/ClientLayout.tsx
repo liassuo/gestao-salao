@@ -1,7 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import { useClientAuth } from '../../auth';
 import { IOSInstallBanner } from '../IOSInstallBanner';
-import { BrandWordmark } from '../BrandWordmark';
+import { BrandWordmark } from '@/components/ui';
 
 export function ClientLayout() {
   const { isLoading, isAuthenticated } = useClientAuth();

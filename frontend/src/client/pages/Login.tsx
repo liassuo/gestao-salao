@@ -9,7 +9,7 @@ import { clientAuthApi, storage } from '../services/api';
 import { formatPhoneInput } from '@/utils/format';
 import { GOOGLE_CLIENT_ID } from '@/app/providers';
 import type { CheckEmailResponse } from '../services/api';
-import { BrandWordmark } from '../components';
+import { BrandWordmark } from '@/components/ui';
 
 type Step = 'email' | 'login' | 'register' | 'setup_password';
 

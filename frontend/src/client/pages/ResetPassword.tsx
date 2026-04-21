@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { Lock, Eye, EyeOff, CheckCircle } from 'lucide-react';
 import { clientAuthApi } from '../services/api';
 import { CLIENT_PATHS } from '../utils/paths';
-import { BrandWordmark } from '../components';
+import { BrandWordmark } from '@/components/ui';
 
 export function ClientResetPassword() {
   const [searchParams] = useSearchParams();

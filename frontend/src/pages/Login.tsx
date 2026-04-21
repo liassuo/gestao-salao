@@ -4,6 +4,7 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Eye, EyeOff, LogIn, Mail, Lock } from 'lucide-react';
 import { useAuth } from '@/auth';
 import type { LoginCredentials } from '@/auth';
+import { BrandWordmark } from '@/components/ui';
 
 export function Login() {
   const { login } = useAuth();
@@ -71,11 +72,7 @@ export function Login() {
           <div className="mb-8 text-center">
             <div className="relative inline-block">
               <div className="absolute -inset-6 rounded-full bg-[#C8923A]/8 blur-2xl" />
-              <img
-                src="/barbearia-america.png"
-                alt="Barbearia América"
-                className="relative mx-auto h-32 w-auto drop-shadow-2xl"
-              />
+              <BrandWordmark size="lg" className="relative" />
             </div>
             <p className="mt-6 text-sm font-medium tracking-widest uppercase text-[#8B7D6B]">
               Painel Administrativo

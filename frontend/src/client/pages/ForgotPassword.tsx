@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Mail, ArrowLeft, CheckCircle } from 'lucide-react';
 import { clientAuthApi } from '../services/api';
 import { CLIENT_PATHS } from '../utils/paths';
-import { BrandWordmark } from '../components';
+import { BrandWordmark } from '@/components/ui';
 
 export function ClientForgotPassword() {
   const [email, setEmail] = useState('');

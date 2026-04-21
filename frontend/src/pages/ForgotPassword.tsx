@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Mail, ArrowLeft, CheckCircle } from 'lucide-react';
 import { authApi } from '@/services/api';
+import { BrandWordmark } from '@/components/ui';
 
 export function ForgotPassword() {
   const [email, setEmail] = useState('');
@@ -40,7 +41,7 @@ export function ForgotPassword() {
           <div className="mb-8 text-center">
             <div className="relative inline-block">
               <div className="absolute -inset-6 rounded-full bg-[#C8923A]/8 blur-2xl" />
-              <img src="/barbearia-america.png" alt="Barbearia América" className="relative mx-auto h-24 w-auto drop-shadow-2xl" />
+              <BrandWordmark size="lg" className="relative" />
             </div>
             <p className="mt-5 text-sm font-medium tracking-widest uppercase text-[#8B7D6B]">
               Recuperar Senha
