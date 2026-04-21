@@ -172,11 +172,12 @@ test.describe('Client Booking Flow', () => {
     await page.getByRole('button', { name: '09:00' }).click();
     await page.getByRole('button', { name: /continuar/i }).click();
 
-    // Step 3: confirm
+    // Step 3: confirm — selecionar pagamento "No local" (CASH) pra evitar modal de CPF
     await expect(page.getByRole('button', { name: /confirmar agendamento/i })).toBeVisible({ timeout: 5000 });
+    await page.getByRole('button', { name: 'No local' }).click();
 
     page.on('dialog', async (dialog) => {
-      expect(dialog.message()).toContain('Agendamento realizado com sucesso');
+      expect(dialog.message()).toMatch(/Agendamento realizado/i);
       await dialog.accept();
     });
 

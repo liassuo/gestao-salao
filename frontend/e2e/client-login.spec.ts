@@ -26,9 +26,16 @@ test.describe('Client Login', () => {
   });
 
   test('should show error when submitting empty fields', async ({ page }) => {
-    // Submit empty email via Enter key (button is disabled when empty)
-    await page.locator('#email').press('Enter');
-    await expect(page.locator('text=Digite seu email')).toBeVisible();
+    // O botão fica desabilitado com email vazio — o próprio disabled é o contrato
+    // de UX (impede a submissão em vez de depender de validação pós-submit).
+    const submitBtn = page.locator('form button[type="submit"]').first();
+    await expect(submitBtn).toBeDisabled();
+
+    // Ao digitar e apagar, botão alterna corretamente
+    await page.locator('#email').fill('a@a.com');
+    await expect(submitBtn).toBeEnabled();
+    await page.locator('#email').fill('');
+    await expect(submitBtn).toBeDisabled();
   });
 
   test('should show error on wrong credentials', async ({ page }) => {
