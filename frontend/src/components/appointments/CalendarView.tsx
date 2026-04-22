@@ -6,11 +6,27 @@ import { BlockTimeModal } from './BlockTimeModal';
 import { AppointmentDetailModal } from './AppointmentDetailModal';
 import type { CalendarAppointment, CalendarTimeBlock, CalendarProfessional } from '@/types';
 
-const SLOT_HEIGHT = 20; // px per 10-min slot
-const HOUR_HEIGHT = SLOT_HEIGHT * 6; // 120px per hour
+const SLOT_HEIGHT_DESKTOP = 20; // px per 10-min slot (desktop)
+const SLOT_HEIGHT_MOBILE = 14; // px per 10-min slot (mobile compact mode)
 const DEFAULT_START_HOUR = 8;
 const DEFAULT_END_HOUR = 21;
 const TIME_LABEL_WIDTH = 60; // px
+const COLUMN_MIN_WIDTH = 220; // px — min width for each professional column
+
+function useIsCompact(): boolean {
+  const [compact, setCompact] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(max-width: 767px)').matches;
+  });
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(max-width: 767px)');
+    const handler = (e: MediaQueryListEvent) => setCompact(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  return compact;
+}
 
 function formatDateBR(dateStr: string): string {
   const [year, month, day] = dateStr.split('-').map(Number);
@@ -40,14 +56,14 @@ function timeToMinutes(time: string): number {
   return h * 60 + m;
 }
 
-function getTopPosition(time: string, startHour = DEFAULT_START_HOUR): number {
+function getTopPosition(time: string, startHour: number, slotHeight: number): number {
   const minutes = timeToMinutes(time);
   const startMinutes = startHour * 60;
-  return ((minutes - startMinutes) / 10) * SLOT_HEIGHT;
+  return ((minutes - startMinutes) / 10) * slotHeight;
 }
 
-function getBlockHeight(durationMinutes: number): number {
-  return (durationMinutes / 10) * SLOT_HEIGHT;
+function getBlockHeight(durationMinutes: number, slotHeight: number): number {
+  return (durationMinutes / 10) * slotHeight;
 }
 
 function extractTime(isoString: string): string {
@@ -146,12 +162,13 @@ interface AppointmentBlockProps {
   onDragStart?: (e: React.PointerEvent<HTMLDivElement>, appointment: CalendarAppointment) => void;
   isDragging?: boolean;
   startHour: number;
+  slotHeight: number;
 }
 
-function AppointmentBlock({ appointment, onAppointmentClick, onDragStart, isDragging, startHour }: AppointmentBlockProps) {
+function AppointmentBlock({ appointment, onAppointmentClick, onDragStart, isDragging, startHour, slotHeight }: AppointmentBlockProps) {
   const time = extractTime(appointment.scheduledAt);
-  const top = getTopPosition(time, startHour);
-  const height = getBlockHeight(appointment.totalDuration);
+  const top = getTopPosition(time, startHour, slotHeight);
+  const height = getBlockHeight(appointment.totalDuration, slotHeight);
   const isSubscription = !!appointment.usedSubscriptionCut && appointment.status === 'SCHEDULED';
   const colorKey = appointment.status !== 'SCHEDULED'
     ? appointment.status
@@ -169,7 +186,7 @@ function AppointmentBlock({ appointment, onAppointmentClick, onDragStart, isDrag
   return (
     <div
       className={`absolute left-1 right-1 ${appointment.status === 'SCHEDULED' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} overflow-hidden rounded-lg border ${colors.border} ${colors.bg} px-2 py-1 backdrop-blur-sm transition-all duration-150 hover:z-20 hover:shadow-lg ${isDragging ? '!opacity-30' : ''}`}
-      style={{ top: `${top}px`, height: `${Math.max(height, SLOT_HEIGHT)}px` }}
+      style={{ top: `${top}px`, height: `${Math.max(height, slotHeight)}px` }}
       title={`${appointment.client?.name || appointment.clientName || 'Cliente'} - ${serviceNames} (${time} - ${endTime})${isFromClient ? ' · App' : ' · Painel'}${isSubscription ? ' · Assinatura' : ''}${appointment.status === 'PENDING_PAYMENT' ? ' · Aguardando pagamento' : ''}`}
       onPointerDown={(e) => {
         if (e.button === 0 && appointment.status === 'SCHEDULED') {
@@ -219,21 +236,22 @@ interface TimeBlockItemProps {
   onDelete: (id: string) => void;
   isDeleting: boolean;
   startHour: number;
+  slotHeight: number;
 }
 
-function TimeBlockItem({ block, onDelete, isDeleting, startHour }: TimeBlockItemProps) {
+function TimeBlockItem({ block, onDelete, isDeleting, startHour, slotHeight }: TimeBlockItemProps) {
   const startTime = extractTime(block.startTime);
   const endTime = extractTime(block.endTime);
-  const top = getTopPosition(startTime, startHour);
+  const top = getTopPosition(startTime, startHour, slotHeight);
   const durationMinutes = timeToMinutes(endTime) - timeToMinutes(startTime);
-  const height = getBlockHeight(durationMinutes);
+  const height = getBlockHeight(durationMinutes, slotHeight);
 
   return (
     <div
       className="group absolute left-1 right-1 overflow-hidden rounded-lg border border-[#A63030]/30 bg-red-500/10 px-2 py-1 backdrop-blur-sm"
       style={{
         top: `${top}px`,
-        height: `${Math.max(height, SLOT_HEIGHT)}px`,
+        height: `${Math.max(height, slotHeight)}px`,
         backgroundImage:
           'repeating-linear-gradient(135deg, transparent, transparent 4px, rgba(239, 68, 68, 0.08) 4px, rgba(239, 68, 68, 0.08) 8px)',
       }}
@@ -274,9 +292,10 @@ interface CurrentTimeLineProps {
   isToday: boolean;
   startHour: number;
   endHour: number;
+  slotHeight: number;
 }
 
-function CurrentTimeLine({ isToday, startHour, endHour }: CurrentTimeLineProps) {
+function CurrentTimeLine({ isToday, startHour, endHour, slotHeight }: CurrentTimeLineProps) {
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -293,7 +312,7 @@ function CurrentTimeLine({ isToday, startHour, endHour }: CurrentTimeLineProps) 
 
   if (currentMinutes < startMinutes || currentMinutes > endMinutes) return null;
 
-  const top = ((currentMinutes - startMinutes) / 10) * SLOT_HEIGHT;
+  const top = ((currentMinutes - startMinutes) / 10) * slotHeight;
 
   return (
     <div
@@ -332,6 +351,10 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
   const { cancel, attend, noShow } = useAppointmentActions();
   const updateAppointment = useUpdateAppointment();
   const toast = useToast();
+
+  const isCompact = useIsCompact();
+  const slotHeight = isCompact ? SLOT_HEIGHT_MOBILE : SLOT_HEIGHT_DESKTOP;
+  const hourHeight = slotHeight * 6;
 
   // Horários dinâmicos baseados nas configurações
   const startHour = useMemo(() => {
@@ -372,14 +395,28 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
 
   const isToday = selectedDate === getTodayStr();
   const timeSlots = useMemo(() => generateTimeSlots(startHour, endHour), [startHour, endHour]);
-  const totalGridHeight = totalHours * HOUR_HEIGHT;
+  const totalGridHeight = totalHours * hourHeight;
 
-  // Scroll to top on mount / date change
+  // Scroll to current time (if today) or to opening hour on date change
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = 0;
+    if (!scrollRef.current) return;
+    const scrollEl = scrollRef.current;
+    let targetMinutes: number;
+    if (isToday) {
+      const now = new Date();
+      targetMinutes = now.getHours() * 60 + now.getMinutes();
+    } else if (settings?.openingTime) {
+      const [h, m] = settings.openingTime.split(':').map(Number);
+      targetMinutes = h * 60 + m;
+    } else {
+      scrollEl.scrollTop = 0;
+      return;
     }
-  }, [selectedDate]);
+    const startMinutes = startHour * 60;
+    const offsetPx = Math.max(0, ((targetMinutes - startMinutes) / 10) * slotHeight - hourHeight);
+    const maxScroll = scrollEl.scrollHeight - scrollEl.clientHeight;
+    scrollEl.scrollTop = Math.max(0, Math.min(offsetPx, maxScroll));
+  }, [selectedDate, isToday, settings?.openingTime, startHour, slotHeight, hourHeight]);
 
   const handlePrevDay = () => setSelectedDate((d) => addDays(d, -1));
   const handleNextDay = () => setSelectedDate((d) => addDays(d, 1));
@@ -456,8 +493,8 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
     if (appointment.status !== 'SCHEDULED' || dragConfirm) return;
 
     const time = extractTime(appointment.scheduledAt);
-    const top = getTopPosition(time, startHour);
-    const height = getBlockHeight(appointment.totalDuration);
+    const top = getTopPosition(time, startHour, slotHeight);
+    const height = getBlockHeight(appointment.totalDuration, slotHeight);
 
     const startClientX = e.clientX;
     dragStartY.current = e.clientY;
@@ -490,8 +527,8 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
       rafId.current = requestAnimationFrame(() => {
         // Vertical: snap to time slots
         const rawTop = dragOriginalTop.current + deltaY;
-        const snappedTop = Math.round(rawTop / SLOT_HEIGHT) * SLOT_HEIGHT;
-        const maxTop = totalHours * HOUR_HEIGHT - height;
+        const snappedTop = Math.round(rawTop / slotHeight) * slotHeight;
+        const maxTop = totalHours * hourHeight - height;
         const clampedTop = Math.max(0, Math.min(snappedTop, maxTop));
         setDragGhostTop(clampedTop);
         dragGhostTopRef.current = clampedTop;
@@ -527,7 +564,7 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
 
         if (dragAppointmentRef.current) {
           const finalTop = dragGhostTopRef.current;
-          const newMinutes = startHour * 60 + (finalTop / SLOT_HEIGHT) * 10;
+          const newMinutes = startHour * 60 + (finalTop / slotHeight) * 10;
           const newTime = minutesToTimeStr(newMinutes);
           const oldTime = extractTime(dragAppointmentRef.current.scheduledAt);
           const sourceProf = dragSourceProfessionalId.current;
@@ -725,92 +762,105 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] backdrop-blur-sm transition-colors duration-200">
-          {/* Professional headers */}
-          <div className="flex border-b border-[var(--card-border)]">
+          {/* Unified horizontal+vertical scroll container (headers + grid synced) */}
+          <div
+            ref={scrollRef}
+            className="overflow-auto overscroll-contain"
+            style={{ maxHeight: 'calc(100vh - 260px)' }}
+          >
             <div
-              className="shrink-0 border-r border-[var(--card-border)] bg-[var(--bg-primary)]"
-              style={{ width: `${TIME_LABEL_WIDTH}px` }}
-            />
-            {professionalsData.map((prof) => (
-              <div
-                key={prof.id}
-                className="flex min-w-[140px] sm:min-w-[180px] flex-1 items-center justify-center gap-2 border-r border-[var(--card-border)] bg-[var(--bg-primary)] px-3 py-3 last:border-r-0"
-              >
-                {prof.avatarUrl ? (
-                  <img src={prof.avatarUrl} alt={prof.name} className="h-7 w-7 rounded-full object-cover" />
-                ) : (
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#C8923A]/20 text-xs font-bold text-[#D4A85C]">
-                    {prof.name.charAt(0).toUpperCase()}
-                  </div>
-                )}
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-[var(--text-primary)]">
-                    {prof.name}
-                  </div>
-                  <div className="text-[10px] text-[var(--text-muted)]">
-                    {(prof.appointments || []).length} agendamento{(prof.appointments || []).length !== 1 ? 's' : ''}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Scrollable grid */}
-          <div ref={scrollRef} className="overflow-auto" style={{ maxHeight: 'calc(100vh - 320px)' }}>
-            <div className="relative flex" style={{ height: `${totalGridHeight}px` }}>
-              {/* Time labels */}
-              <div
-                className="sticky left-0 z-10 shrink-0 border-r border-[var(--card-border)] bg-[var(--card-bg)]"
-                style={{ width: `${TIME_LABEL_WIDTH}px` }}
-              >
-                {timeSlots.map((slot) => {
-                  const [, m] = slot.split(':');
-                  const isFullHour = m === '00';
-                  const isHalfHour = m === '30';
-                  if (!isFullHour && !isHalfHour) return null;
-
-                  const top = getTopPosition(slot, startHour);
-                  return (
-                    <div
-                      key={slot}
-                      className="absolute right-2 flex items-center"
-                      style={{ top: `${top - 8}px` }}
-                    >
-                      <span
-                        className={`text-xs ${
-                          isFullHour
-                            ? 'font-medium text-[var(--text-secondary)]'
-                            : 'text-[var(--text-muted)]'
-                        }`}
-                      >
-                        {slot}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Professional columns */}
-              {professionalsData.map((prof) => (
-                <ProfessionalColumn
-                  key={prof.id}
-                  professional={prof}
-                  timeSlots={timeSlots}
-                  totalGridHeight={totalGridHeight}
-                  isToday={isToday}
-                  selectedDate={selectedDate}
-                  startHour={startHour}
-                  endHour={endHour}
-                  onDeleteBlock={handleDeleteBlock}
-                  isDeletingBlock={deleteTimeBlock.isPending}
-                  onSlotClick={handleSlotClick}
-                  onAppointmentClick={handleAppointmentClick}
-                  onAppointmentDragStart={handleAppointmentDragStart}
-                  draggingAppointmentId={draggingId}
-                  dragGhostTop={dragProfessionalId === prof.id ? dragGhostTop : undefined}
-                  dragGhostHeight={dragProfessionalId === prof.id ? dragGhostHeight : undefined}
+              className="relative"
+              style={{ minWidth: `${TIME_LABEL_WIDTH + professionalsData.length * COLUMN_MIN_WIDTH}px` }}
+            >
+              {/* Sticky professional headers (top) */}
+              <div className="sticky top-0 z-40 flex border-b border-[var(--card-border)] bg-[var(--bg-primary)]">
+                {/* Top-left corner (also sticky left) */}
+                <div
+                  className="sticky left-0 z-50 shrink-0 border-r border-[var(--card-border)] bg-[var(--bg-primary)]"
+                  style={{ width: `${TIME_LABEL_WIDTH}px` }}
                 />
-              ))}
+                {professionalsData.map((prof) => (
+                  <div
+                    key={prof.id}
+                    className="flex min-w-0 flex-1 items-center justify-center gap-2 border-r border-[var(--card-border)] bg-[var(--bg-primary)] px-3 py-3 last:border-r-0"
+                    style={{ minWidth: `${COLUMN_MIN_WIDTH}px` }}
+                  >
+                    {prof.avatarUrl ? (
+                      <img src={prof.avatarUrl} alt={prof.name} className="h-7 w-7 shrink-0 rounded-full object-cover" />
+                    ) : (
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#C8923A]/20 text-xs font-bold text-[#D4A85C]">
+                        {prof.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-[var(--text-primary)]">
+                        {prof.name}
+                      </div>
+                      <div className="text-[10px] text-[var(--text-muted)]">
+                        {(prof.appointments || []).length} agendamento{(prof.appointments || []).length !== 1 ? 's' : ''}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Grid body */}
+              <div className="relative flex" style={{ height: `${totalGridHeight}px` }}>
+                {/* Time labels column (sticky left) */}
+                <div
+                  className="sticky left-0 z-20 shrink-0 border-r border-[var(--card-border)] bg-[var(--card-bg)]"
+                  style={{ width: `${TIME_LABEL_WIDTH}px` }}
+                >
+                  {timeSlots.map((slot) => {
+                    const [, m] = slot.split(':');
+                    const isFullHour = m === '00';
+                    const isHalfHour = m === '30';
+                    if (!isFullHour && !isHalfHour) return null;
+
+                    const top = getTopPosition(slot, startHour, slotHeight);
+                    return (
+                      <div
+                        key={slot}
+                        className="absolute right-2 flex items-center"
+                        style={{ top: `${top - 8}px` }}
+                      >
+                        <span
+                          className={`text-xs ${
+                            isFullHour
+                              ? 'font-medium text-[var(--text-secondary)]'
+                              : 'text-[var(--text-muted)]'
+                          }`}
+                        >
+                          {slot}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Professional columns */}
+                {professionalsData.map((prof) => (
+                  <ProfessionalColumn
+                    key={prof.id}
+                    professional={prof}
+                    timeSlots={timeSlots}
+                    totalGridHeight={totalGridHeight}
+                    isToday={isToday}
+                    selectedDate={selectedDate}
+                    startHour={startHour}
+                    endHour={endHour}
+                    slotHeight={slotHeight}
+                    onDeleteBlock={handleDeleteBlock}
+                    isDeletingBlock={deleteTimeBlock.isPending}
+                    onSlotClick={handleSlotClick}
+                    onAppointmentClick={handleAppointmentClick}
+                    onAppointmentDragStart={handleAppointmentDragStart}
+                    draggingAppointmentId={draggingId}
+                    dragGhostTop={dragProfessionalId === prof.id ? dragGhostTop : undefined}
+                    dragGhostHeight={dragProfessionalId === prof.id ? dragGhostHeight : undefined}
+                  />
+                ))}
+              </div>
             </div>
           </div>
 
@@ -956,6 +1006,7 @@ interface ProfessionalColumnProps {
   selectedDate: string;
   startHour: number;
   endHour: number;
+  slotHeight: number;
   onDeleteBlock: (id: string) => void;
   isDeletingBlock: boolean;
   onSlotClick: (professionalId: string, time: string) => void;
@@ -974,6 +1025,7 @@ function ProfessionalColumn({
   selectedDate,
   startHour,
   endHour,
+  slotHeight,
   onDeleteBlock,
   isDeletingBlock,
   onSlotClick,
@@ -984,19 +1036,23 @@ function ProfessionalColumn({
   dragGhostHeight,
 }: ProfessionalColumnProps) {
   return (
-    <div data-professional-id={professional.id} className="relative min-w-[140px] sm:min-w-[180px] flex-1 border-r border-[var(--card-border)] last:border-r-0">
+    <div
+      data-professional-id={professional.id}
+      className="relative min-w-0 flex-1 border-r border-[var(--card-border)] last:border-r-0"
+      style={{ minWidth: `${COLUMN_MIN_WIDTH}px` }}
+    >
       {/* Grid lines and clickable slots */}
       {timeSlots.map((slot) => {
         const [, m] = slot.split(':');
         const isFullHour = m === '00';
         const isHalfHour = m === '30';
-        const top = getTopPosition(slot, startHour);
+        const top = getTopPosition(slot, startHour, slotHeight);
 
         return (
           <div
             key={slot}
             className="absolute left-0 right-0 cursor-pointer transition-colors hover:bg-[var(--hover-bg)]"
-            style={{ top: `${top}px`, height: `${SLOT_HEIGHT}px` }}
+            style={{ top: `${top}px`, height: `${slotHeight}px` }}
             onClick={() => onSlotClick(professional.id, slot)}
           >
             {isFullHour && (
@@ -1015,6 +1071,7 @@ function ProfessionalColumn({
         selectedDate={selectedDate}
         totalGridHeight={totalGridHeight}
         startHour={startHour}
+        slotHeight={slotHeight}
       />
 
       {/* Appointments */}
@@ -1026,6 +1083,7 @@ function ProfessionalColumn({
           onDragStart={onAppointmentDragStart ? (e, a) => onAppointmentDragStart(e, a, professional.id) : undefined}
           isDragging={draggingAppointmentId === apt.id}
           startHour={startHour}
+          slotHeight={slotHeight}
         />
       ))}
 
@@ -1037,21 +1095,22 @@ function ProfessionalColumn({
           onDelete={onDeleteBlock}
           isDeleting={isDeletingBlock}
           startHour={startHour}
+          slotHeight={slotHeight}
         />
       ))}
 
       {/* Current time line */}
-      <CurrentTimeLine isToday={isToday} startHour={startHour} endHour={endHour} />
+      <CurrentTimeLine isToday={isToday} startHour={startHour} endHour={endHour} slotHeight={slotHeight} />
 
       {/* Drag ghost */}
       {draggingAppointmentId && dragGhostTop !== undefined && dragGhostHeight !== undefined && (
         <div
           className="pointer-events-none absolute left-1 right-1 z-30 rounded-lg border-2 border-dashed border-[#C8923A] bg-[#C8923A]/10 px-2 py-1"
-          style={{ top: `${dragGhostTop}px`, height: `${Math.max(dragGhostHeight, SLOT_HEIGHT)}px` }}
+          style={{ top: `${dragGhostTop}px`, height: `${Math.max(dragGhostHeight, slotHeight)}px` }}
         >
           <div className="flex h-full items-center gap-1 text-xs font-semibold text-[#C8923A]">
             <Clock className="h-3 w-3" />
-            {minutesToTimeStr(startHour * 60 + (dragGhostTop / SLOT_HEIGHT) * 10)}
+            {minutesToTimeStr(startHour * 60 + (dragGhostTop / slotHeight) * 10)}
           </div>
         </div>
       )}
@@ -1069,9 +1128,10 @@ interface WorkingHoursOverlayProps {
   selectedDate: string;
   totalGridHeight: number;
   startHour: number;
+  slotHeight: number;
 }
 
-function WorkingHoursOverlay({ workingHours, selectedDate, totalGridHeight, startHour }: WorkingHoursOverlayProps) {
+function WorkingHoursOverlay({ workingHours, selectedDate, totalGridHeight, startHour, slotHeight }: WorkingHoursOverlayProps) {
   // Get day of week for the selected date (0 = Sunday)
   const [y, m, d] = selectedDate.split('-').map(Number);
   const dayOfWeek = new Date(y, m - 1, d).getDay();
@@ -1098,8 +1158,8 @@ function WorkingHoursOverlay({ workingHours, selectedDate, totalGridHeight, star
     );
   }
 
-  const workStart = getTopPosition(startTime, startHour);
-  const workEnd = getTopPosition(endTime, startHour);
+  const workStart = getTopPosition(startTime, startHour, slotHeight);
+  const workEnd = getTopPosition(endTime, startHour, slotHeight);
 
   return (
     <>
