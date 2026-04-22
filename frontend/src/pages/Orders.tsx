@@ -101,7 +101,7 @@ export function Orders() {
   const { data: activePromotions } = useActivePromotions();
   // Quando há cliente selecionado (na criação) ou na comanda em visualização,
   // buscamos a assinatura ativa dele para aplicar o desconto do plano.
-  const activeClientId = viewingOrder?.clientId || createClientId || undefined;
+  const activeClientId = viewingOrder?.client?.id || createClientId || undefined;
   const { data: clientSub } = useClientSubscription(activeClientId);
   const planDiscount = clientSub && clientSub.status === 'ACTIVE' ? clientSub.plan?.discountPercent ?? 0 : 0;
   const planLabel = clientSub?.plan?.name ? `Plano ${clientSub.plan.name}` : 'Assinatura';
