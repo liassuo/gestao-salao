@@ -36,3 +36,13 @@ export interface CreateTimeBlockPayload {
   endTime: string;
   reason?: string;
 }
+
+export interface CreateTimeBlockRangePayload {
+  professionalId: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string;   // YYYY-MM-DD
+  startTime?: string; // HH:MM
+  endTime?: string;   // HH:MM
+  allDay?: boolean;
+  reason?: string;
+}

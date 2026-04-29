@@ -20,6 +20,7 @@ import {
   CreateAppointmentDto,
   CreateClientAppointmentDto,
   CreateTimeBlockDto,
+  CreateTimeBlockRangeDto,
   UpdateAppointmentDto,
   QueryAppointmentDto,
   MarkAsAttendedDto,
@@ -85,6 +86,18 @@ export class AppointmentsController {
   @HttpCode(HttpStatus.CREATED)
   async createTimeBlock(@Body() dto: CreateTimeBlockDto) {
     return this.appointmentsService.createTimeBlock(dto);
+  }
+
+  /**
+   * POST /appointments/block/range
+   * Cria N bloqueios em um intervalo de datas (um por dia).
+   * Use para "bloquear barbeiro do dia 23 ao dia 27" ou "intervalo recorrente
+   * de almoço por uma semana".
+   */
+  @Post('block/range')
+  @HttpCode(HttpStatus.CREATED)
+  async createTimeBlockRange(@Body() dto: CreateTimeBlockRangeDto) {
+    return this.appointmentsService.createTimeBlockRange(dto);
   }
 
   /**

@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Clock, Lock, Trash2, AlertCircle, Loader2, User, CalendarPlus, Smartphone, Monitor, CalendarDays } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, Lock, Coffee, Trash2, AlertCircle, Loader2, User, CalendarPlus, Smartphone, Monitor, CalendarDays } from 'lucide-react';
 import { useCalendarData, useDeleteTimeBlock, useAppointmentActions, useUpdateAppointment, useSettings } from '@/hooks';
 import { useToast, ConfirmModal } from '@/components/ui';
 import { BlockTimeModal } from './BlockTimeModal';
@@ -335,6 +335,7 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
   const [selectedDate, setSelectedDate] = useState(getTodayStr);
   const dateInputRef = useRef<HTMLInputElement>(null);
   const [blockModalOpen, setBlockModalOpen] = useState(false);
+  const [blockModalMode, setBlockModalMode] = useState<'BLOCK' | 'BREAK'>('BLOCK');
   const [blockModalProfessionalId, setBlockModalProfessionalId] = useState<string | null>(null);
   const [blockModalDefaultTime, setBlockModalDefaultTime] = useState<string | null>(null);
   const [slotChoice, setSlotChoice] = useState<{ professionalId: string; time: string } | null>(null);
@@ -637,6 +638,16 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
 
   const handleSlotChoiceBlock = () => {
     if (!slotChoice) return;
+    setBlockModalMode('BLOCK');
+    setBlockModalProfessionalId(slotChoice.professionalId);
+    setBlockModalDefaultTime(slotChoice.time);
+    setSlotChoice(null);
+    setBlockModalOpen(true);
+  };
+
+  const handleSlotChoiceBreak = () => {
+    if (!slotChoice) return;
+    setBlockModalMode('BREAK');
     setBlockModalProfessionalId(slotChoice.professionalId);
     setBlockModalDefaultTime(slotChoice.time);
     setSlotChoice(null);
@@ -653,6 +664,14 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
   };
 
   const handleOpenBlockModal = () => {
+    setBlockModalMode('BLOCK');
+    setBlockModalProfessionalId(null);
+    setBlockModalDefaultTime(null);
+    setBlockModalOpen(true);
+  };
+
+  const handleOpenBreakModal = () => {
+    setBlockModalMode('BREAK');
     setBlockModalProfessionalId(null);
     setBlockModalDefaultTime(null);
     setBlockModalOpen(true);
@@ -742,13 +761,22 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
           </h2>
         </div>
 
-        <button
-          onClick={handleOpenBlockModal}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#A63030]/30 px-3 py-2 text-sm font-medium text-[#C45050] transition-colors hover:bg-red-500/10 sm:w-auto sm:py-1.5"
-        >
-          <Lock className="h-4 w-4" />
-          Bloquear Horário
-        </button>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          <button
+            onClick={handleOpenBreakModal}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#C8923A]/30 px-3 py-2 text-sm font-medium text-[#C8923A] transition-colors hover:bg-amber-500/10 sm:w-auto sm:py-1.5"
+          >
+            <Coffee className="h-4 w-4" />
+            Intervalo
+          </button>
+          <button
+            onClick={handleOpenBlockModal}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#A63030]/30 px-3 py-2 text-sm font-medium text-[#C45050] transition-colors hover:bg-red-500/10 sm:w-auto sm:py-1.5"
+          >
+            <Lock className="h-4 w-4" />
+            Bloquear Horário
+          </button>
+        </div>
       </div>
 
       {/* Calendar grid */}
@@ -932,6 +960,18 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
                 </div>
               </button>
               <button
+                onClick={handleSlotChoiceBreak}
+                className="flex items-center gap-3 rounded-xl border border-[#C8923A]/20 bg-[#C8923A]/5 px-4 py-3 text-left transition-colors hover:bg-[#C8923A]/15"
+              >
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#C8923A]/20">
+                  <Coffee className="h-4 w-4 text-[#C8923A]" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-[var(--text-primary)]">Adicionar Intervalo</p>
+                  <p className="text-xs text-[var(--text-muted)]">Pausa curta — almoço, café</p>
+                </div>
+              </button>
+              <button
                 onClick={handleSlotChoiceBlock}
                 className="flex items-center gap-3 rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-4 py-3 text-left transition-colors hover:bg-[var(--card-border)]"
               >
@@ -940,7 +980,7 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-[var(--text-primary)]">Bloquear Horário</p>
-                  <p className="text-xs text-[var(--text-muted)]">Marcar como indisponível</p>
+                  <p className="text-xs text-[var(--text-muted)]">Indisponível — folga, férias, atestado</p>
                 </div>
               </button>
             </div>
@@ -956,6 +996,7 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
         defaultProfessionalId={blockModalProfessionalId}
         defaultTime={blockModalDefaultTime}
         selectedDate={selectedDate}
+        mode={blockModalMode}
       />
 
       {/* Appointment detail modal */}

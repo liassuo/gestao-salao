@@ -8,7 +8,12 @@ import {
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
-import { CreateAppointmentDto, CreateTimeBlockDto, UpdateAppointmentDto } from './dto';
+import {
+  CreateAppointmentDto,
+  CreateTimeBlockDto,
+  CreateTimeBlockRangeDto,
+  UpdateAppointmentDto,
+} from './dto';
 import { AsaasService } from '../asaas/asaas.service';
 import {
   AsaasBillingType,
@@ -16,7 +21,8 @@ import {
   parseAsaasBillingType,
 } from '../asaas/asaas.types';
 import {
-  getClientPlanDiscount,
+  getActiveClientPlan,
+  getPlanDiscountForService,
   getActivePromotions,
   getPromoDiscountForService,
   effectiveDiscountPercent,
@@ -41,6 +47,23 @@ export class AppointmentsService {
   `;
 
   async create(dto: CreateAppointmentDto) {
+    // 0. Limitar janela de agendamento para clientes (máx 7 dias a partir de hoje).
+    // Admin pode agendar em qualquer data futura.
+    if (dto.source === 'CLIENT') {
+      const CLIENT_BOOKING_WINDOW_DAYS = 7;
+      const scheduled = new Date(dto.scheduledAt);
+      const now = new Date();
+      const maxDate = new Date(now);
+      maxDate.setDate(maxDate.getDate() + CLIENT_BOOKING_WINDOW_DAYS);
+      maxDate.setHours(23, 59, 59, 999);
+
+      if (scheduled > maxDate) {
+        throw new BadRequestException(
+          `Você só pode agendar até ${CLIENT_BOOKING_WINDOW_DAYS} dias a partir de hoje. Escolha uma data mais próxima.`,
+        );
+      }
+    }
+
     // 1. Buscar os serviços e calcular duração total (precisa antes da validação de conflito)
     const { data: services, error: svcError } = await this.supabase
       .from('services')
@@ -52,17 +75,18 @@ export class AppointmentsService {
       throw new BadRequestException('Um ou mais serviços não encontrados ou inativos');
     }
 
-    // 2.1 Buscar promoções ativas + desconto da assinatura do cliente.
+    // 2.1 Buscar promoções ativas + plano ativo do cliente (com descontos por serviço).
     // Quando houver promoção no serviço E desconto da assinatura, prevalece o MAIOR.
     // Quando o cliente usar crédito do plano (useSubscriptionCut), o serviço fica com preço 0.
     const activePromos = await getActivePromotions(this.supabase);
-    const planDiscount = await getClientPlanDiscount(this.supabase, dto.clientId);
+    const activePlan = await getActiveClientPlan(this.supabase, dto.clientId);
     const useCut = !!dto.useSubscriptionCut;
 
     const getUnitPrice = (svc: { id: string; price: number }): number => {
       if (useCut) return 0;
       const promoPercent = getPromoDiscountForService(activePromos, svc.id);
-      const percent = effectiveDiscountPercent(promoPercent, planDiscount);
+      const planPercent = getPlanDiscountForService(activePlan, svc.id);
+      const percent = effectiveDiscountPercent(promoPercent, planPercent);
       return applyDiscount(svc.price, percent);
     };
 
@@ -738,6 +762,31 @@ export class AppointmentsService {
     const [sy, sm, sd] = datePart.split('-').map(Number);
     const dayOfWeek = new Date(sy, sm - 1, sd).getDay();
 
+    // 1.5 Verificar férias do profissional na data alvo (sem timezone — DATE puro)
+    try {
+      const { data: vacation } = await this.supabase
+        .from('professional_vacations')
+        .select('startDate, endDate')
+        .eq('professionalId', professionalId)
+        .lte('startDate', datePart)
+        .gte('endDate', datePart)
+        .limit(1)
+        .maybeSingle();
+
+      if (vacation) {
+        const startStr = String(vacation.startDate).substring(0, 10);
+        const endStr = String(vacation.endDate).substring(0, 10);
+        const [, sm2, sd2] = startStr.split('-');
+        const [, em, ed] = endStr.split('-');
+        throw new BadRequestException(
+          `Profissional está de férias de ${sd2}/${sm2} até ${ed}/${em}. Escolha outra data ou profissional.`,
+        );
+      }
+    } catch (e) {
+      if (e instanceof BadRequestException) throw e;
+      // Tabela ausente: ignora silenciosamente
+    }
+
     // 2. Verificar expediente
     if (professional.workingHours && Array.isArray(professional.workingHours) && professional.workingHours.length > 0) {
       const daySchedule = (professional.workingHours as any[]).find(
@@ -1180,6 +1229,69 @@ export class AppointmentsService {
     return block;
   }
 
+  /**
+   * Cria N time_blocks ao longo de um intervalo de datas (uma linha por dia).
+   * O conflict-check de agendamento já varre por dia, então cada dia precisa
+   * do seu próprio registro com a mesma faixa de horário.
+   */
+  async createTimeBlockRange(dto: CreateTimeBlockRangeDto) {
+    CreateTimeBlockRangeDto.validate(dto);
+
+    const { data: professional, error: profError } = await this.supabase
+      .from('professionals')
+      .select('id')
+      .eq('id', dto.professionalId)
+      .single();
+
+    if (profError || !professional) {
+      throw new NotFoundException('Profissional não encontrado');
+    }
+
+    const startDate = new Date(`${dto.startDate}T00:00:00`);
+    const endDate = new Date(`${dto.endDate}T00:00:00`);
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+      throw new BadRequestException('Datas inválidas');
+    }
+
+    const dayMs = 24 * 60 * 60 * 1000;
+    const totalDays = Math.round((endDate.getTime() - startDate.getTime()) / dayMs) + 1;
+    if (totalDays > 92) {
+      throw new BadRequestException('Intervalo muito grande (máximo de 92 dias por requisição)');
+    }
+
+    const startHHMM = dto.allDay ? '00:00' : (dto.startTime as string);
+    const endHHMM = dto.allDay ? '23:59' : (dto.endTime as string);
+
+    const now = new Date().toISOString();
+    const rows: any[] = [];
+    for (let i = 0; i < totalDays; i++) {
+      const day = new Date(startDate.getTime() + i * dayMs);
+      const yyyy = day.getFullYear();
+      const mm = String(day.getMonth() + 1).padStart(2, '0');
+      const dd = String(day.getDate()).padStart(2, '0');
+      const dayStr = `${yyyy}-${mm}-${dd}`;
+      rows.push({
+        id: randomUUID(),
+        professionalId: dto.professionalId,
+        startTime: `${dayStr}T${startHHMM}:00`,
+        endTime: `${dayStr}T${endHHMM}:00`,
+        reason: dto.reason ?? null,
+        createdAt: now,
+      });
+    }
+
+    const { data: blocks, error } = await this.supabase
+      .from('time_blocks')
+      .insert(rows)
+      .select('*');
+
+    if (error) throw error;
+    this.logger.log(
+      `Criados ${rows.length} bloqueios para profissional ${dto.professionalId} (${dto.startDate} → ${dto.endDate})`,
+    );
+    return blocks ?? [];
+  }
+
   async deleteTimeBlock(id: string) {
     const { data: block, error: findError } = await this.supabase
       .from('time_blocks')
@@ -1213,6 +1325,22 @@ export class AppointmentsService {
 
     if (!professional) {
       throw new NotFoundException('Profissional não encontrado');
+    }
+
+    // Se o profissional está de férias na data, não há slots — front mostra
+    // o aviso de férias no lugar dos horários.
+    try {
+      const { data: vacation } = await this.supabase
+        .from('professional_vacations')
+        .select('id')
+        .eq('professionalId', professionalId)
+        .lte('startDate', date)
+        .gte('endDate', date)
+        .limit(1)
+        .maybeSingle();
+      if (vacation) return [];
+    } catch {
+      // Tabela ausente: ignora
     }
 
     // Determinar horário de trabalho do profissional

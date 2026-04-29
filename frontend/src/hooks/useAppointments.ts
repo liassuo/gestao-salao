@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { appointmentsService } from '@/services';
-import type { AppointmentFilters, CreateTimeBlockPayload } from '@/types';
+import type { AppointmentFilters, CreateTimeBlockPayload, CreateTimeBlockRangePayload } from '@/types';
 
 const QUERY_KEY = 'appointments';
 
@@ -69,6 +69,17 @@ export function useCreateTimeBlock() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: CreateTimeBlockPayload) => appointmentsService.createTimeBlock(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['appointments-calendar'] });
+    },
+  });
+}
+
+export function useCreateTimeBlockRange() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: CreateTimeBlockRangePayload) =>
+      appointmentsService.createTimeBlockRange(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appointments-calendar'] });
     },

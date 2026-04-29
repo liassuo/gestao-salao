@@ -1,5 +1,5 @@
 import { api } from './api';
-import type { Appointment, AppointmentFilters, CreateAppointmentPayload, CalendarProfessional, CalendarTimeBlock, CreateTimeBlockPayload } from '@/types';
+import type { Appointment, AppointmentFilters, CreateAppointmentPayload, CalendarProfessional, CalendarTimeBlock, CreateTimeBlockPayload, CreateTimeBlockRangePayload } from '@/types';
 
 export const appointmentsService = {
   async create(payload: CreateAppointmentPayload): Promise<Appointment> {
@@ -49,6 +49,11 @@ export const appointmentsService = {
 
   async createTimeBlock(payload: CreateTimeBlockPayload): Promise<CalendarTimeBlock> {
     const response = await api.post<CalendarTimeBlock>('/appointments/block', payload);
+    return response.data;
+  },
+
+  async createTimeBlockRange(payload: CreateTimeBlockRangePayload): Promise<CalendarTimeBlock[]> {
+    const response = await api.post<CalendarTimeBlock[]>('/appointments/block/range', payload);
     return response.data;
   },
 
