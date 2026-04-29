@@ -137,6 +137,12 @@ export const menuItems: MenuItem[] = [
     path: '/financeiro/dpote',
     roles: ['ADMIN'],
   },
+  {
+    icon: Wallet,
+    label: 'Débitos Profissionais',
+    path: '/financeiro/debitos-profissionais',
+    roles: ['ADMIN'],
+  },
   // Cadastros group
   {
     icon: Building2,

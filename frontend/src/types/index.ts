@@ -14,3 +14,4 @@ export * from './order';
 export * from './calendar';
 export * from './asaas';
 export * from './promotion';
+export * from './professionalDebt';

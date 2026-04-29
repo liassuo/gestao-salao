@@ -1,4 +1,4 @@
-export { useAppointments, useAppointmentActions, useCalendarData, useCreateTimeBlock, useDeleteTimeBlock, useUpdateAppointment } from './useAppointments';
+export { useAppointments, useAppointmentActions, useCalendarData, useCreateTimeBlock, useCreateTimeBlockRange, useDeleteTimeBlock, useUpdateAppointment } from './useAppointments';
 export { useCashRegisters } from './useCashRegisters';
 export { useCashRegisterSummary } from './useCashRegisterSummary';
 export { useCashRegisterToday, useCashRegisterOpen, CASH_REGISTER_QUERY_KEY } from './useCashRegisterToday';
@@ -28,6 +28,7 @@ export {
   useResetCuts,
   useRemainingCuts,
   useReopenSubscriptionPix,
+  useRegenerateSubscriptionPix,
   useConfirmSubscriptionPayment,
   useDeleteSubscription,
   SUBSCRIPTION_PLANS_KEY,
@@ -41,3 +42,11 @@ export { useStockMovements, useCreateStockMovement } from './useStock';
 export { useOrders, useOrder, useOrderByAppointment, useCreateOrder, useAddOrderItem, useRemoveOrderItem, usePayOrder, useCancelOrder, useDeleteOrder } from './useOrders';
 export { usePromotions, usePromotion, useActivePromotions, usePromotionTemplates, useCreatePromotion, useUpdatePromotion, useDeletePromotion, useClonePromotion, useUploadBanner } from './usePromotions';
 export { useSettings } from './useSettings';
+export {
+  useProfessionalDebts,
+  usePendingProfessionalDebts,
+  useProfessionalDebtSummary,
+  useCreateProfessionalDebt,
+  useSettleProfessionalDebtCash,
+  useDeleteProfessionalDebt,
+} from './useProfessionalDebts';

@@ -20,6 +20,7 @@ import { ReportsModule } from './reports/reports.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { BranchesModule } from './branches/branches.module';
 import { CommissionsModule } from './commissions/commissions.module';
+import { ProfessionalDebtsModule } from './professional-debts/professional-debts.module';
 import { PaymentMethodConfigModule } from './payment-method-config/payment-method-config.module';
 import { ProductsModule } from './products/products.module';
 import { StockModule } from './stock/stock.module';
@@ -73,6 +74,7 @@ import { MailModule } from './mail/mail.module';
     SubscriptionsModule,
     BranchesModule,
     CommissionsModule,
+    ProfessionalDebtsModule,
     PaymentMethodConfigModule,
     ProductsModule,
     StockModule,

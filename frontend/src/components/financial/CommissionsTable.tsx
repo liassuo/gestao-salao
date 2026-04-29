@@ -51,6 +51,9 @@ export function CommissionsTable({ commissions, onMarkAsPaid, onDelete, isLoadin
                 Produtos
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                Débito
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Total Líquido
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
@@ -81,8 +84,13 @@ export function CommissionsTable({ commissions, onMarkAsPaid, onDelete, isLoadin
                 <td className="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-muted)]">
                   {formatCurrency(commission.amountProducts ?? 0)}
                 </td>
+                <td className="whitespace-nowrap px-4 py-3 text-sm text-red-400">
+                  {(commission.amountDeductedDebts ?? 0) > 0
+                    ? `− ${formatCurrency(commission.amountDeductedDebts ?? 0)}`
+                    : '—'}
+                </td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-[var(--text-primary)]">
-                  {formatCurrency(commission.amount)}
+                  {formatCurrency(Math.max(0, commission.amount - (commission.amountDeductedDebts ?? 0)))}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3">
                   <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${commissionStatusColors[commission.status]}`}>

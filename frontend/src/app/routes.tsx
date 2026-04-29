@@ -29,6 +29,7 @@ import {
   ResetPassword,
   Notifications,
   DPote,
+  ProfessionalDebts,
 } from '@/pages';
 import { getRolesForPath } from '@/config/permissions';
 import {
@@ -161,6 +162,13 @@ export const router = createBrowserRouter([
       {
         path: 'financeiro/dpote',
         element: withRoleProtection('/financeiro/dpote', <DPote />),
+      },
+      {
+        path: 'financeiro/debitos-profissionais',
+        element: withRoleProtection(
+          '/financeiro/debitos-profissionais',
+          <ProfessionalDebts />,
+        ),
       },
       {
         path: 'financeiro/filiais',

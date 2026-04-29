@@ -29,6 +29,12 @@ export class Commission {
   amountProducts: number;
 
   /**
+   * Valor deduzido de débitos pendentes do profissional, em centavos.
+   * Comissão líquida = amount - amountDeductedDebts (nunca negativa).
+   */
+  amountDeductedDebts: number;
+
+  /**
    * Start of the commission period
    */
   periodStart: Date;

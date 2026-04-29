@@ -73,10 +73,11 @@ export type CommissionStatus = 'PENDING' | 'PAID';
 
 export interface Commission {
   id: string;
-  amount: number; // centavos (total)
+  amount: number; // centavos (total bruto antes de dedução)
   amountServices?: number; // centavos - serviços avulsos
   amountSubscription?: number; // centavos - serviços por assinatura
   amountProducts?: number; // centavos - produtos
+  amountDeductedDebts?: number; // centavos - deduzido de débitos pendentes do profissional
   periodStart: string;
   periodEnd: string;
   status: CommissionStatus;

@@ -5,11 +5,15 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
+import { ProfessionalDebtsService } from '../professional-debts/professional-debts.service';
 import { GenerateCommissionDto, QueryCommissionDto } from './dto';
 
 @Injectable()
 export class CommissionsService {
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(
+    private readonly supabase: SupabaseService,
+    private readonly professionalDebtsService: ProfessionalDebtsService,
+  ) {}
 
   async generate(dto: GenerateCommissionDto) {
     if (dto.periodStart >= dto.periodEnd) {
@@ -147,6 +151,7 @@ export class CommissionsService {
           amountServices,
           amountSubscription,
           amountProducts,
+          amountDeductedDebts: 0,
           periodStart: startStr,
           periodEnd: endStr,
           status: 'PENDING',
@@ -158,7 +163,30 @@ export class CommissionsService {
         .select('*, professional:professionals(id, name, commissionRate)')
         .single();
 
-      if (!error) createdCommissions.push(commission);
+      if (error || !commission) continue;
+
+      // Aplica dedução de débitos pendentes do profissional.
+      // Comissão nunca fica negativa: o que não couber permanece em
+      // professional_debts como PENDING e é deduzido na próxima geração.
+      try {
+        const deducted = await this.professionalDebtsService.applyDeductionToCommission({
+          professionalId,
+          commissionId: commission.id,
+          commissionAmount: amount,
+        });
+
+        if (deducted > 0) {
+          await this.supabase
+            .from('commissions')
+            .update({ amountDeductedDebts: deducted, updatedAt: comNow })
+            .eq('id', commission.id);
+          commission.amountDeductedDebts = deducted;
+        }
+      } catch {
+        // Falha na dedução não invalida a comissão; o débito segue PENDING.
+      }
+
+      createdCommissions.push(commission);
     }
 
     if (createdCommissions.length === 0) {
