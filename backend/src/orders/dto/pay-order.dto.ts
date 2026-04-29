@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsIn, IsDateString } from 'class-validator';
+import { IsOptional, IsString, IsIn, IsDateString, IsBoolean } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class PayOrderDto {
@@ -27,4 +27,21 @@ export class PayOrderDto {
   @IsOptional()
   @IsDateString()
   dueDate?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Se true, lança a comanda como débito do profissional consumidor (não entra no caixa). ' +
+      'Requer que a comanda tenha consumerType=PROFESSIONAL ou consumerProfessionalId informado aqui.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  asProfessionalDebt?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Profissional consumidor (sobrescreve consumerProfessionalId da comanda). Usado com asProfessionalDebt=true.',
+  })
+  @IsOptional()
+  @IsString()
+  consumerProfessionalId?: string;
 }

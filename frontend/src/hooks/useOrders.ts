@@ -67,10 +67,21 @@ export function usePayOrder() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, ...data }: { id: string; paymentMethod?: string; billingType?: string; dueDate?: string }) => 
-      ordersService.pay(id, data),
+    mutationFn: ({
+      id,
+      ...data
+    }: {
+      id: string;
+      paymentMethod?: string;
+      billingType?: string;
+      dueDate?: string;
+      asProfessionalDebt?: boolean;
+      consumerProfessionalId?: string;
+    }) => ordersService.pay(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ORDERS_KEY });
+      queryClient.invalidateQueries({ queryKey: ['professional-debts'] });
+      queryClient.invalidateQueries({ queryKey: ['stock'] });
     },
   });
 }
@@ -82,6 +93,8 @@ export function useCancelOrder() {
     mutationFn: (id: string) => ordersService.cancel(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ORDERS_KEY });
+      queryClient.invalidateQueries({ queryKey: ['professional-debts'] });
+      queryClient.invalidateQueries({ queryKey: ['stock'] });
     },
   });
 }

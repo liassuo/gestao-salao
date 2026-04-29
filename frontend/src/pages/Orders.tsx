@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ClipboardList, Plus, AlertCircle, Eye, Trash2, CreditCard, XCircle, ShoppingCart, X, Package, Scissors, Banknote, Smartphone, CircleDollarSign, Tag, Minus } from 'lucide-react';
-import { useOrders, useCreateOrder, usePayOrder, useCancelOrder, useDeleteOrder, useAddOrderItem, useRemoveOrderItem, useClients, useProducts, useServices, useActivePromotions, useClientSubscription, getApiErrorMessage } from '@/hooks';
+import { useOrders, useCreateOrder, usePayOrder, useCancelOrder, useDeleteOrder, useAddOrderItem, useRemoveOrderItem, useClients, useProducts, useServices, useActivePromotions, useClientSubscription, useProfessionals, getApiErrorMessage } from '@/hooks';
 import { ordersService } from '@/services/orders';
 import { Modal, ConfirmModal, useToast } from '@/components/ui';
 import type { Order, OrderStatus, CreateOrderPayload, AddOrderItemPayload, OrderItemType, Promotion } from '@/types';
@@ -81,6 +81,8 @@ export function Orders() {
   const [payingOrderId, setPayingOrderId] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
   const [statusFilter, setStatusFilter] = useState<OrderStatus | ''>('');
+  const [payAsDebt, setPayAsDebt] = useState(false);
+  const [debtProfessionalId, setDebtProfessionalId] = useState<string>('');
 
   // Create form state
   const [createClientId, setCreateClientId] = useState('');
@@ -99,6 +101,7 @@ export function Orders() {
   const { data: products } = useProducts();
   const { data: services } = useServices();
   const { data: activePromotions } = useActivePromotions();
+  const { data: professionals } = useProfessionals();
   // Quando há cliente selecionado (na criação) ou na comanda em visualização,
   // buscamos a assinatura ativa dele para aplicar o desconto do plano.
   const activeClientId = viewingOrder?.client?.id || createClientId || undefined;
@@ -173,6 +176,8 @@ export function Orders() {
 
   const openPayModal = (id: string) => {
     setPaymentMethod('CASH');
+    setPayAsDebt(false);
+    setDebtProfessionalId('');
     setPayingOrderId(id);
   };
 
@@ -181,13 +186,34 @@ export function Orders() {
   const handleConfirmPay = async () => {
     if (!payingOrderId) return;
     try {
+      if (payAsDebt) {
+        if (!debtProfessionalId) {
+          toast.error('Selecione o profissional', 'Informe quem está consumindo a comanda.');
+          return;
+        }
+        await payOrder.mutateAsync({
+          id: payingOrderId,
+          asProfessionalDebt: true,
+          consumerProfessionalId: debtProfessionalId,
+        });
+        toast.success(
+          'Comanda lançada como débito',
+          'Será descontada da próxima comissão deste profissional.',
+        );
+        setPayingOrderId(null);
+        setViewingOrder(null);
+        setPayAsDebt(false);
+        setDebtProfessionalId('');
+        return;
+      }
+
       const data: { paymentMethod?: PaymentMethod; billingType?: string } = { paymentMethod };
       if (useAsaas && (paymentMethod === 'PIX' || paymentMethod === 'CARD')) {
         data.billingType = paymentMethod === 'PIX' ? 'PIX' : 'CREDIT_CARD';
       }
 
       const res = (await payOrder.mutateAsync({ id: payingOrderId, ...data })) as any;
-      
+
       if (res.asaasCharge?.invoiceUrl) {
         window.location.href = res.asaasCharge.invoiceUrl;
         toast.success('Cobrança Asaas gerada. Redirecionando para pagamento.');
@@ -701,6 +727,71 @@ export function Orders() {
       {/* Payment Method Modal */}
       <Modal isOpen={!!payingOrderId} onClose={() => setPayingOrderId(null)} title="Forma de Pagamento" size="sm">
         <div className="space-y-4">
+          {/* Toggle: pagamento normal vs débito do profissional */}
+          <div className="flex gap-2 rounded-lg bg-[var(--hover-bg)] p-1">
+            <button
+              onClick={() => setPayAsDebt(false)}
+              className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                !payAsDebt
+                  ? 'bg-[var(--bg-primary)] text-[var(--text-primary)] shadow'
+                  : 'text-[var(--text-muted)]'
+              }`}
+            >
+              Cliente paga
+            </button>
+            <button
+              onClick={() => setPayAsDebt(true)}
+              className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                payAsDebt
+                  ? 'bg-[var(--bg-primary)] text-[var(--text-primary)] shadow'
+                  : 'text-[var(--text-muted)]'
+              }`}
+            >
+              Débito do profissional
+            </button>
+          </div>
+
+          {payAsDebt ? (
+            <div className="space-y-3">
+              <p className="text-sm text-[var(--text-muted)]">
+                A comanda será lançada como débito do profissional consumidor — não entra no caixa
+                e o valor será descontado automaticamente da próxima comissão dele.
+              </p>
+              <div>
+                <label className="mb-1 block text-xs text-[var(--text-muted)]">
+                  Profissional consumidor *
+                </label>
+                <select
+                  value={debtProfessionalId}
+                  onChange={(e) => setDebtProfessionalId(e.target.value)}
+                  className="w-full rounded-lg border border-[var(--card-border)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)]"
+                >
+                  <option value="">Selecione</option>
+                  {(professionals || []).map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  onClick={() => setPayingOrderId(null)}
+                  className="rounded-xl border border-[var(--card-border)] px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleConfirmPay}
+                  disabled={payOrder.isPending || !debtProfessionalId}
+                  className="flex items-center gap-2 rounded-xl bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50"
+                >
+                  {payOrder.isPending ? 'Lançando...' : 'Lançar como débito'}
+                </button>
+              </div>
+            </div>
+          ) : (
+          <>
           <p className="text-sm text-[var(--text-muted)]">Selecione a forma de pagamento para registrar no caixa:</p>
           <div className="grid grid-cols-3 gap-3">
             <button
@@ -748,6 +839,8 @@ export function Orders() {
               <CreditCard className="h-4 w-4" /> {payOrder.isPending ? 'Processando...' : 'Confirmar Pagamento'}
             </button>
           </div>
+          </>
+          )}
         </div>
       </Modal>
 

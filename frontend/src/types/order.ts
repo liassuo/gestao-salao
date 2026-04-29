@@ -4,6 +4,8 @@ export interface Order {
   totalAmount: number;
   notes?: string | null;
   appointmentId?: string | null;
+  consumerType?: OrderConsumerType;
+  consumerProfessionalId?: string | null;
   createdAt: string;
   updatedAt: string;
   client?: { id: string; name: string } | null;
@@ -11,6 +13,8 @@ export interface Order {
   branch?: { id: string; name: string } | null;
   items: OrderItem[];
 }
+
+export type OrderConsumerType = 'CLIENT' | 'PROFESSIONAL';
 
 export interface OrderItem {
   id: string;
@@ -21,7 +25,7 @@ export interface OrderItem {
   service?: { id: string; name: string } | null;
 }
 
-export type OrderStatus = 'PENDING' | 'PAID' | 'CANCELED';
+export type OrderStatus = 'PENDING' | 'PAID' | 'PAID_AS_DEBT' | 'CANCELED';
 export type OrderItemType = 'PRODUCT' | 'SERVICE';
 
 export interface CreateOrderPayload {
@@ -29,6 +33,8 @@ export interface CreateOrderPayload {
   professionalId?: string;
   branchId?: string;
   notes?: string;
+  consumerType?: OrderConsumerType;
+  consumerProfessionalId?: string;
   items?: CreateOrderItemPayload[];
 }
 
@@ -59,11 +65,13 @@ export interface OrderFilters {
 export const orderStatusLabels: Record<OrderStatus, string> = {
   PENDING: 'Pendente',
   PAID: 'Pago',
+  PAID_AS_DEBT: 'Lançado como débito',
   CANCELED: 'Cancelado',
 };
 
 export const orderStatusColors: Record<OrderStatus, string> = {
   PENDING: 'bg-yellow-500/20 text-yellow-400',
   PAID: 'bg-green-500/20 text-green-400',
+  PAID_AS_DEBT: 'bg-purple-500/20 text-purple-400',
   CANCELED: 'bg-red-500/20 text-red-400',
 };

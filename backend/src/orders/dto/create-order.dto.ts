@@ -41,6 +41,16 @@ export class CreateOrderDto {
   @IsString()
   notes?: string;
 
+  /** CLIENT (default) ou PROFESSIONAL (consumo do próprio profissional → vira débito) */
+  @IsOptional()
+  @IsIn(['CLIENT', 'PROFESSIONAL'])
+  consumerType?: 'CLIENT' | 'PROFESSIONAL';
+
+  /** Obrigatório quando consumerType = PROFESSIONAL */
+  @IsOptional()
+  @IsString()
+  consumerProfessionalId?: string;
+
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })

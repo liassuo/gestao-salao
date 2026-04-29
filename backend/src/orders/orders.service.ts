@@ -3,16 +3,19 @@ import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
 import { AsaasService } from '../asaas/asaas.service';
 import { StockService } from '../stock/stock.service';
+import { ProfessionalDebtsService } from '../professional-debts/professional-debts.service';
 import { AsaasBillingType } from '../asaas/asaas.types';
 import { CreateOrderDto, UpdateOrderDto, AddOrderItemDto, QueryOrderDto, PayOrderDto } from './dto';
 import {
-  getClientPlanDiscount,
+  getActiveClientPlan,
+  getPlanDiscountForService,
   getActivePromotions,
   getPromoDiscountForService,
   getPromoDiscountForProduct,
   effectiveDiscountPercent,
   applyDiscount,
   type PromotionMatch,
+  type ActiveClientPlan,
 } from '../common/pricing.helper';
 
 @Injectable()
@@ -23,15 +26,16 @@ export class OrdersService {
     private readonly supabase: SupabaseService,
     private readonly asaasService: AsaasService,
     private readonly stockService: StockService,
+    private readonly professionalDebtsService: ProfessionalDebtsService,
   ) {}
 
   async create(dto: CreateOrderDto) {
     this.logger.log(`Creating order with ${dto.items?.length ?? 0} items`);
 
-    // Desconto da assinatura ativa do cliente + promoções ativas.
+    // Plano ativo do cliente (com desconto por serviço) + promoções ativas.
     // Entre promoção e assinatura, prevalece o MAIOR desconto por item.
-    const planDiscount = await getClientPlanDiscount(this.supabase, dto.clientId);
-    const activePromos = planDiscount >= 0 ? await getActivePromotions(this.supabase) : [];
+    const activePlan = await getActiveClientPlan(this.supabase, dto.clientId);
+    const activePromos = await getActivePromotions(this.supabase);
 
     const resolvedItems: {
       productId: string | null;
@@ -45,7 +49,7 @@ export class OrdersService {
 
     for (const item of dto.items || []) {
       const quantity = item.quantity || 1;
-      const unitPrice = await this.resolveUnitPrice(item, planDiscount, activePromos);
+      const unitPrice = await this.resolveUnitPrice(item, activePlan, activePromos);
       totalAmount += unitPrice * quantity;
       resolvedItems.push({
         productId: item.productId || null,
@@ -54,6 +58,13 @@ export class OrdersService {
         unitPrice,
         itemType: item.itemType,
       });
+    }
+
+    const consumerType = dto.consumerType || 'CLIENT';
+    if (consumerType === 'PROFESSIONAL' && !dto.consumerProfessionalId) {
+      throw new BadRequestException(
+        'consumerProfessionalId é obrigatório quando consumerType=PROFESSIONAL',
+      );
     }
 
     const now = new Date().toISOString();
@@ -67,6 +78,9 @@ export class OrdersService {
         notes: dto.notes,
         totalAmount: totalAmount,
         status: 'PENDING',
+        consumerType,
+        consumerProfessionalId:
+          consumerType === 'PROFESSIONAL' ? dto.consumerProfessionalId : null,
         createdAt: now,
         updatedAt: now,
       })
@@ -105,11 +119,12 @@ export class OrdersService {
    */
   private async resolveUnitPrice(
     item: { productId?: string; serviceId?: string; unitPrice: number; itemType: 'PRODUCT' | 'SERVICE' },
-    planDiscount: number,
+    activePlan: ActiveClientPlan | null,
     activePromos: PromotionMatch[],
   ): Promise<number> {
     let basePrice = item.unitPrice;
     let promoPercent = 0;
+    let planPercent = 0;
 
     if (item.itemType === 'PRODUCT' && item.productId) {
       const { data: product } = await this.supabase
@@ -119,6 +134,8 @@ export class OrdersService {
         .single();
       if (product?.salePrice != null) basePrice = product.salePrice;
       promoPercent = getPromoDiscountForProduct(activePromos, item.productId);
+      // Produtos não têm override por serviço — usa desconto global do plano
+      planPercent = activePlan?.globalPercent ?? 0;
     } else if (item.itemType === 'SERVICE' && item.serviceId) {
       const { data: service } = await this.supabase
         .from('services')
@@ -127,9 +144,10 @@ export class OrdersService {
         .single();
       if (service?.price != null) basePrice = service.price;
       promoPercent = getPromoDiscountForService(activePromos, item.serviceId);
+      planPercent = getPlanDiscountForService(activePlan, item.serviceId);
     }
 
-    const percent = effectiveDiscountPercent(promoPercent, planDiscount);
+    const percent = effectiveDiscountPercent(promoPercent, planPercent);
     return applyDiscount(basePrice, percent);
   }
 
@@ -204,9 +222,9 @@ export class OrdersService {
     }
 
     // Aplica desconto da assinatura do cliente + promoção ativa (o MAIOR vence).
-    const planDiscount = await getClientPlanDiscount(this.supabase, order.clientId);
+    const activePlan = await getActiveClientPlan(this.supabase, order.clientId);
     const activePromos = await getActivePromotions(this.supabase);
-    const unitPrice = await this.resolveUnitPrice(dto, planDiscount, activePromos);
+    const unitPrice = await this.resolveUnitPrice(dto, activePlan, activePromos);
     const quantity = dto.quantity || 1;
     const lineTotal = unitPrice * quantity;
 
@@ -386,6 +404,33 @@ export class OrdersService {
       if (linkedAppt?.isPaid) {
         throw new BadRequestException('O agendamento vinculado a esta comanda j\u00e1 est\u00e1 pago');
       }
+    }
+
+    // ============================
+    // FLUXO DÉBITO DO PROFISSIONAL
+    // (consumo do barbeiro: não entra no caixa, vira saldo a deduzir na comissão)
+    // ============================
+    const isProfessionalConsumer =
+      dto?.asProfessionalDebt === true || (order as any).consumerType === 'PROFESSIONAL';
+
+    if (isProfessionalConsumer) {
+      if (dto?.billingType) {
+        throw new BadRequestException(
+          'Comanda de débito do profissional não pode ser paga via Asaas',
+        );
+      }
+      const consumerProfessionalId =
+        dto?.consumerProfessionalId ||
+        (order as any).consumerProfessionalId ||
+        (order as any).professionalId;
+
+      if (!consumerProfessionalId) {
+        throw new BadRequestException(
+          'Profissional consumidor não informado. Defina consumerProfessionalId.',
+        );
+      }
+
+      return this.payAsProfessionalDebt(id, order, consumerProfessionalId);
     }
 
     // ============================
@@ -594,10 +639,66 @@ export class OrdersService {
     };
   }
 
+  /**
+   * Lança a comanda como débito do profissional consumidor.
+   * - Dá baixa no estoque (consumo é real, mesmo sem entrada no caixa).
+   * - Cria registro em professional_debts (será deduzido na próxima comissão).
+   * - Marca a comanda como PAID_AS_DEBT.
+   * - NÃO cria payment (nada entra no caixa).
+   * - NÃO marca o agendamento vinculado como pago (débito ≠ pagamento ao salão).
+   */
+  private async payAsProfessionalDebt(
+    id: string,
+    order: any,
+    consumerProfessionalId: string,
+  ) {
+    // Baixa no estoque
+    const productItems = (order.items || []).filter(
+      (i: any) => i.itemType === 'PRODUCT' && i.productId,
+    );
+    for (const item of productItems) {
+      try {
+        await this.stockService.create({
+          productId: item.productId,
+          type: 'EXIT',
+          quantity: item.quantity,
+          reason: `Comanda #${order.id.slice(0, 8)} (débito do profissional)`,
+        });
+      } catch (err) {
+        this.logger.error(
+          `Erro ao dar baixa no estoque do produto ${item.productId}: ${err.message}`,
+        );
+        throw new BadRequestException(`Erro ao dar baixa no estoque: ${err.message}`);
+      }
+    }
+
+    // Cria o débito do profissional
+    await this.professionalDebtsService.createFromOrder({
+      professionalId: consumerProfessionalId,
+      orderId: order.id,
+      amount: order.totalAmount,
+      description: `Comanda #${order.id.slice(0, 8)}`,
+    });
+
+    // Atualiza a comanda
+    const now = new Date().toISOString();
+    await this.supabase
+      .from('orders')
+      .update({
+        status: 'PAID_AS_DEBT',
+        consumerType: 'PROFESSIONAL',
+        consumerProfessionalId,
+        updatedAt: now,
+      })
+      .eq('id', id);
+
+    return this.findOne(id);
+  }
+
   async cancel(id: string) {
     const { data: order, error } = await this.supabase
       .from('orders')
-      .select('id, status')
+      .select('id, status, items:order_items(id, itemType, productId, quantity)')
       .eq('id', id)
       .single();
 
@@ -605,13 +706,48 @@ export class OrdersService {
       throw new NotFoundException('Comanda não encontrada');
     }
 
-    if (order.status !== 'PENDING') {
-      throw new BadRequestException('Comanda não está pendente');
+    if (order.status !== 'PENDING' && order.status !== 'PAID_AS_DEBT') {
+      throw new BadRequestException(
+        'Apenas comandas pendentes ou lançadas como débito podem ser canceladas',
+      );
+    }
+
+    // Reverter efeitos colaterais quando a comanda já tinha sido lançada como débito
+    if (order.status === 'PAID_AS_DEBT') {
+      // 1) Reentrada no estoque
+      const productItems = ((order as any).items || []).filter(
+        (i: any) => i.itemType === 'PRODUCT' && i.productId,
+      );
+      for (const item of productItems) {
+        try {
+          await this.stockService.create({
+            productId: item.productId,
+            type: 'ENTRY',
+            quantity: item.quantity,
+            reason: `Estorno de comanda-débito #${id.slice(0, 8)}`,
+          });
+        } catch (err) {
+          this.logger.error(
+            `Erro ao estornar estoque do produto ${item.productId}: ${err.message}`,
+          );
+          throw new BadRequestException(`Erro ao estornar estoque: ${err.message}`);
+        }
+      }
+
+      // 2) Anular débito(s) pendentes desta comanda
+      try {
+        await this.professionalDebtsService.voidByOrder(id);
+      } catch (err) {
+        this.logger.error(`Erro ao anular débitos da comanda ${id}: ${err.message}`);
+        throw new BadRequestException(
+          `Erro ao reverter débito do profissional: ${err.message}`,
+        );
+      }
     }
 
     const { data: updated, error: updateError } = await this.supabase
       .from('orders')
-      .update({ status: 'CANCELED' })
+      .update({ status: 'CANCELED', updatedAt: new Date().toISOString() })
       .eq('id', id)
       .select('*')
       .single();
