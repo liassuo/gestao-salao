@@ -1,4 +1,4 @@
-import { UserCog, MoreVertical, Edit2, Trash2, KeyRound } from 'lucide-react';
+import { UserCog, MoreVertical, Edit2, Trash2, KeyRound, CalendarDays } from 'lucide-react';
 import { useState, useRef } from 'react';
 import { EmptyState } from '@/components/ui';
 import type { Professional } from '@/types';
@@ -9,6 +9,7 @@ interface ProfessionalsTableProps {
   onEdit: (professional: Professional) => void;
   onDelete: (professional: Professional) => void;
   onResetPassword?: (professional: Professional) => void;
+  onManageVacations?: (professional: Professional) => void;
   isLoading?: boolean;
   onNewProfessional?: () => void;
 }
@@ -28,6 +29,7 @@ export function ProfessionalsTable({
   onEdit,
   onDelete,
   onResetPassword,
+  onManageVacations,
   isLoading,
   onNewProfessional,
 }: ProfessionalsTableProps) {
@@ -166,6 +168,18 @@ export function ProfessionalsTable({
                             <Edit2 className="h-4 w-4" />
                             Editar
                           </button>
+                          {onManageVacations && (
+                            <button
+                              onClick={() => {
+                                onManageVacations(professional);
+                                setOpenMenuId(null);
+                              }}
+                              className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+                            >
+                              <CalendarDays className="h-4 w-4" />
+                              Gerenciar férias
+                            </button>
+                          )}
                           {onResetPassword && (
                             <button
                               onClick={() => {

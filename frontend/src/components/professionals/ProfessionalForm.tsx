@@ -5,7 +5,6 @@ import { api } from '@/services/api';
 import { useServices } from '@/hooks';
 import type { Professional, CreateProfessionalPayload, WorkingHours } from '@/types';
 import { weekDayShortLabels } from '@/types';
-import { VacationsManager } from './VacationsManager';
 
 interface ProfessionalFormData {
   name: string;
@@ -323,10 +322,6 @@ export function ProfessionalForm({ professional, onSubmit, isLoading, error }: P
           })}
         </div>
       </div>
-
-      {isEditing && professional && (
-        <VacationsManager professionalId={professional.id} professionalName={professional.name} />
-      )}
 
       <div className="flex justify-end gap-3 border-t border-[var(--border-color)] pt-4">
         <button

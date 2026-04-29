@@ -8,7 +8,12 @@ import {
   useDeleteProfessional,
   getApiErrorMessage,
 } from '@/hooks';
-import { ProfessionalsTable, ProfessionalForm, ConfirmDeleteModal } from '@/components/professionals';
+import {
+  ProfessionalsTable,
+  ProfessionalForm,
+  ConfirmDeleteModal,
+  VacationsManager,
+} from '@/components/professionals';
 import { Modal, SkeletonTable, useToast } from '@/components/ui';
 import type { Professional, CreateProfessionalPayload, UpdateProfessionalPayload } from '@/types';
 import { professionalsService } from '@/services/professionals';
@@ -18,6 +23,7 @@ export function Professionals() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingProfessional, setEditingProfessional] = useState<Professional | null>(null);
   const [deletingProfessional, setDeletingProfessional] = useState<Professional | null>(null);
+  const [vacationProfessional, setVacationProfessional] = useState<Professional | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -190,6 +196,7 @@ export function Professionals() {
           onEdit={handleOpenEditModal}
           onDelete={setDeletingProfessional}
           onResetPassword={tab === 'active' ? handleResetPassword : undefined}
+          onManageVacations={tab === 'active' ? setVacationProfessional : undefined}
           isLoading={deleteProfessional.isPending}
           onNewProfessional={tab === 'active' ? handleOpenCreateModal : undefined}
         />
@@ -232,6 +239,25 @@ export function Professionals() {
         professional={deletingProfessional}
         isLoading={deleteProfessional.isPending}
       />
+
+      {/* Modal de gerenciamento de férias */}
+      <Modal
+        isOpen={!!vacationProfessional}
+        onClose={() => {
+          setVacationProfessional(null);
+          // Atualiza a tabela (badge "em férias", currentVacation) após fechar.
+          queryClient.invalidateQueries({ queryKey: ['professionals'] });
+        }}
+        title={vacationProfessional ? `Férias — ${vacationProfessional.name}` : 'Férias'}
+        size="md"
+      >
+        {vacationProfessional && (
+          <VacationsManager
+            professionalId={vacationProfessional.id}
+            professionalName={vacationProfessional.name}
+          />
+        )}
+      </Modal>
     </div>
   );
 }
