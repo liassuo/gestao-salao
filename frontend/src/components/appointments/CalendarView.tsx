@@ -846,11 +846,14 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
                     if (!isFullHour && !isHalfHour) return null;
 
                     const top = getTopPosition(slot, startHour, slotHeight);
+                    // O primeiro slot (top=0) ficaria escondido atrás do header
+                    // sticky se usasse top:-8. Clamp em 0.
+                    const labelTop = Math.max(0, top - 8);
                     return (
                       <div
                         key={slot}
                         className="absolute right-2 flex items-center"
-                        style={{ top: `${top - 8}px` }}
+                        style={{ top: `${labelTop}px` }}
                       >
                         <span
                           className={`text-xs ${
@@ -1079,7 +1082,7 @@ function ProfessionalColumn({
   return (
     <div
       data-professional-id={professional.id}
-      className="relative min-w-0 flex-1 border-r border-[var(--card-border)] last:border-r-0"
+      className="relative min-w-0 flex-1 overflow-hidden border-r border-[var(--card-border)] last:border-r-0"
       style={{ minWidth: `${COLUMN_MIN_WIDTH}px` }}
     >
       {/* Grid lines and clickable slots */}
