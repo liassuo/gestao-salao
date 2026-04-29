@@ -88,6 +88,11 @@ export const subscriptionsService = {
     return response.data;
   },
 
+  async regeneratePix(id: string): Promise<any> {
+    const response = await api.post<any>(`/subscriptions/${id}/regenerate-pix`);
+    return response.data;
+  },
+
   async confirmPayment(id: string): Promise<ClientSubscription> {
     const response = await api.post<ClientSubscription>(`/subscriptions/${id}/confirm-payment`);
     return response.data;

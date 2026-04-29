@@ -271,6 +271,17 @@ export class SubscriptionsController {
   }
 
   /**
+   * POST /subscriptions/:id/regenerate-pix
+   * Gera uma NOVA cobrança PIX para a assinatura PENDING_PAYMENT (Admin)
+   */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @Post(':id/regenerate-pix')
+  async regeneratePix(@Param('id', ParseUUIDPipe) id: string) {
+    return this.subscriptionsService.regeneratePixForSubscription(id);
+  }
+
+  /**
    * POST /subscriptions/:id/confirm-payment
    * Confirma manualmente o pagamento de uma assinatura PENDING_PAYMENT (Admin)
    */
@@ -279,6 +290,20 @@ export class SubscriptionsController {
   @Post(':id/confirm-payment')
   async confirmPayment(@Param('id', ParseUUIDPipe) id: string) {
     return this.subscriptionsService.confirmPaymentManually(id);
+  }
+
+  /**
+   * POST /subscriptions/:id/sync-asaas
+   * Reconcilia o estado da assinatura com o Asaas (fonte da verdade).
+   * Usar quando o cliente pagou o PIX, o Asaas confirmou, mas o webhook não
+   * atualizou o sistema. Busca todas as cobranças no Asaas e ativa
+   * retroativamente se encontrar alguma RECEIVED/CONFIRMED. Idempotente.
+   */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @Post(':id/sync-asaas')
+  async syncWithAsaas(@Param('id', ParseUUIDPipe) id: string) {
+    return this.subscriptionsService.reconcileSubscription(id);
   }
 
   /**

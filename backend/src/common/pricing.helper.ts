@@ -8,19 +8,63 @@ export interface PromotionMatch {
   promotion_products?: { productId: string }[] | null;
 }
 
+/**
+ * Resumo do plano ativo de um cliente para cálculo de descontos.
+ * - planId: usado para lookup per-service
+ * - globalPercent: discountPercent do plano (fallback p/ produtos e serviços não-listados)
+ * - servicePercents: mapa serviceId -> percent (override por serviço)
+ */
+export interface ActiveClientPlan {
+  planId: string;
+  globalPercent: number;
+  servicePercents: Map<string, number>;
+}
+
 export async function getClientPlanDiscount(
   supabase: SupabaseService,
   clientId: string | null | undefined,
 ): Promise<number> {
-  if (!clientId) return 0;
+  const plan = await getActiveClientPlan(supabase, clientId);
+  return plan?.globalPercent ?? 0;
+}
+
+export async function getActiveClientPlan(
+  supabase: SupabaseService,
+  clientId: string | null | undefined,
+): Promise<ActiveClientPlan | null> {
+  if (!clientId) return null;
   const { data } = await supabase
     .from('client_subscriptions')
-    .select('plan:subscription_plans(discountPercent)')
+    .select('plan:subscription_plans(id, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
     .eq('clientId', clientId)
     .eq('status', 'ACTIVE')
     .maybeSingle();
-  const percent = (data as any)?.plan?.discountPercent;
-  return typeof percent === 'number' && percent > 0 ? percent : 0;
+  const plan = (data as any)?.plan;
+  if (!plan?.id) return null;
+  const servicePercents = new Map<string, number>();
+  for (const s of (plan.services || []) as { serviceId: string; discountPercent: number }[]) {
+    if (typeof s.discountPercent === 'number' && s.discountPercent >= 0) {
+      servicePercents.set(s.serviceId, s.discountPercent);
+    }
+  }
+  const globalPercent =
+    typeof plan.discountPercent === 'number' && plan.discountPercent > 0 ? plan.discountPercent : 0;
+  return { planId: plan.id, globalPercent, servicePercents };
+}
+
+/**
+ * Retorna o desconto do plano para um serviço específico:
+ * - se serviço estiver listado em subscription_plan_services do plano ativo, usa esse %
+ * - caso contrário, usa o discountPercent global do plano
+ */
+export function getPlanDiscountForService(
+  plan: ActiveClientPlan | null,
+  serviceId: string,
+): number {
+  if (!plan) return 0;
+  const override = plan.servicePercents.get(serviceId);
+  if (typeof override === 'number') return override;
+  return plan.globalPercent;
 }
 
 export async function getActivePromotions(

@@ -1,4 +1,6 @@
-import { IsString, IsOptional, IsNumber, Min, Max } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsArray, ValidateNested, Min, Max } from 'class-validator';
+import { Type } from 'class-transformer';
+import { PlanServiceDiscountDto } from './plan-service-discount.dto';
 
 export class CreatePlanDto {
   @IsString()
@@ -21,4 +23,10 @@ export class CreatePlanDto {
   @Min(0)
   @Max(100)
   discountPercent?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PlanServiceDiscountDto)
+  services?: PlanServiceDiscountDto[];
 }

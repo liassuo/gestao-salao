@@ -1,4 +1,6 @@
-import { IsString, IsOptional, IsNumber, IsBoolean, Min, Max } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsBoolean, IsArray, ValidateNested, Min, Max } from 'class-validator';
+import { Type } from 'class-transformer';
+import { PlanServiceDiscountDto } from './plan-service-discount.dto';
 
 export class UpdatePlanDto {
   @IsOptional()
@@ -28,4 +30,10 @@ export class UpdatePlanDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PlanServiceDiscountDto)
+  services?: PlanServiceDiscountDto[];
 }

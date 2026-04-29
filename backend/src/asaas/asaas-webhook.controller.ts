@@ -100,15 +100,80 @@ export class AsaasWebhookController {
     );
 
     // Buscar pagamento local pelo asaasPaymentId
-    const { data: localPayment } = await this.supabase
+    let { data: localPayment } = await this.supabase
       .from('payments')
       .select('id, appointmentId, clientId, amount, subscriptionId, asaasStatus, paidAt, notes')
       .eq('asaasPaymentId', asaasPaymentId)
-      .single();
+      .maybeSingle();
+
+    // Fallback: se o payments local sumiu, mas o webhook traz externalReference apontando
+    // para uma assinatura existente, recria o registro local antes de seguir.
+    // Cobre o caso "cliente pagou PIX, Asaas confirmou, payments local nunca foi inserido
+    // por race condition / falha de DB".
+    if (!localPayment) {
+      const externalRef: string | undefined = paymentData.externalReference;
+      if (externalRef) {
+        const { data: linkedSub } = await this.supabase
+          .from('client_subscriptions')
+          .select('id, clientId')
+          .eq('id', externalRef)
+          .maybeSingle();
+
+        if (linkedSub) {
+          const billingType = paymentData.billingType || 'PIX';
+          const localMethod = billingType === 'CREDIT_CARD' ? 'CARD' : 'PIX';
+          const valueReais = Number(paymentData.value || 0);
+          const amountCentavos = Math.round(valueReais * 100);
+          const now = new Date().toISOString();
+          const newId = require('crypto').randomUUID();
+
+          const { error: insertError } = await this.supabase
+            .from('payments')
+            .insert({
+              id: newId,
+              clientId: linkedSub.clientId,
+              subscriptionId: linkedSub.id,
+              amount: amountCentavos,
+              method: localMethod,
+              registeredBy: linkedSub.clientId,
+              notes: `Reconciliação webhook (cobrança ${asaasPaymentId})`,
+              asaasPaymentId,
+              asaasStatus: status,
+              paidAt: null,
+              invoiceUrl: paymentData.invoiceUrl || null,
+              bankSlipUrl: paymentData.bankSlipUrl || null,
+              createdAt: now,
+              updatedAt: now,
+            });
+
+          if (insertError) {
+            this.logger.error(
+              `Webhook fallback: falha ao recriar payments para ${asaasPaymentId}: ${insertError.message}`,
+            );
+            return;
+          }
+
+          this.logger.warn(
+            `Webhook fallback: payments local recriado para ${asaasPaymentId} (assinatura ${linkedSub.id})`,
+          );
+
+          localPayment = {
+            id: newId,
+            appointmentId: null,
+            clientId: linkedSub.clientId,
+            amount: amountCentavos,
+            subscriptionId: linkedSub.id,
+            asaasStatus: status,
+            paidAt: null,
+            notes: `Reconciliação webhook (cobrança ${asaasPaymentId})`,
+          };
+        }
+      }
+    }
 
     if (!localPayment) {
       this.logger.warn(
-        `Pagamento local não encontrado para Asaas ID: ${asaasPaymentId}`,
+        `Pagamento local não encontrado para Asaas ID: ${asaasPaymentId} (externalReference=${paymentData.externalReference || 'n/a'})`,
       );
       return;
     }

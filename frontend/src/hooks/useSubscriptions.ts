@@ -139,6 +139,17 @@ export function useReopenSubscriptionPix() {
   });
 }
 
+export function useRegenerateSubscriptionPix() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => subscriptionsService.regeneratePix(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [SUBSCRIPTIONS_KEY] });
+    },
+  });
+}
+
 export function useConfirmSubscriptionPayment() {
   const queryClient = useQueryClient();
 

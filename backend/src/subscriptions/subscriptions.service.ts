@@ -4,6 +4,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { randomUUID } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../supabase/supabase.service';
@@ -33,6 +34,58 @@ export class SubscriptionsService {
   ) {}
 
   // SUBSCRIPTION PLANS
+
+  /**
+   * Substitui completamente a lista de serviços com desconto específico de um plano.
+   * Aceita array vazio (limpa todos) ou undefined (não mexe).
+   */
+  private async syncPlanServices(
+    planId: string,
+    services: { serviceId: string; discountPercent: number }[] | undefined,
+  ) {
+    if (services === undefined) return;
+
+    await this.supabase
+      .from('subscription_plan_services')
+      .delete()
+      .eq('planId', planId);
+
+    if (services.length === 0) return;
+
+    const dedup = new Map<string, number>();
+    for (const s of services) dedup.set(s.serviceId, s.discountPercent);
+
+    const rows = Array.from(dedup.entries()).map(([serviceId, discountPercent]) => ({
+      id: randomUUID(),
+      planId,
+      serviceId,
+      discountPercent,
+      createdAt: new Date().toISOString(),
+    }));
+
+    const { error } = await this.supabase
+      .from('subscription_plan_services')
+      .insert(rows);
+
+    if (error) {
+      this.logger.error(`Falha ao sincronizar serviços do plano ${planId}: ${JSON.stringify(error)}`);
+      throw new BadRequestException(
+        `Erro ao salvar serviços do plano: ${(error as { message?: string }).message || 'desconhecido'}`,
+      );
+    }
+  }
+
+  /**
+   * Anexa lista de serviços (com nome/preço) a um plano carregado.
+   */
+  private async attachPlanServices(plan: any) {
+    if (!plan?.id) return plan;
+    const { data: rows } = await this.supabase
+      .from('subscription_plan_services')
+      .select('id, serviceId, discountPercent, service:services(id, name, price)')
+      .eq('planId', plan.id);
+    return { ...plan, services: rows || [] };
+  }
 
   async createPlan(dto: CreatePlanDto) {
     const now = new Date().toISOString();
@@ -64,13 +117,16 @@ export class SubscriptionsService {
       .single();
 
     if (error) throw error;
-    return plan;
+
+    await this.syncPlanServices(plan.id, dto.services);
+
+    return this.attachPlanServices(plan);
   }
 
   async findAllPlans(activeOnly: boolean = true) {
     let queryBuilder = this.supabase
       .from('subscription_plans')
-      .select('*, subscriptions:client_subscriptions(id)')
+      .select('*, subscriptions:client_subscriptions(id), services:subscription_plan_services(id, serviceId, discountPercent, service:services(id, name, price))')
       .order('price', { ascending: true });
 
     if (activeOnly) {
@@ -90,7 +146,7 @@ export class SubscriptionsService {
   async findOnePlan(id: string) {
     const { data: plan, error } = await this.supabase
       .from('subscription_plans')
-      .select('*')
+      .select('*, services:subscription_plan_services(id, serviceId, discountPercent, service:services(id, name, price))')
       .eq('id', id)
       .single();
 
@@ -141,7 +197,10 @@ export class SubscriptionsService {
       .single();
 
     if (error) throw error;
-    return updated;
+
+    await this.syncPlanServices(id, dto.services);
+
+    return this.attachPlanServices(updated);
   }
 
   async findPlan(id: string) {
@@ -331,7 +390,7 @@ export class SubscriptionsService {
     // Re-fetch com relações (fallback se o select com join falhar)
     const { data: subscription, error: refetchError } = await this.supabase
       .from('client_subscriptions')
-      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent)')
+      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
       .eq('id', insertedSub.id)
       .single();
 
@@ -358,7 +417,7 @@ export class SubscriptionsService {
   async findSubscription(id: string) {
     const { data: subscription, error } = await this.supabase
       .from('client_subscriptions')
-      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent)')
+      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
       .eq('id', id)
       .single();
 
@@ -366,6 +425,14 @@ export class SubscriptionsService {
       throw new NotFoundException('Assinatura não encontrada');
     }
     return subscription;
+  }
+
+  /**
+   * Reconcilia uma assinatura específica e devolve o estado atualizado.
+   * Usado pelo endpoint admin POST /subscriptions/:id/sync-asaas.
+   */
+  async reconcileSubscription(id: string) {
+    return this.syncWithAsaas(id);
   }
 
   async findByClient(clientId: string) {
@@ -389,7 +456,7 @@ export class SubscriptionsService {
   async findAllSubscriptions(status?: string) {
     let queryBuilder = this.supabase
       .from('client_subscriptions')
-      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent)')
+      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
       .order('createdAt', { ascending: false });
 
     if (status) {
@@ -408,12 +475,23 @@ export class SubscriptionsService {
     // não tiverem sido adicionados ao banco (PENDING_PAYMENT, SUSPENDED)
     const { data: results } = await this.supabase
       .from('client_subscriptions')
-      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent)')
+      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
       .eq('clientId', clientId)
       .order('createdAt', { ascending: false })
       .limit(1);
 
-    const subscription: any = results?.[0] ?? null;
+    let subscription: any = results?.[0] ?? null;
+
+    // Auto-reconciliação: se está PENDING_PAYMENT e Asaas configurado, tenta sincronizar
+    // antes de devolver. Cobre o caso "cliente pagou PIX, Asaas confirmou, webhook falhou".
+    if (subscription && subscription.status === 'PENDING_PAYMENT' && this.asaasService.configured) {
+      try {
+        const synced = await this.syncWithAsaas(subscription.id);
+        if (synced && synced.id) subscription = synced;
+      } catch (e) {
+        this.logger.warn(`[auto-sync] Falha ao reconciliar assinatura ${subscription.id} com Asaas: ${e}`);
+      }
+    }
 
     if (subscription) {
       // Buscar última cobrança vinculada a esta assinatura
@@ -455,7 +533,7 @@ export class SubscriptionsService {
           .from('client_subscriptions')
           .update({ status: 'SUSPENDED', updatedAt: now })
           .eq('id', subscription.id)
-          .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent)')
+          .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
           .single();
         this.logger.log(`Assinatura ${subscription.id} suspensa automaticamente (endDate ${subscription.endDate} vencido)`);
         return suspended ?? subscription;
@@ -471,7 +549,7 @@ export class SubscriptionsService {
           .from('client_subscriptions')
           .update({ status: 'CANCELED', updatedAt: now })
           .eq('id', subscription.id)
-          .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent)')
+          .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
           .single();
         this.logger.log(`Assinatura ${subscription.id} cancelada automaticamente (PENDING_PAYMENT expirado, endDate ${subscription.endDate})`);
         return canceled ?? subscription;
@@ -547,7 +625,7 @@ export class SubscriptionsService {
       .from('client_subscriptions')
       .update({ cutsUsedThisMonth: cutsUsed + 1 })
       .eq('id', subscription.id)
-      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent)')
+      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
       .single();
 
     if (error) throw error;
@@ -566,7 +644,7 @@ export class SubscriptionsService {
       .from('client_subscriptions')
       .update({ cutsUsedThisMonth: 0, lastResetDate: now })
       .eq('id', subscription.id)
-      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent)')
+      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
       .single();
 
     if (error) throw error;
@@ -691,13 +769,239 @@ export class SubscriptionsService {
         updatedAt: nowIso,
       })
       .eq('id', subscription.id)
-      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent)')
+      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
       .single();
 
     if (error) throw error;
 
     this.logger.log(`Assinatura ${subscription.id} confirmada manualmente (admin) — status ACTIVE até ${newEndDate.toISOString()}`);
     return updated;
+  }
+
+  /**
+   * Reconcilia o estado local com o Asaas (fonte da verdade).
+   *
+   * Caso de uso: cliente pagou o PIX, Asaas marcou como RECEIVED/CONFIRMED, mas o webhook
+   * nunca chegou ou falhou — assinatura ficou presa em PENDING_PAYMENT. Este método busca
+   * todas as cobranças do cliente/assinatura no Asaas, encontra qualquer uma quitada e
+   * ativa a assinatura retroativamente (idempotente).
+   *
+   * Retorna a assinatura possivelmente atualizada.
+   */
+  async syncWithAsaas(subscriptionId: string) {
+    const subscription = await this.findSubscription(subscriptionId);
+    if (!this.asaasService.configured) return subscription;
+    if (subscription.status === 'ACTIVE' || subscription.status === 'CANCELED') {
+      return subscription;
+    }
+
+    const charges = await this.collectAsaasChargesForSubscription(subscription);
+    if (charges.length === 0) return subscription;
+
+    const paid = charges.find((c: any) =>
+      c.status === 'RECEIVED' || c.status === 'CONFIRMED' || c.status === 'RECEIVED_IN_CASH',
+    );
+
+    if (!paid) {
+      // Sem cobrança paga; reflete o último status conhecido no payments local (best-effort)
+      await this.upsertLocalPaymentFromCharge(subscription, charges[0]).catch(() => {});
+      return subscription;
+    }
+
+    this.logger.warn(
+      `[sync-asaas] Assinatura ${subscription.id} estava ${subscription.status} mas Asaas mostra cobrança ${paid.id} como ${paid.status}. Ativando retroativamente.`,
+    );
+
+    await this.upsertLocalPaymentFromCharge(subscription, paid, true);
+
+    const now = new Date();
+    const currentEnd = subscription.endDate ? new Date(subscription.endDate) : now;
+    const baseDate = currentEnd < now ? now : currentEnd;
+    const newEndDate = new Date(baseDate);
+    newEndDate.setMonth(newEndDate.getMonth() + 1);
+
+    const { data: updated, error } = await this.supabase
+      .from('client_subscriptions')
+      .update({
+        status: 'ACTIVE',
+        cutsUsedThisMonth: 0,
+        lastResetDate: now.toISOString(),
+        endDate: newEndDate.toISOString(),
+        updatedAt: now.toISOString(),
+      })
+      .eq('id', subscription.id)
+      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
+      .single();
+
+    if (error) {
+      this.logger.error(`[sync-asaas] Falha ao ativar assinatura ${subscription.id}: ${error.message}`);
+      throw error;
+    }
+
+    this.logger.log(`[sync-asaas] Assinatura ${subscription.id} ativada via reconciliação (cobrança ${paid.id}).`);
+    return updated;
+  }
+
+  /**
+   * Coleta todas as cobranças relevantes de uma assinatura no Asaas.
+   * Tenta 3 caminhos: (1) por asaasSubscriptionId, (2) por externalReference (sub.id),
+   * (3) por asaasPaymentId já gravado no payments local. Deduplica por id.
+   */
+  private async collectAsaasChargesForSubscription(subscription: any): Promise<any[]> {
+    const found = new Map<string, any>();
+
+    if (subscription.asaasSubscriptionId) {
+      try {
+        const list = await this.asaasService.getSubscriptionPayments(subscription.asaasSubscriptionId);
+        for (const c of list || []) found.set(c.id, c);
+      } catch (e) {
+        this.logger.warn(`[sync-asaas] getSubscriptionPayments falhou: ${e}`);
+      }
+    }
+
+    try {
+      const byRef = await this.asaasService.getPayments({ externalReference: subscription.id });
+      for (const c of byRef?.data || []) found.set(c.id, c);
+    } catch (e) {
+      this.logger.warn(`[sync-asaas] getPayments(externalReference=${subscription.id}) falhou: ${e}`);
+    }
+
+    try {
+      const { data: localPayments } = await this.supabase
+        .from('payments')
+        .select('asaasPaymentId')
+        .eq('subscriptionId', subscription.id)
+        .not('asaasPaymentId', 'is', null);
+
+      for (const p of localPayments || []) {
+        if (!p.asaasPaymentId || found.has(p.asaasPaymentId)) continue;
+        try {
+          const charge = await this.asaasService.getCharge(p.asaasPaymentId);
+          if (charge) found.set(charge.id, charge);
+        } catch (e) {
+          this.logger.warn(`[sync-asaas] getCharge(${p.asaasPaymentId}) falhou: ${e}`);
+        }
+      }
+    } catch (e) {
+      this.logger.warn(`[sync-asaas] busca de payments locais falhou: ${e}`);
+    }
+
+    return Array.from(found.values());
+  }
+
+  /**
+   * Insere ou atualiza o registro local de payment a partir de uma cobrança Asaas.
+   * Se markPaid=true, marca paidAt=now.
+   */
+  private async upsertLocalPaymentFromCharge(subscription: any, charge: any, markPaid = false) {
+    const now = new Date().toISOString();
+    const { data: existing } = await this.supabase
+      .from('payments')
+      .select('id, paidAt, asaasStatus')
+      .eq('asaasPaymentId', charge.id)
+      .maybeSingle();
+
+    const billingType = charge.billingType || 'PIX';
+    const localMethod = asaasBillingToLocalPaymentMethod(
+      billingType === 'CREDIT_CARD' ? AsaasBillingType.CREDIT_CARD : AsaasBillingType.PIX,
+    );
+    const amount = this.asaasService.reaisToCentavos(charge.value || 0);
+
+    if (existing) {
+      const update: any = { asaasStatus: charge.status, updatedAt: now };
+      if (markPaid && !existing.paidAt) update.paidAt = now;
+      await this.supabase.from('payments').update(update).eq('id', existing.id);
+      return existing.id;
+    }
+
+    const id = randomUUID();
+    await this.supabase.from('payments').insert({
+      id,
+      clientId: subscription.clientId,
+      subscriptionId: subscription.id,
+      amount,
+      method: localMethod,
+      registeredBy: subscription.clientId,
+      notes: `Reconciliação Asaas (cobrança ${charge.id})`,
+      asaasPaymentId: charge.id,
+      asaasStatus: charge.status,
+      paidAt: markPaid ? now : null,
+      invoiceUrl: charge.invoiceUrl || null,
+      bankSlipUrl: charge.bankSlipUrl || null,
+      createdAt: now,
+      updatedAt: now,
+    });
+    return id;
+  }
+
+  /**
+   * Gera uma NOVA cobrança PIX para uma assinatura PENDING_PAYMENT (admin).
+   * Útil quando o PIX original expirou ou nunca foi vinculado ao Asaas.
+   */
+  async regeneratePixForSubscription(subscriptionId: string) {
+    const subscription = await this.findSubscription(subscriptionId);
+
+    if (subscription.status !== 'PENDING_PAYMENT') {
+      throw new BadRequestException('Apenas assinaturas aguardando pagamento podem ter o PIX regenerado');
+    }
+
+    if (!this.asaasService.configured) {
+      throw new BadRequestException('Integração Asaas não configurada');
+    }
+
+    const clientId = subscription.clientId;
+    const planPrice = subscription.plan?.price ?? 0;
+    const planName = subscription.plan?.name ?? 'Assinatura';
+
+    const asaasCustomerId = await this.ensureAsaasCustomer(clientId);
+
+    const today = new Date().toISOString().split('T')[0];
+    const charge = await this.asaasService.createCharge({
+      customer: asaasCustomerId,
+      billingType: AsaasBillingType.PIX,
+      value: this.asaasService.centavosToReais(planPrice),
+      dueDate: today,
+      description: `Plano ${planName} (PIX regenerado)`,
+      externalReference: subscription.id,
+    });
+
+    const now = new Date().toISOString();
+    await this.supabase.from('payments').insert({
+      id: randomUUID(),
+      clientId,
+      subscriptionId: subscription.id,
+      amount: planPrice,
+      method: asaasBillingToLocalPaymentMethod(AsaasBillingType.PIX),
+      registeredBy: clientId,
+      notes: `PIX regenerado plano ${planName} #${charge.id}`,
+      asaasPaymentId: charge.id,
+      asaasStatus: charge.status,
+      paidAt: null,
+      invoiceUrl: charge.invoiceUrl || null,
+      bankSlipUrl: charge.bankSlipUrl || null,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    let pixData: any = null;
+    try {
+      pixData = await this.asaasService.getPixQrCode(charge.id);
+    } catch (e) {
+      this.logger.warn(`QR Code PIX regenerado tentativa 1 falhou, retry em 2s: ${e}`);
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      try {
+        pixData = await this.asaasService.getPixQrCode(charge.id);
+      } catch (e2) {
+        this.logger.warn(`QR Code PIX regenerado retry falhou: ${e2}`);
+      }
+    }
+
+    if (!pixData) {
+      throw new BadRequestException('Cobrança gerada, mas não foi possível obter o QR Code. Tente novamente em instantes.');
+    }
+
+    this.logger.log(`PIX regenerado para assinatura ${subscription.id}: charge ${charge.id}`);
+    return pixData;
   }
 
   /**
@@ -937,7 +1241,7 @@ export class SubscriptionsService {
     // Buscar assinatura suspensa
     const { data: results } = await this.supabase
       .from('client_subscriptions')
-      .select('*, client:clients(id, name, phone, asaasCustomerId, email), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent)')
+      .select('*, client:clients(id, name, phone, asaasCustomerId, email), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
       .eq('clientId', clientId)
       .eq('status', 'SUSPENDED')
       .order('createdAt', { ascending: false })
@@ -1040,7 +1344,7 @@ export class SubscriptionsService {
     // Re-fetch atualizado
     const { data: updated } = await this.supabase
       .from('client_subscriptions')
-      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent)')
+      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
       .eq('id', subscription.id)
       .single();
 
@@ -1105,6 +1409,47 @@ export class SubscriptionsService {
       payment,
       asaasCharge,
     };
+  }
+
+  /**
+   * Cron de reconciliação: a cada 10 minutos varre todas as assinaturas
+   * em PENDING_PAYMENT e tenta sincronizar com o Asaas.
+   *
+   * Cobre o cenário "cliente pagou PIX, Asaas confirmou, webhook nunca chegou
+   * (token errado, rede, servidor fora do ar) e o cliente nunca abriu o app".
+   * Sem este cron a assinatura ficaria presa até alguém olhar.
+   */
+  @Cron(CronExpression.EVERY_10_MINUTES)
+  async reconcilePendingSubscriptionsCron() {
+    if (!this.asaasService.configured) return;
+
+    const { data: pending } = await this.supabase
+      .from('client_subscriptions')
+      .select('id, clientId')
+      .eq('status', 'PENDING_PAYMENT')
+      .limit(200);
+
+    if (!pending || pending.length === 0) return;
+
+    this.logger.log(`[reconcile-cron] verificando ${pending.length} assinatura(s) PENDING_PAYMENT`);
+
+    let activated = 0;
+    for (const sub of pending) {
+      try {
+        const before = await this.findSubscription(sub.id).catch(() => null);
+        if (!before) continue;
+        const after = await this.syncWithAsaas(sub.id);
+        if (after?.status === 'ACTIVE' && before.status !== 'ACTIVE') {
+          activated += 1;
+        }
+      } catch (e) {
+        this.logger.warn(`[reconcile-cron] falha em ${sub.id}: ${e}`);
+      }
+    }
+
+    if (activated > 0) {
+      this.logger.log(`[reconcile-cron] ${activated} assinatura(s) ativada(s) retroativamente`);
+    }
   }
 }
 

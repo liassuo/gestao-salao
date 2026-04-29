@@ -73,11 +73,23 @@ function groupSlotsByPeriod(slots: TimeSlot[]) {
   return { manha, tarde, noite };
 }
 
+interface PlanServiceDiscount {
+  serviceId: string;
+  discountPercent: number;
+}
+
 interface MySubscription {
   id: string;
   status: string;
   cutsUsedThisMonth: number;
-  plan: { id: string; name: string; price: number; cutsPerMonth: number; discountPercent?: number };
+  plan: {
+    id: string;
+    name: string;
+    price: number;
+    cutsPerMonth: number;
+    discountPercent?: number;
+    services?: PlanServiceDiscount[];
+  };
 }
 
 interface SubscriptionPlan {
@@ -87,6 +99,20 @@ interface SubscriptionPlan {
   price: number;
   cutsPerMonth: number;
   discountPercent?: number;
+  services?: PlanServiceDiscount[];
+}
+
+// Desconto do plano para um serviço específico:
+// se o plano tem desconto explícito desse serviço, usa esse %;
+// caso contrário, cai no desconto geral do plano.
+function getPlanDiscountForService(
+  plan: MySubscription['plan'] | undefined | null,
+  serviceId: string,
+): number {
+  if (!plan) return 0;
+  const override = plan.services?.find((s) => s.serviceId === serviceId);
+  if (override) return override.discountPercent;
+  return plan.discountPercent ?? 0;
 }
 
 // Entre promoção e desconto do plano, aplica o MAIOR (nunca soma).
@@ -152,6 +178,15 @@ export function ClientBooking() {
   }, [weekOffset]);
 
   const weekDates = useMemo(() => generateWeekDates(baseDate), [baseDate]);
+
+  // Janela máxima de agendamento (cliente só pode marcar até 7 dias a partir de hoje)
+  const CLIENT_BOOKING_WINDOW_DAYS = 7;
+  const maxBookingDateISO = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + CLIENT_BOOKING_WINDOW_DAYS);
+    return formatDateISO(d);
+  }, []);
+  const maxWeekOffset = 1; // hoje + 7 dias cabe em no máximo 2 semanas
 
   useEffect(() => {
     clientApi.get<{ debts: any[]; total: number }>('/debts/my')
@@ -508,8 +543,18 @@ export function ClientBooking() {
     switch (currentStep) {
       case 'service':
         return selectedServices.length > 0;
-      case 'schedule':
-        return selectedProfessional !== null && selectedDate !== null && selectedTime !== null;
+      case 'schedule': {
+        if (!selectedProfessional || !selectedDate || !selectedTime) return false;
+        // Bloquear avanço se profissional está de férias na data
+        const dateISO = formatDateISO(selectedDate);
+        const vac =
+          selectedProfessional.vacationOnDate ||
+          (selectedProfessional.vacations || []).find(
+            (v) => v.startDate <= dateISO && dateISO <= v.endDate,
+          );
+        if (vac) return false;
+        return true;
+      }
       case 'confirm':
         return true;
       default:
@@ -519,11 +564,15 @@ export function ClientBooking() {
 
   // Desconto do plano só se aplica quando o cliente NÃO vai usar crédito do plano
   // (se usar crédito, o serviço é gratuito naquele agendamento).
-  const activePlanDiscount = mySubscription && mySubscription.status === 'ACTIVE' && !useSubscriptionCut
-    ? mySubscription.plan.discountPercent ?? 0
-    : 0;
+  // Cada serviço pode ter um desconto específico no plano (sobrescreve o geral).
+  const activePlan =
+    mySubscription && mySubscription.status === 'ACTIVE' && !useSubscriptionCut
+      ? mySubscription.plan
+      : null;
+  const planDiscountFor = (serviceId: string): number =>
+    activePlan ? getPlanDiscountForService(activePlan, serviceId) : 0;
   const totalPrice = selectedServices.reduce((sum, s) => {
-    const discount = effectiveServiceDiscount(s.id, activePromotions, activePlanDiscount);
+    const discount = effectiveServiceDiscount(s.id, activePromotions, planDiscountFor(s.id));
     return sum + (discount > 0 ? discountedPrice(s.price, discount) : s.price);
   }, 0);
   const stepIndex = STEPS.indexOf(currentStep);
@@ -662,7 +711,7 @@ export function ClientBooking() {
 
         {services.map((service) => {
           const isSelected = selectedServices.some((s) => s.id === service.id);
-          const discount = effectiveServiceDiscount(service.id, activePromotions, activePlanDiscount);
+          const discount = effectiveServiceDiscount(service.id, activePromotions, planDiscountFor(service.id));
           const hasPromo = discount > 0;
           const promoPrice = hasPromo ? discountedPrice(service.price, discount) : service.price;
           return (
@@ -776,7 +825,7 @@ export function ClientBooking() {
           </p>
           <button
             onClick={() => setWeekOffset((w) => w + 1)}
-            disabled={weekOffset >= 3}
+            disabled={weekOffset >= maxWeekOffset}
             className="p-2 rounded-lg text-[var(--text-primary)] disabled:opacity-30"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -801,22 +850,25 @@ export function ClientBooking() {
             const isSelected = formatDateISO(selectedDate) === dateISO;
             const isToday = dateISO === todayISO;
             const isPast = dateISO < todayISO;
+            const isAfterMax = dateISO > maxBookingDateISO;
+            const isDisabled = isPast || isAfterMax;
             return (
               <button
                 key={dateISO}
                 onClick={() => {
-                  if (!isPast) {
+                  if (!isDisabled) {
                     setSelectedDate(date);
                     setSelectedTime(null);
                   }
                 }}
-                disabled={isPast}
+                disabled={isDisabled}
+                title={isAfterMax ? `Agendamentos disponíveis até ${CLIENT_BOOKING_WINDOW_DAYS} dias a partir de hoje` : undefined}
                 className={`py-2.5 rounded-full text-center transition-colors ${
                   isSelected
                     ? 'bg-[#8B6914] text-white'
                     : isToday
                     ? 'text-[#C8923A] font-bold'
-                    : isPast
+                    : isDisabled
                     ? 'text-[var(--text-muted)] opacity-40'
                     : 'text-[var(--text-primary)]'
                 }`}
@@ -837,6 +889,12 @@ export function ClientBooking() {
           <div className="flex gap-4 overflow-x-auto pb-3 -mx-5 px-5 scrollbar-hide">
             {professionals.map((professional) => {
               const isSelected = selectedProfessional?.id === professional.id;
+              const dateISO = formatDateISO(selectedDate);
+              const vac =
+                professional.vacationOnDate ||
+                (professional.vacations || []).find(
+                  (v) => v.startDate <= dateISO && dateISO <= v.endDate,
+                );
               return (
                 <button
                   key={professional.id}
@@ -844,13 +902,13 @@ export function ClientBooking() {
                     setSelectedProfessional(professional);
                     setSelectedTime(null);
                   }}
-                  className="flex flex-col items-center flex-shrink-0 w-20"
+                  className="flex flex-col items-center flex-shrink-0 w-20 relative"
                 >
-                  <div className={`w-16 h-16 rounded-full flex items-center justify-center transition-colors overflow-hidden ${
+                  <div className={`relative w-16 h-16 rounded-full flex items-center justify-center transition-colors overflow-hidden ${
                     isSelected
                       ? 'ring-2 ring-[#C8923A] ring-offset-2 ring-offset-[var(--bg-primary)] bg-[#C8923A]/20'
                       : 'bg-[var(--hover-bg)]'
-                  }`}>
+                  } ${vac ? 'opacity-70' : ''}`}>
                     {professional.avatarUrl ? (
                       <img src={professional.avatarUrl} alt={professional.name} className="w-full h-full object-cover" />
                     ) : (
@@ -864,6 +922,11 @@ export function ClientBooking() {
                   }`}>
                     {professional.name.split(' ').slice(0, 2).join(' ')}
                   </p>
+                  {vac && (
+                    <span className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-[#C8923A]">
+                      férias
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -878,18 +941,60 @@ export function ClientBooking() {
         {/* Time Slots */}
         {selectedProfessional && (
           <div>
-            <p className="font-semibold text-[var(--text-primary)] text-lg mb-1">Horários disponíveis</p>
-            {slotsLoading ? (
-              <LoadingState message="Carregando horários..." />
-            ) : slots.filter((s) => s.available).length === 0 ? (
-              <EmptyState icon="clock" title="Nenhum horário disponível" subtitle="Escolha outra data ou profissional" />
-            ) : (
-              <div>
-                {renderSlotGroup('Manhã', grouped.manha)}
-                {renderSlotGroup('Tarde', grouped.tarde)}
-                {renderSlotGroup('Noite', grouped.noite)}
-              </div>
-            )}
+            {(() => {
+              const selectedDateISO = formatDateISO(selectedDate);
+              // Verificar se o profissional está de férias na data escolhida.
+              // Prioriza vacationOnDate (já calculado no backend para a data
+              // da requisição); cai em vacations[] como fallback.
+              const vacationOnSelected =
+                selectedProfessional.vacationOnDate ||
+                (selectedProfessional.vacations || []).find(
+                  (v) => v.startDate <= selectedDateISO && selectedDateISO <= v.endDate,
+                );
+
+              if (vacationOnSelected) {
+                const fmt = (iso: string) => {
+                  const [y, m, d] = iso.split('-');
+                  return `${d}/${m}/${y}`;
+                };
+                return (
+                  <div className="rounded-xl border border-[#C8923A]/40 bg-[#C8923A]/10 p-5 text-center">
+                    <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-[#C8923A]/20">
+                      <svg className="w-5 h-5 text-[#C8923A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <p className="font-semibold text-[var(--text-primary)]">
+                      {selectedProfessional.name.split(' ')[0]} está de férias
+                    </p>
+                    <p className="text-sm text-[var(--text-secondary)] mt-1">
+                      De <span className="font-semibold text-[#C8923A]">{fmt(vacationOnSelected.startDate)}</span>
+                      {' '}até <span className="font-semibold text-[#C8923A]">{fmt(vacationOnSelected.endDate)}</span>
+                    </p>
+                    <p className="text-xs text-[var(--text-muted)] mt-2">
+                      Escolha outra data ou outro profissional para agendar.
+                    </p>
+                  </div>
+                );
+              }
+
+              return (
+                <>
+                  <p className="font-semibold text-[var(--text-primary)] text-lg mb-1">Horários disponíveis</p>
+                  {slotsLoading ? (
+                    <LoadingState message="Carregando horários..." />
+                  ) : slots.filter((s) => s.available).length === 0 ? (
+                    <EmptyState icon="clock" title="Nenhum horário disponível" subtitle="Escolha outra data ou profissional" />
+                  ) : (
+                    <div>
+                      {renderSlotGroup('Manhã', grouped.manha)}
+                      {renderSlotGroup('Tarde', grouped.tarde)}
+                      {renderSlotGroup('Noite', grouped.noite)}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
       </div>
@@ -909,7 +1014,7 @@ export function ClientBooking() {
           <div>
             <p className="text-xs text-[var(--text-muted)]">Serviços</p>
             {selectedServices.map((s) => {
-              const disc = effectiveServiceDiscount(s.id, activePromotions, activePlanDiscount);
+              const disc = effectiveServiceDiscount(s.id, activePromotions, planDiscountFor(s.id));
               return (
                 <div key={s.id} className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <p className="text-[var(--text-primary)] font-medium break-words min-w-0">{s.name}</p>

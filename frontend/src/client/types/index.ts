@@ -9,6 +9,13 @@ export interface Service {
   price: number; // Em centavos
 }
 
+export interface ProfessionalVacation {
+  id: string;
+  startDate: string; // "YYYY-MM-DD" — sem timezone
+  endDate: string; // "YYYY-MM-DD" — sem timezone
+  reason?: string | null;
+}
+
 export interface Professional {
   id: string;
   name: string;
@@ -17,6 +24,11 @@ export interface Professional {
   avatarUrl?: string | null;
   serviceIds?: string[];
   services?: { id: string; name: string }[];
+  vacations?: ProfessionalVacation[];
+  currentVacation?: ProfessionalVacation | null;
+  // Férias que cobrem a data específica solicitada na busca
+  // (retornada apenas em /professionals/available-for-booking).
+  vacationOnDate?: ProfessionalVacation | null;
 }
 
 export interface AppointmentService {

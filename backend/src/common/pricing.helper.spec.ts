@@ -174,24 +174,24 @@ describe('pricing.helper', () => {
     });
 
     it('retorna discountPercent do plano quando a assinatura está ativa', async () => {
-      const supabase = makeSupabase({ plan: { discountPercent: 25 } });
+      const supabase = makeSupabase({ plan: { id: 'plan-1', discountPercent: 25, services: [] } });
       expect(await getClientPlanDiscount(supabase, 'client-1')).toBe(25);
     });
 
     it('filtra por status ACTIVE', async () => {
-      const supabase = makeSupabase({ plan: { discountPercent: 25 } });
+      const supabase = makeSupabase({ plan: { id: 'plan-1', discountPercent: 25, services: [] } });
       await getClientPlanDiscount(supabase, 'client-1');
       expect(supabase._chain.eq).toHaveBeenCalledWith('status', 'ACTIVE');
       expect(supabase._chain.eq).toHaveBeenCalledWith('clientId', 'client-1');
     });
 
     it('retorna 0 quando discountPercent do plano é 0', async () => {
-      const supabase = makeSupabase({ plan: { discountPercent: 0 } });
+      const supabase = makeSupabase({ plan: { id: 'plan-1', discountPercent: 0, services: [] } });
       expect(await getClientPlanDiscount(supabase, 'client-1')).toBe(0);
     });
 
     it('retorna 0 quando discountPercent não é número', async () => {
-      const supabase = makeSupabase({ plan: { discountPercent: null } });
+      const supabase = makeSupabase({ plan: { id: 'plan-1', discountPercent: null, services: [] } });
       expect(await getClientPlanDiscount(supabase, 'client-1')).toBe(0);
     });
   });

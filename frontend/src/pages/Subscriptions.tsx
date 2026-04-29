@@ -11,6 +11,7 @@ import {
   useUseCut,
   useResetCuts,
   useReopenSubscriptionPix,
+  useRegenerateSubscriptionPix,
   useConfirmSubscriptionPayment,
   useDeleteSubscription,
   useClients,
@@ -84,6 +85,7 @@ export function Subscriptions() {
   const useCut = useUseCut();
   const resetCuts = useResetCuts();
   const reopenPix = useReopenSubscriptionPix();
+  const regeneratePix = useRegenerateSubscriptionPix();
   const confirmPayment = useConfirmSubscriptionPayment();
   const deleteSubscription = useDeleteSubscription();
   const toast = useToast();
@@ -229,14 +231,19 @@ export function Subscriptions() {
 
   const handleReopenPix = async (subscription: ClientSubscription) => {
     try {
-      const pixData = await reopenPix.mutateAsync(subscription.id);
+      let pixData = await reopenPix.mutateAsync(subscription.id);
+
+      // Se não há PIX recuperável, gera um novo automaticamente
       if (!pixData) {
-        toast.warning(
-          'PIX indisponível',
-          'Não foi possível recuperar o QR Code. Considere cancelar e gerar uma nova assinatura.',
-        );
-        return;
+        try {
+          pixData = await regeneratePix.mutateAsync(subscription.id);
+          toast.info('Novo PIX gerado', 'O PIX anterior expirou. Foi gerada uma nova cobrança.');
+        } catch (regenErr) {
+          toast.error('Erro', getApiErrorMessage(regenErr));
+          return;
+        }
       }
+
       setPixModalData({
         pixData,
         amount: subscription.plan?.price || 0,
@@ -480,6 +487,7 @@ export function Subscriptions() {
         isOpen={isCreatePlanModalOpen}
         onClose={handleCloseCreatePlanModal}
         title="Novo Plano"
+        size="xl"
       >
         <SubscriptionPlanForm
           onSubmit={handleCreatePlan}
@@ -493,6 +501,7 @@ export function Subscriptions() {
         isOpen={!!editingPlan}
         onClose={handleCloseEditPlanModal}
         title="Editar Plano"
+        size="xl"
       >
         <SubscriptionPlanForm
           plan={editingPlan}
