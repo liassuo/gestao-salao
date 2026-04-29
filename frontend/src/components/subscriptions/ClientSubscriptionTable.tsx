@@ -1,4 +1,4 @@
-import { Users, Scissors, MoreVertical, XCircle, Phone, RefreshCw } from 'lucide-react';
+import { Users, Scissors, MoreVertical, XCircle, Phone, RefreshCw, QrCode, CheckCircle2, Trash2, RotateCw } from 'lucide-react';
 import { useState, useRef } from 'react';
 import { EmptyState } from '@/components/ui';
 import { formatPhone } from '@/utils/format';
@@ -10,6 +10,10 @@ interface ClientSubscriptionTableProps {
   onCancel: (subscription: ClientSubscription) => void;
   onUseCut: (subscription: ClientSubscription) => void;
   onResetCuts: (subscription: ClientSubscription) => void;
+  onReopenPix?: (subscription: ClientSubscription) => void;
+  onConfirmPayment?: (subscription: ClientSubscription) => void;
+  onDelete?: (subscription: ClientSubscription) => void;
+  onReactivate?: (subscription: ClientSubscription) => void;
   isLoading?: boolean;
   onNewSubscription?: () => void;
 }
@@ -30,6 +34,10 @@ export function ClientSubscriptionTable({
   onCancel,
   onUseCut,
   onResetCuts,
+  onReopenPix,
+  onConfirmPayment,
+  onDelete,
+  onReactivate,
   isLoading,
   onNewSubscription,
 }: ClientSubscriptionTableProps) {
@@ -145,75 +153,166 @@ export function ClientSubscriptionTable({
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-4 py-4 text-center">
-                    {subscription.status === 'ACTIVE' && (
-                      <div className="relative inline-block">
-                        <button
-                          ref={(el) => { menuBtnRefs.current[subscription.id] = el; }}
-                          onClick={() => {
-                            if (openMenuId === subscription.id) {
-                              setOpenMenuId(null);
-                            } else {
-                              const btn = menuBtnRefs.current[subscription.id];
-                              if (btn) {
-                                const rect = btn.getBoundingClientRect();
-                                setMenuPos({ top: rect.bottom + 4, left: rect.right - 160 });
-                              }
-                              setOpenMenuId(subscription.id);
+                    <div className="relative inline-block">
+                      <button
+                        ref={(el) => { menuBtnRefs.current[subscription.id] = el; }}
+                        onClick={() => {
+                          if (openMenuId === subscription.id) {
+                            setOpenMenuId(null);
+                          } else {
+                            const btn = menuBtnRefs.current[subscription.id];
+                            if (btn) {
+                              const rect = btn.getBoundingClientRect();
+                              setMenuPos({ top: rect.bottom + 4, left: rect.right - 200 });
                             }
-                          }}
-                          disabled={isLoading}
-                          className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] disabled:opacity-50"
-                        >
-                          <MoreVertical className="h-5 w-5" />
-                        </button>
+                            setOpenMenuId(subscription.id);
+                          }
+                        }}
+                        disabled={isLoading}
+                        className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] disabled:opacity-50"
+                      >
+                        <MoreVertical className="h-5 w-5" />
+                      </button>
 
-                        {openMenuId === subscription.id && (
-                          <>
-                            <div
-                              className="fixed inset-0 z-10"
-                              onClick={() => setOpenMenuId(null)}
-                            />
-                            <div
-                              className="fixed z-20 w-48 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-1 shadow-lg"
-                              style={{ top: menuPos.top, left: menuPos.left }}
-                            >
-                              <button
-                                onClick={() => {
-                                  onUseCut(subscription);
-                                  setOpenMenuId(null);
-                                }}
-                                disabled={cutsPerMonth !== 99 && subscription.cutsUsedThisMonth >= cutsPerMonth}
-                                className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--hover-bg)] disabled:opacity-40 disabled:cursor-not-allowed"
-                              >
-                                <Scissors className="h-4 w-4 text-[#C8923A]" />
-                                Registrar Corte
-                              </button>
-                              <button
-                                onClick={() => {
-                                  onResetCuts(subscription);
-                                  setOpenMenuId(null);
-                                }}
-                                className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
-                              >
-                                <RefreshCw className="h-4 w-4 text-green-500" />
-                                Renovar Cortes
-                              </button>
-                              <div className="my-1 border-t border-[var(--border-color)]" />
-                              <button
-                                onClick={() => {
-                                  onCancel(subscription);
-                                  setOpenMenuId(null);
-                                }}
-                                className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[#A63030] hover:bg-red-500/10"
-                              >
-                                <XCircle className="h-4 w-4" />
-                                Cancelar Assinatura
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    )}
+                      {openMenuId === subscription.id && (
+                        <>
+                          <div
+                            className="fixed inset-0 z-10"
+                            onClick={() => setOpenMenuId(null)}
+                          />
+                          <div
+                            className="fixed z-20 w-56 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-1 shadow-lg"
+                            style={{ top: menuPos.top, left: menuPos.left }}
+                          >
+                            {subscription.status === 'ACTIVE' && (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    onUseCut(subscription);
+                                    setOpenMenuId(null);
+                                  }}
+                                  disabled={cutsPerMonth !== 99 && subscription.cutsUsedThisMonth >= cutsPerMonth}
+                                  className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--hover-bg)] disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                  <Scissors className="h-4 w-4 text-[#C8923A]" />
+                                  Registrar Corte
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    onResetCuts(subscription);
+                                    setOpenMenuId(null);
+                                  }}
+                                  className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+                                >
+                                  <RefreshCw className="h-4 w-4 text-green-500" />
+                                  Renovar Cortes
+                                </button>
+                                <div className="my-1 border-t border-[var(--border-color)]" />
+                                <button
+                                  onClick={() => {
+                                    onCancel(subscription);
+                                    setOpenMenuId(null);
+                                  }}
+                                  className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[#A63030] hover:bg-red-500/10"
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                  Cancelar Assinatura
+                                </button>
+                              </>
+                            )}
+
+                            {subscription.status === 'PENDING_PAYMENT' && (
+                              <>
+                                {onReopenPix && (
+                                  <button
+                                    onClick={() => {
+                                      onReopenPix(subscription);
+                                      setOpenMenuId(null);
+                                    }}
+                                    className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+                                  >
+                                    <QrCode className="h-4 w-4 text-blue-500" />
+                                    Ver / Reenviar PIX
+                                  </button>
+                                )}
+                                {onConfirmPayment && (
+                                  <button
+                                    onClick={() => {
+                                      onConfirmPayment(subscription);
+                                      setOpenMenuId(null);
+                                    }}
+                                    className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+                                  >
+                                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                                    Confirmar pagamento manual
+                                  </button>
+                                )}
+                                <div className="my-1 border-t border-[var(--border-color)]" />
+                                <button
+                                  onClick={() => {
+                                    onCancel(subscription);
+                                    setOpenMenuId(null);
+                                  }}
+                                  className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[#A63030] hover:bg-red-500/10"
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                  Cancelar
+                                </button>
+                                {onDelete && (
+                                  <button
+                                    onClick={() => {
+                                      onDelete(subscription);
+                                      setOpenMenuId(null);
+                                    }}
+                                    className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[#A63030] hover:bg-red-500/10"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                    Excluir do histórico
+                                  </button>
+                                )}
+                              </>
+                            )}
+
+                            {(subscription.status === 'CANCELED' || subscription.status === 'EXPIRED' || subscription.status === 'SUSPENDED') && (
+                              <>
+                                {onReactivate && (
+                                  <button
+                                    onClick={() => {
+                                      onReactivate(subscription);
+                                      setOpenMenuId(null);
+                                    }}
+                                    className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+                                  >
+                                    <RotateCw className="h-4 w-4 text-[#C8923A]" />
+                                    Reativar (novo PIX)
+                                  </button>
+                                )}
+                                {onDelete && (
+                                  <>
+                                    {onReactivate && <div className="my-1 border-t border-[var(--border-color)]" />}
+                                    <button
+                                      onClick={() => {
+                                        onDelete(subscription);
+                                        setOpenMenuId(null);
+                                      }}
+                                      className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[#A63030] hover:bg-red-500/10"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                      Excluir do histórico
+                                    </button>
+                                  </>
+                                )}
+                                {!onReactivate && !onDelete && (
+                                  <div className="px-4 py-3 text-xs text-[var(--text-muted)]">
+                                    Nenhuma ação disponível
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );

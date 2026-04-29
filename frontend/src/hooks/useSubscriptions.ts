@@ -132,3 +132,33 @@ export function useRemainingCuts(subscriptionId: string | undefined) {
     enabled: !!subscriptionId,
   });
 }
+
+export function useReopenSubscriptionPix() {
+  return useMutation({
+    mutationFn: (id: string) => subscriptionsService.getPendingPix(id),
+  });
+}
+
+export function useConfirmSubscriptionPayment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => subscriptionsService.confirmPayment(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [SUBSCRIPTIONS_KEY] });
+      queryClient.invalidateQueries({ queryKey: [SUBSCRIPTION_PLANS_KEY] });
+    },
+  });
+}
+
+export function useDeleteSubscription() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => subscriptionsService.deleteSubscription(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [SUBSCRIPTIONS_KEY] });
+      queryClient.invalidateQueries({ queryKey: [SUBSCRIPTION_PLANS_KEY] });
+    },
+  });
+}

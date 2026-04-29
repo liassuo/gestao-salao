@@ -258,5 +258,39 @@ export class SubscriptionsController {
   async forceCharge(@Param('id', ParseUUIDPipe) id: string) {
     return this.subscriptionsService.forceCharge(id);
   }
+
+  /**
+   * GET /subscriptions/:id/pending-pix
+   * Retorna dados do PIX pendente da assinatura (Admin) — para reabrir QR Code
+   */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @Get(':id/pending-pix')
+  async getPendingPix(@Param('id', ParseUUIDPipe) id: string) {
+    return this.subscriptionsService.getPendingPixForSubscription(id);
+  }
+
+  /**
+   * POST /subscriptions/:id/confirm-payment
+   * Confirma manualmente o pagamento de uma assinatura PENDING_PAYMENT (Admin)
+   */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @Post(':id/confirm-payment')
+  async confirmPayment(@Param('id', ParseUUIDPipe) id: string) {
+    return this.subscriptionsService.confirmPaymentManually(id);
+  }
+
+  /**
+   * DELETE /subscriptions/:id
+   * Hard-delete de uma assinatura do histórico (Admin) — perde rastro
+   */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async removeSubscription(@Param('id', ParseUUIDPipe) id: string) {
+    await this.subscriptionsService.removeSubscription(id);
+  }
 }
 

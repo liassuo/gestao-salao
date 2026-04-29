@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { CreditCard, AlertCircle, Plus, Users } from 'lucide-react';
 import {
   useSubscriptionPlans,
@@ -10,6 +10,9 @@ import {
   useCancelSubscription,
   useUseCut,
   useResetCuts,
+  useReopenSubscriptionPix,
+  useConfirmSubscriptionPayment,
+  useDeleteSubscription,
   useClients,
   getApiErrorMessage,
 } from '@/hooks';
@@ -20,16 +23,31 @@ import {
   SubscribeClientModal,
   ConfirmCancelModal,
 } from '@/components/subscriptions';
-import { Modal, SkeletonTable, useToast, PixPaymentModal } from '@/components/ui';
+import { Modal, SkeletonTable, useToast, PixPaymentModal, ConfirmModal } from '@/components/ui';
 import type {
   SubscriptionPlan,
   ClientSubscription,
   CreatePlanPayload,
   UpdatePlanPayload,
   SubscribeClientPayload,
+  SubscriptionStatus,
 } from '@/types';
 
 type Tab = 'plans' | 'subscriptions';
+type StatusFilter = 'ACTIVE' | 'PENDING_PAYMENT' | 'ENDED' | 'ALL';
+
+const STATUS_FILTER_LABEL: Record<StatusFilter, string> = {
+  ACTIVE: 'Ativas',
+  PENDING_PAYMENT: 'Aguardando',
+  ENDED: 'Encerradas',
+  ALL: 'Todas',
+};
+
+function matchesStatusFilter(status: SubscriptionStatus, filter: StatusFilter): boolean {
+  if (filter === 'ALL') return true;
+  if (filter === 'ENDED') return status === 'CANCELED' || status === 'EXPIRED' || status === 'SUSPENDED';
+  return status === filter;
+}
 
 export function Subscriptions() {
   const [activeTab, setActiveTab] = useState<Tab>('plans');
@@ -44,7 +62,11 @@ export function Subscriptions() {
   const [isSubscribeModalOpen, setIsSubscribeModalOpen] = useState(false);
   const [cancelingSubscription, setCancelingSubscription] = useState<ClientSubscription | null>(null);
   const [subscribeError, setSubscribeError] = useState<string | null>(null);
-  
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ACTIVE');
+  const [confirmingPayment, setConfirmingPayment] = useState<ClientSubscription | null>(null);
+  const [deletingSubscription, setDeletingSubscription] = useState<ClientSubscription | null>(null);
+  const [reactivatingSubscription, setReactivatingSubscription] = useState<ClientSubscription | null>(null);
+
   // Pix Payment state
   const [pixModalData, setPixModalData] = useState<{ pixData: any; amount: number; description?: string; subscriptionId?: string } | null>(null);
 
@@ -60,7 +82,26 @@ export function Subscriptions() {
   const cancelSubscription = useCancelSubscription();
   const useCut = useUseCut();
   const resetCuts = useResetCuts();
+  const reopenPix = useReopenSubscriptionPix();
+  const confirmPayment = useConfirmSubscriptionPayment();
+  const deleteSubscription = useDeleteSubscription();
   const toast = useToast();
+
+  // Filtered list + counts per filter
+  const allSubscriptions = subscriptions || [];
+  const filteredSubscriptions = useMemo(
+    () => allSubscriptions.filter((s) => matchesStatusFilter(s.status, statusFilter)),
+    [allSubscriptions, statusFilter],
+  );
+  const statusCounts = useMemo(() => {
+    const counts: Record<StatusFilter, number> = { ACTIVE: 0, PENDING_PAYMENT: 0, ENDED: 0, ALL: allSubscriptions.length };
+    for (const s of allSubscriptions) {
+      if (s.status === 'ACTIVE') counts.ACTIVE++;
+      else if (s.status === 'PENDING_PAYMENT') counts.PENDING_PAYMENT++;
+      else if (s.status === 'CANCELED' || s.status === 'EXPIRED' || s.status === 'SUSPENDED') counts.ENDED++;
+    }
+    return counts;
+  }, [allSubscriptions]);
 
   // Plan handlers
   const handleOpenCreatePlanModal = () => {
@@ -178,6 +219,74 @@ export function Subscriptions() {
     }
   };
 
+  const handleReopenPix = async (subscription: ClientSubscription) => {
+    try {
+      const pixData = await reopenPix.mutateAsync(subscription.id);
+      if (!pixData) {
+        toast.warning(
+          'PIX indisponível',
+          'Não foi possível recuperar o QR Code. Considere cancelar e gerar uma nova assinatura.',
+        );
+        return;
+      }
+      setPixModalData({
+        pixData,
+        amount: subscription.plan?.price || 0,
+        description: `Assinatura: ${subscription.plan?.name || 'Plano'}`,
+        subscriptionId: subscription.id,
+      });
+    } catch (err) {
+      toast.error('Erro', getApiErrorMessage(err));
+    }
+  };
+
+  const handleConfirmPayment = async () => {
+    if (!confirmingPayment) return;
+    try {
+      await confirmPayment.mutateAsync(confirmingPayment.id);
+      const name = confirmingPayment.client?.name || 'cliente';
+      setConfirmingPayment(null);
+      toast.success('Pagamento confirmado', `Assinatura de ${name} ativada.`);
+    } catch (err) {
+      toast.error('Erro', getApiErrorMessage(err));
+    }
+  };
+
+  const handleDeleteSubscription = async () => {
+    if (!deletingSubscription) return;
+    try {
+      await deleteSubscription.mutateAsync(deletingSubscription.id);
+      setDeletingSubscription(null);
+      toast.success('Assinatura removida', 'O registro foi excluído do histórico.');
+    } catch (err) {
+      toast.error('Erro', getApiErrorMessage(err));
+    }
+  };
+
+  const handleReactivate = async () => {
+    if (!reactivatingSubscription) return;
+    const sub = reactivatingSubscription;
+    try {
+      const response = await subscribeClient.mutateAsync({
+        clientId: sub.client.id,
+        planId: sub.plan.id,
+      }) as any;
+      setReactivatingSubscription(null);
+      toast.success('Assinatura reativada', 'Uma nova cobrança foi gerada.');
+
+      if (response?.pixData) {
+        setPixModalData({
+          pixData: response.pixData,
+          amount: response.subscription?.plan?.price || sub.plan.price || 0,
+          description: `Assinatura: ${response.subscription?.plan?.name || sub.plan.name}`,
+          subscriptionId: response.subscription?.id,
+        });
+      }
+    } catch (err) {
+      toast.error('Erro', getApiErrorMessage(err));
+    }
+  };
+
   const tabs = [
     { id: 'plans' as Tab, label: 'Planos', icon: CreditCard },
     { id: 'subscriptions' as Tab, label: 'Assinaturas', icon: Users },
@@ -282,14 +391,56 @@ export function Subscriptions() {
               </div>
             </div>
           ) : (
-            <ClientSubscriptionTable
-              subscriptions={subscriptions || []}
-              onCancel={setCancelingSubscription}
-              onUseCut={handleUseCut}
-              onResetCuts={handleResetCuts}
-              isLoading={cancelSubscription.isPending || useCut.isPending || resetCuts.isPending}
-              onNewSubscription={handleOpenSubscribeModal}
-            />
+            <>
+              {/* Filter chips */}
+              <div className="flex flex-wrap gap-2">
+                {(['ACTIVE', 'PENDING_PAYMENT', 'ENDED', 'ALL'] as StatusFilter[]).map((filter) => {
+                  const isActive = statusFilter === filter;
+                  return (
+                    <button
+                      key={filter}
+                      onClick={() => setStatusFilter(filter)}
+                      className={`flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+                        isActive
+                          ? 'bg-[#8B6914] text-white'
+                          : 'border border-[var(--border-color)] bg-[var(--card-bg)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
+                      }`}
+                    >
+                      {STATUS_FILTER_LABEL[filter]}
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs ${
+                          isActive
+                            ? 'bg-white/20'
+                            : 'bg-[var(--hover-bg)] text-[var(--text-muted)]'
+                        }`}
+                      >
+                        {statusCounts[filter]}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <ClientSubscriptionTable
+                subscriptions={filteredSubscriptions}
+                onCancel={setCancelingSubscription}
+                onUseCut={handleUseCut}
+                onResetCuts={handleResetCuts}
+                onReopenPix={handleReopenPix}
+                onConfirmPayment={setConfirmingPayment}
+                onDelete={setDeletingSubscription}
+                onReactivate={setReactivatingSubscription}
+                isLoading={
+                  cancelSubscription.isPending ||
+                  useCut.isPending ||
+                  resetCuts.isPending ||
+                  reopenPix.isPending ||
+                  confirmPayment.isPending ||
+                  deleteSubscription.isPending
+                }
+                onNewSubscription={handleOpenSubscribeModal}
+              />
+            </>
           )}
         </>
       )}
@@ -387,6 +538,54 @@ export function Subscriptions() {
         pixData={pixModalData?.pixData}
         amount={pixModalData?.amount ?? 0}
         description={pixModalData?.description}
+      />
+
+      {/* Confirmar pagamento manual */}
+      <ConfirmModal
+        isOpen={!!confirmingPayment}
+        onClose={() => setConfirmingPayment(null)}
+        onConfirm={handleConfirmPayment}
+        title="Confirmar pagamento manual"
+        message={
+          confirmingPayment
+            ? `Marcar a assinatura de ${confirmingPayment.client?.name || 'cliente'} como ATIVA sem confirmação do gateway? Use apenas se o cliente já tiver pago em dinheiro ou transferência. Esta ação zera os cortes do mês e renova a validade.`
+            : ''
+        }
+        confirmLabel="Confirmar pagamento"
+        variant="info"
+        isLoading={confirmPayment.isPending}
+      />
+
+      {/* Reativar assinatura encerrada */}
+      <ConfirmModal
+        isOpen={!!reactivatingSubscription}
+        onClose={() => setReactivatingSubscription(null)}
+        onConfirm={handleReactivate}
+        title="Reativar assinatura"
+        message={
+          reactivatingSubscription
+            ? `Criar uma nova assinatura para ${reactivatingSubscription.client?.name || 'cliente'} no plano ${reactivatingSubscription.plan?.name || ''} (${(reactivatingSubscription.plan?.price ? (reactivatingSubscription.plan.price / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '')})? Será gerado um novo PIX.`
+            : ''
+        }
+        confirmLabel="Reativar"
+        variant="info"
+        isLoading={subscribeClient.isPending}
+      />
+
+      {/* Excluir do histórico */}
+      <ConfirmModal
+        isOpen={!!deletingSubscription}
+        onClose={() => setDeletingSubscription(null)}
+        onConfirm={handleDeleteSubscription}
+        title="Excluir do histórico"
+        message={
+          deletingSubscription
+            ? `Excluir definitivamente a assinatura de ${deletingSubscription.client?.name || 'cliente'} do histórico? Esta ação remove o registro do banco e perde rastro de auditoria. Não pode ser desfeita.`
+            : ''
+        }
+        confirmLabel="Excluir"
+        variant="danger"
+        isLoading={deleteSubscription.isPending}
       />
     </div>
   );

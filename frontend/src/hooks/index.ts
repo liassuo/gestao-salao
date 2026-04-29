@@ -27,6 +27,9 @@ export {
   useUseCut,
   useResetCuts,
   useRemainingCuts,
+  useReopenSubscriptionPix,
+  useConfirmSubscriptionPayment,
+  useDeleteSubscription,
   SUBSCRIPTION_PLANS_KEY,
   SUBSCRIPTIONS_KEY,
 } from './useSubscriptions';

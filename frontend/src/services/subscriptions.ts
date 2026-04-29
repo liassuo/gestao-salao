@@ -82,4 +82,18 @@ export const subscriptionsService = {
     const response = await api.get<RemainingCuts>(`/subscriptions/${id}/remaining-cuts`);
     return response.data;
   },
+
+  async getPendingPix(id: string): Promise<any> {
+    const response = await api.get<any>(`/subscriptions/${id}/pending-pix`);
+    return response.data;
+  },
+
+  async confirmPayment(id: string): Promise<ClientSubscription> {
+    const response = await api.post<ClientSubscription>(`/subscriptions/${id}/confirm-payment`);
+    return response.data;
+  },
+
+  async deleteSubscription(id: string): Promise<void> {
+    await api.delete(`/subscriptions/${id}`);
+  },
 };

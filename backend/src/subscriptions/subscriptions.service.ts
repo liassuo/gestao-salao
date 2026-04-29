@@ -574,6 +574,161 @@ export class SubscriptionsService {
   }
 
   /**
+   * Busca dados do PIX pendente de uma assinatura específica (admin).
+   * Variante de getMePendingPix que aceita subscriptionId em vez de clientId.
+   */
+  async getPendingPixForSubscription(subscriptionId: string) {
+    const subscription = await this.findSubscription(subscriptionId);
+    if (subscription.status !== 'PENDING_PAYMENT') {
+      throw new BadRequestException('Assinatura não está aguardando pagamento');
+    }
+
+    const clientId = subscription.clientId;
+
+    // Buscar último pagamento PIX pendente vinculado à assinatura ou ao cliente
+    const { data: paymentsBySub } = await this.supabase
+      .from('payments')
+      .select('*')
+      .eq('subscriptionId', subscription.id)
+      .eq('method', 'PIX')
+      .in('asaasStatus', ['PENDING', 'AWAITING_RISK_ANALYSIS'])
+      .order('createdAt', { ascending: false })
+      .limit(1);
+
+    let payment = paymentsBySub?.[0];
+
+    if (!payment) {
+      const { data: paymentsByClient } = await this.supabase
+        .from('payments')
+        .select('*')
+        .eq('clientId', clientId)
+        .eq('method', 'PIX')
+        .in('asaasStatus', ['PENDING', 'AWAITING_RISK_ANALYSIS'])
+        .order('createdAt', { ascending: false })
+        .limit(1);
+      payment = paymentsByClient?.[0];
+    }
+
+    if (payment?.asaasPaymentId) {
+      try {
+        return await this.asaasService.getPixQrCode(payment.asaasPaymentId);
+      } catch (e) {
+        this.logger.warn(`Falha ao carregar QR Code PIX do banco local: ${e}`);
+      }
+    }
+
+    // Fallback: buscar diretamente da assinatura no Asaas
+    if (subscription.asaasSubscriptionId) {
+      try {
+        const charges = await this.asaasService.getSubscriptionPayments(subscription.asaasSubscriptionId);
+        const pending = charges.find((c: any) =>
+          (c.status === 'PENDING' || c.status === 'AWAITING_RISK_ANALYSIS') &&
+          c.billingType === 'PIX',
+        );
+        if (pending) {
+          return await this.asaasService.getPixQrCode(pending.id);
+        }
+      } catch (e) {
+        this.logger.warn(`Falha no fallback de QR Code PIX via assinatura: ${e}`);
+      }
+    }
+
+    // Fallback 2: cobranças avulsas do cliente no Asaas
+    try {
+      const { data: clientData } = await this.supabase
+        .from('clients')
+        .select('asaasCustomerId')
+        .eq('id', clientId)
+        .single();
+      if (clientData?.asaasCustomerId) {
+        const chargesRes = await this.asaasService.getPayments({
+          customer: clientData.asaasCustomerId,
+          status: 'PENDING',
+        });
+        const pending = (chargesRes?.data || []).find((c: any) => c.billingType === 'PIX');
+        if (pending) {
+          return await this.asaasService.getPixQrCode(pending.id);
+        }
+      }
+    } catch (e) {
+      this.logger.warn(`Falha no fallback 2 de QR Code PIX: ${e}`);
+    }
+
+    return null;
+  }
+
+  /**
+   * Confirma manualmente o pagamento de uma assinatura PENDING_PAYMENT.
+   * Marca como ACTIVE, zera cortes e renova endDate se já vencido.
+   * Útil para casos de pagamento offline (dinheiro, transferência).
+   */
+  async confirmPaymentManually(subscriptionId: string) {
+    const subscription = await this.findSubscription(subscriptionId);
+
+    if (subscription.status !== 'PENDING_PAYMENT') {
+      throw new BadRequestException('Apenas assinaturas aguardando pagamento podem ser confirmadas manualmente');
+    }
+
+    const now = new Date();
+    const nowIso = now.toISOString();
+
+    // Se endDate já venceu, renovar para now + 1 mês
+    let newEndDate: Date;
+    if (subscription.endDate && new Date(subscription.endDate) > now) {
+      newEndDate = new Date(subscription.endDate);
+    } else {
+      newEndDate = new Date(now);
+      newEndDate.setMonth(newEndDate.getMonth() + 1);
+    }
+
+    const { data: updated, error } = await this.supabase
+      .from('client_subscriptions')
+      .update({
+        status: 'ACTIVE',
+        cutsUsedThisMonth: 0,
+        lastResetDate: nowIso,
+        endDate: newEndDate.toISOString(),
+        updatedAt: nowIso,
+      })
+      .eq('id', subscription.id)
+      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent)')
+      .single();
+
+    if (error) throw error;
+
+    this.logger.log(`Assinatura ${subscription.id} confirmada manualmente (admin) — status ACTIVE até ${newEndDate.toISOString()}`);
+    return updated;
+  }
+
+  /**
+   * Hard-delete de uma assinatura (admin).
+   * Remove o registro do histórico. Use com cautela — perde dados de auditoria.
+   */
+  async removeSubscription(id: string) {
+    const subscription = await this.findSubscription(id);
+
+    // Se ainda está vinculada a uma assinatura ativa no Asaas, tentar cancelar lá primeiro
+    if (this.asaasService.configured && subscription.asaasSubscriptionId && subscription.status !== 'CANCELED') {
+      try {
+        await this.asaasService.cancelSubscription(subscription.asaasSubscriptionId);
+        this.logger.log(`Assinatura Asaas cancelada antes da remoção: ${subscription.asaasSubscriptionId}`);
+      } catch (syncError) {
+        this.logger.warn(`Falha ao cancelar assinatura no Asaas durante remoção: ${syncError}`);
+      }
+    }
+
+    const { error } = await this.supabase
+      .from('client_subscriptions')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+
+    this.logger.log(`Assinatura ${id} removida do histórico (admin)`);
+    return { id, deleted: true };
+  }
+
+  /**
    * Força uma cobrança manual no Asaas para uma assinatura específica.
    * Cria um registro de pagamento pendente vinculado à assinatura.
    */
