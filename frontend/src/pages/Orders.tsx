@@ -89,6 +89,8 @@ export function Orders() {
   const [createNotes, setCreateNotes] = useState('');
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [createItemTab, setCreateItemTab] = useState<OrderItemType>('PRODUCT');
+  const [createConsumerType, setCreateConsumerType] = useState<'CLIENT' | 'PROFESSIONAL'>('CLIENT');
+  const [createConsumerProfessionalId, setCreateConsumerProfessionalId] = useState('');
 
   // Add item form state
   const [itemType, setItemType] = useState<OrderItemType>('PRODUCT');
@@ -148,8 +150,18 @@ export function Orders() {
 
   const handleCreate = async () => {
     try {
+      if (createConsumerType === 'PROFESSIONAL' && !createConsumerProfessionalId) {
+        toast.error('Selecione o profissional', 'Informe quem está consumindo a comanda.');
+        return;
+      }
+
       const payload: CreateOrderPayload = {};
-      if (createClientId) payload.clientId = createClientId;
+      if (createConsumerType === 'PROFESSIONAL') {
+        payload.consumerType = 'PROFESSIONAL';
+        payload.consumerProfessionalId = createConsumerProfessionalId;
+      } else if (createClientId) {
+        payload.clientId = createClientId;
+      }
       if (createNotes.trim()) payload.notes = createNotes.trim();
 
       if (cartItems.length > 0) {
@@ -169,6 +181,8 @@ export function Orders() {
       setCreateNotes('');
       setCartItems([]);
       setCreateItemTab('PRODUCT');
+      setCreateConsumerType('CLIENT');
+      setCreateConsumerProfessionalId('');
     } catch (err) {
       toast.error('Erro', getApiErrorMessage(err));
     }
@@ -314,6 +328,7 @@ export function Orders() {
             <option value="">Todos os status</option>
             <option value="PENDING">Pendente</option>
             <option value="PAID">Pago</option>
+            <option value="PAID_AS_DEBT">Lançado como débito</option>
             <option value="CANCELED">Cancelado</option>
           </select>
           <button onClick={() => { setCreateClientId(''); setCreateNotes(''); setCartItems([]); setCreateItemTab('PRODUCT'); setIsCreateModalOpen(true); }} className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-4 py-2.5 font-medium text-white transition-colors hover:bg-[#725510]">
@@ -349,7 +364,15 @@ export function Orders() {
                 {orders.map((order) => (
                   <tr key={order.id} className="border-b border-[var(--card-border)] transition-colors hover:bg-[var(--hover-bg)]">
                     <td className="px-4 py-3 text-[var(--text-muted)] font-mono text-sm">{order.id.slice(0, 8)}</td>
-                    <td className="px-4 py-3 text-[var(--text-primary)]">{order.client?.name || '-'}</td>
+                    <td className="px-4 py-3 text-[var(--text-primary)]">
+                      {order.consumerType === 'PROFESSIONAL' ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-md bg-purple-500/15 px-2 py-0.5 text-xs font-medium text-purple-300">
+                          {order.consumerProfessional?.name || order.professional?.name || 'Profissional'} (débito)
+                        </span>
+                      ) : (
+                        order.client?.name || '-'
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-[var(--text-secondary)]">{order.items?.length ?? '-'}</td>
                     <td className="px-4 py-3 font-medium text-[var(--text-primary)]">{formatCents(order.totalAmount)}</td>
                     <td className="px-4 py-3">
@@ -365,6 +388,9 @@ export function Orders() {
                             <button onClick={() => handleCancel(order.id)} className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-yellow-400"><XCircle className="h-4 w-4" /></button>
                           </>
                         )}
+                        {order.status === 'PAID_AS_DEBT' && (
+                          <button onClick={() => handleCancel(order.id)} title="Cancelar (estorna estoque e anula débito)" className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-yellow-400"><XCircle className="h-4 w-4" /></button>
+                        )}
                         <button onClick={() => setDeletingOrder(order)} className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-[#C45050]"><Trash2 className="h-4 w-4" /></button>
                       </div>
                     </td>
@@ -379,19 +405,66 @@ export function Orders() {
       {/* Create Modal */}
       <Modal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} title="Nova Comanda" size="lg">
         <div className="space-y-4">
+          {/* Toggle: cliente vs profissional consumindo */}
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">Cliente (opcional)</label>
-            <select
-              value={createClientId}
-              onChange={(e) => setCreateClientId(e.target.value)}
-              className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[#C8923A] focus:outline-none"
-            >
-              <option value="">Sem cliente</option>
-              {clients?.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+            <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">Para quem é a comanda?</label>
+            <div className="flex gap-2 rounded-lg bg-[var(--hover-bg)] p-1">
+              <button
+                onClick={() => setCreateConsumerType('CLIENT')}
+                className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  createConsumerType === 'CLIENT'
+                    ? 'bg-[var(--bg-primary)] text-[var(--text-primary)] shadow'
+                    : 'text-[var(--text-muted)]'
+                }`}
+              >
+                Cliente
+              </button>
+              <button
+                onClick={() => setCreateConsumerType('PROFESSIONAL')}
+                className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  createConsumerType === 'PROFESSIONAL'
+                    ? 'bg-[var(--bg-primary)] text-[var(--text-primary)] shadow'
+                    : 'text-[var(--text-muted)]'
+                }`}
+              >
+                Profissional (vira débito)
+              </button>
+            </div>
           </div>
+
+          {createConsumerType === 'CLIENT' ? (
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">Cliente (opcional)</label>
+              <select
+                value={createClientId}
+                onChange={(e) => setCreateClientId(e.target.value)}
+                className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[#C8923A] focus:outline-none"
+              >
+                <option value="">Sem cliente</option>
+                {clients?.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">Profissional consumidor *</label>
+              <select
+                value={createConsumerProfessionalId}
+                onChange={(e) => setCreateConsumerProfessionalId(e.target.value)}
+                className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-purple-500 focus:outline-none"
+              >
+                <option value="">Selecione o profissional</option>
+                {(professionals || []).map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              <p className="mt-1.5 text-xs text-[var(--text-muted)]">
+                Esta comanda será lançada como débito do profissional ao ser fechada — não entra no
+                caixa, é descontada da próxima comissão dele.
+              </p>
+            </div>
+          )}
 
           {/* Adicionar itens */}
           <div className="border-t border-[var(--card-border)] pt-4">

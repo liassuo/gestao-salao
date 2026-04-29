@@ -6,6 +6,7 @@ export interface Order {
   appointmentId?: string | null;
   consumerType?: OrderConsumerType;
   consumerProfessionalId?: string | null;
+  consumerProfessional?: { id: string; name: string } | null;
   createdAt: string;
   updatedAt: string;
   client?: { id: string; name: string } | null;

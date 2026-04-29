@@ -152,7 +152,7 @@ export class OrdersService {
   }
 
   async findAll(query: QueryOrderDto) {
-    let queryBuilder = this.supabase.from('orders').select('*, client:clients(id, name), items:order_items(id, itemType, productId, serviceId, quantity, unitPrice, product:products(id, name), service:services(id, name))');
+    let queryBuilder = this.supabase.from('orders').select('*, client:clients(id, name), consumerProfessional:professionals!consumerProfessionalId(id, name), items:order_items(id, itemType, productId, serviceId, quantity, unitPrice, product:products(id, name), service:services(id, name))');
 
     if (query.status) {
       queryBuilder = queryBuilder.eq('status', query.status);
@@ -183,7 +183,7 @@ export class OrdersService {
   async findOne(id: string) {
     const { data: order, error } = await this.supabase
       .from('orders')
-      .select('*, client:clients(id, name), items:order_items(id, itemType, productId, serviceId, quantity, unitPrice, product:products(id, name), service:services(id, name))')
+      .select('*, client:clients(id, name), consumerProfessional:professionals!consumerProfessionalId(id, name), items:order_items(id, itemType, productId, serviceId, quantity, unitPrice, product:products(id, name), service:services(id, name))')
       .eq('id', id)
       .single();
 
@@ -197,7 +197,7 @@ export class OrdersService {
   async findByAppointment(appointmentId: string) {
     const { data: order } = await this.supabase
       .from('orders')
-      .select('*, client:clients(id, name), items:order_items(id, itemType, productId, serviceId, quantity, unitPrice, product:products(id, name), service:services(id, name))')
+      .select('*, client:clients(id, name), consumerProfessional:professionals!consumerProfessionalId(id, name), items:order_items(id, itemType, productId, serviceId, quantity, unitPrice, product:products(id, name), service:services(id, name))')
       .eq('appointmentId', appointmentId)
       .order('createdAt', { ascending: false })
       .limit(1)

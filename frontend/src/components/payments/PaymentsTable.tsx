@@ -89,7 +89,15 @@ export function PaymentsTable({
                   {formatDateTime(payment.paidAt)}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-[var(--text-primary)]">
-                  {payment.client?.name || 'Cliente'}
+                  {payment.client?.name ? (
+                    payment.client.name
+                  ) : payment.notes?.startsWith('Quitação de débito do profissional') ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-md bg-purple-500/15 px-2 py-0.5 text-xs font-medium text-purple-300">
+                      Quitação de débito
+                    </span>
+                  ) : (
+                    'Cliente'
+                  )}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold text-[var(--text-primary)]">
                   {formatCurrency(payment.amount)}
