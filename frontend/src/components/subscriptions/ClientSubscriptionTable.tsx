@@ -181,7 +181,7 @@ export function ClientSubscriptionTable({
                             onClick={() => setOpenMenuId(null)}
                           />
                           <div
-                            className="fixed z-20 w-56 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-1 shadow-lg"
+                            className="fixed z-20 w-56 rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] py-1 shadow-xl"
                             style={{ top: menuPos.top, left: menuPos.left }}
                           >
                             {subscription.status === 'ACTIVE' && (

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { CreditCard, AlertCircle, Plus, Users } from 'lucide-react';
+import { CreditCard, AlertCircle, Plus, Users, Search, X } from 'lucide-react';
 import {
   useSubscriptionPlans,
   useClientSubscriptions,
@@ -63,6 +63,7 @@ export function Subscriptions() {
   const [cancelingSubscription, setCancelingSubscription] = useState<ClientSubscription | null>(null);
   const [subscribeError, setSubscribeError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ACTIVE');
+  const [searchQuery, setSearchQuery] = useState('');
   const [confirmingPayment, setConfirmingPayment] = useState<ClientSubscription | null>(null);
   const [deletingSubscription, setDeletingSubscription] = useState<ClientSubscription | null>(null);
   const [reactivatingSubscription, setReactivatingSubscription] = useState<ClientSubscription | null>(null);
@@ -89,10 +90,17 @@ export function Subscriptions() {
 
   // Filtered list + counts per filter
   const allSubscriptions = subscriptions || [];
-  const filteredSubscriptions = useMemo(
-    () => allSubscriptions.filter((s) => matchesStatusFilter(s.status, statusFilter)),
-    [allSubscriptions, statusFilter],
-  );
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const filteredSubscriptions = useMemo(() => {
+    return allSubscriptions.filter((s) => {
+      if (!matchesStatusFilter(s.status, statusFilter)) return false;
+      if (!normalizedQuery) return true;
+      const name = (s.client?.name || '').toLowerCase();
+      const phone = (s.client?.phone || '').toLowerCase();
+      const planName = (s.plan?.name || '').toLowerCase();
+      return name.includes(normalizedQuery) || phone.includes(normalizedQuery) || planName.includes(normalizedQuery);
+    });
+  }, [allSubscriptions, statusFilter, normalizedQuery]);
   const statusCounts = useMemo(() => {
     const counts: Record<StatusFilter, number> = { ACTIVE: 0, PENDING_PAYMENT: 0, ENDED: 0, ALL: allSubscriptions.length };
     for (const s of allSubscriptions) {
@@ -392,33 +400,55 @@ export function Subscriptions() {
             </div>
           ) : (
             <>
-              {/* Filter chips */}
-              <div className="flex flex-wrap gap-2">
-                {(['ACTIVE', 'PENDING_PAYMENT', 'ENDED', 'ALL'] as StatusFilter[]).map((filter) => {
-                  const isActive = statusFilter === filter;
-                  return (
+              {/* Search + filter chips */}
+              <div className="flex flex-col gap-3">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Buscar por cliente, telefone ou plano..."
+                    className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-2.5 pl-10 pr-10 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[#C8923A] focus:outline-none focus:ring-2 focus:ring-[#C8923A]/30"
+                  />
+                  {searchQuery && (
                     <button
-                      key={filter}
-                      onClick={() => setStatusFilter(filter)}
-                      className={`flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-                        isActive
-                          ? 'bg-[#8B6914] text-white'
-                          : 'border border-[var(--border-color)] bg-[var(--card-bg)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
-                      }`}
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
+                      aria-label="Limpar busca"
                     >
-                      {STATUS_FILTER_LABEL[filter]}
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs ${
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {(['ACTIVE', 'PENDING_PAYMENT', 'ENDED', 'ALL'] as StatusFilter[]).map((filter) => {
+                    const isActive = statusFilter === filter;
+                    return (
+                      <button
+                        key={filter}
+                        onClick={() => setStatusFilter(filter)}
+                        className={`flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
                           isActive
-                            ? 'bg-white/20'
-                            : 'bg-[var(--hover-bg)] text-[var(--text-muted)]'
+                            ? 'bg-[#8B6914] text-white'
+                            : 'border border-[var(--border-color)] bg-[var(--card-bg)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
                         }`}
                       >
-                        {statusCounts[filter]}
-                      </span>
-                    </button>
-                  );
-                })}
+                        {STATUS_FILTER_LABEL[filter]}
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs ${
+                            isActive
+                              ? 'bg-white/20'
+                              : 'bg-[var(--hover-bg)] text-[var(--text-muted)]'
+                          }`}
+                        >
+                          {statusCounts[filter]}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <ClientSubscriptionTable
