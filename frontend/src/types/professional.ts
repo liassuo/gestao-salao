@@ -4,6 +4,16 @@ export interface WorkingHours {
   endTime: string; // "18:00"
 }
 
+export interface ProfessionalVacation {
+  id: string;
+  professionalId?: string;
+  startDate: string; // "YYYY-MM-DD" — sem timezone
+  endDate: string; // "YYYY-MM-DD" — sem timezone
+  reason?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface Professional {
   id: string;
   name: string;
@@ -19,6 +29,8 @@ export interface Professional {
     id: string;
     name: string;
   }[];
+  vacations?: ProfessionalVacation[];
+  currentVacation?: ProfessionalVacation | null;
 }
 
 export interface CreateProfessionalPayload {

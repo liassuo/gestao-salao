@@ -164,6 +164,8 @@ describe('ProfessionalsService', () => {
             { id: 'svc1', name: 'Corte' },
             { id: 'svc2', name: 'Barba' },
           ],
+          vacations: [],
+          currentVacation: null,
           _count: { appointments: 5 },
         },
       ]);
@@ -194,6 +196,8 @@ describe('ProfessionalsService', () => {
           name: 'Carlos',
           email: null,
           services: [],
+          vacations: [],
+          currentVacation: null,
           _count: { appointments: 0 },
         },
       ]);
@@ -259,7 +263,13 @@ describe('ProfessionalsService', () => {
 
       const result = await service.findOne('prof1');
 
-      expect(result).toEqual({ ...prof, email: 'ana@test.com', services: [] });
+      expect(result).toEqual({
+        ...prof,
+        email: 'ana@test.com',
+        services: [],
+        vacations: [],
+        currentVacation: null,
+      });
       expect(chains['professionals'].eq).toHaveBeenCalledWith('id', 'prof1');
     });
 
@@ -316,6 +326,9 @@ describe('ProfessionalsService', () => {
           id: 'prof1',
           name: 'Ana',
           avatarUrl: 'avatar.jpg',
+          vacations: [],
+          currentVacation: null,
+          vacationOnDate: null,
         },
       ]);
     });
@@ -435,6 +448,9 @@ describe('ProfessionalsService', () => {
           id: 'prof1',
           name: 'Ana',
           avatarUrl: null,
+          vacations: [],
+          currentVacation: null,
+          vacationOnDate: null,
         },
       ]);
     });

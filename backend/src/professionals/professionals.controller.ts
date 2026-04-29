@@ -21,7 +21,12 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../common/enums';
 import { ProfessionalsService } from './professionals.service';
-import { CreateProfessionalDto, UpdateProfessionalDto } from './dto';
+import {
+  CreateProfessionalDto,
+  UpdateProfessionalDto,
+  CreateVacationDto,
+  UpdateVacationDto,
+} from './dto';
 
 @ApiTags('Professionals')
 @ApiBearerAuth()
@@ -156,5 +161,62 @@ export class ProfessionalsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async hardDelete(@Param('id', ParseUUIDPipe) id: string) {
     await this.professionalsService.hardDelete(id);
+  }
+
+  // ==================== FÉRIAS ====================
+
+  /**
+   * GET /professionals/:id/vacations
+   * Lista as férias de um profissional (público — usado pelo app cliente
+   * para exibir o aviso "está de férias até X").
+   */
+  @Get(':id/vacations')
+  async listVacations(@Param('id', ParseUUIDPipe) id: string) {
+    return this.professionalsService.listVacations(id);
+  }
+
+  /**
+   * POST /professionals/:id/vacations
+   * Cadastra um período de férias para o profissional.
+   */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @Post(':id/vacations')
+  @HttpCode(HttpStatus.CREATED)
+  async createVacation(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateVacationDto,
+  ) {
+    return this.professionalsService.createVacation(id, dto);
+  }
+
+  /**
+   * PATCH /professionals/:id/vacations/:vacationId
+   * Atualiza um período de férias.
+   */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @Patch(':id/vacations/:vacationId')
+  async updateVacation(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('vacationId', ParseUUIDPipe) vacationId: string,
+    @Body() dto: UpdateVacationDto,
+  ) {
+    return this.professionalsService.updateVacation(id, vacationId, dto);
+  }
+
+  /**
+   * DELETE /professionals/:id/vacations/:vacationId
+   * Remove um período de férias.
+   */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @Delete(':id/vacations/:vacationId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteVacation(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('vacationId', ParseUUIDPipe) vacationId: string,
+  ) {
+    await this.professionalsService.deleteVacation(id, vacationId);
   }
 }

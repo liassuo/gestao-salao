@@ -81,7 +81,17 @@ export function ProfessionalsTable({
                       )}
                     </div>
                     <div>
-                      <p className="font-medium text-[var(--text-primary)]">{professional.name}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-medium text-[var(--text-primary)]">{professional.name}</p>
+                        {professional.currentVacation && (
+                          <span
+                            title={`Volta em ${professional.currentVacation.endDate.split('-').reverse().join('/')}`}
+                            className="text-[10px] font-bold uppercase tracking-wider bg-[#C8923A] text-[#1c1006] px-1.5 py-0.5 rounded"
+                          >
+                            em férias
+                          </span>
+                        )}
+                      </div>
                       {professional.commissionRate && (
                         <p className="text-xs text-[var(--text-muted)]">
                           Comissão: {professional.commissionRate}%
