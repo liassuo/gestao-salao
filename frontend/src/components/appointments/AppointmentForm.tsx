@@ -23,7 +23,6 @@ interface AppointmentFormProps {
     serviceIds: string[];
     scheduledAt: string;
     notes?: string;
-    billingType?: 'PIX' | 'CREDIT_CARD';
   }) => Promise<void>;
   isLoading: boolean;
   error: string | null;

@@ -154,7 +154,7 @@ export function ClientBooking() {
   const [debtPixCopied, setDebtPixCopied] = useState(false);
   const [debtPollingActive, setDebtPollingActive] = useState(false);
   const [appointmentBillingType, setAppointmentBillingType] =
-    useState<AppointmentBillingType>('PIX');
+    useState<AppointmentBillingType>('CASH');
   const [subscribePlanModal, setSubscribePlanModal] = useState<string | null>(null);
   const [leaveAfterPixClose, setLeaveAfterPixClose] = useState(false);
   const [clientCpf, setClientCpf] = useState<string | null>(null);
@@ -1069,18 +1069,7 @@ export function ClientBooking() {
         {totalPrice > 0 && !(useSubscriptionCut && mySubscription) && (
           <div className="mb-4">
             <p className="text-sm font-medium text-[var(--text-primary)] mb-2">Forma de pagamento</p>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => setAppointmentBillingType('PIX')}
-                className={`rounded-xl border py-3 px-2 text-sm font-semibold transition-colors ${
-                  appointmentBillingType === 'PIX'
-                    ? 'border-[#C8923A] bg-[#C8923A]/15 text-[#C8923A]'
-                    : 'border-[var(--card-border)] bg-[var(--card-bg)] text-[var(--text-secondary)]'
-                }`}
-              >
-                PIX
-              </button>
+            <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => setAppointmentBillingType('CREDIT_CARD')}
@@ -1105,9 +1094,7 @@ export function ClientBooking() {
               </button>
             </div>
             <p className="text-xs text-[var(--text-muted)] mt-2">
-              {appointmentBillingType === 'PIX'
-                ? 'Você verá o QR Code após confirmar.'
-                : appointmentBillingType === 'CREDIT_CARD'
+              {appointmentBillingType === 'CREDIT_CARD'
                 ? 'Abriremos o link seguro do Asaas para pagar com cartão.'
                 : 'Pague na hora do serviço (dinheiro, cartão ou PIX na maquininha).'}
             </p>
