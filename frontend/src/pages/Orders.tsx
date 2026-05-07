@@ -141,7 +141,6 @@ export function Orders() {
     () => getActiveSubscriptionView(clientSub),
     [clientSub],
   );
-  const planLabel = activeSub?.planLabel ?? 'Assinatura';
 
   const createOrder = useCreateOrder();
   const payOrder = usePayOrder();
