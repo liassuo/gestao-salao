@@ -433,7 +433,7 @@ export class AppointmentsService {
   async markAsAttended(id: string, paymentMethod?: string, registeredBy?: string) {
     const { data: appointment, error } = await this.supabase
       .from('appointments')
-      .select('id, status, clientId, totalPrice')
+      .select('id, status, clientId, totalPrice, isPaid')
       .eq('id', id)
       .single();
 
@@ -458,7 +458,11 @@ export class AppointmentsService {
       .eq('appointmentId', id)
       .is('paidAt', null)
       .in('method', ['PIX', 'CARD'])
-      .single();
+      .maybeSingle();
+
+    // Se já está pago (via webhook Asaas, por exemplo), apenas atender sem
+    // criar pagamento novo — caso contrário cria-se duplicata no caixa.
+    const alreadyPaid = !!appointment.isPaid;
 
     if (pendingPayment) {
       await this.supabase
@@ -491,7 +495,7 @@ export class AppointmentsService {
 
         await this.supabase
           .from('orders')
-          .update({ status: 'PAID', updatedAt: now })
+          .update({ status: 'PAID', paymentId: pendingPayment.id, updatedAt: now })
           .eq('appointmentId', id)
           .eq('status', 'PENDING');
 
@@ -499,7 +503,7 @@ export class AppointmentsService {
           .from('cash_registers')
           .select('id')
           .eq('isOpen', true)
-          .single();
+          .maybeSingle();
 
         if (openRegister) {
           await this.supabase
@@ -508,7 +512,7 @@ export class AppointmentsService {
             .eq('id', pendingPayment.id);
         }
       }
-    } else if (paymentMethod) {
+    } else if (paymentMethod && !alreadyPaid) {
       // Não tinha pagamento pendente online — criar um novo registro de pagamento
       const paymentId = randomUUID();
       await this.supabase
@@ -532,7 +536,7 @@ export class AppointmentsService {
 
       await this.supabase
         .from('orders')
-        .update({ status: 'PAID', updatedAt: now })
+        .update({ status: 'PAID', paymentId, updatedAt: now })
         .eq('appointmentId', id)
         .eq('status', 'PENDING');
 
@@ -541,7 +545,7 @@ export class AppointmentsService {
         .from('cash_registers')
         .select('id')
         .eq('isOpen', true)
-        .single();
+        .maybeSingle();
 
       if (openRegister) {
         await this.supabase
@@ -1137,7 +1141,7 @@ export class AppointmentsService {
     // Pagar comanda vinculada ao agendamento
     await this.supabase
       .from('orders')
-      .update({ status: 'PAID', updatedAt: new Date().toISOString() })
+      .update({ status: 'PAID', paymentId, updatedAt: new Date().toISOString() })
       .eq('appointmentId', appointmentId)
       .eq('status', 'PENDING');
   }

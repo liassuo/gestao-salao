@@ -413,7 +413,7 @@ export class ProfessionalDebtsService {
       .from('cash_registers')
       .select('id')
       .eq('isOpen', true)
-      .single();
+      .maybeSingle();
 
     if (openRegister) {
       await this.supabase

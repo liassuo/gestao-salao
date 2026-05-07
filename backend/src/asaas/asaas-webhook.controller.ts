@@ -210,7 +210,7 @@ export class AsaasWebhookController {
       // Pagar comanda vinculada ao agendamento
       await this.supabase
         .from('orders')
-        .update({ status: 'PAID', updatedAt: new Date().toISOString() })
+        .update({ status: 'PAID', paymentId: localPayment.id, updatedAt: new Date().toISOString() })
         .eq('appointmentId', localPayment.appointmentId)
         .eq('status', 'PENDING');
     }
@@ -242,7 +242,7 @@ export class AsaasWebhookController {
       .from('cash_registers')
       .select('id')
       .eq('isOpen', true)
-      .single();
+      .maybeSingle();
 
     if (openRegister) {
       await this.supabase

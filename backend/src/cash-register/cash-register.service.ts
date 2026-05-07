@@ -65,7 +65,7 @@ export class CashRegisterService {
       .select('id')
       .gte('date', startOfDay)
       .lte('date', endOfDay)
-      .single();
+      .maybeSingle();
 
     if (existingRegister) {
       throw new ConflictException('Já existe um caixa para este dia');
@@ -75,7 +75,7 @@ export class CashRegisterService {
       .from('cash_registers')
       .select('id')
       .eq('isOpen', true)
-      .single();
+      .maybeSingle();
 
     if (openRegister) {
       throw new BadRequestException('Existe um caixa aberto que precisa ser fechado primeiro');
@@ -156,7 +156,7 @@ export class CashRegisterService {
       .select('*')
       .gte('date', startOfDay)
       .lte('date', endOfDay)
-      .single();
+      .maybeSingle();
 
     // Se o caixa está aberto, calcular totais em tempo real
     if (register && register.isOpen) {
@@ -175,7 +175,7 @@ export class CashRegisterService {
       .from('cash_registers')
       .select('*')
       .eq('isOpen', true)
-      .single();
+      .maybeSingle();
 
     // Calcular totais em tempo real para o caixa aberto
     if (register) {
@@ -238,11 +238,18 @@ export class CashRegisterService {
     const startOfDay = `${dateStr}T00:00:00`;
     const endOfDay = `${dateStr}T23:59:59`;
 
-    const { data: payments } = await this.supabase
+    const { data: payments, error: paymentsError } = await this.supabase
       .from('payments')
       .select('amount, method, asaasStatus')
       .gte('paidAt', startOfDay)
       .lte('paidAt', endOfDay);
+
+    // Falha ruidosamente: caixa zerado por erro silencioso de query é bug crítico.
+    if (paymentsError) {
+      throw new Error(
+        `Falha ao calcular totais do caixa para ${dateStr}: ${paymentsError.message} (code=${paymentsError.code})`,
+      );
+    }
 
     const totals = { cash: 0, pix: 0, card: 0, boleto: 0, total: 0 };
 

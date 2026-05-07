@@ -490,7 +490,7 @@ export class OrdersService {
         .from('cash_registers')
         .select('id')
         .eq('isOpen', true)
-        .single();
+        .maybeSingle();
 
       if (openRegister && paymentId) {
         await this.supabase
