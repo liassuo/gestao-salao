@@ -354,7 +354,7 @@ export function CashRegister() {
                   totalPix: 0,
                   totalCard: 0,
                   totalDiscrepancy: 0,
-                  count: 0,
+                  daysCount: 0,
                 }
               }
               isLoading={false}
