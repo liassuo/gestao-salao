@@ -47,6 +47,9 @@ export function SubscriptionPlanTable({
           <thead>
             <tr className="border-b border-[var(--border-color)] bg-[var(--hover-bg)]">
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                Ordem
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Plano
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
@@ -72,6 +75,11 @@ export function SubscriptionPlanTable({
           <tbody className="divide-y divide-[var(--border-color)]">
             {plans.map((plan) => (
               <tr key={plan.id} className="hover:bg-[var(--hover-bg)]">
+                <td className="whitespace-nowrap px-4 py-4">
+                  <span className="inline-flex h-7 min-w-[2rem] items-center justify-center rounded-md bg-[var(--hover-bg)] px-2 text-sm font-medium tabular-nums text-[var(--text-secondary)]">
+                    {plan.displayOrder ?? 0}
+                  </span>
+                </td>
                 <td className="px-4 py-4">
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#C8923A]/20 text-[#C8923A]">

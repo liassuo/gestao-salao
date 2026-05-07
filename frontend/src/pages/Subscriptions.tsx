@@ -364,7 +364,7 @@ export function Subscriptions() {
       {activeTab === 'plans' && (
         <>
           {isLoadingPlans ? (
-            <SkeletonTable rows={5} cols={6} />
+            <SkeletonTable rows={5} cols={7} />
           ) : isPlansError ? (
             <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-6">
               <div className="flex items-center gap-3">

@@ -110,6 +110,7 @@ export class SubscriptionsService {
         price: dto.price,
         cutsPerMonth: dto.cutsPerMonth,
         discountPercent: dto.discountPercent ?? 0,
+        displayOrder: dto.displayOrder ?? 0,
         isActive: true,
         createdAt: now,
         updatedAt: now,
@@ -128,6 +129,7 @@ export class SubscriptionsService {
     let queryBuilder = this.supabase
       .from('subscription_plans')
       .select('*, subscriptions:client_subscriptions(id), services:subscription_plan_services(id, serviceId, discountPercent, service:services(id, name, price))')
+      .order('displayOrder', { ascending: true })
       .order('price', { ascending: true });
 
     if (activeOnly) {
@@ -188,6 +190,7 @@ export class SubscriptionsService {
     if (dto.price !== undefined) updateData.price = dto.price;
     if (dto.cutsPerMonth !== undefined) updateData.cutsPerMonth = dto.cutsPerMonth;
     if (dto.discountPercent !== undefined) updateData.discountPercent = dto.discountPercent;
+    if (dto.displayOrder !== undefined) updateData.displayOrder = dto.displayOrder;
     if (dto.isActive !== undefined) updateData.isActive = dto.isActive;
 
     const { data: updated, error } = await this.supabase

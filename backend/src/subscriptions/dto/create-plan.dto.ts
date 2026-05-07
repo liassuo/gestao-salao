@@ -25,6 +25,11 @@ export class CreatePlanDto {
   discountPercent?: number;
 
   @IsOptional()
+  @IsNumber()
+  @Min(0)
+  displayOrder?: number;
+
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => PlanServiceDiscountDto)

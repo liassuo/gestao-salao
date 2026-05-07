@@ -8,6 +8,7 @@ export class SubscriptionPlan {
   price: number;
   cutsPerMonth: number;
   discountPercent: number;
+  displayOrder: number;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;

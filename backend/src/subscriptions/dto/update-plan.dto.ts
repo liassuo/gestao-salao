@@ -28,6 +28,11 @@ export class UpdatePlanDto {
   discountPercent?: number;
 
   @IsOptional()
+  @IsNumber()
+  @Min(0)
+  displayOrder?: number;
+
+  @IsOptional()
   @IsBoolean()
   isActive?: boolean;
 

@@ -20,6 +20,7 @@ export interface SubscriptionPlan {
   price: number; // centavos
   cutsPerMonth: number;
   discountPercent: number; // 0-100, fallback global (aplica em produtos e serviços não-listados)
+  displayOrder: number; // ordem de exibição p/ cliente (menor primeiro). Empate cai em price asc.
   isActive: boolean;
   createdAt: string;
   services?: PlanServiceDiscount[]; // serviços com desconto específico
@@ -62,6 +63,7 @@ export interface CreatePlanPayload {
   price: number; // centavos
   cutsPerMonth: number;
   discountPercent?: number;
+  displayOrder?: number;
   services?: PlanServicePayload[];
 }
 
@@ -71,6 +73,7 @@ export interface UpdatePlanPayload {
   price?: number;
   cutsPerMonth?: number;
   discountPercent?: number;
+  displayOrder?: number;
   isActive?: boolean;
   services?: PlanServicePayload[];
 }

@@ -10,6 +10,7 @@ interface PlanFormData {
   price: string;
   cutsPerMonth: number;
   discountPercent: number;
+  displayOrder: number;
 }
 
 interface SubscriptionPlanFormProps {
@@ -78,6 +79,7 @@ export function SubscriptionPlanForm({ plan, onSubmit, isLoading, error }: Subsc
       price: plan?.price ? String(plan.price) : '',
       cutsPerMonth: plan?.cutsPerMonth || 4,
       discountPercent: plan?.discountPercent ?? 0,
+      displayOrder: plan?.displayOrder ?? 0,
     },
   });
 
@@ -145,6 +147,7 @@ export function SubscriptionPlanForm({ plan, onSubmit, isLoading, error }: Subsc
       price: priceInCents,
       cutsPerMonth: data.cutsPerMonth,
       discountPercent: Number.isFinite(data.discountPercent) ? data.discountPercent : 0,
+      displayOrder: Number.isFinite(data.displayOrder) ? data.displayOrder : 0,
       services: validServices,
     });
   };
@@ -272,6 +275,31 @@ export function SubscriptionPlanForm({ plan, onSubmit, isLoading, error }: Subsc
       <p className="-mt-2 text-xs text-[var(--text-muted)]">
         O desconto geral é aplicado em produtos e em serviços que NÃO estiverem listados abaixo. Quando houver promoção ativa, prevalece o maior desconto.
       </p>
+
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
+          Ordem de exibição
+        </label>
+        <input
+          type="number"
+          min={0}
+          step={1}
+          {...register('displayOrder', {
+            valueAsNumber: true,
+            min: { value: 0, message: 'Mínimo 0' },
+          })}
+          placeholder="0"
+          className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] md:w-40 ${
+            errors.displayOrder ? 'border-[#A63030]' : 'border-[var(--border-color)]'
+          }`}
+        />
+        <p className="mt-1 text-xs text-[var(--text-muted)]">
+          Controla a ordem na lista de planos vista pelo cliente. Menor aparece primeiro. Em caso de empate, ordena pelo preço.
+        </p>
+        {errors.displayOrder && (
+          <p className="mt-1 text-sm text-[#A63030]">{errors.displayOrder.message}</p>
+        )}
+      </div>
 
       {/* Serviços com desconto específico */}
       <div>
