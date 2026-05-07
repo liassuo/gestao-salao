@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { AlertCircle, Loader2, Camera, Check } from 'lucide-react';
 import { api } from '@/services/api';
 import { useServices } from '@/hooks';
+import { useToast } from '@/components/ui/ToastContext';
 import type { Professional, CreateProfessionalPayload, WorkingHours } from '@/types';
 import { weekDayShortLabels } from '@/types';
 
@@ -74,9 +75,21 @@ export function ProfessionalForm({ professional, onSubmit, isLoading, error }: P
     },
   });
 
+  const toast = useToast();
+
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Arquivo inválido', 'Selecione uma imagem (PNG, JPG, etc.)');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Arquivo muito grande', 'Limite de 5 MB.');
+      return;
+    }
+
     setUploading(true);
     try {
       const formData = new FormData();
@@ -85,10 +98,14 @@ export function ProfessionalForm({ professional, onSubmit, isLoading, error }: P
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       setAvatarUrl(data.url);
-    } catch {
-      // silently fail
+      toast.success('Foto enviada', 'Salve o profissional para confirmar');
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Tente novamente';
+      toast.error('Falha ao enviar foto', msg);
     } finally {
       setUploading(false);
+      // permite re-selecionar o mesmo arquivo após erro
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
