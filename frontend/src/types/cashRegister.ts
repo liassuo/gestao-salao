@@ -32,7 +32,7 @@ export interface CashRegisterSummary {
   totalPix: number;
   totalCard: number;
   totalDiscrepancy: number;
-  count: number;
+  daysCount: number;
 }
 
 export interface CashRegisterFilters {

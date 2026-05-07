@@ -8,6 +8,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { randomUUID } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../supabase/supabase.service';
+import { nowLocalIsoString } from '../common/datetime.util';
 import { AsaasService } from '../asaas/asaas.service';
 import {
   AsaasBillingType,
@@ -60,7 +61,7 @@ export class SubscriptionsService {
       planId,
       serviceId,
       discountPercent,
-      createdAt: new Date().toISOString(),
+      createdAt: nowLocalIsoString(),
     }));
 
     const { error } = await this.supabase
@@ -88,7 +89,7 @@ export class SubscriptionsService {
   }
 
   async createPlan(dto: CreatePlanDto) {
-    const now = new Date().toISOString();
+    const now = nowLocalIsoString();
     const { data: existing } = await this.supabase
       .from('subscription_plans')
       .select('id')
@@ -333,7 +334,7 @@ export class SubscriptionsService {
 
     // Se Asaas está configurado, aguarda confirmação de pagamento antes de ativar
     const initialStatus = this.asaasService.configured ? 'PENDING_PAYMENT' : 'ACTIVE';
-    const subNow = new Date().toISOString();
+    const subNow = nowLocalIsoString();
 
     // Tenta encontrar uma assinatura cancelada para reutilizar o registro (devido à restrição UNIQUE no clientId)
     const { data: existingSub } = await this.supabase
@@ -528,7 +529,7 @@ export class SubscriptionsService {
     if (subscription && subscription.status === 'ACTIVE') {
       const endDate = new Date(subscription.endDate);
       if (new Date() > endDate) {
-        const now = new Date().toISOString();
+        const now = nowLocalIsoString();
         const { data: suspended } = await this.supabase
           .from('client_subscriptions')
           .update({ status: 'SUSPENDED', updatedAt: now })
@@ -544,7 +545,7 @@ export class SubscriptionsService {
     if (subscription && subscription.status === 'PENDING_PAYMENT') {
       const endDate = new Date(subscription.endDate);
       if (new Date() > endDate) {
-        const now = new Date().toISOString();
+        const now = nowLocalIsoString();
         const { data: canceled } = await this.supabase
           .from('client_subscriptions')
           .update({ status: 'CANCELED', updatedAt: now })
@@ -605,7 +606,7 @@ export class SubscriptionsService {
 
     // Segurança: verificar se endDate não venceu
     if (subscription.endDate && new Date() > new Date(subscription.endDate)) {
-      const now = new Date().toISOString();
+      const now = nowLocalIsoString();
       await this.supabase
         .from('client_subscriptions')
         .update({ status: 'SUSPENDED', updatedAt: now })
@@ -639,7 +640,7 @@ export class SubscriptionsService {
       throw new BadRequestException('Assinatura não está ativa');
     }
 
-    const now = new Date().toISOString();
+    const now = nowLocalIsoString();
     const { data: updated, error } = await this.supabase
       .from('client_subscriptions')
       .update({ cutsUsedThisMonth: 0, lastResetDate: now })
@@ -894,7 +895,7 @@ export class SubscriptionsService {
    * Se markPaid=true, marca paidAt=now.
    */
   private async upsertLocalPaymentFromCharge(subscription: any, charge: any, markPaid = false) {
-    const now = new Date().toISOString();
+    const now = nowLocalIsoString();
     const { data: existing } = await this.supabase
       .from('payments')
       .select('id, paidAt, asaasStatus')
@@ -955,7 +956,7 @@ export class SubscriptionsService {
 
     const asaasCustomerId = await this.ensureAsaasCustomer(clientId);
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = nowLocalIsoString().split('T')[0];
     const charge = await this.asaasService.createCharge({
       customer: asaasCustomerId,
       billingType: AsaasBillingType.PIX,
@@ -965,7 +966,7 @@ export class SubscriptionsService {
       externalReference: subscription.id,
     });
 
-    const now = new Date().toISOString();
+    const now = nowLocalIsoString();
     await this.supabase.from('payments').insert({
       id: randomUUID(),
       clientId,
@@ -1125,7 +1126,7 @@ export class SubscriptionsService {
       try {
         const asaasCustomerId = await this.ensureAsaasCustomer(clientId);
 
-        const today = new Date().toISOString().split('T')[0];
+        const today = nowLocalIsoString().split('T')[0];
         const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:5173');
         const charge = await this.asaasService.createCharge({
           customer: asaasCustomerId,
@@ -1144,7 +1145,7 @@ export class SubscriptionsService {
         });
 
         invoiceUrl = charge.invoiceUrl || null;
-        const now = new Date().toISOString();
+        const now = nowLocalIsoString();
         const localMethod = asaasBillingToLocalPaymentMethod(effectiveBilling);
 
         // Inserir registro de pagamento (antes do QR Code para garantir persistência)
@@ -1186,7 +1187,7 @@ export class SubscriptionsService {
         this.logger.error(`Falha ao criar cobrança Asaas: ${e}`);
         await this.supabase
           .from('client_subscriptions')
-          .update({ status: 'CANCELED', updatedAt: new Date().toISOString() })
+          .update({ status: 'CANCELED', updatedAt: nowLocalIsoString() })
           .eq('id', freshSub.id);
         const detail = e instanceof Error ? e.message : String(e);
         throw new BadRequestException(`Erro ao gerar cobrança no gateway de pagamento. Tente novamente. (${detail})`);
@@ -1208,7 +1209,7 @@ export class SubscriptionsService {
 
     const { data: updated, error } = await this.supabase
       .from('client_subscriptions')
-      .update({ status: 'CANCELED', updatedAt: new Date().toISOString() })
+      .update({ status: 'CANCELED', updatedAt: nowLocalIsoString() })
       .eq('id', subscription.id)
       .select('*')
       .single();
@@ -1373,7 +1374,7 @@ export class SubscriptionsService {
     const asaasCustomerId = await this.ensureAsaasCustomer(subscription.clientId);
 
     // 2. Criar cobrança avulsa no Asaas
-    const today = new Date().toISOString().split('T')[0];
+    const today = nowLocalIsoString().split('T')[0];
     const asaasCharge = await this.asaasService.createCharge({
       customer: asaasCustomerId,
       billingType: AsaasBillingType.PIX, // Padrão para cobrança forçada
@@ -1384,7 +1385,7 @@ export class SubscriptionsService {
     });
 
     // 3. Registrar pagamento pendente no banco local vinculado à assinatura
-    const now = new Date().toISOString();
+    const now = nowLocalIsoString();
     const { data: payment, error } = await this.supabase
       .from('payments')
       .insert({

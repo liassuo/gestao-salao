@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
+import { nowLocalIsoString } from '../common/datetime.util';
 import {
   CreateProfessionalDebtDto,
   QueryProfessionalDebtDto,
@@ -31,7 +32,7 @@ export class ProfessionalDebtsService {
   async create(dto: CreateProfessionalDebtDto) {
     await this.assertProfessionalExists(dto.professionalId);
 
-    const now = new Date().toISOString();
+    const now = nowLocalIsoString();
     const { data, error } = await this.supabase
       .from('professional_debts')
       .insert({
@@ -69,7 +70,7 @@ export class ProfessionalDebtsService {
 
     await this.assertProfessionalExists(params.professionalId);
 
-    const now = new Date().toISOString();
+    const now = nowLocalIsoString();
     const { data, error } = await this.supabase
       .from('professional_debts')
       .insert({
@@ -109,7 +110,7 @@ export class ProfessionalDebtsService {
       return { voidedCount: 0 };
     }
 
-    const now = new Date().toISOString();
+    const now = nowLocalIsoString();
     const { error: updateError } = await this.supabase
       .from('professional_debts')
       .update({ status: 'VOIDED', updatedAt: now })
@@ -206,7 +207,7 @@ export class ProfessionalDebtsService {
     const newRemainingBalance = debt.remainingBalance - amount;
     const isNowSettled = newRemainingBalance === 0;
 
-    const now = new Date().toISOString();
+    const now = nowLocalIsoString();
     const { data: updated, error } = await this.supabase
       .from('professional_debts')
       .update({
@@ -261,7 +262,7 @@ export class ProfessionalDebtsService {
 
     let budgetLeft = commissionAmount;
     let totalDeducted = 0;
-    const now = new Date().toISOString();
+    const now = nowLocalIsoString();
 
     for (const debt of pending) {
       if (budgetLeft <= 0) break;

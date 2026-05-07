@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
+import { nowLocalIsoString } from '../common/datetime.util';
 import { CreatePaymentDto, UpdatePaymentDto } from './dto';
 
 @Injectable()
@@ -87,7 +88,7 @@ export class PaymentsService {
       // Pagar comanda vinculada ao agendamento
       await this.supabase
         .from('orders')
-        .update({ status: 'PAID', paymentId: payment.id, updatedAt: new Date().toISOString() })
+        .update({ status: 'PAID', paymentId: payment.id, updatedAt: nowLocalIsoString() })
         .eq('appointmentId', dto.appointmentId)
         .eq('status', 'PENDING');
     }

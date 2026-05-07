@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
   ConflictException,
@@ -8,8 +9,12 @@ import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
 import { OpenCashRegisterDto, CloseCashRegisterDto } from './dto';
 
+/** Discrepância (em centavos) que dispara aviso WARN ao fechar caixa. */
+const DISCREPANCY_WARN_THRESHOLD = 5000; // R$ 50,00
+
 @Injectable()
 export class CashRegisterService {
+  private readonly logger = new Logger(CashRegisterService.name);
   constructor(private readonly supabase: SupabaseService) {}
 
   private normalizeDate(date: Date): Date {
@@ -123,6 +128,16 @@ export class CashRegisterService {
     const totals = await this.calculateDailyTotals(register.date);
     const expectedClosingBalance = register.openingBalance + totals.cash;
     const discrepancy = dto.closingBalance - expectedClosingBalance;
+
+    if (Math.abs(discrepancy) >= DISCREPANCY_WARN_THRESHOLD) {
+      this.logger.warn(
+        `Caixa ${id} fechado com discrepância de ${(discrepancy / 100).toFixed(2)} ` +
+          `(esperado ${(expectedClosingBalance / 100).toFixed(2)}, ` +
+          `informado ${(dto.closingBalance / 100).toFixed(2)}, ` +
+          `cash do dia ${(totals.cash / 100).toFixed(2)}). ` +
+          `Notas: ${dto.notes ?? '(nenhuma)'}`,
+      );
+    }
 
     const { data: closedRegister, error: closeError } = await this.supabase
       .from('cash_registers')

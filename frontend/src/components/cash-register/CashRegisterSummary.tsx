@@ -44,7 +44,7 @@ export function CashRegisterSummary({
     {
       label: 'Total Faturado',
       value: formatCurrency(summary.totalRevenue),
-      subValue: `${summary.count} ${summary.count === 1 ? 'dia' : 'dias'}`,
+      subValue: `${summary.daysCount} ${summary.daysCount === 1 ? 'dia' : 'dias'}`,
       icon: TrendingUp,
       iconBg: 'bg-[#C8923A]/15',
       iconColor: 'text-[#C8923A]',

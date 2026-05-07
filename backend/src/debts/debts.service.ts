@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
+import { nowLocalIsoString } from '../common/datetime.util';
 import { CreateDebtDto, UpdateDebtDto, PayDebtDto } from './dto';
 import { AsaasService } from '../asaas/asaas.service';
 import { AsaasBillingType } from '../asaas/asaas.types';
@@ -34,7 +35,7 @@ export class DebtsService {
     }
 
     // 2. Criar dívida
-    const now = new Date().toISOString();
+    const now = nowLocalIsoString();
     const { data: debt, error } = await this.supabase
       .from('debts')
       .insert({
@@ -319,7 +320,7 @@ export class DebtsService {
 
     if (!userId) return;
 
-    const now = paidAt || new Date().toISOString();
+    const now = paidAt || nowLocalIsoString();
     const paymentId = randomUUID();
     await this.supabase.from('payments').insert({
       id: paymentId,
@@ -410,7 +411,7 @@ export class DebtsService {
     }
 
     // 3. Criar cobrança PIX no Asaas
-    const today = new Date().toISOString().substring(0, 10);
+    const today = nowLocalIsoString().substring(0, 10);
     const asaasCharge = await this.asaasService.createCharge({
       customer: asaasCustomerId,
       billingType: AsaasBillingType.PIX,
@@ -421,7 +422,7 @@ export class DebtsService {
     });
 
     // 4. Registrar pagamento pendente para rastreamento
-    const now = new Date().toISOString();
+    const now = nowLocalIsoString();
     await this.supabase.from('payments').insert({
       id: randomUUID(),
       clientId,

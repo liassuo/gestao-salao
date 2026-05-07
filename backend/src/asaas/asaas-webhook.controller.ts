@@ -11,6 +11,7 @@ import {
 import { ApiTags, ApiOperation, ApiExcludeEndpoint } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../supabase/supabase.service';
+import { nowLocalIsoString } from '../common/datetime.util';
 import { AsaasService } from './asaas.service';
 import { AsaasWebhookEvent, AsaasChargeStatus } from './asaas.types';
 import { Public } from '../auth/decorators/public.decorator';
@@ -124,7 +125,7 @@ export class AsaasWebhookController {
           const localMethod = billingType === 'CREDIT_CARD' ? 'CARD' : 'PIX';
           const valueReais = Number(paymentData.value || 0);
           const amountCentavos = Math.round(valueReais * 100);
-          const now = new Date().toISOString();
+          const now = nowLocalIsoString();
           const newId = require('crypto').randomUUID();
 
           const { error: insertError } = await this.supabase
@@ -189,7 +190,7 @@ export class AsaasWebhookController {
       .from('payments')
       .update({
         asaasStatus: status,
-        paidAt: new Date().toISOString(),
+        paidAt: nowLocalIsoString(),
       })
       .eq('id', localPayment.id);
 
@@ -197,20 +198,20 @@ export class AsaasWebhookController {
     if (localPayment.appointmentId) {
       await this.supabase
         .from('appointments')
-        .update({ isPaid: true, updatedAt: new Date().toISOString() })
+        .update({ isPaid: true, updatedAt: nowLocalIsoString() })
         .eq('id', localPayment.appointmentId);
 
       // Promover PENDING_PAYMENT → SCHEDULED após pagamento confirmado
       await this.supabase
         .from('appointments')
-        .update({ status: 'SCHEDULED', updatedAt: new Date().toISOString() })
+        .update({ status: 'SCHEDULED', updatedAt: nowLocalIsoString() })
         .eq('id', localPayment.appointmentId)
         .eq('status', 'PENDING_PAYMENT');
 
       // Pagar comanda vinculada ao agendamento
       await this.supabase
         .from('orders')
-        .update({ status: 'PAID', paymentId: localPayment.id, updatedAt: new Date().toISOString() })
+        .update({ status: 'PAID', paymentId: localPayment.id, updatedAt: nowLocalIsoString() })
         .eq('appointmentId', localPayment.appointmentId)
         .eq('status', 'PENDING');
     }
@@ -226,12 +227,12 @@ export class AsaasWebhookController {
       if (linkedOrder?.appointmentId) {
         await this.supabase
           .from('appointments')
-          .update({ isPaid: true, updatedAt: new Date().toISOString() })
+          .update({ isPaid: true, updatedAt: nowLocalIsoString() })
           .eq('id', linkedOrder.appointmentId);
 
         await this.supabase
           .from('orders')
-          .update({ status: 'PAID', updatedAt: new Date().toISOString() })
+          .update({ status: 'PAID', updatedAt: nowLocalIsoString() })
           .eq('id', linkedOrder.id)
           .eq('status', 'PENDING');
       }
@@ -286,7 +287,7 @@ export class AsaasWebhookController {
 
     // Se for pagamento de dívida, quitar dívidas apenas se o valor pago cobre o total pendente
     if (localPayment.notes === 'DEBT_PAYMENT' && localPayment.clientId) {
-      const debtNow = new Date().toISOString();
+      const debtNow = nowLocalIsoString();
 
       const { data: pendingDebts } = await this.supabase
         .from('debts')
@@ -356,7 +357,7 @@ export class AsaasWebhookController {
 
     if (!localPayment) return;
 
-    const now = new Date().toISOString();
+    const now = nowLocalIsoString();
 
     // Suspender assinatura vinculada
     if (localPayment.subscriptionId) {

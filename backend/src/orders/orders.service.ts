@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
+import { nowLocalIsoString } from '../common/datetime.util';
 import { AsaasService } from '../asaas/asaas.service';
 import { StockService } from '../stock/stock.service';
 import { ProfessionalDebtsService } from '../professional-debts/professional-debts.service';
@@ -66,8 +67,15 @@ export class OrdersService {
         'consumerProfessionalId é obrigatório quando consumerType=PROFESSIONAL',
       );
     }
+    // Comanda de cliente sem clientId é dado órfão: não dá pra registrar
+    // pagamento corretamente no caixa nem cruzar com agendamento depois.
+    if (consumerType === 'CLIENT' && !dto.clientId) {
+      throw new BadRequestException(
+        'clientId é obrigatório para comandas de cliente (consumerType=CLIENT)',
+      );
+    }
 
-    const now = new Date().toISOString();
+    const now = nowLocalIsoString();
     const { data: order, error } = await this.supabase
       .from('orders')
       .insert({
@@ -252,7 +260,7 @@ export class OrdersService {
 
     // Sincronizar agendamento vinculado (totalPrice + totalDuration se for serviço)
     if (order.appointmentId) {
-      const updateData: any = { totalPrice: newTotal, updatedAt: new Date().toISOString() };
+      const updateData: any = { totalPrice: newTotal, updatedAt: nowLocalIsoString() };
 
       if (dto.itemType === 'SERVICE' && dto.serviceId) {
         const { data: svc } = await this.supabase
@@ -278,7 +286,7 @@ export class OrdersService {
           id: randomUUID(),
           appointmentId: order.appointmentId,
           serviceId: dto.serviceId,
-          createdAt: new Date().toISOString(),
+          createdAt: nowLocalIsoString(),
         });
       }
 
@@ -328,7 +336,7 @@ export class OrdersService {
 
     // Sincronizar agendamento vinculado
     if (order.appointmentId) {
-      const updateData: any = { totalPrice: newTotal, updatedAt: new Date().toISOString() };
+      const updateData: any = { totalPrice: newTotal, updatedAt: nowLocalIsoString() };
 
       if (item.itemType === 'SERVICE' && item.serviceId) {
         const { data: svc } = await this.supabase
@@ -445,7 +453,7 @@ export class OrdersService {
     // ============================
 
     // Baixa no estoque para produtos
-    const payNow = new Date().toISOString();
+    const payNow = nowLocalIsoString();
     const productItems = (order.items || []).filter((i: any) => i.itemType === 'PRODUCT' && i.productId);
     for (const item of productItems) {
       try {
@@ -556,7 +564,7 @@ export class OrdersService {
 
     // Criar cobrança no Asaas
     const billingType = dto.billingType as unknown as AsaasBillingType;
-    const dueDate = dto.dueDate || new Date().toISOString().split('T')[0];
+    const dueDate = dto.dueDate || nowLocalIsoString().split('T')[0];
 
     const asaasCharge = await this.asaasService.createCharge({
       customer: asaasCustomerId,
@@ -573,7 +581,7 @@ export class OrdersService {
       CREDIT_CARD: 'CARD',
     };
 
-    const asaasNow = new Date().toISOString();
+    const asaasNow = nowLocalIsoString();
     const { data: payment } = await this.supabase
       .from('payments')
       .insert({
@@ -685,7 +693,7 @@ export class OrdersService {
     });
 
     // Atualiza a comanda
-    const now = new Date().toISOString();
+    const now = nowLocalIsoString();
     await this.supabase
       .from('orders')
       .update({
@@ -751,7 +759,7 @@ export class OrdersService {
 
     const { data: updated, error: updateError } = await this.supabase
       .from('orders')
-      .update({ status: 'CANCELED', updatedAt: new Date().toISOString() })
+      .update({ status: 'CANCELED', updatedAt: nowLocalIsoString() })
       .eq('id', id)
       .select('*')
       .single();

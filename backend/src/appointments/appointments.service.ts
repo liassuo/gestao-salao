@@ -8,6 +8,7 @@ import {
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
+import { nowLocalIsoString } from '../common/datetime.util';
 import {
   CreateAppointmentDto,
   CreateTimeBlockDto,
@@ -171,7 +172,7 @@ export class AppointmentsService {
             // Cancelar agendamento antigo
             await this.supabase
               .from('appointments')
-              .update({ status: 'CANCELED', canceledAt: new Date().toISOString() })
+              .update({ status: 'CANCELED', canceledAt: nowLocalIsoString() })
               .eq('id', pendingAppts[0].id);
           } else {
             // Mesmo valor: retornar o agendamento existente com QR code
@@ -201,7 +202,7 @@ export class AppointmentsService {
     // Pagamentos online via app (PIX/cartão) ficam PENDING_PAYMENT até confirmação do Asaas
     const initialStatus = requiresOnlinePayment ? 'PENDING_PAYMENT' : 'SCHEDULED';
 
-    const now = new Date().toISOString();
+    const now = nowLocalIsoString();
     const appointmentId = randomUUID();
     const { data: appointment, error: apptError } = await this.supabase
       .from('appointments')
@@ -413,7 +414,7 @@ export class AppointmentsService {
 
     const { data: updated, error: updateError } = await this.supabase
       .from('appointments')
-      .update({ status: 'CANCELED', canceledAt: new Date().toISOString() })
+      .update({ status: 'CANCELED', canceledAt: nowLocalIsoString() })
       .eq('id', id)
       .select(this.APPOINTMENT_SELECT)
       .single();
@@ -423,7 +424,7 @@ export class AppointmentsService {
     // Cancelar comanda vinculada
     await this.supabase
       .from('orders')
-      .update({ status: 'CANCELED', updatedAt: new Date().toISOString() })
+      .update({ status: 'CANCELED', updatedAt: nowLocalIsoString() })
       .eq('appointmentId', id)
       .eq('status', 'PENDING');
 
@@ -449,7 +450,7 @@ export class AppointmentsService {
       throw new BadRequestException('Agendamento já foi marcado como atendido');
     }
 
-    const now = new Date().toISOString();
+    const now = nowLocalIsoString();
 
     // Converter pagamento online não pago para pagamento no local
     const { data: pendingPayment } = await this.supabase
@@ -729,7 +730,7 @@ export class AppointmentsService {
     // Cancelar comanda vinculada
     await this.supabase
       .from('orders')
-      .update({ status: 'CANCELED', updatedAt: new Date().toISOString() })
+      .update({ status: 'CANCELED', updatedAt: nowLocalIsoString() })
       .eq('appointmentId', id)
       .eq('status', 'PENDING');
 
@@ -1085,7 +1086,7 @@ export class AppointmentsService {
     }
 
     // Criar nova cobrança
-    const today = new Date().toISOString().substring(0, 10);
+    const today = nowLocalIsoString().substring(0, 10);
     const newCharge = await this.asaasService.createCharge({
       customer: asaasCustomerId,
       billingType: 'PIX' as any,
@@ -1095,7 +1096,7 @@ export class AppointmentsService {
       externalReference: appointment.id,
     });
 
-    const now = new Date().toISOString();
+    const now = nowLocalIsoString();
 
     if (oldPayment) {
       // Atualizar pagamento existente
@@ -1141,7 +1142,7 @@ export class AppointmentsService {
     // Pagar comanda vinculada ao agendamento
     await this.supabase
       .from('orders')
-      .update({ status: 'PAID', paymentId, updatedAt: new Date().toISOString() })
+      .update({ status: 'PAID', paymentId, updatedAt: nowLocalIsoString() })
       .eq('appointmentId', appointmentId)
       .eq('status', 'PENDING');
   }
@@ -1215,7 +1216,7 @@ export class AppointmentsService {
       throw new NotFoundException('Profissional não encontrado');
     }
 
-    const now = new Date().toISOString();
+    const now = nowLocalIsoString();
     const { data: block, error } = await this.supabase
       .from('time_blocks')
       .insert({
@@ -1266,7 +1267,7 @@ export class AppointmentsService {
     const startHHMM = dto.allDay ? '00:00' : (dto.startTime as string);
     const endHHMM = dto.allDay ? '23:59' : (dto.endTime as string);
 
-    const now = new Date().toISOString();
+    const now = nowLocalIsoString();
     const rows: any[] = [];
     for (let i = 0; i < totalDays; i++) {
       const day = new Date(startDate.getTime() + i * dayMs);
@@ -1493,7 +1494,7 @@ export class AppointmentsService {
 
     if (!stale?.length) return;
 
-    const now = new Date().toISOString();
+    const now = nowLocalIsoString();
     for (const appt of stale) {
       await this.supabase
         .from('appointments')
