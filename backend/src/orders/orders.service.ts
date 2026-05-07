@@ -472,6 +472,7 @@ export class OrdersService {
         .insert({
           id: randomUUID(),
           clientId: order.clientId,
+          appointmentId: (order as any).appointmentId ?? null,
           amount: order.totalAmount,
           method: paymentMethod,
           paidAt: payNow,
@@ -578,9 +579,12 @@ export class OrdersService {
       .insert({
         id: randomUUID(),
         clientId: order.clientId,
+        appointmentId: (order as any).appointmentId ?? null,
         amount: order.totalAmount,
         method: paymentMethodMap[dto.billingType!] || 'PIX',
-        paidAt: asaasNow,
+        // paidAt fica NULL até o webhook Asaas confirmar — caso contrário
+        // cobranças geradas e nunca pagas entram no caixa do dia da geração.
+        paidAt: null,
         registeredBy: dto.registeredBy || order.clientId,
         notes: `Cobrança Asaas #${asaasCharge.id} - Comanda #${order.id.slice(0, 8)}`,
         asaasPaymentId: asaasCharge.id,

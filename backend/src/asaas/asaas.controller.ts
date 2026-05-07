@@ -71,12 +71,13 @@ export class AsaasController {
       externalReference: dto.externalReference || dto.appointmentId || dto.orderId,
     });
 
-    // Criar registro de pagamento local com status pendente
+    // Criar registro de pagamento local com status pendente.
+    // paidAt fica NULL — só o webhook Asaas confirma e seta a data real.
     const paymentData: Record<string, any> = {
       clientId: dto.clientId,
       amount: dto.value,
       method: this.billingTypeToPaymentMethod(dto.billingType as AsaasBillingType),
-      paidAt: new Date().toISOString(),
+      paidAt: null,
       registeredBy: dto.clientId, // auto-gerado
       notes: `Cobrança Asaas #${asaasCharge.id} - ${dto.description || ''}`,
       asaasPaymentId: asaasCharge.id,
