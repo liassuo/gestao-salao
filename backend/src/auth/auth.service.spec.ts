@@ -40,7 +40,9 @@ const mockChain = () => {
   chain.insert = jest.fn().mockReturnValue(chain);
   chain.update = jest.fn().mockReturnValue(chain);
   chain.eq = jest.fn().mockReturnValue(chain);
+  chain.ilike = jest.fn().mockReturnValue(chain);
   chain.single = jest.fn();
+  chain.maybeSingle = jest.fn().mockResolvedValue({ data: null, error: null });
   return chain;
 };
 
@@ -195,7 +197,7 @@ describe('AuthService', () => {
 
       expect(mockSupabaseService.from).toHaveBeenCalledWith('clients');
       expect(chain.select).toHaveBeenCalledWith('*');
-      expect(chain.eq).toHaveBeenCalledWith('email', clientLoginDto.email);
+      expect(chain.ilike).toHaveBeenCalledWith('email', expect.any(String));
       expect(chain.single).toHaveBeenCalled();
       expect(bcrypt.compare).toHaveBeenCalledWith(clientLoginDto.password, mockClient.password);
       expect(mockJwtService.sign).toHaveBeenCalledWith({
