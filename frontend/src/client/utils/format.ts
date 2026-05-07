@@ -9,9 +9,19 @@ export function formatPrice(priceInCents: number): string {
 }
 
 /**
- * Parse seguro de data - strings YYYY-MM-DD recebem T12:00:00 para evitar bug de timezone
+ * Parse seguro de data.
+ *
+ * Por que existir: o backend grava `scheduledAt` (e similares) como string local
+ * `YYYY-MM-DDTHH:mm:ss`, mas a coluna no Postgres é `timestamptz`, então o
+ * Supabase devolve com sufixo `Z`/`+00:00`. Se passarmos isso direto para
+ * `new Date(...)`, o JS reinterpreta como UTC e desloca pelo fuso do
+ * navegador (ex.: 18:00 vira 15:00 em BRT) — derruba filtros de "próximos
+ * agendamentos" e mostra horário errado no card.
+ *
+ * Strings `YYYY-MM-DD` puras recebem `T12:00:00` para não cair no dia anterior
+ * em fusos negativos.
  */
-function safeParseDate(dateStr: string): Date {
+export function safeParseDate(dateStr: string): Date {
   const clean = dateStr.replace(/Z$/, '').replace(/[+-]\d{2}:\d{2}$/, '');
   if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
     return new Date(clean + 'T12:00:00');
@@ -48,7 +58,7 @@ export function formatDateLong(isoDate: string): string {
  * Formata hora de data ISO
  */
 export function formatTime(isoDate: string): string {
-  const date = new Date(isoDate);
+  const date = safeParseDate(isoDate);
   return date.toLocaleTimeString('pt-BR', {
     hour: '2-digit',
     minute: '2-digit',
@@ -59,7 +69,7 @@ export function formatTime(isoDate: string): string {
  * Calcula hora de término baseado em duração
  */
 export function formatEndTime(isoDate: string, durationMinutes: number): string {
-  const date = new Date(isoDate);
+  const date = safeParseDate(isoDate);
   date.setMinutes(date.getMinutes() + durationMinutes);
   return date.toLocaleTimeString('pt-BR', {
     hour: '2-digit',
@@ -95,7 +105,7 @@ export function formatDateShort(date: Date): string {
  * Verifica se uma data esta no passado
  */
 export function isPastDate(isoDate: string): boolean {
-  return new Date(isoDate) < new Date();
+  return safeParseDate(isoDate) < new Date();
 }
 
 /**
@@ -103,7 +113,7 @@ export function isPastDate(isoDate: string): boolean {
  */
 export function hoursUntil(isoDate: string): number {
   const now = new Date();
-  const target = new Date(isoDate);
+  const target = safeParseDate(isoDate);
   return (target.getTime() - now.getTime()) / (1000 * 60 * 60);
 }
 

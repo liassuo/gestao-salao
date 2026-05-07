@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import { appointmentsApi } from '../services/appointments';
+import { safeParseDate } from '../utils/format';
 import type { Appointment, CreateAppointmentData } from '../types';
 
 export function useClientAppointments() {
@@ -45,20 +46,23 @@ export function useClientAppointments() {
   }, []);
 
   // Separar agendamentos
+  // IMPORTANTE: usar safeParseDate. O backend grava local-time mas a coluna é
+  // timestamptz, então a API devolve com sufixo Z/+00:00. Sem o strip, um
+  // agendamento das 18:00 BRT é interpretado como 15:00 BRT e cai no passado.
   const { upcomingAppointments, pastAppointments, nextAppointment } = useMemo(() => {
     const now = new Date();
 
     const activeStatuses = ['SCHEDULED', 'PENDING_PAYMENT'];
 
     const upcoming = appointments.filter((a) => {
-      const date = new Date(a.scheduledAt);
+      const date = safeParseDate(a.scheduledAt);
       return date >= now && activeStatuses.includes(a.status);
-    }).sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
+    }).sort((a, b) => safeParseDate(a.scheduledAt).getTime() - safeParseDate(b.scheduledAt).getTime());
 
     const past = appointments.filter((a) => {
-      const date = new Date(a.scheduledAt);
+      const date = safeParseDate(a.scheduledAt);
       return date < now || !activeStatuses.includes(a.status);
-    }).sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime());
+    }).sort((a, b) => safeParseDate(b.scheduledAt).getTime() - safeParseDate(a.scheduledAt).getTime());
 
     return {
       upcomingAppointments: upcoming,
