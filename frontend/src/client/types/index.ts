@@ -66,6 +66,7 @@ export interface CreateAppointmentData {
   startTime: string;
   useSubscriptionCut?: boolean;
   billingType?: AppointmentBillingType;
+  notes?: string;
 }
 
 /** Resposta de POST /appointments/client quando o Asaas gera cobrança */

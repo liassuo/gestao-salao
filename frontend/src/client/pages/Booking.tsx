@@ -155,6 +155,7 @@ export function ClientBooking() {
   const [debtPollingActive, setDebtPollingActive] = useState(false);
   const [appointmentBillingType, setAppointmentBillingType] =
     useState<AppointmentBillingType>('CASH');
+  const [notes, setNotes] = useState('');
   const [subscribePlanModal, setSubscribePlanModal] = useState<string | null>(null);
   const [leaveAfterPixClose, setLeaveAfterPixClose] = useState(false);
   const [clientCpf, setClientCpf] = useState<string | null>(null);
@@ -509,6 +510,7 @@ export function ClientBooking() {
         startTime: selectedTime,
         useSubscriptionCut: usesSubscription,
         billingType: needsPayment ? appointmentBillingType : undefined,
+        notes: notes.trim() || undefined,
       });
 
       if (appointmentBillingType === 'CASH' && needsPayment) {
@@ -1142,6 +1144,20 @@ export function ClientBooking() {
             </button>
           );
         })()}
+
+        <div>
+          <label className="text-xs text-[var(--text-muted)] block mb-2">
+            Observações <span className="text-[var(--text-muted)]">(opcional)</span>
+          </label>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Alguma preferência ou pedido especial? (visível para o profissional)"
+            rows={3}
+            maxLength={500}
+            className="w-full resize-none rounded-xl border border-[var(--card-border)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A]"
+          />
+        </div>
 
         <div className="flex items-start gap-3">
           <svg className="w-5 h-5 text-[#C8923A] mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
