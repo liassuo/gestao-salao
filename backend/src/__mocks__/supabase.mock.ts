@@ -35,6 +35,7 @@ export function createSupabaseMock() {
 
     // Terminadores
     single: jest.fn().mockImplementation(() => Promise.resolve(mock._result)),
+    maybeSingle: jest.fn().mockImplementation(() => Promise.resolve(mock._result)),
 
     // Para queries sem .single() o Supabase retorna implicitamente
     // Usamos then() para tornar o mock "thenable"

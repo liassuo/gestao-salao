@@ -15,6 +15,7 @@ const mockChain = () => {
   chain.lte = jest.fn().mockReturnValue(chain);
   chain.order = jest.fn().mockReturnValue(chain);
   chain.single = jest.fn().mockResolvedValue({ data: null, error: null });
+  chain.maybeSingle = jest.fn().mockResolvedValue({ data: null, error: null });
   return chain;
 };
 
