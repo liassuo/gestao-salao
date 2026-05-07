@@ -28,6 +28,7 @@ export interface CalendarTimeBlock {
   startTime: string;
   endTime: string;
   reason: string | null;
+  recurring?: boolean; // intervalo fixo do expediente (ex: almoço) — não é um time_block real
 }
 
 export interface CreateTimeBlockPayload {

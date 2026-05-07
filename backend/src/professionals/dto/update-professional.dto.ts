@@ -1,6 +1,18 @@
 import { IsString, IsOptional, IsNumber, IsBoolean, IsArray, ValidateNested, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 
+class RecurringBreakDto {
+  @IsString()
+  startTime: string;
+
+  @IsString()
+  endTime: string;
+
+  @IsOptional()
+  @IsString()
+  label?: string;
+}
+
 class WorkingHoursDto {
   @IsNumber()
   dayOfWeek: number;
@@ -10,6 +22,12 @@ class WorkingHoursDto {
 
   @IsString()
   endTime: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => RecurringBreakDto)
+  breaks?: RecurringBreakDto[];
 }
 
 export class UpdateProfessionalDto {

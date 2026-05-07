@@ -1,7 +1,14 @@
+export interface RecurringBreak {
+  startTime: string; // "12:00"
+  endTime: string; // "13:00"
+  label?: string; // ex: "Almoço"
+}
+
 export interface WorkingHours {
   dayOfWeek: number; // 0 = Domingo, 1 = Segunda, ..., 6 = Sábado
   startTime: string; // "09:00"
   endTime: string; // "18:00"
+  breaks?: RecurringBreak[]; // intervalos fixos do dia (ex: almoço)
 }
 
 export interface ProfessionalVacation {

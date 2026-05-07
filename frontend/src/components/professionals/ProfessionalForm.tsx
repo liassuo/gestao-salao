@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
-import { AlertCircle, Loader2, Camera, Check } from 'lucide-react';
+import { AlertCircle, Loader2, Camera, Check, Coffee, X } from 'lucide-react';
 import { api } from '@/services/api';
 import { useServices } from '@/hooks';
 import { useToast } from '@/components/ui/ToastContext';
@@ -61,6 +61,62 @@ export function ProfessionalForm({ professional, onSubmit, isLoading, error }: P
     setWorkingHours((prev) =>
       prev.map((wh) => (wh.dayOfWeek === day ? { ...wh, [field]: value } : wh))
     );
+  };
+
+  const addBreak = (day: number) => {
+    setWorkingHours((prev) =>
+      prev.map((wh) =>
+        wh.dayOfWeek === day
+          ? {
+              ...wh,
+              breaks: [
+                ...(wh.breaks || []),
+                { startTime: '12:00', endTime: '13:00', label: 'Almoço' },
+              ],
+            }
+          : wh
+      )
+    );
+  };
+
+  const updateBreak = (
+    day: number,
+    index: number,
+    field: 'startTime' | 'endTime' | 'label',
+    value: string
+  ) => {
+    setWorkingHours((prev) =>
+      prev.map((wh) => {
+        if (wh.dayOfWeek !== day) return wh;
+        const breaks = [...(wh.breaks || [])];
+        breaks[index] = { ...breaks[index], [field]: value };
+        return { ...wh, breaks };
+      })
+    );
+  };
+
+  const removeBreak = (day: number, index: number) => {
+    setWorkingHours((prev) =>
+      prev.map((wh) => {
+        if (wh.dayOfWeek !== day) return wh;
+        const breaks = [...(wh.breaks || [])];
+        breaks.splice(index, 1);
+        return { ...wh, breaks };
+      })
+    );
+  };
+
+  const copyBreaksToAllDays = (sourceDay: number) => {
+    setWorkingHours((prev) => {
+      const source = prev.find((wh) => wh.dayOfWeek === sourceDay);
+      if (!source) return prev;
+      const sourceBreaks = (source.breaks || []).map((b) => ({ ...b }));
+      return prev.map((wh) =>
+        wh.dayOfWeek === sourceDay
+          ? wh
+          : { ...wh, breaks: sourceBreaks.map((b) => ({ ...b })) }
+      );
+    });
   };
 
   const {
@@ -296,43 +352,103 @@ export function ProfessionalForm({ professional, onSubmit, isLoading, error }: P
           {ALL_DAYS.map((day, idx) => {
             const active = isDayActive(day);
             const wh = workingHours.find((w) => w.dayOfWeek === day);
+            const breaks = wh?.breaks || [];
             return (
               <div
                 key={day}
-                className={`flex items-center gap-3 px-3 py-2 ${
+                className={`px-3 py-2 ${
                   idx < ALL_DAYS.length - 1 ? 'border-b border-[var(--border-color)]' : ''
                 } ${active ? '' : 'opacity-50'}`}
               >
-                <button
-                  type="button"
-                  onClick={() => toggleDay(day)}
-                  className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border transition-colors ${
-                    active ? 'border-[#C8923A] bg-[#C8923A]' : 'border-[var(--border-color)] hover:border-[#C8923A]'
-                  }`}
-                >
-                  {active && <Check className="h-3 w-3 text-white" />}
-                </button>
-                <span className={`w-10 text-sm font-medium ${active ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
-                  {weekDayShortLabels[day]}
-                </span>
-                {active && wh ? (
-                  <div className="flex items-center gap-1.5 ml-auto">
-                    <input
-                      type="time"
-                      value={wh.startTime}
-                      onChange={(e) => updateDayTime(day, 'startTime', e.target.value)}
-                      className="rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] px-2 py-1 text-xs text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[#C8923A] w-[80px]"
-                    />
-                    <span className="text-xs text-[var(--text-muted)]">-</span>
-                    <input
-                      type="time"
-                      value={wh.endTime}
-                      onChange={(e) => updateDayTime(day, 'endTime', e.target.value)}
-                      className="rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] px-2 py-1 text-xs text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[#C8923A] w-[80px]"
-                    />
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => toggleDay(day)}
+                    className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border transition-colors ${
+                      active ? 'border-[#C8923A] bg-[#C8923A]' : 'border-[var(--border-color)] hover:border-[#C8923A]'
+                    }`}
+                  >
+                    {active && <Check className="h-3 w-3 text-white" />}
+                  </button>
+                  <span className={`w-10 text-sm font-medium ${active ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
+                    {weekDayShortLabels[day]}
+                  </span>
+                  {active && wh ? (
+                    <div className="flex items-center gap-1.5 ml-auto">
+                      <input
+                        type="time"
+                        value={wh.startTime}
+                        onChange={(e) => updateDayTime(day, 'startTime', e.target.value)}
+                        className="rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] px-2 py-1 text-xs text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[#C8923A] w-[80px]"
+                      />
+                      <span className="text-xs text-[var(--text-muted)]">-</span>
+                      <input
+                        type="time"
+                        value={wh.endTime}
+                        onChange={(e) => updateDayTime(day, 'endTime', e.target.value)}
+                        className="rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] px-2 py-1 text-xs text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[#C8923A] w-[80px]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => addBreak(day)}
+                        className="ml-1 flex items-center gap-1 rounded-lg border border-[var(--border-color)] px-2 py-1 text-[10px] font-medium text-[var(--text-secondary)] hover:border-[#C8923A] hover:text-[#C8923A]"
+                        title="Adicionar intervalo fixo"
+                      >
+                        <Coffee className="h-3 w-3" />
+                        Intervalo
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="ml-auto text-xs text-[var(--text-muted)]">Folga</span>
+                  )}
+                </div>
+
+                {active && breaks.length > 0 && (
+                  <div className="mt-2 ml-8 space-y-1.5">
+                    {breaks.map((br, bIdx) => (
+                      <div key={bIdx} className="flex items-center gap-1.5">
+                        <Coffee className="h-3 w-3 text-[#C8923A] flex-shrink-0" />
+                        <input
+                          type="text"
+                          value={br.label || ''}
+                          onChange={(e) => updateBreak(day, bIdx, 'label', e.target.value)}
+                          placeholder="Almoço"
+                          className="rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] px-2 py-1 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-1 focus:ring-[#C8923A] w-[90px]"
+                        />
+                        <input
+                          type="time"
+                          value={br.startTime}
+                          onChange={(e) => updateBreak(day, bIdx, 'startTime', e.target.value)}
+                          className="rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] px-2 py-1 text-xs text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[#C8923A] w-[80px]"
+                        />
+                        <span className="text-xs text-[var(--text-muted)]">-</span>
+                        <input
+                          type="time"
+                          value={br.endTime}
+                          onChange={(e) => updateBreak(day, bIdx, 'endTime', e.target.value)}
+                          className="rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] px-2 py-1 text-xs text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[#C8923A] w-[80px]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeBreak(day, bIdx)}
+                          className="rounded p-1 text-[var(--text-muted)] hover:bg-red-500/10 hover:text-[#A63030]"
+                          title="Remover intervalo"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                        {bIdx === 0 && (
+                          <button
+                            type="button"
+                            onClick={() => copyBreaksToAllDays(day)}
+                            className="ml-auto text-[10px] text-[#C8923A] hover:text-[#8B6914]"
+                            title="Aplicar estes intervalos a todos os outros dias ativos"
+                          >
+                            Aplicar a todos os dias
+                          </button>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                ) : (
-                  <span className="ml-auto text-xs text-[var(--text-muted)]">Folga</span>
                 )}
               </div>
             );

@@ -823,6 +823,22 @@ export class AppointmentsService {
           `O serviço ultrapassa o fim do expediente do profissional (${daySchedule.endTime})`,
         );
       }
+
+      // Intervalos fixos do dia (ex: almoço): bloqueiam agendamento no mesmo modo dos time_blocks
+      const recurringBreaks = Array.isArray(daySchedule.breaks) ? daySchedule.breaks : [];
+      for (const br of recurringBreaks) {
+        const [bsH, bsM] = String(br.startTime || '').split(':').map(Number);
+        const [beH, beM] = String(br.endTime || '').split(':').map(Number);
+        const brStart = (bsH || 0) * 60 + (bsM || 0);
+        const brEnd = (beH || 0) * 60 + (beM || 0);
+        if (brEnd <= brStart) continue;
+        if (apptMinutes < brEnd && apptEndMinutes > brStart) {
+          const label = br.label ? ` (${br.label})` : '';
+          throw new ConflictException(
+            `O horário selecionado conflita com um intervalo fixo do profissional${label} (${br.startTime} - ${br.endTime})`,
+          );
+        }
+      }
     }
 
     // 3. Verificar conflitos com bloqueios e agendamentos existentes
@@ -1194,12 +1210,35 @@ export class AppointmentsService {
       throw tbError;
     }
 
-    // 4. Agrupar por profissional
-    return (professionals || []).map(prof => ({
-      ...prof,
-      appointments: (appointments || []).filter(a => a.professionalId === prof.id),
-      timeBlocks: (timeBlocks || []).filter(tb => tb.professionalId === prof.id),
-    }));
+    // 4. Agrupar por profissional + injetar intervalos recorrentes do dia como timeBlocks sintéticos
+    const [yy, mm, dd] = date.split('-').map(Number);
+    const dayOfWeek = new Date(yy, (mm || 1) - 1, dd || 1).getDay();
+
+    return (professionals || []).map((prof: any) => {
+      const realBlocks = (timeBlocks || []).filter(tb => tb.professionalId === prof.id);
+      const recurringBlocks: any[] = [];
+      const wh = Array.isArray(prof.workingHours)
+        ? prof.workingHours.find((w: any) => w.dayOfWeek === dayOfWeek)
+        : null;
+      if (wh && Array.isArray(wh.breaks)) {
+        for (const [idx, br] of wh.breaks.entries()) {
+          if (!br?.startTime || !br?.endTime) continue;
+          recurringBlocks.push({
+            id: `recurring-break:${prof.id}:${dayOfWeek}:${idx}`,
+            startTime: `${date}T${br.startTime}:00`,
+            endTime: `${date}T${br.endTime}:00`,
+            reason: br.label || 'Intervalo',
+            recurring: true,
+            professionalId: prof.id,
+          });
+        }
+      }
+      return {
+        ...prof,
+        appointments: (appointments || []).filter(a => a.professionalId === prof.id),
+        timeBlocks: [...realBlocks, ...recurringBlocks],
+      };
+    });
   }
 
   async createTimeBlock(dto: CreateTimeBlockDto) {
@@ -1355,8 +1394,9 @@ export class AppointmentsService {
     let endMinute = 0;
     const dayOfWeek = new Date(date + 'T12:00:00Z').getUTCDay(); // 0=Dom, 1=Seg...
 
+    let recurringBreaks: { startTime: string; endTime: string; label?: string }[] = [];
     if (professional.workingHours && Array.isArray(professional.workingHours)) {
-      // Formato: [{dayOfWeek: 1, startTime: '09:00', endTime: '18:00'}]
+      // Formato: [{dayOfWeek: 1, startTime: '09:00', endTime: '18:00', breaks?: [...]}]
       const daySchedule = (professional.workingHours as any[]).find(
         (wh: any) => wh.dayOfWeek === dayOfWeek,
       );
@@ -1374,6 +1414,9 @@ export class AppointmentsService {
         const [h, m] = daySchedule.endTime.split(':').map(Number);
         endHour = h;
         endMinute = m || 0;
+      }
+      if (Array.isArray(daySchedule.breaks)) {
+        recurringBreaks = daySchedule.breaks;
       }
     }
 
@@ -1419,6 +1462,15 @@ export class AppointmentsService {
         start: parseMinutes(block.startTime),
         end: parseMinutes(block.endTime),
       });
+    }
+
+    // Intervalos fixos recorrentes do dia (ex: almoço)
+    for (const br of recurringBreaks) {
+      const [bsH, bsM] = String(br.startTime || '').split(':').map(Number);
+      const [beH, beM] = String(br.endTime || '').split(':').map(Number);
+      const brStart = (bsH || 0) * 60 + (bsM || 0);
+      const brEnd = (beH || 0) * 60 + (beM || 0);
+      if (brEnd > brStart) busySlots.push({ start: brStart, end: brEnd });
     }
 
     // Gerar slots e verificar disponibilidade

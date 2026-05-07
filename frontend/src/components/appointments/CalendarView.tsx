@@ -245,44 +245,64 @@ function TimeBlockItem({ block, onDelete, isDeleting, startHour, slotHeight }: T
   const top = getTopPosition(startTime, startHour, slotHeight);
   const durationMinutes = timeToMinutes(endTime) - timeToMinutes(startTime);
   const height = getBlockHeight(durationMinutes, slotHeight);
+  const isRecurring = !!block.recurring;
+
+  // Recorrente (intervalo fixo do expediente): tom âmbar + ícone de café, sem botão de excluir
+  const containerClass = isRecurring
+    ? 'group absolute left-1 right-1 overflow-hidden rounded-lg border border-[#C8923A]/30 bg-amber-500/10 px-2 py-1 backdrop-blur-sm'
+    : 'group absolute left-1 right-1 overflow-hidden rounded-lg border border-[#A63030]/30 bg-red-500/10 px-2 py-1 backdrop-blur-sm';
+  const stripe = isRecurring
+    ? 'repeating-linear-gradient(135deg, transparent, transparent 4px, rgba(200, 146, 58, 0.10) 4px, rgba(200, 146, 58, 0.10) 8px)'
+    : 'repeating-linear-gradient(135deg, transparent, transparent 4px, rgba(239, 68, 68, 0.08) 4px, rgba(239, 68, 68, 0.08) 8px)';
+  const labelClass = isRecurring
+    ? 'flex items-center gap-1 truncate text-xs font-medium text-[#C8923A]'
+    : 'flex items-center gap-1 truncate text-xs font-medium text-[#C45050]';
+  const subClass = isRecurring ? 'truncate text-[10px] text-[#C8923A]/70' : 'truncate text-[10px] text-[#C45050]/70';
+  const timeClass = isRecurring ? 'mt-auto text-[10px] text-[#C8923A]/60' : 'mt-auto text-[10px] text-[#C45050]/60';
+  const Icon = isRecurring ? Coffee : Lock;
+  const label = isRecurring ? (block.reason || 'Intervalo') : 'Bloqueado';
+  const titleAttr = isRecurring
+    ? `${block.reason || 'Intervalo fixo'} (configurado no cadastro do profissional)`
+    : (block.reason || 'Horário bloqueado');
 
   return (
     <div
-      className="group absolute left-1 right-1 overflow-hidden rounded-lg border border-[#A63030]/30 bg-red-500/10 px-2 py-1 backdrop-blur-sm"
+      className={containerClass}
       style={{
         top: `${top}px`,
         height: `${Math.max(height, slotHeight)}px`,
-        backgroundImage:
-          'repeating-linear-gradient(135deg, transparent, transparent 4px, rgba(239, 68, 68, 0.08) 4px, rgba(239, 68, 68, 0.08) 8px)',
+        backgroundImage: stripe,
       }}
-      title={block.reason || 'Horário bloqueado'}
+      title={titleAttr}
     >
       <div className="flex h-full items-start justify-between">
         <div className="flex min-w-0 flex-col overflow-hidden">
-          <div className="flex items-center gap-1 truncate text-xs font-medium text-[#C45050]">
-            <Lock className="h-2.5 w-2.5 shrink-0" />
-            Bloqueado
+          <div className={labelClass}>
+            <Icon className="h-2.5 w-2.5 shrink-0" />
+            {label}
           </div>
-          {height >= 40 && block.reason && (
-            <div className="truncate text-[10px] text-[#C45050]/70">{block.reason}</div>
+          {height >= 40 && !isRecurring && block.reason && (
+            <div className={subClass}>{block.reason}</div>
           )}
           {height >= 60 && (
-            <div className="mt-auto text-[10px] text-[#C45050]/60">
+            <div className={timeClass}>
               {startTime} - {endTime}
             </div>
           )}
         </div>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(block.id);
-          }}
-          disabled={isDeleting}
-          className="shrink-0 rounded p-0.5 text-[#C45050]/60 opacity-0 transition-opacity hover:bg-red-500/20 hover:text-[#C45050] group-hover:opacity-100"
-          title="Remover bloqueio"
-        >
-          <Trash2 className="h-3 w-3" />
-        </button>
+        {!isRecurring && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(block.id);
+            }}
+            disabled={isDeleting}
+            className="shrink-0 rounded p-0.5 text-[#C45050]/60 opacity-0 transition-opacity hover:bg-red-500/20 hover:text-[#C45050] group-hover:opacity-100"
+            title="Remover bloqueio"
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        )}
       </div>
     </div>
   );
