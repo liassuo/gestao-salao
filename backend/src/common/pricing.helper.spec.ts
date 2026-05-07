@@ -1,9 +1,16 @@
 import {
   applyDiscount,
   effectiveDiscountPercent,
+  getActiveClientPlan,
+  getActiveClientSubscription,
   getClientPlanDiscount,
+  getPlanDiscountForService,
   getPromoDiscountForProduct,
   getPromoDiscountForService,
+  getRemainingCuts,
+  isPlanIncludedService,
+  isUnlimitedCutsPlan,
+  UNLIMITED_CUTS,
   PromotionMatch,
 } from './pricing.helper';
 import { SupabaseService } from '../supabase/supabase.service';
@@ -174,25 +181,224 @@ describe('pricing.helper', () => {
     });
 
     it('retorna discountPercent do plano quando a assinatura está ativa', async () => {
-      const supabase = makeSupabase({ plan: { id: 'plan-1', discountPercent: 25, services: [] } });
+      const supabase = makeSupabase({ id: 'sub-1', cutsUsedThisMonth: 0, plan: { id: 'plan-1', cutsPerMonth: 4, discountPercent: 25, services: [] } });
       expect(await getClientPlanDiscount(supabase, 'client-1')).toBe(25);
     });
 
     it('filtra por status ACTIVE', async () => {
-      const supabase = makeSupabase({ plan: { id: 'plan-1', discountPercent: 25, services: [] } });
+      const supabase = makeSupabase({ id: 'sub-1', cutsUsedThisMonth: 0, plan: { id: 'plan-1', cutsPerMonth: 4, discountPercent: 25, services: [] } });
       await getClientPlanDiscount(supabase, 'client-1');
       expect(supabase._chain.eq).toHaveBeenCalledWith('status', 'ACTIVE');
       expect(supabase._chain.eq).toHaveBeenCalledWith('clientId', 'client-1');
     });
 
     it('retorna 0 quando discountPercent do plano é 0', async () => {
-      const supabase = makeSupabase({ plan: { id: 'plan-1', discountPercent: 0, services: [] } });
+      const supabase = makeSupabase({ id: 'sub-1', cutsUsedThisMonth: 0, plan: { id: 'plan-1', cutsPerMonth: 4, discountPercent: 0, services: [] } });
       expect(await getClientPlanDiscount(supabase, 'client-1')).toBe(0);
     });
 
     it('retorna 0 quando discountPercent não é número', async () => {
-      const supabase = makeSupabase({ plan: { id: 'plan-1', discountPercent: null, services: [] } });
+      const supabase = makeSupabase({ id: 'sub-1', cutsUsedThisMonth: 0, plan: { id: 'plan-1', cutsPerMonth: 4, discountPercent: null, services: [] } });
       expect(await getClientPlanDiscount(supabase, 'client-1')).toBe(0);
+    });
+  });
+
+  // ─── getPlanDiscountForService (sync, com plano carregado) ────────────────
+  describe('getPlanDiscountForService (override por serviço)', () => {
+    it('retorna 0 quando plano é null', () => {
+      expect(getPlanDiscountForService(null, 'svc-1')).toBe(0);
+    });
+
+    it('retorna o override do serviço quando o serviço está listado no plano', () => {
+      const plan = {
+        planId: 'plan-1',
+        globalPercent: 10,
+        servicePercents: new Map<string, number>([['svc-corte', 100]]),
+      };
+      // Cenário do bug reportado: 100% de desconto específico no corte deve zerar o preço.
+      expect(getPlanDiscountForService(plan, 'svc-corte')).toBe(100);
+    });
+
+    it('cai no desconto global do plano quando o serviço NÃO está listado', () => {
+      const plan = {
+        planId: 'plan-1',
+        globalPercent: 25,
+        servicePercents: new Map<string, number>([['svc-corte', 100]]),
+      };
+      expect(getPlanDiscountForService(plan, 'svc-barba')).toBe(25);
+    });
+
+    it('respeita override de 0% mesmo quando o global é maior (override explícito)', () => {
+      const plan = {
+        planId: 'plan-1',
+        globalPercent: 30,
+        servicePercents: new Map<string, number>([['svc-premium', 0]]),
+      };
+      expect(getPlanDiscountForService(plan, 'svc-premium')).toBe(0);
+    });
+  });
+
+  // ─── getActiveClientPlan (async, com Supabase mock e overrides) ───────────
+  describe('getActiveClientPlan', () => {
+    const makeSupabase = (returnData: any) => {
+      const chain: any = {};
+      chain.select = jest.fn().mockReturnValue(chain);
+      chain.eq = jest.fn().mockReturnValue(chain);
+      chain.maybeSingle = jest.fn().mockResolvedValue({ data: returnData });
+      return {
+        from: jest.fn().mockReturnValue(chain),
+      } as unknown as SupabaseService;
+    };
+
+    it('retorna null quando clientId é falsy', async () => {
+      const supabase = makeSupabase(null);
+      expect(await getActiveClientPlan(supabase, null)).toBeNull();
+      expect(await getActiveClientPlan(supabase, undefined)).toBeNull();
+      expect(await getActiveClientPlan(supabase, '')).toBeNull();
+    });
+
+    it('retorna null quando o cliente não tem assinatura ACTIVE', async () => {
+      const supabase = makeSupabase(null);
+      expect(await getActiveClientPlan(supabase, 'client-1')).toBeNull();
+    });
+
+    it('mapeia corretamente os overrides por serviço do plano ACTIVE', async () => {
+      const supabase = makeSupabase({
+        id: 'sub-1',
+        cutsUsedThisMonth: 0,
+        plan: {
+          id: 'plan-1',
+          cutsPerMonth: 4,
+          discountPercent: 10,
+          services: [
+            { serviceId: 'svc-corte', discountPercent: 100 },
+            { serviceId: 'svc-barba', discountPercent: 50 },
+          ],
+        },
+      });
+      const plan = await getActiveClientPlan(supabase, 'client-1');
+      expect(plan).not.toBeNull();
+      expect(plan!.planId).toBe('plan-1');
+      expect(plan!.globalPercent).toBe(10);
+      expect(plan!.servicePercents.get('svc-corte')).toBe(100);
+      expect(plan!.servicePercents.get('svc-barba')).toBe(50);
+      // E o resolver final aplica corretamente o override do corte.
+      expect(getPlanDiscountForService(plan, 'svc-corte')).toBe(100);
+      expect(applyDiscount(5000, getPlanDiscountForService(plan, 'svc-corte'))).toBe(0);
+    });
+  });
+
+  // ─── isPlanIncludedService / isUnlimitedCutsPlan / getRemainingCuts ───────
+  describe('helpers de saldo de cortes do plano', () => {
+    it('isPlanIncludedService: true quando override é exatamente 100%', () => {
+      const plan = {
+        planId: 'plan-1',
+        globalPercent: 0,
+        servicePercents: new Map<string, number>([['svc-corte', 100]]),
+      };
+      expect(isPlanIncludedService(plan, 'svc-corte')).toBe(true);
+    });
+
+    it('isPlanIncludedService: false quando override é < 100% (apenas desconto)', () => {
+      const plan = {
+        planId: 'plan-1',
+        globalPercent: 0,
+        servicePercents: new Map<string, number>([['svc-barba', 50]]),
+      };
+      expect(isPlanIncludedService(plan, 'svc-barba')).toBe(false);
+    });
+
+    it('isPlanIncludedService: false quando o serviço não está listado (cai no global)', () => {
+      const plan = {
+        planId: 'plan-1',
+        globalPercent: 100, // global 100% NÃO conta como "incluído" — só override exato
+        servicePercents: new Map<string, number>(),
+      };
+      expect(isPlanIncludedService(plan, 'svc-fora')).toBe(false);
+    });
+
+    it('isUnlimitedCutsPlan: 99 = ilimitado', () => {
+      expect(isUnlimitedCutsPlan(UNLIMITED_CUTS)).toBe(true);
+      expect(isUnlimitedCutsPlan(4)).toBe(false);
+      expect(isUnlimitedCutsPlan(0)).toBe(false);
+    });
+
+    it('getRemainingCuts: subtrai usados do total mensal', () => {
+      const sub = {
+        subscriptionId: 's1', planId: 'p1', globalPercent: 0,
+        servicePercents: new Map<string, number>(),
+        cutsPerMonth: 4, cutsUsedThisMonth: 1,
+      };
+      expect(getRemainingCuts(sub)).toBe(3);
+    });
+
+    it('getRemainingCuts: 0 quando saldo zerado/negativo', () => {
+      const sub = {
+        subscriptionId: 's1', planId: 'p1', globalPercent: 0,
+        servicePercents: new Map<string, number>(),
+        cutsPerMonth: 4, cutsUsedThisMonth: 4,
+      };
+      expect(getRemainingCuts(sub)).toBe(0);
+    });
+
+    it('getRemainingCuts: Infinity para plano ilimitado', () => {
+      const sub = {
+        subscriptionId: 's1', planId: 'p1', globalPercent: 0,
+        servicePercents: new Map<string, number>(),
+        cutsPerMonth: UNLIMITED_CUTS, cutsUsedThisMonth: 50,
+      };
+      expect(getRemainingCuts(sub)).toBe(Number.POSITIVE_INFINITY);
+    });
+
+    it('getRemainingCuts: 0 quando sub é null', () => {
+      expect(getRemainingCuts(null)).toBe(0);
+    });
+  });
+
+  // ─── getActiveClientSubscription (carrega plano + saldo de cortes) ────────
+  describe('getActiveClientSubscription', () => {
+    const makeSupabase = (returnData: any) => {
+      const chain: any = {};
+      chain.select = jest.fn().mockReturnValue(chain);
+      chain.eq = jest.fn().mockReturnValue(chain);
+      chain.maybeSingle = jest.fn().mockResolvedValue({ data: returnData });
+      return {
+        from: jest.fn().mockReturnValue(chain),
+      } as unknown as SupabaseService;
+    };
+
+    it('retorna null para clientId falsy', async () => {
+      const supabase = makeSupabase(null);
+      expect(await getActiveClientSubscription(supabase, null)).toBeNull();
+    });
+
+    it('retorna null quando não há assinatura ACTIVE', async () => {
+      const supabase = makeSupabase(null);
+      expect(await getActiveClientSubscription(supabase, 'c1')).toBeNull();
+    });
+
+    it('mapeia plano + saldo de cortes do mês corrente', async () => {
+      const supabase = makeSupabase({
+        id: 'sub-123',
+        cutsUsedThisMonth: 2,
+        plan: {
+          id: 'plan-1',
+          cutsPerMonth: 4,
+          discountPercent: 10,
+          services: [{ serviceId: 'svc-corte', discountPercent: 100 }],
+        },
+      });
+      const sub = await getActiveClientSubscription(supabase, 'c1');
+      expect(sub).not.toBeNull();
+      expect(sub!.subscriptionId).toBe('sub-123');
+      expect(sub!.planId).toBe('plan-1');
+      expect(sub!.globalPercent).toBe(10);
+      expect(sub!.cutsPerMonth).toBe(4);
+      expect(sub!.cutsUsedThisMonth).toBe(2);
+      expect(sub!.servicePercents.get('svc-corte')).toBe(100);
+      // Cenário de uso real do bug reportado:
+      expect(isPlanIncludedService(sub, 'svc-corte')).toBe(true);
+      expect(getRemainingCuts(sub)).toBe(2); // ainda pode usar 2 cortes este mês
     });
   });
 });

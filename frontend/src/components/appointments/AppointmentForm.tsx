@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { AlertCircle, Loader2, Search, X } from 'lucide-react';
 import { useClients, useProfessionals, useServices, useActivePromotions, useClientSubscription } from '@/hooks';
-import { formatPhone } from '@/utils/format';
+import { formatPhone, getActivePlanFromSubscription } from '@/utils';
 import { AppointmentSummary } from './AppointmentSummary';
 import { useToast } from '@/components/ui/ToastContext';
 import type { Service } from '@/types';
@@ -85,7 +85,9 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
   const watchedTime = watch('time');
 
   const { data: clientSub } = useClientSubscription(watchedClientId || undefined);
-  const planDiscount = clientSub && clientSub.status === 'ACTIVE' ? clientSub.plan?.discountPercent ?? 0 : 0;
+  // Plano ativo (com overrides por serviço). Null quando não há assinatura ACTIVE —
+  // PENDING_PAYMENT/SUSPENDED/CANCELED não concedem desconto.
+  const activePlan = getActivePlanFromSubscription(clientSub);
   const planLabel = clientSub?.plan?.name ? `Plano ${clientSub.plan.name}` : undefined;
 
   // Client autocomplete
@@ -334,7 +336,7 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
       <AppointmentSummary
         selectedServices={selectedServices}
         promotions={activePromotions}
-        planDiscountPercent={planDiscount}
+        plan={activePlan}
         planLabel={planLabel}
       />
 

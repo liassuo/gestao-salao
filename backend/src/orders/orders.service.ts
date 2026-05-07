@@ -8,15 +8,17 @@ import { ProfessionalDebtsService } from '../professional-debts/professional-deb
 import { AsaasBillingType } from '../asaas/asaas.types';
 import { CreateOrderDto, UpdateOrderDto, AddOrderItemDto, QueryOrderDto, PayOrderDto } from './dto';
 import {
-  getActiveClientPlan,
+  getActiveClientSubscription,
   getPlanDiscountForService,
   getActivePromotions,
   getPromoDiscountForService,
   getPromoDiscountForProduct,
   effectiveDiscountPercent,
   applyDiscount,
+  getRemainingCuts,
+  isPlanIncludedService,
   type PromotionMatch,
-  type ActiveClientPlan,
+  type ActiveClientSubscription,
 } from '../common/pricing.helper';
 
 @Injectable()
@@ -33,10 +35,16 @@ export class OrdersService {
   async create(dto: CreateOrderDto) {
     this.logger.log(`Creating order with ${dto.items?.length ?? 0} items`);
 
-    // Plano ativo do cliente (com desconto por serviço) + promoções ativas.
-    // Entre promoção e assinatura, prevalece o MAIOR desconto por item.
-    const activePlan = await getActiveClientPlan(this.supabase, dto.clientId);
+    // Plano ativo do cliente (com desconto por serviço + saldo de cortes) + promoções.
+    // Regras: (a) entre promoção e plano, prevalece o MAIOR desconto por item;
+    // (b) serviço com override 100% = "incluído no plano" — zera o preço e debita
+    // 1 corte do `cutsUsedThisMonth`; quando o saldo acaba, cai no `discountPercent`
+    // global do plano (cobra naturalmente).
+    const activeSub = await getActiveClientSubscription(this.supabase, dto.clientId);
     const activePromos = await getActivePromotions(this.supabase);
+
+    // Saldo simulado: vai sendo decrementado item-a-item antes de persistir o débito.
+    let remainingCuts = getRemainingCuts(activeSub);
 
     const resolvedItems: {
       productId: string | null;
@@ -44,21 +52,66 @@ export class OrdersService {
       quantity: number;
       unitPrice: number;
       itemType: 'PRODUCT' | 'SERVICE';
+      consumedSubscriptionCut: boolean;
     }[] = [];
 
     let totalAmount = 0;
+    let cutsToDebit = 0;
 
+    // Para cada item da entrada, expandimos por quantidade quando for serviço incluído
+    // no plano — porque cada unidade pode ter destino diferente (a 1ª e 2ª consomem
+    // crédito, a 3ª já não tem saldo e cai no fallback). Para o caso comum (qty=1
+    // ou item que não consome corte), continua como uma linha só.
     for (const item of dto.items || []) {
       const quantity = item.quantity || 1;
-      const unitPrice = await this.resolveUnitPrice(item, activePlan, activePromos);
-      totalAmount += unitPrice * quantity;
-      resolvedItems.push({
-        productId: item.productId || null,
-        serviceId: item.serviceId || null,
-        quantity,
-        unitPrice,
-        itemType: item.itemType,
-      });
+      const isPlanCut =
+        item.itemType === 'SERVICE' &&
+        !!item.serviceId &&
+        isPlanIncludedService(activeSub, item.serviceId);
+
+      if (isPlanCut && quantity > 1) {
+        for (let i = 0; i < quantity; i++) {
+          const { unitPrice, consumedCut } = await this.resolveItemPrice(
+            item,
+            activeSub,
+            remainingCuts,
+            activePromos,
+          );
+          if (consumedCut) {
+            remainingCuts -= 1;
+            cutsToDebit += 1;
+          }
+          totalAmount += unitPrice;
+          resolvedItems.push({
+            productId: item.productId || null,
+            serviceId: item.serviceId || null,
+            quantity: 1,
+            unitPrice,
+            itemType: item.itemType,
+            consumedSubscriptionCut: consumedCut,
+          });
+        }
+      } else {
+        const { unitPrice, consumedCut } = await this.resolveItemPrice(
+          item,
+          activeSub,
+          remainingCuts,
+          activePromos,
+        );
+        if (consumedCut) {
+          remainingCuts -= 1;
+          cutsToDebit += 1;
+        }
+        totalAmount += unitPrice * quantity;
+        resolvedItems.push({
+          productId: item.productId || null,
+          serviceId: item.serviceId || null,
+          quantity,
+          unitPrice,
+          itemType: item.itemType,
+          consumedSubscriptionCut: consumedCut,
+        });
+      }
     }
 
     const consumerType = dto.consumerType || 'CLIENT';
@@ -106,6 +159,7 @@ export class OrdersService {
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         itemType: item.itemType,
+        consumedSubscriptionCut: item.consumedSubscriptionCut,
       });
 
       if (itemError) {
@@ -114,22 +168,33 @@ export class OrdersService {
       }
     }
 
+    // Debita os créditos da assinatura uma só vez (não por item) pra reduzir
+    // round-trips e manter o contador consistente com o nº de linhas marcadas.
+    if (cutsToDebit > 0 && activeSub) {
+      await this.debitSubscriptionCuts(activeSub.subscriptionId, cutsToDebit);
+    }
+
     return this.findOne(order.id);
   }
 
   /**
-   * Resolve o preço unitário de um item de comanda considerando:
-   * - preço base (products.salePrice / services.price) quando o productId/serviceId é informado
-   * - desconto da assinatura ativa do cliente (se houver)
-   * - desconto de promoção ativa para o item (se houver)
-   * Entre promoção e assinatura, prevalece o MAIOR desconto. Se nenhum id for informado,
-   * cai de volta para o unitPrice enviado.
+   * Resolve o preço unitário de UMA UNIDADE de item de comanda considerando:
+   * - preço base (products.salePrice / services.price) quando o productId/serviceId é informado;
+   * - serviço incluído no plano (override 100%) com saldo disponível → preço 0 e
+   *   marca consumedCut=true (1 corte do `cutsUsedThisMonth` será debitado);
+   * - serviço incluído no plano sem saldo → cai no `discountPercent` global do plano
+   *   (fallback "natural": cobra com desconto residual ou cheio se global=0);
+   * - demais casos: aplica o MAIOR entre promoção ativa e desconto do plano (override
+   *   por serviço ou global).
+   *
+   * Se nenhum id for informado, cai de volta para o unitPrice enviado pelo caller.
    */
-  private async resolveUnitPrice(
+  private async resolveItemPrice(
     item: { productId?: string; serviceId?: string; unitPrice: number; itemType: 'PRODUCT' | 'SERVICE' },
-    activePlan: ActiveClientPlan | null,
+    sub: ActiveClientSubscription | null,
+    remainingCuts: number,
     activePromos: PromotionMatch[],
-  ): Promise<number> {
+  ): Promise<{ unitPrice: number; consumedCut: boolean }> {
     let basePrice = item.unitPrice;
     let promoPercent = 0;
     let planPercent = 0;
@@ -142,8 +207,8 @@ export class OrdersService {
         .single();
       if (product?.salePrice != null) basePrice = product.salePrice;
       promoPercent = getPromoDiscountForProduct(activePromos, item.productId);
-      // Produtos não têm override por serviço — usa desconto global do plano
-      planPercent = activePlan?.globalPercent ?? 0;
+      // Produtos não têm override por serviço — usa desconto global do plano.
+      planPercent = sub?.globalPercent ?? 0;
     } else if (item.itemType === 'SERVICE' && item.serviceId) {
       const { data: service } = await this.supabase
         .from('services')
@@ -152,11 +217,91 @@ export class OrdersService {
         .single();
       if (service?.price != null) basePrice = service.price;
       promoPercent = getPromoDiscountForService(activePromos, item.serviceId);
-      planPercent = getPlanDiscountForService(activePlan, item.serviceId);
+
+      // Serviço incluído no plano: tenta consumir crédito; se não há saldo, cai
+      // no desconto global (fallback natural — cobra normalmente).
+      if (sub && isPlanIncludedService(sub, item.serviceId)) {
+        if (remainingCuts > 0) {
+          return { unitPrice: 0, consumedCut: true };
+        }
+        planPercent = sub.globalPercent;
+      } else {
+        planPercent = getPlanDiscountForService(sub, item.serviceId);
+      }
     }
 
     const percent = effectiveDiscountPercent(promoPercent, planPercent);
-    return applyDiscount(basePrice, percent);
+    return { unitPrice: applyDiscount(basePrice, percent), consumedCut: false };
+  }
+
+  /**
+   * Débito atômico de cortes da assinatura via RPC PostgreSQL
+   * (`debit_subscription_cuts(sub_id, amount)`). O UPDATE incremental dentro da
+   * função usa row lock automático do Postgres — duas chamadas concorrentes ficam
+   * serializadas, sem perder débitos.
+   *
+   * Fallback: se a RPC ainda não existe (migration não aplicada), cai num
+   * read-modify-write — não dá erro, só fica vulnerável a race em concorrência
+   * simultânea (cenário raro para uma comanda de salão).
+   */
+  private async debitSubscriptionCuts(subscriptionId: string, amount: number) {
+    if (amount <= 0) return;
+    const { error } = await this.supabase.rpc('debit_subscription_cuts', {
+      sub_id: subscriptionId,
+      amount,
+    });
+    if (error) {
+      this.logger.warn(
+        `RPC debit_subscription_cuts indisponível (${error.message}); usando fallback read-modify-write. ` +
+          `Aplique a migration backend/sql/alter_order_items_add_consumed_cut.sql.`,
+      );
+      await this.debitFallback(subscriptionId, amount);
+    }
+  }
+
+  private async refundSubscriptionCuts(subscriptionId: string, amount: number) {
+    if (amount <= 0) return;
+    const { error } = await this.supabase.rpc('refund_subscription_cuts', {
+      sub_id: subscriptionId,
+      amount,
+    });
+    if (error) {
+      this.logger.warn(
+        `RPC refund_subscription_cuts indisponível (${error.message}); usando fallback. ` +
+          `Aplique a migration backend/sql/alter_order_items_add_consumed_cut.sql.`,
+      );
+      await this.refundFallback(subscriptionId, amount);
+    }
+  }
+
+  /** Fallback não-atômico — só usado se a RPC do Postgres não existir ainda. */
+  private async debitFallback(subscriptionId: string, amount: number) {
+    const { data: sub } = await this.supabase
+      .from('client_subscriptions')
+      .select('id, cutsUsedThisMonth')
+      .eq('id', subscriptionId)
+      .single();
+    if (!sub) return;
+    const current = typeof sub.cutsUsedThisMonth === 'number' ? sub.cutsUsedThisMonth : 0;
+    await this.supabase
+      .from('client_subscriptions')
+      .update({ cutsUsedThisMonth: current + amount, updatedAt: nowLocalIsoString() })
+      .eq('id', subscriptionId);
+  }
+
+  private async refundFallback(subscriptionId: string, amount: number) {
+    const { data: sub } = await this.supabase
+      .from('client_subscriptions')
+      .select('id, cutsUsedThisMonth')
+      .eq('id', subscriptionId)
+      .single();
+    if (!sub) return;
+    const current = typeof sub.cutsUsedThisMonth === 'number' ? sub.cutsUsedThisMonth : 0;
+    const next = Math.max(0, current - amount);
+    await this.supabase
+      .from('client_subscriptions')
+      .update({ cutsUsedThisMonth: next, updatedAt: nowLocalIsoString() })
+      .eq('id', subscriptionId);
   }
 
   async findAll(query: QueryOrderDto) {
@@ -230,25 +375,78 @@ export class OrdersService {
     }
 
     // Aplica desconto da assinatura do cliente + promoção ativa (o MAIOR vence).
-    const activePlan = await getActiveClientPlan(this.supabase, order.clientId);
+    // Para serviço incluído no plano (override 100%), consome créditos disponíveis;
+    // se passar do limite, cobra naturalmente pelo discountPercent global do plano.
+    const activeSub = await getActiveClientSubscription(this.supabase, order.clientId);
     const activePromos = await getActivePromotions(this.supabase);
-    const unitPrice = await this.resolveUnitPrice(dto, activePlan, activePromos);
+    let remainingCuts = getRemainingCuts(activeSub);
+
     const quantity = dto.quantity || 1;
-    const lineTotal = unitPrice * quantity;
+    const isPlanCut =
+      dto.itemType === 'SERVICE' &&
+      !!dto.serviceId &&
+      isPlanIncludedService(activeSub, dto.serviceId);
 
-    const { error: insertError } = await this.supabase.from('order_items').insert({
-      id: randomUUID(),
-      orderId: orderId,
-      productId: dto.productId || null,
-      serviceId: dto.serviceId || null,
-      quantity,
-      unitPrice,
-      itemType: dto.itemType,
-    });
+    // Linhas a inserir (uma só na maioria dos casos; expande quando o item é
+    // do plano e quantity > 1 e parte consome crédito e parte não).
+    const linesToInsert: {
+      quantity: number;
+      unitPrice: number;
+      consumedSubscriptionCut: boolean;
+    }[] = [];
+    let cutsToDebit = 0;
+    let lineTotal = 0;
 
-    if (insertError) {
-      this.logger.error(`Error inserting order item: ${JSON.stringify(insertError)}`);
-      throw insertError;
+    if (isPlanCut && quantity > 1) {
+      for (let i = 0; i < quantity; i++) {
+        const { unitPrice, consumedCut } = await this.resolveItemPrice(
+          dto,
+          activeSub,
+          remainingCuts,
+          activePromos,
+        );
+        if (consumedCut) {
+          remainingCuts -= 1;
+          cutsToDebit += 1;
+        }
+        linesToInsert.push({ quantity: 1, unitPrice, consumedSubscriptionCut: consumedCut });
+        lineTotal += unitPrice;
+      }
+    } else {
+      const { unitPrice, consumedCut } = await this.resolveItemPrice(
+        dto,
+        activeSub,
+        remainingCuts,
+        activePromos,
+      );
+      if (consumedCut) {
+        remainingCuts -= 1;
+        cutsToDebit += 1;
+      }
+      linesToInsert.push({ quantity, unitPrice, consumedSubscriptionCut: consumedCut });
+      lineTotal = unitPrice * quantity;
+    }
+
+    for (const line of linesToInsert) {
+      const { error: insertError } = await this.supabase.from('order_items').insert({
+        id: randomUUID(),
+        orderId: orderId,
+        productId: dto.productId || null,
+        serviceId: dto.serviceId || null,
+        quantity: line.quantity,
+        unitPrice: line.unitPrice,
+        itemType: dto.itemType,
+        consumedSubscriptionCut: line.consumedSubscriptionCut,
+      });
+
+      if (insertError) {
+        this.logger.error(`Error inserting order item: ${JSON.stringify(insertError)}`);
+        throw insertError;
+      }
+    }
+
+    if (cutsToDebit > 0 && activeSub) {
+      await this.debitSubscriptionCuts(activeSub.subscriptionId, cutsToDebit);
     }
 
     const newTotal = order.totalAmount + lineTotal;
@@ -302,7 +500,7 @@ export class OrdersService {
   async removeItem(orderId: string, itemId: string) {
     const { data: order, error } = await this.supabase
       .from('orders')
-      .select('id, status, totalAmount, appointmentId')
+      .select('id, status, totalAmount, appointmentId, clientId')
       .eq('id', orderId)
       .single();
 
@@ -316,7 +514,7 @@ export class OrdersService {
 
     const { data: item, error: itemError } = await this.supabase
       .from('order_items')
-      .select('id, unitPrice, quantity, orderId, itemType, serviceId')
+      .select('id, unitPrice, quantity, orderId, itemType, serviceId, consumedSubscriptionCut')
       .eq('id', itemId)
       .single();
 
@@ -328,6 +526,15 @@ export class OrdersService {
     const newTotal = order.totalAmount - lineTotal;
 
     await this.supabase.from('order_items').delete().eq('id', itemId);
+
+    // Se este item havia consumido cr\u00e9ditos da assinatura, devolve agora.
+    // (1 cr\u00e9dito por unidade marcada \u2014 quantity)
+    if ((item as any).consumedSubscriptionCut && (order as any).clientId) {
+      const sub = await getActiveClientSubscription(this.supabase, (order as any).clientId);
+      if (sub) {
+        await this.refundSubscriptionCuts(sub.subscriptionId, item.quantity || 1);
+      }
+    }
 
     await this.supabase
       .from('orders')
@@ -710,7 +917,7 @@ export class OrdersService {
   async cancel(id: string) {
     const { data: order, error } = await this.supabase
       .from('orders')
-      .select('id, status, items:order_items(id, itemType, productId, quantity)')
+      .select('id, status, clientId, items:order_items(id, itemType, productId, quantity, consumedSubscriptionCut)')
       .eq('id', id)
       .single();
 
@@ -722,6 +929,19 @@ export class OrdersService {
       throw new BadRequestException(
         'Apenas comandas pendentes ou lançadas como débito podem ser canceladas',
       );
+    }
+
+    // Devolver créditos de assinatura consumidos pelos itens desta comanda.
+    // Soma as quantidades dos itens marcados com consumedSubscriptionCut=true.
+    const cutsToRefund = ((order as any).items || []).reduce(
+      (sum: number, i: any) => sum + (i.consumedSubscriptionCut ? (i.quantity || 1) : 0),
+      0,
+    );
+    if (cutsToRefund > 0 && (order as any).clientId) {
+      const sub = await getActiveClientSubscription(this.supabase, (order as any).clientId);
+      if (sub) {
+        await this.refundSubscriptionCuts(sub.subscriptionId, cutsToRefund);
+      }
     }
 
     // Reverter efeitos colaterais quando a comanda já tinha sido lançada como débito

@@ -31,4 +31,16 @@ export class SupabaseService implements OnModuleInit {
   from(table: string) {
     return this.supabase.from(table);
   }
+
+  /**
+   * Chama uma stored procedure (RPC) do Postgres. Usado para operações que
+   * precisam ser atômicas no banco — ex.: incremento/decremento de contadores
+   * sem read-modify-write (debit_subscription_cuts, refund_subscription_cuts).
+   */
+  rpc<TArgs extends Record<string, unknown> = Record<string, unknown>>(
+    fn: string,
+    args?: TArgs,
+  ) {
+    return this.supabase.rpc(fn, args ?? {});
+  }
 }

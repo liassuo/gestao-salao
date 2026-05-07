@@ -192,6 +192,39 @@ describe('AppointmentsService', () => {
       expect(chains['appointment_services'].insert).toHaveBeenCalledTimes(2);
     });
 
+    /**
+     * Fluxo legado do app cliente: o checkbox "usar corte da assinatura" zera
+     * todos os serviços e o controller é quem chama `subscriptionsService.useCut()`
+     * (debita 1 corte só, fixo, independente de quantos serviços). Garantir que
+     * o auto-débito por override 100% NÃO duplica o débito nesse caminho.
+     */
+    it('useSubscriptionCut=true zera tudo, NÃO marca consumedSubscriptionCut e NÃO chama RPC de débito', async () => {
+      setupCreateSuccess();
+      // Mock rpc — se for chamada, falha o teste.
+      (mockSupabase as any).rpc = jest.fn();
+
+      const result = await service.create({ ...dto, useSubscriptionCut: true });
+
+      expect(result).toMatchObject({ id: 'mock-uuid-123' });
+
+      const insertCall = chains['appointments'].insert.mock.calls[0][0];
+      // Total = 0 — flag legada zera tudo (independente do plano).
+      expect(insertCall.totalPrice).toBe(0);
+      expect(insertCall.usedSubscriptionCut).toBe(true);
+
+      // Order items inseridos como zerados, mas SEM consumedSubscriptionCut
+      // (a contabilidade de cortes é feita pelo controller via useCut()).
+      const itemInserts = chains['order_items'].insert.mock.calls.map((c: any[]) => c[0]);
+      expect(itemInserts).toHaveLength(2);
+      for (const it of itemInserts) {
+        expect(it.unitPrice).toBe(0);
+        expect(it.consumedSubscriptionCut).toBe(false);
+      }
+
+      // Não pode haver chamada de débito automático — o controller cuida disso.
+      expect((mockSupabase as any).rpc).not.toHaveBeenCalled();
+    });
+
     it('should throw NotFoundException when professional not found', async () => {
       // services precisa passar antes de chegar em validateScheduleConflicts
       chains['services'] = mockChain();

@@ -4,65 +4,92 @@ import { ClipboardList, Plus, AlertCircle, Eye, Trash2, CreditCard, XCircle, Sho
 import { useOrders, useCreateOrder, usePayOrder, useCancelOrder, useDeleteOrder, useAddOrderItem, useRemoveOrderItem, useClients, useProducts, useServices, useActivePromotions, useClientSubscription, useProfessionals, getApiErrorMessage } from '@/hooks';
 import { ordersService } from '@/services/orders';
 import { Modal, ConfirmModal, useToast } from '@/components/ui';
-import type { Order, OrderStatus, CreateOrderPayload, AddOrderItemPayload, OrderItemType, Promotion } from '@/types';
+import type { Order, OrderStatus, CreateOrderPayload, AddOrderItemPayload, OrderItemType } from '@/types';
 import { orderStatusLabels, orderStatusColors } from '@/types';
+import {
+  getActiveSubscriptionView,
+  resolveCartLine,
+  type ActiveSubscriptionView,
+  type ResolvedLine,
+} from '@/utils';
 
 type PaymentMethod = 'CASH' | 'PIX' | 'CARD';
 
-interface CartItem {
+// Entrada bruta do carrinho (o que o admin clicou). Os preços e flags de
+// consumo de corte são derivados via `resolveCart` — assim o saldo simulado
+// é sempre coerente com a ordem dos itens (1º consome 1º crédito, etc).
+interface CartEntry {
   id: string; // productId or serviceId
   name: string;
   itemType: OrderItemType;
   originalPrice: number;
-  unitPrice: number;
   quantity: number;
-  hasPromo: boolean;
-  promoName?: string;
+}
+
+interface ResolvedCartLine extends CartEntry {
+  /** Linhas expandidas: cada unidade vira uma sub-linha com seu próprio preço/flag. */
+  units: ResolvedLine[];
+  /** Soma de todas as unidades. */
+  lineTotal: number;
+  /** True se ao menos uma unidade consumiu corte. */
+  anyConsumesCut: boolean;
+  /** True se ao menos uma unidade caiu em fallback por limite mensal. */
+  anyLimitReached: boolean;
 }
 
 function formatCents(cents: number): string {
   return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-interface DiscountInfo {
-  percent: number;
-  name: string;
-  source: 'PROMO' | 'PLAN';
-}
+/**
+ * Resolve o carrinho inteiro contra o saldo da assinatura. Itera item por item,
+ * expandindo cada unidade individualmente (uma unidade pode consumir corte e a
+ * próxima cair no fallback se o saldo acabar). Retorna também o saldo restante
+ * após processar tudo, pra UI mostrar "x cortes consumidos / y cortes restantes".
+ */
+function resolveCart(
+  entries: CartEntry[],
+  promotions: ReturnType<typeof useActivePromotions>['data'],
+  sub: ActiveSubscriptionView | null,
+): { lines: ResolvedCartLine[]; cutsConsumed: number; remainingCutsAfter: number } {
+  let remaining = sub?.remainingCuts ?? 0;
+  const startingRemaining = remaining;
+  const lines: ResolvedCartLine[] = [];
 
-function getPromoProductDiscount(productId: string, promotions: Promotion[]): DiscountInfo | null {
-  for (const promo of promotions) {
-    if (promo.products?.some((p) => p.id === productId)) {
-      return { percent: promo.discountPercent, name: promo.name, source: 'PROMO' };
+  for (const entry of entries) {
+    const units: ResolvedLine[] = [];
+    for (let i = 0; i < entry.quantity; i++) {
+      const line = resolveCartLine(
+        entry.itemType,
+        entry.id,
+        entry.originalPrice,
+        promotions,
+        sub,
+        remaining,
+      );
+      if (line.consumesCut) remaining -= 1;
+      units.push(line);
     }
+    const lineTotal = units.reduce((acc, u) => acc + u.unitPrice, 0);
+    lines.push({
+      ...entry,
+      units,
+      lineTotal,
+      anyConsumesCut: units.some((u) => u.consumesCut),
+      anyLimitReached: units.some((u) => u.planLimitReached),
+    });
   }
-  return null;
+
+  const cutsConsumed = Number.isFinite(startingRemaining)
+    ? Math.max(0, (startingRemaining as number) - remaining)
+    : units_consumed(lines);
+  return { lines, cutsConsumed, remainingCutsAfter: remaining };
 }
 
-function getPromoServiceDiscount(serviceId: string, promotions: Promotion[]): DiscountInfo | null {
-  for (const promo of promotions) {
-    if (promo.services?.some((s) => s.id === serviceId)) {
-      return { percent: promo.discountPercent, name: promo.name, source: 'PROMO' };
-    }
-  }
-  return null;
-}
-
-// Aplica a regra: entre promoção do item e desconto da assinatura do cliente,
-// prevalece o MAIOR. Nunca soma os dois.
-function pickEffectiveDiscount(
-  promo: DiscountInfo | null,
-  planPercent: number,
-  planLabel: string,
-): DiscountInfo | null {
-  const promoPct = promo?.percent ?? 0;
-  if (promoPct <= 0 && planPercent <= 0) return null;
-  if (promoPct >= planPercent) return promo;
-  return { percent: planPercent, name: planLabel, source: 'PLAN' };
-}
-
-function applyDiscount(price: number, percent: number): number {
-  return Math.round(price * (100 - percent) / 100);
+function units_consumed(lines: ResolvedCartLine[]): number {
+  let n = 0;
+  for (const l of lines) for (const u of l.units) if (u.consumesCut) n += 1;
+  return n;
 }
 
 export function Orders() {
@@ -87,7 +114,7 @@ export function Orders() {
   // Create form state
   const [createClientId, setCreateClientId] = useState('');
   const [createNotes, setCreateNotes] = useState('');
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [cartItems, setCartItems] = useState<CartEntry[]>([]);
   const [createItemTab, setCreateItemTab] = useState<OrderItemType>('PRODUCT');
   const [createConsumerType, setCreateConsumerType] = useState<'CLIENT' | 'PROFESSIONAL'>('CLIENT');
   const [createConsumerProfessionalId, setCreateConsumerProfessionalId] = useState('');
@@ -108,8 +135,14 @@ export function Orders() {
   // buscamos a assinatura ativa dele para aplicar o desconto do plano.
   const activeClientId = viewingOrder?.client?.id || createClientId || undefined;
   const { data: clientSub } = useClientSubscription(activeClientId);
-  const planDiscount = clientSub && clientSub.status === 'ACTIVE' ? clientSub.plan?.discountPercent ?? 0 : 0;
-  const planLabel = clientSub?.plan?.name ? `Plano ${clientSub.plan.name}` : 'Assinatura';
+  // Visão completa da assinatura ativa: plano + saldo de cortes + label.
+  // Null para PENDING_PAYMENT/CANCELED/SUSPENDED — esses estados não concedem desconto.
+  const activeSub: ActiveSubscriptionView | null = useMemo(
+    () => getActiveSubscriptionView(clientSub),
+    [clientSub],
+  );
+  const planLabel = activeSub?.planLabel ?? 'Assinatura';
+
   const createOrder = useCreateOrder();
   const payOrder = usePayOrder();
   const cancelOrder = useCancelOrder();
@@ -118,7 +151,16 @@ export function Orders() {
   const removeOrderItem = useRemoveOrderItem();
   const toast = useToast();
 
-  const cartTotal = useMemo(() => cartItems.reduce((acc, item) => acc + item.unitPrice * item.quantity, 0), [cartItems]);
+  // Resolve o carrinho inteiro contra o saldo da assinatura sempre que o cart
+  // ou a assinatura mudam — o backend faz a mesma simulação ao persistir.
+  const resolvedCart = useMemo(
+    () => resolveCart(cartItems, activePromotions, activeSub),
+    [cartItems, activePromotions, activeSub],
+  );
+  const cartTotal = useMemo(
+    () => resolvedCart.lines.reduce((acc, line) => acc + line.lineTotal, 0),
+    [resolvedCart],
+  );
 
   const addToCart = (id: string, name: string, itemType: OrderItemType, originalPrice: number) => {
     setCartItems((prev) => {
@@ -126,11 +168,7 @@ export function Orders() {
       if (existing) {
         return prev.map((i) => i.id === id && i.itemType === itemType ? { ...i, quantity: i.quantity + 1 } : i);
       }
-      const promos = activePromotions || [];
-      const promo = itemType === 'PRODUCT' ? getPromoProductDiscount(id, promos) : getPromoServiceDiscount(id, promos);
-      const discount = pickEffectiveDiscount(promo, planDiscount, planLabel);
-      const unitPrice = discount ? applyDiscount(originalPrice, discount.percent) : originalPrice;
-      return [...prev, { id, name, itemType, originalPrice, unitPrice, quantity: 1, hasPromo: !!discount, promoName: discount?.name }];
+      return [...prev, { id, name, itemType, originalPrice, quantity: 1 }];
     });
   };
 
@@ -165,11 +203,15 @@ export function Orders() {
       if (createNotes.trim()) payload.notes = createNotes.trim();
 
       if (cartItems.length > 0) {
+        // Enviamos o preço cheio como `unitPrice`. O backend ignora quando
+        // productId/serviceId estão presentes — recalcula a partir do banco
+        // aplicando promoção, override de plano e consumo de cortes. Esse `unitPrice`
+        // só é usado como fallback quando o item não tem id (caso raro/livre).
         payload.items = cartItems.map((item) => ({
           productId: item.itemType === 'PRODUCT' ? item.id : undefined,
           serviceId: item.itemType === 'SERVICE' ? item.id : undefined,
           quantity: item.quantity,
-          unitPrice: item.unitPrice,
+          unitPrice: item.originalPrice,
           itemType: item.itemType,
         }));
       }
@@ -262,21 +304,26 @@ export function Orders() {
     if (!viewingOrder) return;
     try {
       let payload: AddOrderItemPayload;
-      const promos = activePromotions || [];
+      // Enviamos o preço cheio. Backend recalcula aplicando promoção, override de
+      // plano e consumo de cortes — UI mostra apenas a previsão.
       if (itemType === 'PRODUCT') {
         const product = products?.find((p) => p.id === selectedProductId);
         if (!product) return;
-        const promo = getPromoProductDiscount(product.id, promos);
-        const discount = pickEffectiveDiscount(promo, planDiscount, planLabel);
-        const price = discount ? applyDiscount(product.salePrice, discount.percent) : product.salePrice;
-        payload = { productId: product.id, quantity: itemQuantity, unitPrice: price, itemType: 'PRODUCT' };
+        payload = {
+          productId: product.id,
+          quantity: itemQuantity,
+          unitPrice: product.salePrice,
+          itemType: 'PRODUCT',
+        };
       } else {
         const service = services?.find((s) => s.id === selectedServiceId);
         if (!service) return;
-        const promo = getPromoServiceDiscount(service.id, promos);
-        const discount = pickEffectiveDiscount(promo, planDiscount, planLabel);
-        const price = discount ? applyDiscount(service.price, discount.percent) : service.price;
-        payload = { serviceId: service.id, quantity: itemQuantity, unitPrice: price, itemType: 'SERVICE' };
+        payload = {
+          serviceId: service.id,
+          quantity: itemQuantity,
+          unitPrice: service.price,
+          itemType: 'SERVICE',
+        };
       }
       const updated = await addOrderItem.mutateAsync({ orderId: viewingOrder.id, payload });
       toast.success('Item adicionado');
@@ -309,9 +356,41 @@ export function Orders() {
 
   const selectedProduct = products?.find((p) => p.id === selectedProductId);
   const selectedService = services?.find((s) => s.id === selectedServiceId);
-  const itemPreviewPrice = itemType === 'PRODUCT'
-    ? (selectedProduct?.salePrice ?? 0) * itemQuantity
-    : (selectedService?.price ?? 0) * itemQuantity;
+  // Preview espelha o que o backend vai cobrar: aplica promoção, override do plano
+  // e consumo de cortes. Para "Adicionar Item" em comanda existente, o saldo de
+  // partida é o saldo ATUAL da assinatura (a comanda em vigor já consumiu o que
+  // tinha que consumir; itens novos partem desse ponto).
+  const previewBasePrice = itemType === 'PRODUCT'
+    ? (selectedProduct?.salePrice ?? 0)
+    : (selectedService?.price ?? 0);
+  const previewItemId = itemType === 'PRODUCT' ? selectedProductId : selectedServiceId;
+
+  // Resolve cada uma das `itemQuantity` unidades contra o saldo atual da assinatura.
+  const previewUnits: ResolvedLine[] = useMemo(() => {
+    if (!previewItemId) return [];
+    let remaining = activeSub?.remainingCuts ?? 0;
+    const out: ResolvedLine[] = [];
+    for (let i = 0; i < itemQuantity; i++) {
+      const line = resolveCartLine(
+        itemType,
+        previewItemId,
+        previewBasePrice,
+        activePromotions,
+        activeSub,
+        remaining,
+      );
+      if (line.consumesCut) remaining -= 1;
+      out.push(line);
+    }
+    return out;
+  }, [previewItemId, itemType, previewBasePrice, itemQuantity, activePromotions, activeSub]);
+
+  const itemPreviewPrice = previewUnits.reduce((acc, u) => acc + u.unitPrice, 0);
+  const itemPreviewOriginal = previewBasePrice * itemQuantity;
+  const previewAnyConsumesCut = previewUnits.some((u) => u.consumesCut);
+  const previewAnyLimitReached = previewUnits.some((u) => u.planLimitReached);
+  // Para mostrar o "rótulo" do desconto resumido, usa o do primeiro unit com desconto.
+  const previewDiscountLabel = previewUnits.find((u) => u.discount)?.discount ?? null;
 
   return (
     <div className="space-y-6">
@@ -489,9 +568,15 @@ export function Orders() {
               {createItemTab === 'PRODUCT' ? (
                 products?.filter((p) => p.isActive !== false).length ? (
                   products.filter((p) => p.isActive !== false).map((p) => {
-                    const promo = getPromoProductDiscount(p.id, activePromotions || []);
-                    const discount = pickEffectiveDiscount(promo, planDiscount, planLabel);
-                    const finalPrice = discount ? applyDiscount(p.salePrice, discount.percent) : p.salePrice;
+                    // Preview "se adicionar +1": parte do saldo APÓS o cart atual.
+                    const line = resolveCartLine(
+                      'PRODUCT',
+                      p.id,
+                      p.salePrice,
+                      activePromotions,
+                      activeSub,
+                      resolvedCart.remainingCutsAfter,
+                    );
                     const inCart = cartItems.find((i) => i.id === p.id && i.itemType === 'PRODUCT');
                     return (
                       <button
@@ -505,13 +590,13 @@ export function Orders() {
                           {inCart && <span className="shrink-0 text-xs text-[#C8923A] font-medium">x{inCart.quantity}</span>}
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
-                          {discount ? (
+                          {line.discount ? (
                             <>
                               <span className="hidden sm:flex items-center gap-1 text-xs text-green-400">
-                                <Tag className="h-3 w-3" />-{discount.percent}%
+                                <Tag className="h-3 w-3" />-{line.discount.percent}%
                               </span>
                               <span className="hidden md:inline text-xs text-[var(--text-muted)] line-through">{formatCents(p.salePrice)}</span>
-                              <span className="font-medium text-green-400">{formatCents(finalPrice)}</span>
+                              <span className="font-medium text-green-400">{formatCents(line.unitPrice)}</span>
                             </>
                           ) : (
                             <span className="text-[var(--text-muted)]">{formatCents(p.salePrice)}</span>
@@ -527,9 +612,15 @@ export function Orders() {
               ) : (
                 services?.filter((s) => s.isActive !== false).length ? (
                   services.filter((s) => s.isActive !== false).map((s) => {
-                    const promo = getPromoServiceDiscount(s.id, activePromotions || []);
-                    const discount = pickEffectiveDiscount(promo, planDiscount, planLabel);
-                    const finalPrice = discount ? applyDiscount(s.price, discount.percent) : s.price;
+                    // Preview "se adicionar +1": parte do saldo APÓS o cart atual.
+                    const line = resolveCartLine(
+                      'SERVICE',
+                      s.id,
+                      s.price,
+                      activePromotions,
+                      activeSub,
+                      resolvedCart.remainingCutsAfter,
+                    );
                     const inCart = cartItems.find((i) => i.id === s.id && i.itemType === 'SERVICE');
                     return (
                       <button
@@ -541,15 +632,25 @@ export function Orders() {
                           <Scissors className="h-3.5 w-3.5 text-[#D4A85C] flex-shrink-0" />
                           <span className="truncate text-[var(--text-primary)]">{s.name}</span>
                           {inCart && <span className="shrink-0 text-xs text-[#C8923A] font-medium">x{inCart.quantity}</span>}
+                          {line.consumesCut && (
+                            <span className="shrink-0 rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
+                              incluso no plano
+                            </span>
+                          )}
+                          {line.planLimitReached && (
+                            <span className="shrink-0 rounded-md bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-medium text-orange-400">
+                              limite atingido
+                            </span>
+                          )}
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
-                          {discount ? (
+                          {line.discount ? (
                             <>
                               <span className="hidden sm:flex items-center gap-1 text-xs text-green-400">
-                                <Tag className="h-3 w-3" />-{discount.percent}%
+                                <Tag className="h-3 w-3" />-{line.discount.percent}%
                               </span>
                               <span className="hidden md:inline text-xs text-[var(--text-muted)] line-through">{formatCents(s.price)}</span>
-                              <span className="font-medium text-green-400">{formatCents(finalPrice)}</span>
+                              <span className="font-medium text-green-400">{formatCents(line.unitPrice)}</span>
                             </>
                           ) : (
                             <span className="text-[var(--text-muted)]">{formatCents(s.price)}</span>
@@ -566,33 +667,67 @@ export function Orders() {
             </div>
           </div>
 
+          {/* Banner do plano: mostra saldo de cortes pra dar contexto ao admin */}
+          {activeSub && createConsumerType === 'CLIENT' && (
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium text-emerald-300">{activeSub.planLabel}</span>
+                <span className="text-emerald-200">
+                  {activeSub.remainingCuts === Number.POSITIVE_INFINITY
+                    ? 'Cortes ilimitados'
+                    : `${Math.max(0, activeSub.remainingCuts - resolvedCart.cutsConsumed)} de ${activeSub.cutsPerMonth} cortes restantes este mês`}
+                  {resolvedCart.cutsConsumed > 0 && (
+                    <span className="ml-1 text-emerald-400">
+                      (–{resolvedCart.cutsConsumed} ao salvar)
+                    </span>
+                  )}
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Carrinho */}
-          {cartItems.length > 0 && (
+          {resolvedCart.lines.length > 0 && (
             <div className="border-t border-[var(--card-border)] pt-4">
-              <label className="mb-2 block text-sm font-medium text-[var(--text-secondary)]">Itens selecionados ({cartItems.length})</label>
+              <label className="mb-2 block text-sm font-medium text-[var(--text-secondary)]">Itens selecionados ({resolvedCart.lines.length})</label>
               <div className="space-y-2">
-                {cartItems.map((item) => (
-                  <div key={`${item.itemType}-${item.id}`} className="flex items-center justify-between gap-2 rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2">
+                {resolvedCart.lines.map((line) => (
+                  <div key={`${line.itemType}-${line.id}`} className="flex items-center justify-between gap-2 rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2">
                     <div className="flex min-w-0 items-center gap-2">
-                      {item.itemType === 'PRODUCT' ? <Package className="h-4 w-4 shrink-0 text-purple-400" /> : <Scissors className="h-4 w-4 shrink-0 text-[#D4A85C]" />}
+                      {line.itemType === 'PRODUCT' ? <Package className="h-4 w-4 shrink-0 text-purple-400" /> : <Scissors className="h-4 w-4 shrink-0 text-[#D4A85C]" />}
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-[var(--text-primary)]">{item.name}</p>
+                        <p className="truncate text-sm font-medium text-[var(--text-primary)]">{line.name}</p>
                         <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                          {item.hasPromo && (
-                            <span className="text-[10px] text-green-400 flex items-center gap-0.5"><Tag className="h-2.5 w-2.5" />{item.promoName}</span>
+                          {line.anyConsumesCut && (
+                            <span className="text-[10px] text-emerald-400 flex items-center gap-0.5">
+                              <Tag className="h-2.5 w-2.5" /> incluso no plano
+                            </span>
                           )}
-                          <span className="text-xs text-[var(--text-muted)]">{formatCents(item.unitPrice)} un.</span>
+                          {line.anyLimitReached && (
+                            <span className="text-[10px] text-orange-400 flex items-center gap-0.5">
+                              <AlertCircle className="h-2.5 w-2.5" /> limite mensal atingido — cobra
+                            </span>
+                          )}
+                          {line.units.length > 1 ? (
+                            <span className="text-xs text-[var(--text-muted)]">
+                              {line.units.map((u) => formatCents(u.unitPrice)).join(' + ')}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-[var(--text-muted)]">
+                              {formatCents(line.units[0]?.unitPrice ?? 0)} un.
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       <div className="flex items-center gap-1 rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)]">
-                        <button onClick={() => updateCartQty(item.id, item.itemType, -1)} className="px-2 py-1 text-[var(--text-muted)] hover:text-[var(--text-primary)]"><Minus className="h-3 w-3" /></button>
-                        <span className="text-sm font-medium text-[var(--text-primary)] min-w-[20px] text-center">{item.quantity}</span>
-                        <button onClick={() => updateCartQty(item.id, item.itemType, 1)} className="px-2 py-1 text-[var(--text-muted)] hover:text-[var(--text-primary)]"><Plus className="h-3 w-3" /></button>
+                        <button onClick={() => updateCartQty(line.id, line.itemType, -1)} className="px-2 py-1 text-[var(--text-muted)] hover:text-[var(--text-primary)]"><Minus className="h-3 w-3" /></button>
+                        <span className="text-sm font-medium text-[var(--text-primary)] min-w-[20px] text-center">{line.quantity}</span>
+                        <button onClick={() => updateCartQty(line.id, line.itemType, 1)} className="px-2 py-1 text-[var(--text-muted)] hover:text-[var(--text-primary)]"><Plus className="h-3 w-3" /></button>
                       </div>
-                      <span className="hidden sm:inline text-sm font-medium text-[var(--text-primary)] min-w-[70px] text-right">{formatCents(item.unitPrice * item.quantity)}</span>
-                      <button onClick={() => removeFromCart(item.id, item.itemType)} className="rounded-lg p-1 text-[var(--text-muted)] hover:bg-red-500/20 hover:text-[#C45050]"><X className="h-4 w-4" /></button>
+                      <span className="hidden sm:inline text-sm font-medium text-[var(--text-primary)] min-w-[70px] text-right">{formatCents(line.lineTotal)}</span>
+                      <button onClick={() => removeFromCart(line.id, line.itemType)} className="rounded-lg p-1 text-[var(--text-muted)] hover:bg-red-500/20 hover:text-[#C45050]"><X className="h-4 w-4" /></button>
                     </div>
                   </div>
                 ))}
@@ -775,10 +910,41 @@ export function Orders() {
 
           {/* Preview */}
           {(selectedProductId || selectedServiceId) && (
-            <div className="rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] p-3">
-              <div className="flex justify-between text-sm">
+            <div className="space-y-1.5 rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] p-3 text-sm">
+              {previewAnyConsumesCut && (
+                <div className="flex items-center gap-1.5 text-xs text-emerald-400">
+                  <Tag className="h-3 w-3" />
+                  Incluso no plano — consome {previewUnits.filter((u) => u.consumesCut).length} corte(s)
+                </div>
+              )}
+              {previewAnyLimitReached && (
+                <div className="flex items-center gap-1.5 text-xs text-orange-400">
+                  <AlertCircle className="h-3 w-3" />
+                  Limite mensal do plano atingido — será cobrado naturalmente
+                </div>
+              )}
+              {previewDiscountLabel && !previewAnyConsumesCut && (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="flex items-center gap-1 text-green-400">
+                    <Tag className="h-3 w-3" />
+                    {previewDiscountLabel.name} (-{previewDiscountLabel.percent}%)
+                  </span>
+                  <span className="text-[var(--text-muted)] line-through">
+                    {formatCents(itemPreviewOriginal)}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between">
                 <span className="text-[var(--text-muted)]">Subtotal:</span>
-                <span className="font-bold text-[var(--text-primary)]">{formatCents(itemPreviewPrice)}</span>
+                <span
+                  className={`font-bold ${
+                    itemPreviewPrice < itemPreviewOriginal
+                      ? 'text-green-400'
+                      : 'text-[var(--text-primary)]'
+                  }`}
+                >
+                  {formatCents(itemPreviewPrice)}
+                </span>
               </div>
             </div>
           )}

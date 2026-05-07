@@ -22,12 +22,14 @@ import {
   parseAsaasBillingType,
 } from '../asaas/asaas.types';
 import {
-  getActiveClientPlan,
+  getActiveClientSubscription,
   getPlanDiscountForService,
   getActivePromotions,
   getPromoDiscountForService,
   effectiveDiscountPercent,
   applyDiscount,
+  getRemainingCuts,
+  isPlanIncludedService,
 } from '../common/pricing.helper';
 
 @Injectable()
@@ -76,23 +78,47 @@ export class AppointmentsService {
       throw new BadRequestException('Um ou mais serviços não encontrados ou inativos');
     }
 
-    // 2.1 Buscar promoções ativas + plano ativo do cliente (com descontos por serviço).
-    // Quando houver promoção no serviço E desconto da assinatura, prevalece o MAIOR.
-    // Quando o cliente usar crédito do plano (useSubscriptionCut), o serviço fica com preço 0.
+    // 2.1 Buscar promoções ativas + assinatura ATIVA do cliente (com descontos por
+    // serviço e saldo de cortes do mês).
+    // Regras: (a) entre promoção do serviço e desconto do plano, prevalece o MAIOR;
+    // (b) se o cliente clicar "usar corte" (useSubscriptionCut, fluxo do app), todos
+    // os serviços ficam zerados e o controller debita 1 corte (comportamento legado);
+    // (c) caso contrário (admin ou app sem flag), aplicamos a regra natural: serviço
+    // com override 100% (incluído no plano) zera enquanto houver saldo de cortes; sem
+    // saldo cai no `discountPercent` global do plano.
     const activePromos = await getActivePromotions(this.supabase);
-    const activePlan = await getActiveClientPlan(this.supabase, dto.clientId);
+    const activeSub = await getActiveClientSubscription(this.supabase, dto.clientId);
     const useCut = !!dto.useSubscriptionCut;
 
+    // Saldo simulado de cortes; vai diminuindo conforme processamos os serviços.
+    let remainingCuts = useCut ? 0 : getRemainingCuts(activeSub);
+    const consumedFlags: boolean[] = [];
+
     const getUnitPrice = (svc: { id: string; price: number }): number => {
-      if (useCut) return 0;
+      if (useCut) {
+        consumedFlags.push(false); // legado: já será debitado 1 corte só pelo controller
+        return 0;
+      }
       const promoPercent = getPromoDiscountForService(activePromos, svc.id);
-      const planPercent = getPlanDiscountForService(activePlan, svc.id);
+      // Serviço incluído no plano (override 100%) consome crédito enquanto houver saldo.
+      if (isPlanIncludedService(activeSub, svc.id) && remainingCuts > 0) {
+        remainingCuts -= 1;
+        consumedFlags.push(true);
+        return 0;
+      }
+      // Sem saldo (ou serviço fora do plano): aplica desconto normal.
+      const planPercent = isPlanIncludedService(activeSub, svc.id)
+        ? activeSub?.globalPercent ?? 0
+        : getPlanDiscountForService(activeSub, svc.id);
       const percent = effectiveDiscountPercent(promoPercent, planPercent);
+      consumedFlags.push(false);
       return applyDiscount(svc.price, percent);
     };
 
     const totalDuration = services.reduce((sum, s) => sum + s.duration, 0);
-    const totalPrice = services.reduce((sum, s) => sum + getUnitPrice(s), 0);
+    const itemUnitPrices = services.map((s) => getUnitPrice(s));
+    const totalPrice = itemUnitPrices.reduce((sum, p) => sum + p, 0);
+    const cutsToDebit = consumedFlags.filter(Boolean).length;
 
     // 2. Validar profissional ativo, expediente, bloqueios e conflitos de agendamento
     await this.validateScheduleConflicts(
@@ -241,16 +267,19 @@ export class AppointmentsService {
       }
     }
 
-    // 5.1 Criar comanda vinculada ao agendamento (com os serviços como itens)
+    // 5.1 Criar comanda vinculada ao agendamento (com os serviços como itens).
+    // Usa os preços e flags JÁ calculados acima — não chamar getUnitPrice de novo
+    // (faria dupla contagem em remainingCuts).
     const orderId = randomUUID();
-    const orderItems = services.map((s) => ({
+    const orderItems = services.map((s, idx) => ({
       id: randomUUID(),
       orderId,
       serviceId: s.id,
       productId: null,
       quantity: 1,
-      unitPrice: getUnitPrice(s),
+      unitPrice: itemUnitPrices[idx],
       itemType: 'SERVICE' as const,
+      consumedSubscriptionCut: consumedFlags[idx] === true,
     }));
 
     await this.supabase.from('orders').insert({
@@ -267,6 +296,35 @@ export class AppointmentsService {
 
     for (const item of orderItems) {
       await this.supabase.from('order_items').insert(item);
+    }
+
+    // 5.2 Debitar créditos da assinatura quando o agendamento consumiu cortes
+    // automaticamente (cenário admin / app sem flag `useSubscriptionCut`).
+    // Quando `useCut=true`, o controller chama `subscriptionsService.useCut(...)`
+    // — não duplicar débito aqui.
+    if (!useCut && cutsToDebit > 0 && activeSub) {
+      const { error: rpcErr } = await this.supabase.rpc('debit_subscription_cuts', {
+        sub_id: activeSub.subscriptionId,
+        amount: cutsToDebit,
+      });
+      if (rpcErr) {
+        this.logger.warn(
+          `RPC debit_subscription_cuts indisponível (${rpcErr.message}); usando fallback. ` +
+            `Aplique a migration backend/sql/alter_order_items_add_consumed_cut.sql.`,
+        );
+        const { data: currentSub } = await this.supabase
+          .from('client_subscriptions')
+          .select('id, cutsUsedThisMonth')
+          .eq('id', activeSub.subscriptionId)
+          .single();
+        if (currentSub) {
+          const current = typeof currentSub.cutsUsedThisMonth === 'number' ? currentSub.cutsUsedThisMonth : 0;
+          await this.supabase
+            .from('client_subscriptions')
+            .update({ cutsUsedThisMonth: current + cutsToDebit, updatedAt: nowLocalIsoString() })
+            .eq('id', activeSub.subscriptionId);
+        }
+      }
     }
 
     // 6. Criar cobrança no Asaas (se configurado, valor > 0 e não for pago só com crédito do plano)
@@ -421,6 +479,11 @@ export class AppointmentsService {
 
     if (updateError) throw updateError;
 
+    // Devolver créditos da assinatura consumidos pela comanda vinculada (se houver)
+    // ANTES de cancelar a comanda — depois de CANCELED os itens permanecem mas
+    // ficam fora do fluxo ativo.
+    await this.refundLinkedOrderCuts(id);
+
     // Cancelar comanda vinculada
     await this.supabase
       .from('orders')
@@ -429,6 +492,55 @@ export class AppointmentsService {
       .eq('status', 'PENDING');
 
     return updated;
+  }
+
+  /**
+   * Devolve à assinatura ativa do cliente todos os cortes que foram consumidos
+   * pelos itens (consumedSubscriptionCut=true) da comanda vinculada a este
+   * agendamento. Idempotente: só busca itens em comandas PENDING.
+   */
+  private async refundLinkedOrderCuts(appointmentId: string): Promise<void> {
+    const { data: linkedOrder } = await this.supabase
+      .from('orders')
+      .select('id, clientId, status, items:order_items(id, quantity, consumedSubscriptionCut)')
+      .eq('appointmentId', appointmentId)
+      .eq('status', 'PENDING')
+      .maybeSingle();
+    if (!linkedOrder || !(linkedOrder as any).clientId) return;
+
+    const cutsToRefund = ((linkedOrder as any).items || []).reduce(
+      (sum: number, i: any) => sum + (i.consumedSubscriptionCut ? (i.quantity || 1) : 0),
+      0,
+    );
+    if (cutsToRefund <= 0) return;
+
+    const sub = await getActiveClientSubscription(this.supabase, (linkedOrder as any).clientId);
+    if (!sub) return;
+    const { error: rpcErr } = await this.supabase.rpc('refund_subscription_cuts', {
+      sub_id: sub.subscriptionId,
+      amount: cutsToRefund,
+    });
+    if (rpcErr) {
+      this.logger.warn(
+        `RPC refund_subscription_cuts indisponível (${rpcErr.message}); usando fallback. ` +
+          `Aplique a migration backend/sql/alter_order_items_add_consumed_cut.sql.`,
+      );
+      const { data: currentSub } = await this.supabase
+        .from('client_subscriptions')
+        .select('id, cutsUsedThisMonth')
+        .eq('id', sub.subscriptionId)
+        .single();
+      if (!currentSub) return;
+      const current = typeof currentSub.cutsUsedThisMonth === 'number' ? currentSub.cutsUsedThisMonth : 0;
+      const next = Math.max(0, current - cutsToRefund);
+      await this.supabase
+        .from('client_subscriptions')
+        .update({ cutsUsedThisMonth: next, updatedAt: nowLocalIsoString() })
+        .eq('id', sub.subscriptionId);
+    }
+    this.logger.log(
+      `Devolvidos ${cutsToRefund} cortes da assinatura ${sub.subscriptionId} (cancelamento agendamento ${appointmentId})`,
+    );
   }
 
   async markAsAttended(id: string, paymentMethod?: string, registeredBy?: string) {
@@ -726,6 +838,11 @@ export class AppointmentsService {
       .single();
 
     if (updateError) throw updateError;
+
+    // Devolver créditos consumidos pela comanda vinculada (no-show ⇒ cliente
+    // não compareceu ⇒ não consome corte). Independente do flag legado
+    // `appointment.usedSubscriptionCut` (já tratado acima).
+    await this.refundLinkedOrderCuts(id);
 
     // Cancelar comanda vinculada
     await this.supabase
@@ -1567,6 +1684,9 @@ export class AppointmentsService {
           try { await this.asaasService.cancelCharge(payment.asaasPaymentId); } catch {}
         }
       }
+
+      // Devolver créditos consumidos pela comanda vinculada (cancelamento auto)
+      await this.refundLinkedOrderCuts(appt.id);
 
       // Cancelar comanda vinculada
       await this.supabase

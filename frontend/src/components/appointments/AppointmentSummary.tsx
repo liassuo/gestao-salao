@@ -1,10 +1,21 @@
 import { Clock, DollarSign, Tag } from 'lucide-react';
 import type { Service, Promotion } from '@/types';
+import {
+  applyDiscount,
+  effectiveDiscountPercent,
+  getPlanDiscountForService,
+  getPromoServicePercent,
+  type PlanLike,
+} from '@/utils';
 
 interface AppointmentSummaryProps {
   selectedServices: Service[];
   promotions?: Promotion[];
-  planDiscountPercent?: number;
+  /**
+   * Plano ativo do cliente, com discountPercent global e overrides por serviço.
+   * Null/undefined quando não há assinatura ACTIVE — nesse caso não há desconto do plano.
+   */
+  plan?: PlanLike | null;
   planLabel?: string;
 }
 
@@ -24,33 +35,28 @@ function formatDuration(minutes: number): string {
   return mins > 0 ? `${hours}h ${mins}min` : `${hours}h`;
 }
 
-function getPromoPercent(serviceId: string, promos: Promotion[]): number {
-  for (const promo of promos) {
-    if (promo.services?.some((s) => s.id === serviceId)) return promo.discountPercent;
-  }
-  return 0;
-}
-
 export function AppointmentSummary({
   selectedServices,
   promotions = [],
-  planDiscountPercent = 0,
+  plan,
   planLabel,
 }: AppointmentSummaryProps) {
   const totalDuration = selectedServices.reduce((sum, s) => sum + (s.durationMinutes || s.duration || 0), 0);
 
   // Entre promoção e plano, aplica o MAIOR desconto (nunca soma).
+  // Para o plano, considera override por serviço (subscription_plan_services) com fallback no global.
   let originalTotal = 0;
   let discountedTotal = 0;
   let usedPlan = false;
   let usedPromo = false;
   for (const s of selectedServices) {
-    const promoPct = getPromoPercent(s.id, promotions);
-    const pct = Math.max(promoPct, planDiscountPercent);
+    const promoPct = getPromoServicePercent(s.id, promotions);
+    const planPct = getPlanDiscountForService(plan, s.id);
+    const pct = effectiveDiscountPercent(promoPct, planPct);
     originalTotal += s.price;
-    discountedTotal += pct > 0 ? Math.round((s.price * (100 - pct)) / 100) : s.price;
-    if (pct > 0 && pct === planDiscountPercent && planDiscountPercent >= promoPct) usedPlan = true;
-    if (pct > 0 && promoPct > planDiscountPercent) usedPromo = true;
+    discountedTotal += applyDiscount(s.price, pct);
+    if (pct > 0 && planPct >= promoPct) usedPlan = true;
+    if (pct > 0 && promoPct > planPct) usedPromo = true;
   }
   const hasDiscount = discountedTotal < originalTotal;
 
@@ -77,7 +83,7 @@ export function AppointmentSummary({
               <Tag className="h-4 w-4 shrink-0" />
               <span className="truncate">
                 {usedPlan && !usedPromo
-                  ? `Desconto ${planLabel ?? 'assinatura'} (${planDiscountPercent}%)`
+                  ? `Desconto ${planLabel ?? 'assinatura'}`
                   : usedPromo && !usedPlan
                   ? 'Desconto promoção'
                   : 'Desconto aplicado'}

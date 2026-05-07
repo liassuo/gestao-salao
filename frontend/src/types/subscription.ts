@@ -49,6 +49,7 @@ export interface ClientSubscription {
     price: number;
     cutsPerMonth: number;
     discountPercent: number;
+    services?: PlanServiceDiscount[];
   };
 }
 

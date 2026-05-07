@@ -20,6 +20,48 @@ export interface ActiveClientPlan {
   servicePercents: Map<string, number>;
 }
 
+/**
+ * Estado completo da assinatura ativa do cliente, incluindo o saldo mensal de
+ * cortes do plano. Usado pela comanda/agendamento p/ decidir quando consumir um
+ * crédito (serviço com override 100% + cortes disponíveis → preço 0 + débito de
+ * 1 corte) e quando cair pro fallback (sem cortes → aplica desconto global).
+ */
+export interface ActiveClientSubscription extends ActiveClientPlan {
+  subscriptionId: string;
+  cutsPerMonth: number;
+  cutsUsedThisMonth: number;
+}
+
+/** 99 é a sentinela usada nos planos para "ilimitado". */
+export const UNLIMITED_CUTS = 99;
+
+export function isUnlimitedCutsPlan(cutsPerMonth: number): boolean {
+  return cutsPerMonth === UNLIMITED_CUTS;
+}
+
+/**
+ * Calcula quantos cortes ainda restam no ciclo mensal da assinatura.
+ * Retorna Number.POSITIVE_INFINITY para planos ilimitados.
+ */
+export function getRemainingCuts(sub: ActiveClientSubscription | null | undefined): number {
+  if (!sub) return 0;
+  if (isUnlimitedCutsPlan(sub.cutsPerMonth)) return Number.POSITIVE_INFINITY;
+  return Math.max(0, sub.cutsPerMonth - (sub.cutsUsedThisMonth ?? 0));
+}
+
+/**
+ * Indica se o serviço está "incluído no plano" — convenção: override de 100% em
+ * subscription_plan_services. Outros overrides (ex: 30%) são apenas desconto
+ * sem consumo de crédito.
+ */
+export function isPlanIncludedService(
+  plan: ActiveClientPlan | null | undefined,
+  serviceId: string,
+): boolean {
+  if (!plan) return false;
+  return plan.servicePercents.get(serviceId) === 100;
+}
+
 export async function getClientPlanDiscount(
   supabase: SupabaseService,
   clientId: string | null | undefined,
@@ -32,15 +74,35 @@ export async function getActiveClientPlan(
   supabase: SupabaseService,
   clientId: string | null | undefined,
 ): Promise<ActiveClientPlan | null> {
+  const sub = await getActiveClientSubscription(supabase, clientId);
+  if (!sub) return null;
+  return {
+    planId: sub.planId,
+    globalPercent: sub.globalPercent,
+    servicePercents: sub.servicePercents,
+  };
+}
+
+/**
+ * Carrega a assinatura ACTIVE do cliente (uma única — `client_subscriptions` não
+ * deveria ter mais de uma linha ACTIVE por cliente). Retorna o plano + saldo mensal
+ * de cortes. Use no lugar de `getActiveClientPlan` quando precisar saber quantos
+ * cortes ainda restam (ex: comanda decidindo se zera o serviço ou aplica fallback).
+ */
+export async function getActiveClientSubscription(
+  supabase: SupabaseService,
+  clientId: string | null | undefined,
+): Promise<ActiveClientSubscription | null> {
   if (!clientId) return null;
   const { data } = await supabase
     .from('client_subscriptions')
-    .select('plan:subscription_plans(id, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
+    .select('id, cutsUsedThisMonth, plan:subscription_plans(id, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
     .eq('clientId', clientId)
     .eq('status', 'ACTIVE')
     .maybeSingle();
-  const plan = (data as any)?.plan;
-  if (!plan?.id) return null;
+  const row = data as any;
+  const plan = row?.plan;
+  if (!row?.id || !plan?.id) return null;
   const servicePercents = new Map<string, number>();
   for (const s of (plan.services || []) as { serviceId: string; discountPercent: number }[]) {
     if (typeof s.discountPercent === 'number' && s.discountPercent >= 0) {
@@ -49,7 +111,14 @@ export async function getActiveClientPlan(
   }
   const globalPercent =
     typeof plan.discountPercent === 'number' && plan.discountPercent > 0 ? plan.discountPercent : 0;
-  return { planId: plan.id, globalPercent, servicePercents };
+  return {
+    subscriptionId: row.id,
+    planId: plan.id,
+    globalPercent,
+    servicePercents,
+    cutsPerMonth: typeof plan.cutsPerMonth === 'number' ? plan.cutsPerMonth : 0,
+    cutsUsedThisMonth: typeof row.cutsUsedThisMonth === 'number' ? row.cutsUsedThisMonth : 0,
+  };
 }
 
 /**
