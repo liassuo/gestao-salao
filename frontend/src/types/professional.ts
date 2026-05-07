@@ -44,7 +44,7 @@ export interface CreateProfessionalPayload {
   name: string;
   phone?: string;
   email?: string;
-  avatarUrl?: string;
+  avatarUrl?: string | null;
   commissionRate?: number;
   workingHours?: WorkingHours[];
   serviceIds?: string[];
