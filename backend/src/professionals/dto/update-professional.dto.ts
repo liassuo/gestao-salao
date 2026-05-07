@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, IsBoolean, IsArray, ValidateNested, Min, Max } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsBoolean, IsArray, ValidateNested, ValidateIf, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class RecurringBreakDto {
@@ -39,9 +39,9 @@ export class UpdateProfessionalDto {
   @IsString()
   email?: string;
 
-  @IsOptional()
+  @ValidateIf((o) => o.avatarUrl !== null && o.avatarUrl !== undefined)
   @IsString()
-  avatarUrl?: string;
+  avatarUrl?: string | null;
 
   @IsOptional()
   @IsArray()
