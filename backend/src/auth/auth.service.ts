@@ -11,6 +11,12 @@ import { LoginDto, AuthResponseDto, GoogleAuthDto } from './dto';
 import { JwtPayload } from './strategies/jwt.strategy';
 import { UserRole } from '../common/enums/user-role.enum';
 
+// Escapa wildcards de LIKE/ILIKE (`%`, `_`, `\`) para usar ilike como
+// igualdade case-insensitive sem o input ser interpretado como padrão.
+function escapeIlike(value: string): string {
+  return value.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
 @Injectable()
 export class AuthService {
   private googleClient: OAuth2Client;
@@ -165,7 +171,7 @@ export class AuthService {
     const { data: existing } = await this.supabase
       .from('clients')
       .select('id')
-      .eq('email', dto.email)
+      .ilike('email', escapeIlike(dto.email))
       .single();
 
     if (existing) {
@@ -217,7 +223,7 @@ export class AuthService {
     const { data: client } = await this.supabase
       .from('clients')
       .select('*')
-      .eq('email', email)
+      .ilike('email', escapeIlike(email))
       .single();
 
     if (!client) {
@@ -269,7 +275,7 @@ export class AuthService {
     const { data: client } = await this.supabase
       .from('clients')
       .select('id, name, password, googleId, mustChangePassword, isActive')
-      .eq('email', email)
+      .ilike('email', escapeIlike(email))
       .single();
 
     if (!client) {
@@ -297,7 +303,7 @@ export class AuthService {
     const { data: client } = await this.supabase
       .from('clients')
       .select('*')
-      .eq('email', dto.email)
+      .ilike('email', escapeIlike(dto.email))
       .single();
 
     if (!client) {
@@ -501,7 +507,7 @@ export class AuthService {
     const { data: user } = await this.supabase
       .from('users')
       .select('id, name, email, password, isActive')
-      .eq('email', email)
+      .ilike('email', escapeIlike(email))
       .single();
 
     // Retorno silencioso para não expor se o email existe
@@ -560,7 +566,7 @@ export class AuthService {
     const { data: client } = await this.supabase
       .from('clients')
       .select('id, name, email, password, isActive, googleId')
-      .eq('email', email)
+      .ilike('email', escapeIlike(email))
       .single();
 
     // Retorno silencioso para não expor se o email existe
@@ -641,7 +647,7 @@ export class AuthService {
     const { data: existingClient } = await this.supabase
       .from('clients')
       .select('*')
-      .eq('email', email)
+      .ilike('email', escapeIlike(email))
       .single();
 
     let client;

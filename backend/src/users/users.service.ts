@@ -7,6 +7,12 @@ import { SupabaseService } from '../supabase/supabase.service';
 import { CreateUserDto, UpdateUserDto } from './dto';
 import * as bcrypt from 'bcrypt';
 
+// Escapa wildcards de LIKE/ILIKE (`%`, `_`, `\`) para usar ilike como
+// igualdade case-insensitive sem o input ser interpretado como padrão.
+function escapeIlike(value: string): string {
+  return value.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
 export interface User {
   id: string;
   email: string;
@@ -82,7 +88,7 @@ export class UsersService {
     const { data: user } = await this.supabase
       .from('users')
       .select('*')
-      .eq('email', email)
+      .ilike('email', escapeIlike(email))
       .single();
 
     return user;
@@ -92,7 +98,7 @@ export class UsersService {
     const { data: user } = await this.supabase
       .from('users')
       .select('*')
-      .eq('email', email)
+      .ilike('email', escapeIlike(email))
       .single();
 
     return user;
