@@ -286,6 +286,11 @@ export function AppointmentDetailModal({
           <div className="mb-2 flex items-center justify-between">
             <div className="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">Comanda</div>
             <div className="flex items-center gap-2">
+              {appointment.usedSubscriptionCut && (
+                <span className="rounded-full border border-[#C8923A]/40 bg-[#C8923A]/15 px-2 py-0.5 text-xs font-medium text-[#C8923A]">
+                  Assinatura
+                </span>
+              )}
               {order && (
                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${order.status === 'PAID' ? 'bg-emerald-500/20 text-emerald-400' : order.status === 'CANCELED' ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
                   {order.status === 'PAID' ? 'Paga' : order.status === 'CANCELED' ? 'Cancelada' : 'Pendente'}
@@ -319,7 +324,11 @@ export function AppointmentDetailModal({
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-[var(--text-muted)]">{formatCurrency(item.unitPrice * item.quantity)}</span>
+                    {appointment.usedSubscriptionCut && item.itemType === 'SERVICE' && item.unitPrice === 0 ? (
+                      <span className="text-xs font-medium text-[#C8923A]">Assinatura</span>
+                    ) : (
+                      <span className="text-sm text-[var(--text-muted)]">{formatCurrency(item.unitPrice * item.quantity)}</span>
+                    )}
                     {canEditOrder && (
                       <button onClick={() => handleRemoveItem(item.id)} className="rounded p-1 text-[#A63030] hover:bg-red-500/10">
                         <Trash2 className="h-3.5 w-3.5" />
@@ -331,7 +340,11 @@ export function AppointmentDetailModal({
               {/* Total */}
               <div className="flex items-center justify-between border-t border-[var(--border-color)] px-3 pt-2">
                 <span className="text-sm font-semibold text-[var(--text-primary)]">Total</span>
-                <span className="text-sm font-semibold text-[var(--text-primary)]">{formatCurrency(order.totalAmount)}</span>
+                <span className="text-sm font-semibold text-[var(--text-primary)]">
+                  {appointment.usedSubscriptionCut && order.totalAmount === 0
+                    ? 'Assinatura'
+                    : formatCurrency(order.totalAmount)}
+                </span>
               </div>
             </div>
           ) : (
