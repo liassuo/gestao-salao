@@ -1,22 +1,20 @@
-import { Clock, DollarSign, Tag } from 'lucide-react';
+import { Clock, DollarSign, Tag, AlertTriangle } from 'lucide-react';
 import type { Service, Promotion } from '@/types';
 import {
-  applyDiscount,
-  effectiveDiscountPercent,
-  getPlanDiscountForService,
-  getPromoServicePercent,
-  type PlanLike,
+  resolveCartLine,
+  type ActiveSubscriptionView,
+  type ResolvedLine,
 } from '@/utils';
 
 interface AppointmentSummaryProps {
   selectedServices: Service[];
   promotions?: Promotion[];
   /**
-   * Plano ativo do cliente, com discountPercent global e overrides por serviço.
-   * Null/undefined quando não há assinatura ACTIVE — nesse caso não há desconto do plano.
+   * Visão da assinatura ATIVA do cliente (plano + saldo de cortes do mês).
+   * Null quando o cliente não tem assinatura ACTIVE — espelha o backend, que
+   * só aplica desconto/consumo de cortes para status='ACTIVE'.
    */
-  plan?: PlanLike | null;
-  planLabel?: string;
+  subscription?: ActiveSubscriptionView | null;
 }
 
 function formatCurrency(cents: number): string {
@@ -38,30 +36,53 @@ function formatDuration(minutes: number): string {
 export function AppointmentSummary({
   selectedServices,
   promotions = [],
-  plan,
-  planLabel,
+  subscription,
 }: AppointmentSummaryProps) {
-  const totalDuration = selectedServices.reduce((sum, s) => sum + (s.durationMinutes || s.duration || 0), 0);
+  const totalDuration = selectedServices.reduce(
+    (sum, s) => sum + (s.durationMinutes || s.duration || 0),
+    0,
+  );
 
-  // Entre promoção e plano, aplica o MAIOR desconto (nunca soma).
-  // Para o plano, considera override por serviço (subscription_plan_services) com fallback no global.
+  // Espelha exatamente o cálculo do backend (appointments.service.ts):
+  // resolveCartLine consome cortes do plano enquanto houver saldo, e cai pro
+  // desconto global quando o saldo zera. Isso evita mostrar R$ 0 na UI quando
+  // o backend de fato vai cobrar.
   let originalTotal = 0;
   let discountedTotal = 0;
   let usedPlan = false;
   let usedPromo = false;
+  let usedCut = false;
+  let limitReached = false;
+
+  let remainingCuts = subscription?.remainingCuts ?? 0;
+  const lines: ResolvedLine[] = [];
   for (const s of selectedServices) {
-    const promoPct = getPromoServicePercent(s.id, promotions);
-    const planPct = getPlanDiscountForService(plan, s.id);
-    const pct = effectiveDiscountPercent(promoPct, planPct);
+    const line = resolveCartLine('SERVICE', s.id, s.price, promotions, subscription ?? null, remainingCuts);
+    lines.push(line);
+    if (line.consumesCut) remainingCuts -= 1;
     originalTotal += s.price;
-    discountedTotal += applyDiscount(s.price, pct);
-    if (pct > 0 && planPct >= promoPct) usedPlan = true;
-    if (pct > 0 && promoPct > planPct) usedPromo = true;
+    discountedTotal += line.unitPrice;
+    if (line.discount?.source === 'PROMO') usedPromo = true;
+    if (line.discount?.source === 'PLAN') usedPlan = true;
+    if (line.discount?.source === 'PLAN_CUT') usedCut = true;
+    if (line.planLimitReached) limitReached = true;
   }
+
   const hasDiscount = discountedTotal < originalTotal;
 
   if (selectedServices.length === 0) {
     return null;
+  }
+
+  let discountLabel: string;
+  if (usedCut && !usedPromo && !usedPlan) {
+    discountLabel = subscription?.planLabel ?? 'Plano';
+  } else if (usedPlan && !usedPromo && !usedCut) {
+    discountLabel = `Desconto ${subscription?.planLabel ?? 'assinatura'}`;
+  } else if (usedPromo && !usedPlan && !usedCut) {
+    discountLabel = 'Desconto promoção';
+  } else {
+    discountLabel = 'Desconto aplicado';
   }
 
   return (
@@ -73,27 +94,34 @@ export function AppointmentSummary({
             <Clock className="h-4 w-4" />
             <span>Duração total</span>
           </div>
-          <span className="font-medium text-[#8B6914]">
-            {formatDuration(totalDuration)}
-          </span>
+          <span className="font-medium text-[#8B6914]">{formatDuration(totalDuration)}</span>
         </div>
+
         {hasDiscount && (
           <div className="flex items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2 text-sm text-[#C8923A]">
               <Tag className="h-4 w-4 shrink-0" />
-              <span className="truncate">
-                {usedPlan && !usedPromo
-                  ? `Desconto ${planLabel ?? 'assinatura'}`
-                  : usedPromo && !usedPlan
-                  ? 'Desconto promoção'
-                  : 'Desconto aplicado'}
-              </span>
+              <span className="truncate">{discountLabel}</span>
             </div>
             <span className="shrink-0 text-sm font-medium text-[#8B6914]">
               -{formatCurrency(originalTotal - discountedTotal)}
             </span>
           </div>
         )}
+
+        {limitReached && subscription && (
+          <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-xs text-[#8B6914]">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>
+              Limite mensal de cortes do plano atingido
+              {subscription.cutsPerMonth > 0
+                ? ` (${subscription.cutsUsedThisMonth}/${subscription.cutsPerMonth})`
+                : ''}
+              . Desconto do plano será aplicado em vez do crédito.
+            </span>
+          </div>
+        )}
+
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2 text-sm text-[#C8923A]">
             <DollarSign className="h-4 w-4 shrink-0" />

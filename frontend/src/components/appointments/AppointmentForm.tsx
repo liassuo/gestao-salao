@@ -1,9 +1,16 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { AlertCircle, Loader2, Search, X } from 'lucide-react';
-import { useClients, useProfessionals, useServices, useActivePromotions, useClientSubscription } from '@/hooks';
-import { formatPhone, getActivePlanFromSubscription } from '@/utils';
+import {
+  useClients,
+  useProfessionals,
+  useServices,
+  useActivePromotions,
+  useClientSubscription,
+} from '@/hooks';
+import { formatPhone, getActiveSubscriptionView } from '@/utils';
 import { AppointmentSummary } from './AppointmentSummary';
+import { SubscriptionStatusBanner } from '@/components/subscriptions';
 import { useToast } from '@/components/ui/ToastContext';
 import type { Service } from '@/types';
 
@@ -85,10 +92,10 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
   const watchedTime = watch('time');
 
   const { data: clientSub } = useClientSubscription(watchedClientId || undefined);
-  // Plano ativo (com overrides por serviço). Null quando não há assinatura ACTIVE —
-  // PENDING_PAYMENT/SUSPENDED/CANCELED não concedem desconto.
-  const activePlan = getActivePlanFromSubscription(clientSub);
-  const planLabel = clientSub?.plan?.name ? `Plano ${clientSub.plan.name}` : undefined;
+  // Visão da assinatura ATIVA com saldo de cortes. Null quando o cliente não
+  // tem subscription com status='ACTIVE' (PENDING_PAYMENT/SUSPENDED/CANCELED
+  // não concedem desconto, espelhando o backend).
+  const activeSubscriptionView = getActiveSubscriptionView(clientSub);
 
   // Client autocomplete
   const [clientSearch, setClientSearch] = useState('');
@@ -332,12 +339,23 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
         )}
       </div>
 
+      {/* Status da assinatura — só aparece se cliente selecionado tem subscription */}
+      {clientSub && watchedClientId && (
+        <SubscriptionStatusBanner
+          subscriptionId={clientSub.id}
+          status={clientSub.status}
+          planName={clientSub.plan?.name}
+          remainingCuts={activeSubscriptionView?.remainingCuts ?? 0}
+          cutsPerMonth={activeSubscriptionView?.cutsPerMonth ?? 0}
+          context="agendamento"
+        />
+      )}
+
       {/* Resumo */}
       <AppointmentSummary
         selectedServices={selectedServices}
         promotions={activePromotions}
-        plan={activePlan}
-        planLabel={planLabel}
+        subscription={activeSubscriptionView}
       />
 
       {/* Data e Hora */}
@@ -433,3 +451,4 @@ function ServiceCheckbox({ service, isSelected, onToggle }: ServiceCheckboxProps
     </label>
   );
 }
+

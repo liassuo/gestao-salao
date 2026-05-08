@@ -4,6 +4,7 @@ import { ClipboardList, Plus, AlertCircle, Eye, Trash2, CreditCard, XCircle, Sho
 import { useOrders, useCreateOrder, usePayOrder, useCancelOrder, useDeleteOrder, useAddOrderItem, useRemoveOrderItem, useClients, useProducts, useServices, useActivePromotions, useClientSubscription, useProfessionals, getApiErrorMessage } from '@/hooks';
 import { ordersService } from '@/services/orders';
 import { Modal, ConfirmModal, useToast } from '@/components/ui';
+import { SubscriptionStatusBanner } from '@/components/subscriptions';
 import type { Order, OrderStatus, CreateOrderPayload, AddOrderItemPayload, OrderItemType } from '@/types';
 import { orderStatusLabels, orderStatusColors } from '@/types';
 import {
@@ -666,22 +667,28 @@ export function Orders() {
             </div>
           </div>
 
-          {/* Banner do plano: mostra saldo de cortes pra dar contexto ao admin */}
-          {activeSub && createConsumerType === 'CLIENT' && (
-            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs">
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-medium text-emerald-300">{activeSub.planLabel}</span>
-                <span className="text-emerald-200">
-                  {activeSub.remainingCuts === Number.POSITIVE_INFINITY
-                    ? 'Cortes ilimitados'
-                    : `${Math.max(0, activeSub.remainingCuts - resolvedCart.cutsConsumed)} de ${activeSub.cutsPerMonth} cortes restantes este mês`}
-                  {resolvedCart.cutsConsumed > 0 && (
-                    <span className="ml-1 text-emerald-400">
-                      (–{resolvedCart.cutsConsumed} ao salvar)
-                    </span>
-                  )}
-                </span>
-              </div>
+          {/* Banner de status da assinatura: ACTIVE mostra saldo; PENDING_PAYMENT/SUSPENDED
+              destaca o problema com CTAs para reconciliar. Sem isso o admin pode cobrar
+              cheio sem perceber que a assinatura existia mas não estava ativa. */}
+          {clientSub && createConsumerType === 'CLIENT' && createClientId && (
+            <div className="space-y-2">
+              <SubscriptionStatusBanner
+                subscriptionId={clientSub.id}
+                status={clientSub.status}
+                planName={clientSub.plan?.name}
+                remainingCuts={Math.max(
+                  0,
+                  (activeSub?.remainingCuts ?? 0) - resolvedCart.cutsConsumed,
+                )}
+                cutsPerMonth={activeSub?.cutsPerMonth ?? 0}
+                context="comanda"
+              />
+              {activeSub && resolvedCart.cutsConsumed > 0 && (
+                <p className="px-1 text-xs text-emerald-300">
+                  Esta comanda vai consumir <strong>{resolvedCart.cutsConsumed}</strong> corte
+                  {resolvedCart.cutsConsumed > 1 ? 's' : ''} do plano ao salvar.
+                </p>
+              )}
             </div>
           )}
 

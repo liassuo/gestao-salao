@@ -475,16 +475,20 @@ export class SubscriptionsService {
 
 
   async findClientSubscription(clientId: string) {
-    // Usa neq em vez de in para evitar problemas se novos valores do enum ainda
-    // não tiverem sido adicionados ao banco (PENDING_PAYMENT, SUSPENDED)
-    const { data: results } = await this.supabase
+    // Prioriza assinatura ACTIVE: se existir, sempre retorna a ACTIVE — mesmo
+    // que o cliente também tenha uma linha PENDING_PAYMENT mais recente (ex.:
+    // tentou renovar e o pagamento não confirmou ainda). Sem essa precedência,
+    // o frontend admin mostraria "sem plano" enquanto o backend (que filtra
+    // por status='ACTIVE' no pricing.helper) aplicaria desconto — divergência.
+    const { data: allSubs } = await this.supabase
       .from('client_subscriptions')
       .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
       .eq('clientId', clientId)
-      .order('createdAt', { ascending: false })
-      .limit(1);
+      .order('createdAt', { ascending: false });
 
-    let subscription: any = results?.[0] ?? null;
+    const list = (allSubs || []) as any[];
+    let subscription: any =
+      list.find((s) => s.status === 'ACTIVE') ?? list[0] ?? null;
 
     // Auto-reconciliação: se está PENDING_PAYMENT e Asaas configurado, tenta sincronizar
     // antes de devolver. Cobre o caso "cliente pagou PIX, Asaas confirmou, webhook falhou".

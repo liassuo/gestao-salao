@@ -162,6 +162,17 @@ export function useConfirmSubscriptionPayment() {
   });
 }
 
+export function useSyncSubscriptionWithAsaas() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => subscriptionsService.syncWithAsaas(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [SUBSCRIPTIONS_KEY] });
+    },
+  });
+}
+
 export function useDeleteSubscription() {
   const queryClient = useQueryClient();
 

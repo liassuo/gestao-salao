@@ -98,6 +98,11 @@ export const subscriptionsService = {
     return response.data;
   },
 
+  async syncWithAsaas(id: string): Promise<ClientSubscription> {
+    const response = await api.post<ClientSubscription>(`/subscriptions/${id}/sync-asaas`);
+    return response.data;
+  },
+
   async deleteSubscription(id: string): Promise<void> {
     await api.delete(`/subscriptions/${id}`);
   },
