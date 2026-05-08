@@ -8,6 +8,15 @@ import { SupabaseService } from '../supabase/supabase.service';
 import { ProfessionalDebtsService } from '../professional-debts/professional-debts.service';
 import { GenerateCommissionDto, QueryCommissionDto } from './dto';
 
+/**
+ * Regra fixa de assinaturas: a barbearia fica com metade da receita
+ * mensal das assinaturas e a outra metade vira pote dividido entre os
+ * barbeiros proporcionalmente às fichas atendidas no período.
+ * O commissionRate individual NÃO se aplica nesse pote — só em cortes
+ * avulsos e produtos.
+ */
+const SUBSCRIPTION_BARBER_POOL_PERCENT = 50;
+
 @Injectable()
 export class CommissionsService {
   constructor(
@@ -105,9 +114,12 @@ export class CommissionsService {
         0,
       );
 
-      // Distribuir o pote proporcionalmente pelas fichas
+      // 50% da receita fica com a barbearia, 50% vira pote dos barbeiros
+      const barberPool = Math.round((totalSubscriptionValue * SUBSCRIPTION_BARBER_POOL_PERCENT) / 100);
+
+      // Distribuir o pote proporcionalmente pelas fichas — valor já final do barbeiro
       for (const [profId, profFichas] of fichasByProfessional) {
-        const subscriptionShare = Math.round((profFichas / totalFichas) * totalSubscriptionValue);
+        const subscriptionShare = Math.round((profFichas / totalFichas) * barberPool);
         getEntry(profId).subscription += subscriptionShare;
       }
     }
@@ -131,11 +143,13 @@ export class CommissionsService {
         .eq('id', professionalId)
         .single();
 
-      if (!professional || !professional.commissionRate) continue;
+      if (!professional) continue;
 
-      const rate = professional.commissionRate;
+      // commissionRate aplica em cortes avulsos e produtos. Assinatura é pote fixo
+      // (50% da receita dividido por fichas), independente do rate do barbeiro.
+      const rate = professional.commissionRate || 0;
       const amountServices = Math.round((totals.services * rate) / 100);
-      const amountSubscription = Math.round((totals.subscription * rate) / 100);
+      const amountSubscription = totals.subscription;
       const amountProducts = Math.round((totals.products * rate) / 100);
       const amount = amountServices + amountSubscription + amountProducts;
 
@@ -264,12 +278,15 @@ export class CommissionsService {
       if (prof) professionals.push(prof);
     }
 
-    // Montar resultado por profissional
+    // Montar resultado por profissional.
+    // shareOfPot = fatia da receita TOTAL trazida pelo profissional (referência).
+    // commission = o que ele de fato recebe = 50% do shareOfPot (regra fixa).
+    // Os outros 50% ficam com a barbearia (calculado no front como shareOfPot - commission).
     const byProfessional = professionals.map((prof) => {
       const entry = profMap.get(prof.id)!;
       const percentage = totalFichas > 0 ? entry.fichas / totalFichas : 0;
       const shareOfPot = Math.round(percentage * totalSubscriptionValue);
-      const commission = Math.round((shareOfPot * (prof.commissionRate || 0)) / 100);
+      const commission = Math.round((shareOfPot * SUBSCRIPTION_BARBER_POOL_PERCENT) / 100);
 
       return {
         professionalId: prof.id,
@@ -289,6 +306,7 @@ export class CommissionsService {
       totalServices,
       totalFichas,
       totalSubscriptionValue,
+      barberPoolPercent: SUBSCRIPTION_BARBER_POOL_PERCENT,
       activeSubscriptions: activeSubscriptions?.length || 0,
       byProfessional,
     };
