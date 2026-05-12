@@ -7,6 +7,7 @@ import {
   Smartphone,
   CreditCard,
   Clock,
+  Crown,
 } from 'lucide-react';
 import { CashRegisterStatusBadge } from './CashRegisterStatusBadge';
 import { EmptyState } from '@/components/ui';
@@ -161,6 +162,20 @@ export function CashRegisterTable({ cashRegisters }: CashRegisterTableProps) {
                     </div>
                   </div>
                 </div>
+
+                {(cr.totalSubscriptions ?? 0) > 0 && (
+                  <div className="flex items-center justify-between rounded-lg border border-[#C8923A]/30 bg-[#C8923A]/10 p-3">
+                    <div className="flex items-center gap-2">
+                      <Crown className="h-4 w-4 text-[#D4A85C]" />
+                      <p className="text-xs uppercase tracking-wider text-[#D4A85C]">
+                        Faturamento por assinaturas
+                      </p>
+                    </div>
+                    <span className="text-sm font-bold text-[#D4A85C]">
+                      {formatCurrency(cr.totalSubscriptions ?? 0)}
+                    </span>
+                  </div>
+                )}
 
                 {/* Detalhes do caixa */}
                 <div className="grid grid-cols-2 gap-3 text-sm">

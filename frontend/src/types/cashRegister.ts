@@ -9,6 +9,7 @@ export interface CashRegister {
   totalPix: number; // centavos
   totalCard: number; // centavos
   totalRevenue: number; // centavos
+  totalSubscriptions?: number; // centavos — faturamento vindo de planos/assinaturas (recortado por payment.subscriptionId)
   discrepancy: number; // centavos (pode ser negativo)
   isOpen: boolean;
   notes?: string;

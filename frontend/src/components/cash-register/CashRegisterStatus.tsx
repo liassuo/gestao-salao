@@ -7,6 +7,7 @@ import {
   TrendingUp,
   Lock,
   Wallet,
+  Crown,
 } from 'lucide-react';
 import type { CashRegister } from '@/types';
 
@@ -192,6 +193,30 @@ export function CashRegisterStatus({ cashRegister, onClose }: CashRegisterStatus
                 Cartão {cardPct.toFixed(0)}%
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Faturamento por assinaturas (recorte transversal aos métodos) */}
+      {(cashRegister.totalSubscriptions ?? 0) > 0 && (
+        <div className="rounded-2xl border border-[#C8923A]/30 bg-[#C8923A]/10 p-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#C8923A]/20">
+                <Crown className="h-5 w-5 text-[#D4A85C]" />
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wider text-[#D4A85C]">
+                  Faturamento por assinaturas
+                </p>
+                <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
+                  Mensalidades de planos pagas hoje (qualquer método).
+                </p>
+              </div>
+            </div>
+            <span className="text-2xl font-bold text-[#D4A85C]">
+              {formatCurrency(cashRegister.totalSubscriptions ?? 0)}
+            </span>
           </div>
         </div>
       )}

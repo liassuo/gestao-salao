@@ -180,6 +180,11 @@ export class CashRegisterService {
       register.totalPix = totals.pix;
       register.totalCard = totals.card;
       register.totalRevenue = totals.total;
+      register.totalSubscriptions = totals.subscriptions;
+    } else if (register) {
+      // Caixa já fechado: recomputa a faixa de assinaturas (não persiste em coluna)
+      const totals = await this.calculateDailyTotals(register.date);
+      register.totalSubscriptions = totals.subscriptions;
     }
 
     return register;
@@ -199,6 +204,7 @@ export class CashRegisterService {
       register.totalPix = totals.pix;
       register.totalCard = totals.card;
       register.totalRevenue = totals.total;
+      register.totalSubscriptions = totals.subscriptions;
     }
 
     return register;
@@ -214,6 +220,10 @@ export class CashRegisterService {
     if (error || !register) {
       throw new NotFoundException('Caixa não encontrado');
     }
+
+    // Faturamento por assinaturas não tem coluna persistida — recomputa a partir dos payments do dia.
+    const totals = await this.calculateDailyTotals(register.date);
+    register.totalSubscriptions = totals.subscriptions;
 
     return register;
   }
@@ -240,7 +250,17 @@ export class CashRegisterService {
       .order('date', { ascending: false });
 
     if (error) throw error;
-    return registers || [];
+    const list = registers || [];
+    // Anexa faturamento por assinaturas em cada caixa (recomputa por dia — sem coluna persistida).
+    for (const r of list) {
+      try {
+        const totals = await this.calculateDailyTotals(r.date);
+        (r as any).totalSubscriptions = totals.subscriptions;
+      } catch {
+        (r as any).totalSubscriptions = 0;
+      }
+    }
+    return list;
   }
 
   async calculateDailyTotals(dateInput: Date | string) {
@@ -255,7 +275,7 @@ export class CashRegisterService {
 
     const { data: payments, error: paymentsError } = await this.supabase
       .from('payments')
-      .select('amount, method, asaasStatus')
+      .select('amount, method, asaasStatus, subscriptionId')
       .gte('paidAt', startOfDay)
       .lte('paidAt', endOfDay);
 
@@ -266,7 +286,7 @@ export class CashRegisterService {
       );
     }
 
-    const totals = { cash: 0, pix: 0, card: 0, boleto: 0, total: 0 };
+    const totals = { cash: 0, pix: 0, card: 0, boleto: 0, total: 0, subscriptions: 0 };
 
     for (const payment of payments || []) {
       // Ignorar pagamentos Asaas que foram estornados ou deletados
@@ -289,6 +309,12 @@ export class CashRegisterService {
           break;
       }
       totals.total += payment.amount;
+      // Faturamento vindo de assinaturas (mensalidade do plano) — categoria
+      // transversal a método de pagamento. O caixa mostra como linha separada
+      // para o admin conferir quanto do dia veio de plano vs avulso.
+      if (payment.subscriptionId) {
+        totals.subscriptions += payment.amount;
+      }
     }
 
     return totals;
