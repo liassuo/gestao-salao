@@ -7,5 +7,6 @@ export class AuthResponseDto {
     email: string;
     name: string;
     role: UserRole;
+    professionalId?: string;
   };
 }

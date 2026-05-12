@@ -51,6 +51,7 @@ export class AuthService {
         sub: user.id,
         email: user.email,
         role: user.role as unknown as UserRole,
+        professionalId: (user as any).professionalId,
       };
       const tempToken = this.jwtService.sign(payload, { expiresIn: '30m' });
 
@@ -62,6 +63,7 @@ export class AuthService {
           email: user.email,
           name: user.name,
           role: user.role as unknown as UserRole,
+          professionalId: (user as any).professionalId,
         },
       };
     }
@@ -92,6 +94,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       role: user.role as unknown as UserRole,
+      professionalId: (user as any).professionalId,
     };
 
     const accessToken = this.jwtService.sign(payload);
@@ -103,6 +106,7 @@ export class AuthService {
         email: user.email,
         name: user.name,
         role: user.role as unknown as UserRole,
+        professionalId: (user as any).professionalId,
       },
     };
   }
@@ -143,6 +147,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       role: user.role as unknown as UserRole,
+      professionalId: (user as any).professionalId,
     };
 
     const accessToken = this.jwtService.sign(payload);
@@ -154,6 +159,7 @@ export class AuthService {
         email: user.email,
         name: user.name,
         role: user.role as unknown as UserRole,
+        professionalId: (user as any).professionalId,
       },
     };
   }
