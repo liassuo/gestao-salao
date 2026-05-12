@@ -134,16 +134,16 @@ function validateDropTarget(
 
 const statusColors: Record<string, { bg: string; border: string; text: string }> = {
   // variantes de SCHEDULED (agendado)
-  SUBSCRIPTION: { bg: 'bg-[#C8923A]/20', border: 'border-[#C8923A]/40', text: 'text-[#D4A85C]' }, // âmbar — assinatura
-  CASH_PENDING: { bg: 'bg-yellow-400/15', border: 'border-yellow-400/30', text: 'text-yellow-300' }, // amarelo — agendado, pagar no local
-  PAID:         { bg: 'bg-green-500/25',  border: 'border-green-500/50',  text: 'text-green-300' }, // verde forte — pago
+  SUBSCRIPTION: { bg: 'bg-[#C8923A]/20', border: 'border-[#C8923A]/40', text: 'text-[#D4A85C]' }, // âmbar — assinatura/plano
+  CASH_PENDING: { bg: 'bg-green-500/15', border: 'border-green-500/35', text: 'text-green-300' }, // verde — cliente marcou sem plano
+  PAID:         { bg: 'bg-green-500/25',  border: 'border-green-500/50',  text: 'text-green-300' }, // verde forte — pago (PIX/cartão)
   // status de agendamento
   PENDING_PAYMENT: { bg: 'bg-blue-500/15', border: 'border-blue-500/30',  text: 'text-blue-400'  }, // azul — aguardando PIX/cartão
-  ATTENDED:        { bg: 'bg-green-500/10', border: 'border-green-500/20', text: 'text-green-500/80' }, // verde suave — atendido
+  ATTENDED:        { bg: 'bg-gray-500/15', border: 'border-gray-500/30', text: 'text-gray-300' }, // cinza — caixa finalizado
   CANCELLED:       { bg: 'bg-red-500/15',   border: 'border-[#A63030]/30', text: 'text-[#C45050]' },
   CANCELED:        { bg: 'bg-red-500/15',   border: 'border-[#A63030]/30', text: 'text-[#C45050]' },
   NO_SHOW:         { bg: 'bg-amber-500/15', border: 'border-amber-500/30', text: 'text-amber-400' },
-  SCHEDULED:       { bg: 'bg-yellow-400/15', border: 'border-yellow-400/30', text: 'text-yellow-300' }, // fallback
+  SCHEDULED:       { bg: 'bg-green-500/15', border: 'border-green-500/35', text: 'text-green-300' }, // fallback — agendado sem plano
 };
 
 function generateTimeSlots(startHour: number, endHour: number): string[] {
@@ -182,12 +182,13 @@ function AppointmentBlock({ appointment, onAppointmentClick, onDragStart, isDrag
   const endMinutes = timeToMinutes(time) + appointment.totalDuration;
   const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
   const isFromClient = appointment.source === 'CLIENT';
+  const isCancelled = appointment.status === 'CANCELED' || appointment.status === 'CANCELLED';
 
   return (
     <div
-      className={`absolute left-1 right-1 ${appointment.status === 'SCHEDULED' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} overflow-hidden rounded-lg border ${colors.border} ${colors.bg} px-2 py-1 backdrop-blur-sm transition-all duration-150 hover:z-20 hover:shadow-lg ${isDragging ? '!opacity-30' : ''}`}
+      className={`absolute left-1 right-1 ${appointment.status === 'SCHEDULED' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} overflow-hidden rounded-lg border ${colors.border} ${colors.bg} px-2 py-1 backdrop-blur-sm transition-all duration-150 hover:z-20 hover:shadow-lg ${isDragging ? '!opacity-30' : ''} ${isCancelled ? 'opacity-70 z-0' : ''}`}
       style={{ top: `${top}px`, height: `${Math.max(height, slotHeight)}px` }}
-      title={`${appointment.client?.name || appointment.clientName || 'Cliente'} - ${serviceNames} (${time} - ${endTime})${isFromClient ? ' · App' : ' · Painel'}${isSubscription ? ' · Assinatura' : ''}${appointment.status === 'PENDING_PAYMENT' ? ' · Aguardando pagamento' : ''}`}
+      title={`${appointment.client?.name || appointment.clientName || 'Cliente'} - ${serviceNames} (${time} - ${endTime})${isFromClient ? ' · App' : ' · Painel'}${isSubscription ? ' · Assinatura' : ''}${appointment.status === 'PENDING_PAYMENT' ? ' · Aguardando pagamento' : ''}${isCancelled ? ' · Cancelado' : ''}`}
       onPointerDown={(e) => {
         if (e.button === 0 && appointment.status === 'SCHEDULED') {
           onDragStart?.(e, appointment);
@@ -199,7 +200,7 @@ function AppointmentBlock({ appointment, onAppointmentClick, onDragStart, isDrag
       }}
     >
       <div className="flex h-full flex-col overflow-hidden">
-        <div className={`truncate text-xs font-semibold ${colors.text}`}>
+        <div className={`truncate text-xs font-semibold ${colors.text} ${isCancelled ? 'line-through' : ''}`}>
           {appointment.client?.name || appointment.clientName || 'Cliente'}
         </div>
         {height >= 40 && (
@@ -919,12 +920,24 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-[var(--card-border)] bg-[var(--bg-primary)] px-3 py-2.5 sm:gap-4 sm:px-4">
             <span className="text-xs text-[var(--text-muted)]">Legenda:</span>
             <div className="flex items-center gap-1.5">
-              <div className="h-3 w-3 rounded border border-[#C8923A]/40 bg-[#C8923A]/20" />
+              <div className="h-3 w-3 rounded border border-green-500/35 bg-green-500/15" />
               <span className="text-xs text-[var(--text-muted)]">Agendado</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="h-3 w-3 rounded border border-emerald-500/40 bg-emerald-500/20" />
-              <span className="text-xs text-[var(--text-muted)]">Atendido</span>
+              <div className="h-3 w-3 rounded border border-[#C8923A]/40 bg-[#C8923A]/20" />
+              <span className="text-xs text-[var(--text-muted)]">Plano</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="h-3 w-3 rounded border border-blue-500/30 bg-blue-500/15" />
+              <span className="text-xs text-[var(--text-muted)]">Pagamento pendente</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="h-3 w-3 rounded border border-green-500/50 bg-green-500/25" />
+              <span className="text-xs text-[var(--text-muted)]">Pago</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="h-3 w-3 rounded border border-gray-500/30 bg-gray-500/15" />
+              <span className="text-xs text-[var(--text-muted)]">Finalizado</span>
             </div>
             <div className="flex items-center gap-1.5">
               <div className="h-3 w-3 rounded border border-amber-500/30 bg-amber-500/15" />
