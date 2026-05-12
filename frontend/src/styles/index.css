@@ -23,14 +23,16 @@
   --bg-tertiary: #EDE3D3;
   --bg-sidebar: #1A1008;
   --bg-header: rgba(250, 245, 235, 0.88);
-  --border-color: #D4C4A0;
+  /* #D4C4A0 sobre #F2E8D8 dava contraste 1.5:1 (UI borders pedem 3:1). */
+  --border-color: #B8A476;
   --border-sidebar: #2A1F13;
   --text-primary: #2C1810;
   --text-secondary: #4A3728;
-  --text-muted: #8B7355;
+  /* #8B7355 sobre #F2E8D8 dava 4.0:1 (texto pede 4.5:1 WCAG AA). */
+  --text-muted: #6B5640;
   --text-sidebar: #9B8B73;
   --card-bg: #FAF5EB;
-  --card-border: #D4C4A0;
+  --card-border: #B8A476;
   --hover-bg: #EDE3D3;
 }
 
@@ -41,14 +43,16 @@
   --bg-tertiary: rgba(26, 21, 14, 0.85);
   --bg-sidebar: #130E07;
   --bg-header: rgba(26, 21, 14, 0.88);
-  --border-color: #2E2418;
+  /* #2E2418 sobre #110D07 mal aparecia (~1.6:1). Subi pra dar volume a cards. */
+  --border-color: #463826;
   --border-sidebar: #2A1F13;
   --text-primary: #F2E8D5;
   --text-secondary: #D4C4A0;
-  --text-muted: #8B7D6B;
+  /* #8B7D6B subido pra dar fôlego a textos auxiliares (timestamps, hints). */
+  --text-muted: #A89B85;
   --text-sidebar: #9B8B73;
   --card-bg: rgba(26, 21, 14, 0.85);
-  --card-border: #2E2418;
+  --card-border: #463826;
   --hover-bg: #241C12;
 }
 

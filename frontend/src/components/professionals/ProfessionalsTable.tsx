@@ -117,7 +117,7 @@ export function ProfessionalsTable({
                       <span className="text-sm text-[var(--text-muted)]">Nenhum serviço</span>
                     )}
                     {professional.services && professional.services.length > 3 && (
-                      <span className="inline-block rounded bg-zinc-500/20 px-2 py-0.5 text-xs text-zinc-400">
+                      <span className="inline-block rounded bg-zinc-500/20 px-2 py-0.5 text-xs text-zinc-700 dark:text-zinc-300">
                         +{professional.services.length - 3}
                       </span>
                     )}

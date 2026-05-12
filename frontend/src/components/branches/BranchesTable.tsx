@@ -86,7 +86,7 @@ export function BranchesTable({
                       Ativo
                     </span>
                   ) : (
-                    <span className="inline-flex w-fit rounded-full bg-zinc-500/20 px-2 py-0.5 text-xs font-medium text-zinc-400">
+                    <span className="inline-flex w-fit rounded-full bg-zinc-500/20 px-2 py-0.5 text-xs font-medium text-zinc-700 dark:text-zinc-300">
                       Inativo
                     </span>
                   )}

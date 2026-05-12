@@ -15,7 +15,7 @@ interface PromotionsTableProps {
 const statusLabels: Record<string, { label: string; color: string }> = {
   ACTIVE: { label: 'Ativa', color: 'bg-green-500/20 text-green-400' },
   SCHEDULED: { label: 'Agendada', color: 'bg-blue-500/20 text-blue-400' },
-  EXPIRED: { label: 'Expirada', color: 'bg-gray-500/20 text-gray-400' },
+  EXPIRED: { label: 'Expirada', color: 'bg-gray-500/20 text-gray-700 dark:text-gray-300' },
   DISABLED: { label: 'Desativada', color: 'bg-red-500/20 text-red-400' },
 };
 

@@ -139,7 +139,8 @@ const statusColors: Record<string, { bg: string; border: string; text: string }>
   PAID:         { bg: 'bg-green-500/25',  border: 'border-green-500/50',  text: 'text-green-300' }, // verde forte — pago (PIX/cartão)
   // status de agendamento
   PENDING_PAYMENT: { bg: 'bg-blue-500/15', border: 'border-blue-500/30',  text: 'text-blue-400'  }, // azul — aguardando PIX/cartão
-  ATTENDED:        { bg: 'bg-gray-500/15', border: 'border-gray-500/30', text: 'text-gray-300' }, // cinza — caixa finalizado
+  // Atendido: cinza neutro que aparece nos dois temas (claro precisa de texto mais escuro).
+  ATTENDED:        { bg: 'bg-gray-500/20', border: 'border-gray-500/40', text: 'text-gray-700 dark:text-gray-300' },
   // Cancelado: vermelho saturado + listra diagonal aplicada inline (ver isCancelled abaixo).
   // Antes ficava muito sutil (bg-red-500/15 + opacity-70 sobreposto) e o admin não enxergava.
   CANCELLED:       { bg: 'bg-red-500/30',   border: 'border-red-500/60',   text: 'text-red-300' },
