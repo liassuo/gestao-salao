@@ -94,7 +94,13 @@ export function AppointmentActions({
               {canModify && !showPaymentSubmenu && (
                 <>
                   <button
-                    onClick={() => setShowPaymentSubmenu(true)}
+                    onClick={() => {
+                      if (appointment.totalPrice === 0) {
+                        handleAction(() => onAttend(appointment.id));
+                      } else {
+                        setShowPaymentSubmenu(true);
+                      }
+                    }}
                     disabled={isLoading}
                     className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-[var(--text-secondary)] hover:bg-[var(--hover-bg)] disabled:opacity-50"
                   >

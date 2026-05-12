@@ -291,7 +291,7 @@ export function AppointmentDetailModal({
                   Assinatura
                 </span>
               )}
-              {order && (
+              {order && !(order.status === 'PENDING' && order.totalAmount === 0) && (
                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${order.status === 'PAID' ? 'bg-emerald-500/20 text-emerald-400' : order.status === 'CANCELED' ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
                   {order.status === 'PAID' ? 'Paga' : order.status === 'CANCELED' ? 'Cancelada' : 'Pendente'}
                 </span>
@@ -496,7 +496,17 @@ export function AppointmentDetailModal({
             </div>
           ) : (
             <div className="flex flex-wrap gap-2 pt-1">
-              <button onClick={() => setShowPaymentOptions(true)} disabled={isActing} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-500/20 px-3 py-2 text-sm font-medium text-emerald-400 transition-colors hover:bg-emerald-500/30 disabled:opacity-50">
+              <button
+                onClick={() => {
+                  if (appointment.totalPrice === 0) {
+                    handleAction(() => onAttend(appointment.id));
+                  } else {
+                    setShowPaymentOptions(true);
+                  }
+                }}
+                disabled={isActing}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-500/20 px-3 py-2 text-sm font-medium text-emerald-400 transition-colors hover:bg-emerald-500/30 disabled:opacity-50"
+              >
                 {isActing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                 Atendido
               </button>

@@ -564,14 +564,21 @@ export class AppointmentsService {
 
     const now = nowLocalIsoString();
 
+    // Comanda 100% coberta por assinatura: total = 0, não há o que cobrar.
+    // Fecha a comanda direto (PAID) sem criar payment nem mexer no caixa, e ignora
+    // qualquer paymentMethod recebido (a UI manda 'CASH' por padrão).
+    const isZeroTotal = (appointment.totalPrice ?? 0) === 0;
+
     // Converter pagamento online não pago para pagamento no local
-    const { data: pendingPayment } = await this.supabase
-      .from('payments')
-      .select('id, asaasPaymentId, asaasStatus, method')
-      .eq('appointmentId', id)
-      .is('paidAt', null)
-      .in('method', ['PIX', 'CARD'])
-      .maybeSingle();
+    const { data: pendingPayment } = isZeroTotal
+      ? { data: null as null }
+      : await this.supabase
+          .from('payments')
+          .select('id, asaasPaymentId, asaasStatus, method')
+          .eq('appointmentId', id)
+          .is('paidAt', null)
+          .in('method', ['PIX', 'CARD'])
+          .maybeSingle();
 
     // Se já está pago (via webhook Asaas, por exemplo), apenas atender sem
     // criar pagamento novo — caso contrário cria-se duplicata no caixa.
@@ -625,7 +632,7 @@ export class AppointmentsService {
             .eq('id', pendingPayment.id);
         }
       }
-    } else if (paymentMethod && !alreadyPaid) {
+    } else if (paymentMethod && !alreadyPaid && !isZeroTotal) {
       // Não tinha pagamento pendente online — criar um novo registro de pagamento
       const paymentId = randomUUID();
       await this.supabase
@@ -666,6 +673,19 @@ export class AppointmentsService {
           .update({ cashRegisterId: openRegister.id })
           .eq('id', paymentId);
       }
+    }
+
+    if (isZeroTotal && !alreadyPaid) {
+      await this.supabase
+        .from('appointments')
+        .update({ isPaid: true })
+        .eq('id', id);
+
+      await this.supabase
+        .from('orders')
+        .update({ status: 'PAID', updatedAt: now })
+        .eq('appointmentId', id)
+        .eq('status', 'PENDING');
     }
 
     const { data: updated, error: updateError } = await this.supabase
@@ -1018,6 +1038,23 @@ export class AppointmentsService {
     }
   }
 
+  async assertOwnedByProfessional(appointmentId: string, professionalId: string | undefined): Promise<void> {
+    if (!professionalId) {
+      throw new BadRequestException('Conta de profissional sem profissional vinculado');
+    }
+    const { data, error } = await this.supabase
+      .from('appointments')
+      .select('id, professionalId')
+      .eq('id', appointmentId)
+      .single();
+    if (error || !data) {
+      throw new NotFoundException('Agendamento não encontrado');
+    }
+    if (data.professionalId !== professionalId) {
+      throw new BadRequestException('Você só pode gerenciar agendamentos da sua própria agenda');
+    }
+  }
+
   async update(id: string, dto: UpdateAppointmentDto) {
     const { data: appointment, error } = await this.supabase
       .from('appointments')
@@ -1280,7 +1317,7 @@ export class AppointmentsService {
       .eq('status', 'PENDING');
   }
 
-  async getCalendarData(date: string) {
+  async getCalendarData(date: string, restrictToProfessionalId?: string) {
     if (!date || isNaN(new Date(date).getTime())) {
       throw new BadRequestException('Data inválida');
     }
@@ -1288,27 +1325,30 @@ export class AppointmentsService {
     const startOfDay = `${date}T00:00:00`;
     const endOfDay = `${date}T23:59:59`;
 
-    this.logger.log(`Calendar query for ${date}: ${startOfDay} - ${endOfDay}`);
+    this.logger.log(`Calendar query for ${date}: ${startOfDay} - ${endOfDay}${restrictToProfessionalId ? ` (restrict=${restrictToProfessionalId})` : ''}`);
 
     // 1. Buscar profissionais ativos
-    const { data: professionals, error: profError } = await this.supabase
+    let profQuery = this.supabase
       .from('professionals')
       .select('id, name, workingHours, avatarUrl')
       .eq('isActive', true)
       .order('name', { ascending: true });
+    if (restrictToProfessionalId) {
+      profQuery = profQuery.eq('id', restrictToProfessionalId);
+    }
+    const { data: professionals, error: profError } = await profQuery;
 
     if (profError) {
       this.logger.error(`Calendar professionals query error: ${JSON.stringify(profError)}`);
       throw profError;
     }
 
-    // 2. Buscar agendamentos do dia (excluindo cancelados)
+    // 2. Buscar agendamentos do dia (cancelados são exibidos em vermelho pelo frontend)
     const { data: appointments, error: apptError } = await this.supabase
       .from('appointments')
       .select(this.APPOINTMENT_SELECT)
       .gte('scheduledAt', startOfDay)
-      .lte('scheduledAt', endOfDay)
-      .neq('status', 'CANCELED');
+      .lte('scheduledAt', endOfDay);
 
     if (apptError) {
       this.logger.error(`Calendar appointments query error: ${JSON.stringify(apptError)}`);
