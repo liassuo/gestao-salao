@@ -243,7 +243,12 @@ export class AppointmentsService {
         status: initialStatus,
         notes: dto.notes,
         source: dto.source || 'ADMIN',
-        usedSubscriptionCut: !!dto.useSubscriptionCut,
+        // Marca o agendamento como "assinatura" tanto no fluxo legado
+        // (dto.useSubscriptionCut=true vindo do app) quanto no fluxo natural,
+        // quando ao menos um serviço incluído no plano consumiu um crédito.
+        // Sem isso, a UI (CalendarView/Detail) não pinta a cor de assinatura
+        // mesmo o cliente tendo plano ativo e serviço coberto.
+        usedSubscriptionCut: !!dto.useSubscriptionCut || consumedFlags.some(Boolean),
         createdAt: now,
         updatedAt: now,
       })
@@ -830,23 +835,40 @@ export class AppointmentsService {
       }
     }
 
-    // Devolver corte de assinatura (se usou)
+    // Devolver corte de assinatura (apenas fluxo legado).
+    // No fluxo legado (`dto.useSubscriptionCut=true`), o débito é feito pelo controller
+    // e os order_items não recebem `consumedSubscriptionCut=true`. Já no fluxo natural,
+    // o débito é feito via `consumedSubscriptionCut` nos itens — e nesse caso a
+    // devolução é responsabilidade do `refundLinkedOrderCuts` abaixo. Sem esta guarda,
+    // o no-show devolveria 1 crédito aqui + 1 a mais pela comanda (refund duplicado).
     if (appointment.usedSubscriptionCut) {
-      const { data: subscription } = await this.supabase
-        .from('client_subscriptions')
-        .select('id, cutsUsedThisMonth')
-        .eq('clientId', appointment.clientId)
-        .in('status', ['ACTIVE', 'SUSPENDED'])
-        .order('createdAt', { ascending: false })
-        .limit(1)
+      const { data: linkedItems } = await this.supabase
+        .from('orders')
+        .select('items:order_items(consumedSubscriptionCut)')
+        .eq('appointmentId', id)
+        .eq('status', 'PENDING')
         .maybeSingle();
+      const hasItemLevelConsumption = ((linkedItems as any)?.items || []).some(
+        (i: any) => i.consumedSubscriptionCut,
+      );
 
-      if (subscription && subscription.cutsUsedThisMonth > 0) {
-        await this.supabase
+      if (!hasItemLevelConsumption) {
+        const { data: subscription } = await this.supabase
           .from('client_subscriptions')
-          .update({ cutsUsedThisMonth: subscription.cutsUsedThisMonth - 1 })
-          .eq('id', subscription.id);
-        this.logger.log(`Corte de assinatura devolvido para cliente ${appointment.clientId} (no-show ${id})`);
+          .select('id, cutsUsedThisMonth')
+          .eq('clientId', appointment.clientId)
+          .in('status', ['ACTIVE', 'SUSPENDED'])
+          .order('createdAt', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (subscription && subscription.cutsUsedThisMonth > 0) {
+          await this.supabase
+            .from('client_subscriptions')
+            .update({ cutsUsedThisMonth: subscription.cutsUsedThisMonth - 1 })
+            .eq('id', subscription.id);
+          this.logger.log(`Corte de assinatura devolvido para cliente ${appointment.clientId} (no-show ${id})`);
+        }
       }
     }
 
