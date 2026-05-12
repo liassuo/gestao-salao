@@ -1365,12 +1365,13 @@ export class AppointmentsService {
       throw profError;
     }
 
-    // 2. Buscar agendamentos do dia (cancelados são exibidos em vermelho pelo frontend)
+    // 2. Buscar agendamentos do dia (excluindo cancelados)
     const { data: appointments, error: apptError } = await this.supabase
       .from('appointments')
       .select(this.APPOINTMENT_SELECT)
       .gte('scheduledAt', startOfDay)
-      .lte('scheduledAt', endOfDay);
+      .lte('scheduledAt', endOfDay)
+      .neq('status', 'CANCELED');
 
     if (apptError) {
       this.logger.error(`Calendar appointments query error: ${JSON.stringify(apptError)}`);
