@@ -283,6 +283,10 @@ export class AsaasWebhookController {
       this.logger.log(
         `Assinatura ${localPayment.subscriptionId} ativada/renovada até ${newEndDate.toISOString()}`,
       );
+
+      // Quitar a dívida de "Cobrança não paga" criada quando este mesmo pagamento ficou OVERDUE.
+      // A correlação é feita pela tag [asaas:<id>] embutida na descrição.
+      await this.settleOverdueDebtForPayment(localPayment.clientId, asaasPaymentId);
     }
 
     // Se for pagamento de dívida, quitar dívidas apenas se o valor pago cobre o total pendente
@@ -382,6 +386,20 @@ export class AsaasWebhookController {
       const dueDate = new Date();
       dueDate.setDate(dueDate.getDate() + 7);
 
+      // Idempotência: se já existe dívida para este mesmo asaasPaymentId, não duplica.
+      const debtTag = `[asaas:${asaasPaymentId}]`;
+      const { data: existingDebt } = await this.supabase
+        .from('debts')
+        .select('id')
+        .eq('clientId', localPayment.clientId)
+        .ilike('description', `%${debtTag}%`)
+        .maybeSingle();
+
+      if (existingDebt) {
+        this.logger.log(`Dívida já existente para cobrança ${asaasPaymentId}, ignorando duplicação.`);
+        return;
+      }
+
       const { error: debtError } = await this.supabase
         .from('debts')
         .insert({
@@ -390,7 +408,7 @@ export class AsaasWebhookController {
           amount: localPayment.amount,
           amountPaid: 0,
           remainingBalance: localPayment.amount,
-          description: `Cobrança não paga — ${planName}`,
+          description: `Cobrança não paga — ${planName} ${debtTag}`,
           dueDate: dueDate.toISOString(),
           isSettled: false,
           createdAt: now,
@@ -455,5 +473,67 @@ export class AsaasWebhookController {
       .from('payments')
       .update({ asaasStatus: 'DELETED' })
       .eq('asaasPaymentId', asaasPaymentId);
+  }
+
+  /**
+   * Quita a dívida criada por handlePaymentOverdue para o mesmo asaasPaymentId.
+   * A correlação é feita pela tag [asaas:<id>] embutida na descrição da dívida.
+   * Idempotente: se não há dívida, ou já está quitada, é no-op.
+   */
+  private async settleOverdueDebtForPayment(clientId: string, asaasPaymentId: string) {
+    if (!clientId || !asaasPaymentId) return;
+    const tag = `[asaas:${asaasPaymentId}]`;
+
+    let { data: debts } = await this.supabase
+      .from('debts')
+      .select('id, amount')
+      .eq('clientId', clientId)
+      .eq('isSettled', false)
+      .ilike('description', `%${tag}%`);
+
+    // Fallback para dívidas legadas (sem tag), criadas antes deste fix.
+    // Quita todas as dívidas em aberto do cliente cuja descrição começa com "Cobrança não paga"
+    // — esse rótulo é exclusivo do fluxo de assinatura inadimplente.
+    if (!debts || debts.length === 0) {
+      const { data: legacy } = await this.supabase
+        .from('debts')
+        .select('id, amount')
+        .eq('clientId', clientId)
+        .eq('isSettled', false)
+        .ilike('description', 'Cobrança não paga%');
+      debts = legacy || [];
+    }
+
+    if (!debts || debts.length === 0) return;
+
+    const now = nowLocalIsoString();
+    for (const debt of debts) {
+      await this.supabase
+        .from('debts')
+        .update({
+          amountPaid: debt.amount,
+          remainingBalance: 0,
+          isSettled: true,
+          paidAt: now,
+          updatedAt: now,
+        })
+        .eq('id', debt.id);
+    }
+
+    // Recalcular flag hasDebts: se não restar nenhuma dívida em aberto, limpar.
+    const { count } = await this.supabase
+      .from('debts')
+      .select('id', { count: 'exact', head: true })
+      .eq('clientId', clientId)
+      .eq('isSettled', false);
+
+    await this.supabase
+      .from('clients')
+      .update({ hasDebts: (count || 0) > 0 })
+      .eq('id', clientId);
+
+    this.logger.log(
+      `Dívida(s) de cobrança ${asaasPaymentId} quitada(s) automaticamente após confirmação do pagamento (${debts.length} registro(s)).`,
+    );
   }
 }
