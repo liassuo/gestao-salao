@@ -44,6 +44,12 @@ function createStatefulSupabase(initial: Tables = {}) {
         if (op === 'lte') return r[col] <= val;
         if (op === 'not-is') return r[col] !== val;
         if (op === 'gt') return r[col] > val;
+        if (op === 'ilike') {
+          // Suporta apenas o padrão '%substr%' (suficiente para os usos do webhook).
+          const target = String(val).replace(/^%/, '').replace(/%$/, '').toLowerCase();
+          const value = String(r[col] ?? '').toLowerCase();
+          return value.includes(target);
+        }
         return true;
       }),
     );
@@ -90,6 +96,10 @@ function createStatefulSupabase(initial: Tables = {}) {
       },
       in: (col: string, vals: any[]) => {
         filters.push(['in', col, vals]);
+        return chain;
+      },
+      ilike: (col: string, val: string) => {
+        filters.push(['ilike', col, val]);
         return chain;
       },
       gte: (col: string, v: any) => {
@@ -359,7 +369,79 @@ describe('AsaasWebhookController (e2e)', () => {
       expect(state.debts[0].clientId).toBe('client-1');
       expect(state.debts[0].amount).toBe(5000);
       expect(state.debts[0].isSettled).toBe(false);
+      // A descrição carrega a tag [asaas:<id>] para correlacionar com o pagamento confirmado depois.
+      expect(state.debts[0].description).toContain('[asaas:asaas_pay_001]');
       expect(state.clients[0].hasDebts).toBe(true);
+    });
+
+    it('idempotente: OVERDUE duas vezes para a mesma cobrança não duplica a dívida', async () => {
+      const { controller, state } = await buildController({
+        client_subscriptions: [
+          { id: 'sub-1', clientId: 'client-1', status: 'ACTIVE', plan: { name: 'Mensal' } },
+        ],
+        payments: [
+          {
+            id: 'pay-local-1',
+            asaasPaymentId: 'asaas_pay_001',
+            clientId: 'client-1',
+            subscriptionId: 'sub-1',
+            amount: 5000,
+            asaasStatus: 'PENDING',
+          },
+        ],
+        clients: [{ id: 'client-1', hasDebts: false }],
+        debts: [],
+      });
+
+      const event = paymentEvent(
+        AsaasWebhookEvent.PAYMENT_OVERDUE,
+        basePaymentData({ status: 'OVERDUE' }),
+      );
+      await controller.handleWebhook(event, 'test-token');
+      await controller.handleWebhook(event, 'test-token');
+
+      expect(state.debts).toHaveLength(1);
+    });
+
+    it('PAYMENT_RECEIVED depois de OVERDUE quita a dívida automaticamente', async () => {
+      const { controller, state } = await buildController({
+        client_subscriptions: [
+          { id: 'sub-1', clientId: 'client-1', status: 'ACTIVE', plan: { name: 'Mensal' }, endDate: '2026-06-12T00:00:00.000' },
+        ],
+        payments: [
+          {
+            id: 'pay-local-1',
+            asaasPaymentId: 'asaas_pay_001',
+            clientId: 'client-1',
+            subscriptionId: 'sub-1',
+            amount: 5000,
+            asaasStatus: 'PENDING',
+            paidAt: null,
+          },
+        ],
+        clients: [{ id: 'client-1', hasDebts: false }],
+        debts: [],
+        cash_registers: [],
+      });
+
+      // 1. Cobrança vence → cria dívida tagueada
+      await controller.handleWebhook(
+        paymentEvent(AsaasWebhookEvent.PAYMENT_OVERDUE, basePaymentData({ status: 'OVERDUE' })),
+        'test-token',
+      );
+      expect(state.debts).toHaveLength(1);
+      expect(state.debts[0].isSettled).toBe(false);
+
+      // 2. Cliente paga → mesma cobrança confirma → dívida correlata deve ser quitada
+      await controller.handleWebhook(
+        paymentEvent(AsaasWebhookEvent.PAYMENT_RECEIVED, basePaymentData({ status: 'RECEIVED' })),
+        'test-token',
+      );
+
+      expect(state.debts[0].isSettled).toBe(true);
+      expect(state.debts[0].remainingBalance).toBe(0);
+      expect(state.clients[0].hasDebts).toBe(false);
+      expect(state.client_subscriptions[0].status).toBe('ACTIVE');
     });
   });
 
