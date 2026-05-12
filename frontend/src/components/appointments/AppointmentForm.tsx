@@ -8,6 +8,7 @@ import {
   useActivePromotions,
   useClientSubscription,
 } from '@/hooks';
+import { useAuth } from '@/auth';
 import { formatPhone, getActiveSubscriptionView } from '@/utils';
 import { AppointmentSummary } from './AppointmentSummary';
 import { SubscriptionStatusBanner } from '@/components/subscriptions';
@@ -64,8 +65,19 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
   const toast = useToast();
 
+  const { user } = useAuth();
+  const isBarber = user?.role === 'PROFESSIONAL';
+  const lockedProfessionalId = isBarber ? user?.professionalId : undefined;
+
   const { data: clients = [], isLoading: isLoadingClients } = useClients();
-  const { data: professionals = [], isLoading: isLoadingProfessionals } = useProfessionals();
+  const { data: allProfessionals = [], isLoading: isLoadingProfessionals } = useProfessionals();
+  const professionals = useMemo(
+    () =>
+      lockedProfessionalId
+        ? allProfessionals.filter((p) => p.id === lockedProfessionalId)
+        : allProfessionals,
+    [allProfessionals, lockedProfessionalId],
+  );
   const { data: services = [], isLoading: isLoadingServices } = useServices();
   const { data: activePromotions = [] } = useActivePromotions();
 
@@ -81,7 +93,7 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
       return {
         date: prefill?.date || defaults.date,
         time: prefill?.time || defaults.time,
-        professionalId: prefill?.professionalId || '',
+        professionalId: prefill?.professionalId || lockedProfessionalId || '',
       };
     })(),
   });
@@ -295,7 +307,8 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
         </label>
         <select
           {...register('professionalId', { required: 'Selecione um profissional' })}
-          className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] ${
+          disabled={!!lockedProfessionalId}
+          className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] disabled:cursor-not-allowed disabled:opacity-70 ${
             errors.professionalId ? 'border-[#A63030]' : 'border-[var(--border-color)]'
           }`}
         >

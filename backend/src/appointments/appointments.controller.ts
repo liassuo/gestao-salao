@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Post,
@@ -75,8 +76,10 @@ export class AppointmentsController {
    * GET /appointments/calendar?date=2026-02-03
    */
   @Get('calendar')
-  async getCalendarData(@Query('date') date: string) {
-    return this.appointmentsService.getCalendarData(date);
+  async getCalendarData(@Query('date') date: string, @Req() req: RequestWithUser) {
+    const restrictId =
+      req.user?.role === 'PROFESSIONAL' ? req.user.professionalId : undefined;
+    return this.appointmentsService.getCalendarData(date, restrictId);
   }
 
   /**
@@ -84,7 +87,14 @@ export class AppointmentsController {
    */
   @Post('block')
   @HttpCode(HttpStatus.CREATED)
-  async createTimeBlock(@Body() dto: CreateTimeBlockDto) {
+  async createTimeBlock(@Body() dto: CreateTimeBlockDto, @Req() req: RequestWithUser) {
+    if (
+      req.user?.role === 'PROFESSIONAL' &&
+      req.user.professionalId &&
+      dto.professionalId !== req.user.professionalId
+    ) {
+      throw new BadRequestException('Você só pode bloquear horários da sua agenda');
+    }
     return this.appointmentsService.createTimeBlock(dto);
   }
 
@@ -96,7 +106,14 @@ export class AppointmentsController {
    */
   @Post('block/range')
   @HttpCode(HttpStatus.CREATED)
-  async createTimeBlockRange(@Body() dto: CreateTimeBlockRangeDto) {
+  async createTimeBlockRange(@Body() dto: CreateTimeBlockRangeDto, @Req() req: RequestWithUser) {
+    if (
+      req.user?.role === 'PROFESSIONAL' &&
+      req.user.professionalId &&
+      dto.professionalId !== req.user.professionalId
+    ) {
+      throw new BadRequestException('Você só pode bloquear horários da sua agenda');
+    }
     return this.appointmentsService.createTimeBlockRange(dto);
   }
 
@@ -114,7 +131,17 @@ export class AppointmentsController {
    */
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  async create(@Body() createAppointmentDto: CreateAppointmentDto) {
+  async create(
+    @Body() createAppointmentDto: CreateAppointmentDto,
+    @Req() req: RequestWithUser,
+  ) {
+    if (
+      req.user?.role === 'PROFESSIONAL' &&
+      req.user.professionalId &&
+      createAppointmentDto.professionalId !== req.user.professionalId
+    ) {
+      throw new BadRequestException('Você só pode criar agendamentos na sua própria agenda');
+    }
     const appointment = await this.appointmentsService.create(createAppointmentDto);
 
     // Notificar admins sobre novo agendamento (fire-and-forget)
@@ -205,12 +232,25 @@ export class AppointmentsController {
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateAppointmentDto: UpdateAppointmentDto,
+    @Req() req: RequestWithUser,
   ) {
+    if (req.user?.role === 'PROFESSIONAL') {
+      await this.appointmentsService.assertOwnedByProfessional(id, req.user.professionalId);
+      if (
+        updateAppointmentDto.professionalId &&
+        updateAppointmentDto.professionalId !== req.user.professionalId
+      ) {
+        throw new BadRequestException('Você não pode transferir agendamentos para outro profissional');
+      }
+    }
     return this.appointmentsService.update(id, updateAppointmentDto);
   }
 
   @Patch(':id/cancel')
-  async cancel(@Param('id', ParseUUIDPipe) id: string) {
+  async cancel(@Param('id', ParseUUIDPipe) id: string, @Req() req: RequestWithUser) {
+    if (req.user?.role === 'PROFESSIONAL') {
+      await this.appointmentsService.assertOwnedByProfessional(id, req.user.professionalId);
+    }
     const result = await this.appointmentsService.cancel(id);
 
     // Notificar admins sobre cancelamento (fire-and-forget)
@@ -233,11 +273,17 @@ export class AppointmentsController {
     @Body() dto: MarkAsAttendedDto,
     @Req() req: RequestWithUser,
   ) {
+    if (req.user?.role === 'PROFESSIONAL') {
+      await this.appointmentsService.assertOwnedByProfessional(id, req.user.professionalId);
+    }
     return this.appointmentsService.markAsAttended(id, dto.paymentMethod, req.user.id);
   }
 
   @Patch(':id/no-show')
-  async markAsNoShow(@Param('id', ParseUUIDPipe) id: string) {
+  async markAsNoShow(@Param('id', ParseUUIDPipe) id: string, @Req() req: RequestWithUser) {
+    if (req.user?.role === 'PROFESSIONAL') {
+      await this.appointmentsService.assertOwnedByProfessional(id, req.user.professionalId);
+    }
     return this.appointmentsService.markAsNoShow(id);
   }
 
