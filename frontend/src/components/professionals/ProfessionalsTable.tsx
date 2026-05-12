@@ -137,7 +137,13 @@ export function ProfessionalsTable({
                           const btn = menuBtnRefs.current[professional.id];
                           if (btn) {
                             const rect = btn.getBoundingClientRect();
-                            setMenuPos({ top: rect.bottom + 4, left: rect.right - 144 });
+                            const menuHeight = 180;
+                            const spaceBelow = window.innerHeight - rect.bottom;
+                            const top = spaceBelow < menuHeight + 8
+                              ? Math.max(8, rect.top - menuHeight - 4)
+                              : rect.bottom + 4;
+                            const left = Math.max(8, Math.min(rect.right - 144, window.innerWidth - 144 - 8));
+                            setMenuPos({ top, left });
                           }
                           setOpenMenuId(professional.id);
                         }
