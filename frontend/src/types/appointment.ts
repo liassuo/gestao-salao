@@ -62,8 +62,9 @@ export const appointmentStatusLabels: Record<AppointmentStatus, string> = {
 
 export const appointmentStatusColors: Record<AppointmentStatus, string> = {
   SCHEDULED: 'bg-blue-500/20 text-blue-500',
-  ATTENDED: 'bg-blue-600/20 text-blue-400',
-  CANCELED: 'bg-zinc-500/20 text-zinc-400',
-  NO_SHOW: 'bg-red-500/20 text-red-500',
+  ATTENDED: 'bg-green-500/20 text-green-400',
+  // Cancelado: vermelho saturado (antes era cinza e ficava indistinguível dos demais).
+  CANCELED: 'bg-red-500/25 text-red-400 line-through',
+  NO_SHOW: 'bg-amber-500/25 text-amber-400',
   PENDING_PAYMENT: 'bg-amber-500/20 text-amber-500',
 };

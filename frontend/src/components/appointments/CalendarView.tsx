@@ -140,8 +140,10 @@ const statusColors: Record<string, { bg: string; border: string; text: string }>
   // status de agendamento
   PENDING_PAYMENT: { bg: 'bg-blue-500/15', border: 'border-blue-500/30',  text: 'text-blue-400'  }, // azul — aguardando PIX/cartão
   ATTENDED:        { bg: 'bg-gray-500/15', border: 'border-gray-500/30', text: 'text-gray-300' }, // cinza — caixa finalizado
-  CANCELLED:       { bg: 'bg-red-500/15',   border: 'border-[#A63030]/30', text: 'text-[#C45050]' },
-  CANCELED:        { bg: 'bg-red-500/15',   border: 'border-[#A63030]/30', text: 'text-[#C45050]' },
+  // Cancelado: vermelho saturado + listra diagonal aplicada inline (ver isCancelled abaixo).
+  // Antes ficava muito sutil (bg-red-500/15 + opacity-70 sobreposto) e o admin não enxergava.
+  CANCELLED:       { bg: 'bg-red-500/30',   border: 'border-red-500/60',   text: 'text-red-300' },
+  CANCELED:        { bg: 'bg-red-500/30',   border: 'border-red-500/60',   text: 'text-red-300' },
   NO_SHOW:         { bg: 'bg-amber-500/15', border: 'border-amber-500/30', text: 'text-amber-400' },
   SCHEDULED:       { bg: 'bg-green-500/15', border: 'border-green-500/35', text: 'text-green-300' }, // fallback — agendado sem plano
 };
@@ -184,10 +186,19 @@ function AppointmentBlock({ appointment, onAppointmentClick, onDragStart, isDrag
   const isFromClient = appointment.source === 'CLIENT';
   const isCancelled = appointment.status === 'CANCELED' || appointment.status === 'CANCELLED';
 
+  // Listra diagonal sobre o card cancelado — torna o status reconhecível sem
+  // depender só da cor (boa para daltônicos e telas pouco contrastadas).
+  const cancelledStripe = isCancelled
+    ? {
+        backgroundImage:
+          'repeating-linear-gradient(45deg, rgba(220,38,38,0.25) 0, rgba(220,38,38,0.25) 6px, transparent 6px, transparent 12px)',
+      }
+    : undefined;
+
   return (
     <div
-      className={`absolute left-1 right-1 ${appointment.status === 'SCHEDULED' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} overflow-hidden rounded-lg border ${colors.border} ${colors.bg} px-2 py-1 backdrop-blur-sm transition-all duration-150 hover:z-20 hover:shadow-lg ${isDragging ? '!opacity-30' : ''} ${isCancelled ? 'opacity-70 z-0' : ''}`}
-      style={{ top: `${top}px`, height: `${Math.max(height, slotHeight)}px` }}
+      className={`absolute left-1 right-1 ${appointment.status === 'SCHEDULED' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} overflow-hidden rounded-lg border ${colors.border} ${colors.bg} px-2 py-1 backdrop-blur-sm transition-all duration-150 hover:z-20 hover:shadow-lg ${isDragging ? '!opacity-30' : ''} ${isCancelled ? 'z-0' : ''}`}
+      style={{ top: `${top}px`, height: `${Math.max(height, slotHeight)}px`, ...cancelledStripe }}
       title={`${appointment.client?.name || appointment.clientName || 'Cliente'} - ${serviceNames} (${time} - ${endTime})${isFromClient ? ' · App' : ' · Painel'}${isSubscription ? ' · Assinatura' : ''}${appointment.status === 'PENDING_PAYMENT' ? ' · Aguardando pagamento' : ''}${isCancelled ? ' · Cancelado' : ''}`}
       onPointerDown={(e) => {
         if (e.button === 0 && appointment.status === 'SCHEDULED') {
@@ -200,8 +211,15 @@ function AppointmentBlock({ appointment, onAppointmentClick, onDragStart, isDrag
       }}
     >
       <div className="flex h-full flex-col overflow-hidden">
-        <div className={`truncate text-xs font-semibold ${colors.text} ${isCancelled ? 'line-through' : ''}`}>
-          {appointment.client?.name || appointment.clientName || 'Cliente'}
+        <div className="flex items-center gap-1.5">
+          <div className={`truncate text-xs font-semibold ${colors.text} ${isCancelled ? 'line-through' : ''}`}>
+            {appointment.client?.name || appointment.clientName || 'Cliente'}
+          </div>
+          {isCancelled && (
+            <span className="shrink-0 rounded bg-red-500/40 px-1 text-[9px] font-bold uppercase tracking-wide text-red-100">
+              Cancelado
+            </span>
+          )}
         </div>
         {height >= 40 && (
           <div className="flex items-center gap-1 overflow-hidden">
