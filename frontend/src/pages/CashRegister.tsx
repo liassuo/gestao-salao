@@ -74,9 +74,9 @@ function ClosedTodaySummary({ cashRegister }: { cashRegister: CashRegisterType }
   return (
     <div className="space-y-5">
       {/* Banner fechado */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-600 to-zinc-700 p-6 text-white">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-600 to-zinc-700 p-4 text-white sm:p-6">
         <div className="absolute right-0 top-0 h-32 w-32 translate-x-8 -translate-y-8 rounded-full bg-white/10" />
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-2.5">
               <CheckCircle2 className="h-5 w-5" />
@@ -84,12 +84,12 @@ function ClosedTodaySummary({ cashRegister }: { cashRegister: CashRegisterType }
             </div>
             <p className="mt-1 text-sm text-zinc-300">O caixa de hoje já foi encerrado</p>
           </div>
-          <div className="text-right">
+          <div className="sm:text-right">
             <p className="text-xs text-zinc-400 uppercase">Receita do dia</p>
             <p className="text-2xl font-bold">{formatCurrency(totalRevenue)}</p>
           </div>
         </div>
-        <div className="mt-4 flex items-center gap-4 text-sm text-zinc-300">
+        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-zinc-300">
           <div className="flex items-center gap-1.5">
             <Clock className="h-3.5 w-3.5" />
             Aberto as {formatTime(cashRegister.openedAt)}
