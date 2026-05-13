@@ -568,7 +568,7 @@ export class ProfessionalsService {
       throw new NotFoundException('Profissional não encontrado');
     }
 
-    const { serviceIds, ...data } = dto;
+    const { serviceIds, email, ...data } = dto;
 
     const updateData: any = {};
     if (data.name !== undefined) updateData.name = data.name;
@@ -585,6 +585,38 @@ export class ProfessionalsService {
       .single();
 
     if (error) throw error;
+
+    // Atualiza email do user vinculado (login do profissional)
+    if (email !== undefined && email !== null && email.trim() !== '') {
+      const normalizedEmail = email.trim();
+
+      const { data: linkedUser } = await this.supabase
+        .from('users')
+        .select('id, email')
+        .eq('professionalId', id)
+        .single();
+
+      if (linkedUser && linkedUser.email !== normalizedEmail) {
+        // Garante que o novo email não esteja em uso por outro usuário
+        const { data: conflict } = await this.supabase
+          .from('users')
+          .select('id')
+          .ilike('email', normalizedEmail.replace(/[\\%_]/g, (c) => `\\${c}`))
+          .neq('id', linkedUser.id)
+          .maybeSingle();
+
+        if (conflict) {
+          throw new ConflictException('Email já está em uso por outro usuário');
+        }
+
+        const { error: userUpdateError } = await this.supabase
+          .from('users')
+          .update({ email: normalizedEmail, updatedAt: new Date().toISOString() })
+          .eq('id', linkedUser.id);
+
+        if (userUpdateError) throw userUpdateError;
+      }
+    }
 
     if (serviceIds) {
       // Remove existing service links

@@ -332,19 +332,18 @@ export function ProfessionalForm({ professional, onSubmit, isLoading, error }: P
                 pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Email inválido' },
               })}
               placeholder="email@exemplo.com"
-              disabled={isEditing}
-              className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] disabled:opacity-60 disabled:cursor-not-allowed ${
+              className={`w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] ${
                 errors.email ? 'border-[#A63030]' : 'border-[var(--border-color)]'
               }`}
             />
             {errors.email && (
               <p className="mt-1 text-sm text-[#A63030]">{errors.email.message}</p>
             )}
-            {!isEditing && (
-              <p className="mt-1 text-xs text-[var(--text-muted)]">
-                O profissional usará este email para fazer login no sistema.
-              </p>
-            )}
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              {isEditing
+                ? 'Alterar este email muda o login do profissional no sistema.'
+                : 'O profissional usará este email para fazer login no sistema.'}
+            </p>
           </div>
         </div>
       </div>
