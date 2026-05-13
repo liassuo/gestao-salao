@@ -113,6 +113,13 @@ export function AppointmentDetailModal({
   const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
   const isScheduled = appointment.status === 'SCHEDULED' || appointment.status === 'PENDING_PAYMENT';
   const canEditOrder = order && order.status === 'PENDING';
+  // Assinatura ativa: prioriza o estado ATUAL do cliente (devolvido pelo
+  // backend em order.hasActiveSubscription) e cai pra flag histórica
+  // do agendamento — assim cliente que assinou depois também aparece marcado.
+  const hasSubscription = !!(order as any)?.hasActiveSubscription || !!appointment.usedSubscriptionCut;
+  // Total a cobrar = total da comanda (que reflete extras adicionados depois),
+  // não o totalPrice congelado do agendamento.
+  const orderTotal = order?.totalAmount ?? appointment.totalPrice;
 
   const handleStartEdit = () => {
     const vals = extractEditValues(appointment.scheduledAt);
@@ -337,7 +344,7 @@ export function AppointmentDetailModal({
           <div className="mb-2 flex items-center justify-between">
             <div className="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">Comanda</div>
             <div className="flex items-center gap-2">
-              {appointment.usedSubscriptionCut && (
+              {hasSubscription && (
                 <span className="rounded-full border border-[#C8923A]/40 bg-[#C8923A]/15 px-2 py-0.5 text-xs font-medium text-[#C8923A]">
                   Assinatura
                 </span>
@@ -375,7 +382,7 @@ export function AppointmentDetailModal({
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    {appointment.usedSubscriptionCut && item.itemType === 'SERVICE' && item.unitPrice === 0 ? (
+                    {item.consumedSubscriptionCut || (hasSubscription && item.itemType === 'SERVICE' && item.unitPrice === 0) ? (
                       <span className="text-xs font-medium text-[#C8923A]">Assinatura</span>
                     ) : (
                       <span className="text-sm text-[var(--text-muted)]">{formatCurrency(item.unitPrice * item.quantity)}</span>
@@ -392,7 +399,7 @@ export function AppointmentDetailModal({
               <div className="flex items-center justify-between border-t border-[var(--border-color)] px-3 pt-2">
                 <span className="text-sm font-semibold text-[var(--text-primary)]">Total</span>
                 <span className="text-sm font-semibold text-[var(--text-primary)]">
-                  {appointment.usedSubscriptionCut && order.totalAmount === 0
+                  {hasSubscription && order.totalAmount === 0
                     ? 'Assinatura'
                     : formatCurrency(order.totalAmount)}
                 </span>
@@ -549,7 +556,10 @@ export function AppointmentDetailModal({
             <div className="flex flex-wrap gap-2 pt-1">
               <button
                 onClick={() => {
-                  if (appointment.totalPrice === 0) {
+                  // Usa o total da COMANDA (não do agendamento) — extras adicionados
+                  // depois precisam de cobrança mesmo que o agendamento original
+                  // estivesse coberto pela assinatura.
+                  if (orderTotal === 0) {
                     handleAction(() => onAttend(appointment.id));
                   } else {
                     setShowPaymentOptions(true);
