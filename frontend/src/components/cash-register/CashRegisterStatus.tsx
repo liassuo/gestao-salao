@@ -82,12 +82,12 @@ export function CashRegisterStatus({ cashRegister, onClose }: CashRegisterStatus
   return (
     <div className="space-y-5">
       {/* Status banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-green-600 to-green-700 p-6 text-white">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-green-600 to-green-700 p-4 text-white sm:p-6">
         <div className="absolute right-0 top-0 h-32 w-32 translate-x-8 -translate-y-8 rounded-full bg-white/10" />
         <div className="absolute right-8 bottom-0 h-20 w-20 translate-y-6 rounded-full bg-white/5" />
 
         <div className="relative">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="flex items-center gap-2.5">
                 <div className="h-2.5 w-2.5 animate-pulse rounded-full bg-white" />
@@ -97,21 +97,21 @@ export function CashRegisterStatus({ cashRegister, onClose }: CashRegisterStatus
             </div>
             <button
               onClick={onClose}
-              className="flex items-center gap-2 rounded-xl bg-white/15 px-4 py-2.5 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/25 active:scale-95"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-white/15 px-4 py-2.5 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/25 active:scale-95 sm:w-auto"
             >
               <Lock className="h-4 w-4" />
               Fechar Caixa
             </button>
           </div>
 
-          <div className="mt-6 flex items-end justify-between">
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-xs text-green-200 uppercase tracking-wide">Receita do dia</p>
-              <p className="mt-1 text-3xl font-bold tracking-tight">
+              <p className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
                 {formatCurrency(totalRevenue)}
               </p>
             </div>
-            <div className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-sm text-green-100">
+            <div className="flex items-center gap-1.5 self-start rounded-lg bg-white/10 px-3 py-1.5 text-sm text-green-100 sm:self-auto">
               <Clock className="h-3.5 w-3.5" />
               <span>Aberto há {elapsed}</span>
               <span className="text-green-300">({formatTime(cashRegister.openedAt)})</span>
