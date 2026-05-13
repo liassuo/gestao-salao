@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useClientAuth } from '../auth';
 import { CLIENT_PATHS } from '../utils/paths';
 import { clientApi } from '../services/api';
-import { formatPhone } from '@/utils/format';
+import { formatPhone, formatDateBrInput, dateBrToIso, dateIsoToBr } from '@/utils/format';
 
 interface ClientProfile {
   id: string;
@@ -74,8 +74,14 @@ function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string;
   );
 }
 
-function EditField({ label, value, onChange, placeholder, type = 'text' }: {
-  label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string;
+function EditField({ label, value, onChange, placeholder, type = 'text', inputMode, maxLength }: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  type?: string;
+  inputMode?: 'text' | 'numeric' | 'decimal' | 'tel' | 'email' | 'url' | 'search' | 'none';
+  maxLength?: number;
 }) {
   return (
     <div className="mb-3">
@@ -85,6 +91,8 @@ function EditField({ label, value, onChange, placeholder, type = 'text' }: {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
+        inputMode={inputMode}
+        maxLength={maxLength}
         className="w-full px-3 py-2.5 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-color)] text-[var(--text-primary)] text-sm focus:outline-none focus:border-[#C8923A] transition-colors"
       />
     </div>
@@ -167,7 +175,7 @@ export function ClientProfile() {
       name: profile?.name || user?.name || '',
       phone: profile?.phone ? maskPhone(profile.phone) : '',
       cpf: profile?.cpf ? maskCpf(profile.cpf) : '',
-      birthDate: profile?.birthDate ? profile.birthDate.slice(0, 10) : '',
+      birthDate: dateIsoToBr(profile?.birthDate),
       address: profile?.address || '',
       addressNumber: profile?.addressNumber || '',
       neighborhood: profile?.neighborhood || '',
@@ -193,7 +201,8 @@ export function ClientProfile() {
         city: form.city.trim(),
         state: form.state.trim(),
       };
-      if (form.birthDate) payload.birthDate = form.birthDate;
+      const birthIso = dateBrToIso(form.birthDate);
+      if (birthIso) payload.birthDate = birthIso;
 
       const res = await clientApi.patch(`/clients/${user.id}`, payload);
       setProfile(res.data);
@@ -287,7 +296,7 @@ export function ClientProfile() {
               <EditField label="Nome *" value={form.name} onChange={(v) => setForm({ ...form, name: v })} placeholder="Seu nome completo" />
               <EditField label="Telefone" value={form.phone} onChange={(v) => setForm({ ...form, phone: maskPhone(v) })} placeholder="(00) 00000-0000" />
               <EditField label="CPF" value={form.cpf} onChange={(v) => setForm({ ...form, cpf: maskCpf(v) })} placeholder="000.000.000-00" />
-              <EditField label="Data de Nascimento" value={form.birthDate} onChange={(v) => setForm({ ...form, birthDate: v })} type="date" />
+              <EditField label="Data de Nascimento" value={form.birthDate} onChange={(v) => setForm({ ...form, birthDate: formatDateBrInput(v) })} placeholder="DD/MM/AAAA" inputMode="numeric" maxLength={10} />
             </div>
 
             {/* Form - Endereço */}

@@ -6,7 +6,7 @@ import type { CredentialResponse } from '@react-oauth/google';
 import { Mail, Lock, ArrowRight, ArrowLeft, User, Phone, CalendarDays } from 'lucide-react';
 import { useClientAuth } from '../auth';
 import { clientAuthApi, storage } from '../services/api';
-import { formatPhoneInput } from '@/utils/format';
+import { formatPhoneInput, formatDateBrInput, dateBrToIso } from '@/utils/format';
 import { GOOGLE_CLIENT_ID } from '@/app/providers';
 import type { CheckEmailResponse } from '../services/api';
 import { BrandWordmark } from '@/components/ui';
@@ -109,8 +109,9 @@ export function ClientLogin() {
       return;
     }
 
-    if (!birthDate) {
-      setError('Informe sua data de nascimento');
+    const birthDateIso = dateBrToIso(birthDate);
+    if (!birthDateIso) {
+      setError('Informe sua data de nascimento (DD/MM/AAAA)');
       return;
     }
 
@@ -129,7 +130,7 @@ export function ClientLogin() {
     setError(null);
 
     try {
-      await register(name.trim(), email.trim(), password, phone.trim(), birthDate || undefined);
+      await register(name.trim(), email.trim(), password, phone.trim(), birthDateIso);
       navigate(from, { replace: true });
     } catch (err: any) {
       const msg = err.response?.data?.message || 'Erro ao criar conta. Tente novamente.';
@@ -419,7 +420,17 @@ export function ClientLogin() {
                   <div className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#8B7D6B]">
                     <CalendarDays className="h-5 w-5" />
                   </div>
-                  <input type="date" id="birthDate" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} disabled={isSubmitting} className={inputClass} />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    id="birthDate"
+                    value={birthDate}
+                    onChange={(e) => setBirthDate(formatDateBrInput(e.target.value))}
+                    placeholder="DD/MM/AAAA"
+                    maxLength={10}
+                    disabled={isSubmitting}
+                    className={inputClass}
+                  />
                 </div>
               </div>
 

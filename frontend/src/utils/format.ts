@@ -95,6 +95,48 @@ export function formatPhoneInput(value: string): string {
 }
 
 /**
+ * Aplica máscara DD/MM/AAAA durante digitação no input.
+ * Aceita só dígitos, descarta o resto e insere as barras conforme o usuário digita.
+ */
+export function formatDateBrInput(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
+
+/**
+ * Converte "DD/MM/AAAA" digitado pelo usuário para "YYYY-MM-DD" (formato esperado
+ * pelo backend). Retorna string vazia se incompleto ou inválido.
+ */
+export function dateBrToIso(value: string): string {
+  const digits = value.replace(/\D/g, '');
+  if (digits.length !== 8) return '';
+  const day = parseInt(digits.slice(0, 2), 10);
+  const month = parseInt(digits.slice(2, 4), 10);
+  const year = parseInt(digits.slice(4, 8), 10);
+  if (
+    day < 1 || day > 31 ||
+    month < 1 || month > 12 ||
+    year < 1900 || year > 2100
+  ) {
+    return '';
+  }
+  return `${digits.slice(4, 8)}-${digits.slice(2, 4)}-${digits.slice(0, 2)}`;
+}
+
+/**
+ * Converte "YYYY-MM-DD" (ou ISO completo) vindo do backend para "DD/MM/AAAA"
+ * para exibir/editar no input. Retorna string vazia se inválido.
+ */
+export function dateIsoToBr(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const match = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return '';
+  return `${match[3]}/${match[2]}/${match[1]}`;
+}
+
+/**
  * Converte valor em reais (input do usuário) para centavos
  * @param reais - Valor em reais (ex: 65.00)
  */

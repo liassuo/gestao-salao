@@ -1,6 +1,6 @@
 import { useForm } from 'react-hook-form';
 import { AlertCircle, Loader2 } from 'lucide-react';
-import { formatPhoneInput } from '@/utils/format';
+import { formatPhoneInput, formatDateBrInput, dateBrToIso, dateIsoToBr } from '@/utils/format';
 import type { Client, CreateClientPayload } from '@/types';
 
 const UF_OPTIONS = [
@@ -57,7 +57,7 @@ export function ClientForm({ client, onSubmit, isLoading, error }: ClientFormPro
       phone: client?.phone ? formatPhoneInput(client.phone) : '',
       email: client?.email || '',
       cpf: client?.cpf ? formatCpfInput(client.cpf) : '',
-      birthDate: client?.birthDate ? client.birthDate.slice(0, 10) : '',
+      birthDate: dateIsoToBr(client?.birthDate),
       address: client?.address || '',
       addressNumber: client?.addressNumber || '',
       neighborhood: client?.neighborhood || '',
@@ -73,7 +73,7 @@ export function ClientForm({ client, onSubmit, isLoading, error }: ClientFormPro
       phone: data.phone.replace(/\D/g, ''),
       email: data.email || undefined,
       cpf: data.cpf.replace(/\D/g, '') || undefined,
-      birthDate: data.birthDate || undefined,
+      birthDate: dateBrToIso(data.birthDate) || undefined,
       address: data.address || undefined,
       addressNumber: data.addressNumber || undefined,
       neighborhood: data.neighborhood || undefined,
@@ -184,8 +184,13 @@ export function ClientForm({ client, onSubmit, isLoading, error }: ClientFormPro
             Data de Nascimento
           </label>
           <input
-            type="date"
-            {...register('birthDate')}
+            type="text"
+            inputMode="numeric"
+            placeholder="DD/MM/AAAA"
+            maxLength={10}
+            {...register('birthDate', {
+              onChange: (e) => setValue('birthDate', formatDateBrInput(e.target.value)),
+            })}
             className={inputClass(false)}
           />
         </div>
