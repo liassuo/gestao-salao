@@ -368,6 +368,7 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
   const [detailModal, setDetailModal] = useState<{
     appointment: CalendarAppointment;
     professionalName: string;
+    professionalId: string;
   } | null>(null);
 
   const { data: professionals, isLoading, isError, error } = useCalendarData(selectedDate);
@@ -455,10 +456,10 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
     }
   };
 
-  const handleAppointmentClick = (appointment: CalendarAppointment, professionalName: string) => {
+  const handleAppointmentClick = (appointment: CalendarAppointment, professionalName: string, professionalId: string) => {
     // Skip click if it follows a drag
     if (draggingId) return;
-    setDetailModal({ appointment, professionalName });
+    setDetailModal({ appointment, professionalName, professionalId });
   };
 
   const handleDetailAttend = async (id: string, paymentMethod?: string) => {
@@ -501,11 +502,11 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
         setDetailModal({
           ...detailModal,
           professionalName: newProfessionalName,
+          professionalId: data.professionalId ?? detailModal.professionalId,
           appointment: {
             ...detailModal.appointment,
             ...(data.scheduledAt && { scheduledAt: data.scheduledAt }),
             ...(data.notes !== undefined && { notes: data.notes || null }),
-            ...(data.professionalId && { professionalId: data.professionalId }),
             ...(data.totalDuration !== undefined && { totalDuration: data.totalDuration }),
           },
         });
@@ -1066,6 +1067,7 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
         isOpen={!!detailModal}
         appointment={detailModal?.appointment ?? null}
         professionalName={detailModal?.professionalName ?? ''}
+        professionalId={detailModal?.professionalId ?? ''}
         professionals={professionalsData}
         onClose={() => setDetailModal(null)}
         onAttend={handleDetailAttend}
@@ -1114,7 +1116,7 @@ interface ProfessionalColumnProps {
   onDeleteBlock: (id: string) => void;
   isDeletingBlock: boolean;
   onSlotClick: (professionalId: string, time: string) => void;
-  onAppointmentClick: (appointment: CalendarAppointment, professionalName: string) => void;
+  onAppointmentClick: (appointment: CalendarAppointment, professionalName: string, professionalId: string) => void;
   onAppointmentDragStart?: (e: React.PointerEvent<HTMLDivElement>, appointment: CalendarAppointment, professionalId: string) => void;
   draggingAppointmentId?: string | null;
   dragGhostTop?: number;
@@ -1214,7 +1216,7 @@ function ProfessionalColumn({
           <AppointmentBlock
             key={apt.id}
             appointment={apt}
-            onAppointmentClick={(a) => onAppointmentClick(a, professional.name)}
+            onAppointmentClick={(a) => onAppointmentClick(a, professional.name, professional.id)}
             onDragStart={onAppointmentDragStart ? (e, a) => onAppointmentDragStart(e, a, professional.id) : undefined}
             isDragging={draggingAppointmentId === apt.id}
             startHour={startHour}

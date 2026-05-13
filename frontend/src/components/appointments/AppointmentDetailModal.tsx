@@ -59,6 +59,7 @@ function formatDuration(minutes: number): string {
 interface AppointmentDetailModalProps {
   appointment: CalendarAppointment | null;
   professionalName: string;
+  professionalId: string;
   /** Lista usada para trocar o profissional na edição. O profissional atual sempre entra mesmo que esteja inativo. */
   professionals?: CalendarProfessional[];
   isOpen: boolean;
@@ -72,6 +73,7 @@ interface AppointmentDetailModalProps {
 export function AppointmentDetailModal({
   appointment,
   professionalName,
+  professionalId,
   professionals,
   isOpen,
   onClose,
@@ -116,7 +118,7 @@ export function AppointmentDetailModal({
     const vals = extractEditValues(appointment.scheduledAt);
     setEditDate(vals.date);
     setEditTime(vals.time);
-    setEditProfessionalId(appointment.professionalId || '');
+    setEditProfessionalId(professionalId || '');
     setEditNotes(appointment.notes || '');
     setEditDuration(appointment.totalDuration || 0);
     setIsEditing(true);
@@ -128,7 +130,7 @@ export function AppointmentDetailModal({
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const originalProfId = appointment.professionalId || '';
+      const originalProfId = professionalId || '';
       const profChanged = editProfessionalId && editProfessionalId !== originalProfId;
       const durationChanged = editDuration > 0 && editDuration !== appointment.totalDuration;
       await onUpdate(appointment.id, {
