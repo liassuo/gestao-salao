@@ -134,15 +134,15 @@ function validateDropTarget(
 }
 
 const statusColors: Record<string, { bg: string; border: string; text: string; sub: string }> = {
-  // variantes de SCHEDULED (agendado)
-  SUBSCRIPTION:    { bg: 'bg-[#C8923A]/40 dark:bg-[#C8923A]/25',   border: 'border-[#C8923A]/60',     text: 'text-[#5a4112] dark:text-[#E8C77F]', sub: 'text-[#7a5a1c] dark:text-[#C8923A]' },
-  CASH_PENDING:    { bg: 'bg-green-500/35 dark:bg-green-500/20',   border: 'border-green-600/50',     text: 'text-green-950 dark:text-green-200',  sub: 'text-green-800 dark:text-green-300' },
-  PAID:            { bg: 'bg-emerald-500/45 dark:bg-emerald-500/25', border: 'border-emerald-600/60', text: 'text-emerald-950 dark:text-emerald-100', sub: 'text-emerald-800 dark:text-emerald-300' },
-  // status de agendamento
-  PENDING_PAYMENT: { bg: 'bg-blue-500/30 dark:bg-blue-500/20',     border: 'border-blue-500/50',      text: 'text-blue-950 dark:text-blue-200',    sub: 'text-blue-800 dark:text-blue-300' },
-  ATTENDED:        { bg: 'bg-gray-500/35 dark:bg-gray-500/20',     border: 'border-gray-500/50',      text: 'text-gray-900 dark:text-gray-200',    sub: 'text-gray-700 dark:text-gray-400' },
-  NO_SHOW:         { bg: 'bg-amber-500/35 dark:bg-amber-500/20',   border: 'border-amber-500/50',     text: 'text-amber-950 dark:text-amber-200',  sub: 'text-amber-800 dark:text-amber-300' },
-  SCHEDULED:       { bg: 'bg-green-500/35 dark:bg-green-500/20',   border: 'border-green-600/50',     text: 'text-green-950 dark:text-green-200',  sub: 'text-green-800 dark:text-green-300' },
+  // Fundos SÓLIDOS (sem transparência) — pastéis claros para legibilidade no calendário claro,
+  // e tons mais escuros saturados no tema escuro.
+  SUBSCRIPTION:    { bg: 'bg-[#F4D785] dark:bg-[#7a5a1c]',   border: 'border-[#C8923A]',          text: 'text-[#3a2a0a] dark:text-[#F4D785]',     sub: 'text-[#5a4112] dark:text-[#E8C77F]' },
+  CASH_PENDING:    { bg: 'bg-[#A8E6B5] dark:bg-[#1d5a31]',   border: 'border-green-600',          text: 'text-[#0a3a14] dark:text-green-100',     sub: 'text-[#1f5a2e] dark:text-green-200' },
+  PAID:            { bg: 'bg-[#7DD89B] dark:bg-[#0f5a2a]',   border: 'border-emerald-600',        text: 'text-[#053b1e] dark:text-emerald-50',    sub: 'text-[#0d4a25] dark:text-emerald-200' },
+  PENDING_PAYMENT: { bg: 'bg-[#A8C8F5] dark:bg-[#1e3a72]',   border: 'border-blue-600',           text: 'text-[#0a2a5a] dark:text-blue-100',      sub: 'text-[#1c3d6e] dark:text-blue-200' },
+  ATTENDED:        { bg: 'bg-[#D4D4D8] dark:bg-[#3f3f46]',   border: 'border-gray-500',           text: 'text-[#1a1a1a] dark:text-gray-100',      sub: 'text-[#404040] dark:text-gray-300' },
+  NO_SHOW:         { bg: 'bg-[#F5C77A] dark:bg-[#7a5217]',   border: 'border-amber-600',          text: 'text-[#3a2410] dark:text-amber-100',     sub: 'text-[#5c3a1a] dark:text-amber-200' },
+  SCHEDULED:       { bg: 'bg-[#A8E6B5] dark:bg-[#1d5a31]',   border: 'border-green-600',          text: 'text-[#0a3a14] dark:text-green-100',     sub: 'text-[#1f5a2e] dark:text-green-200' },
 };
 
 function generateTimeSlots(startHour: number, endHour: number): string[] {
@@ -162,9 +162,10 @@ interface AppointmentBlockProps {
   isDragging?: boolean;
   startHour: number;
   slotHeight: number;
+  conflictReason?: string | null;
 }
 
-function AppointmentBlock({ appointment, onAppointmentClick, onDragStart, isDragging, startHour, slotHeight }: AppointmentBlockProps) {
+function AppointmentBlock({ appointment, onAppointmentClick, onDragStart, isDragging, startHour, slotHeight, conflictReason }: AppointmentBlockProps) {
   const time = extractTime(appointment.scheduledAt);
   const top = getTopPosition(time, startHour, slotHeight);
   const height = getBlockHeight(appointment.totalDuration, slotHeight);
@@ -185,9 +186,9 @@ function AppointmentBlock({ appointment, onAppointmentClick, onDragStart, isDrag
   const isDraggable = appointment.status === 'SCHEDULED';
   return (
     <div
-      className={`absolute left-1 right-1 ${isDraggable ? 'cursor-grab touch-none select-none active:cursor-grabbing' : 'cursor-pointer'} overflow-hidden rounded-lg border ${colors.border} ${colors.bg} px-2 py-1 transition-all duration-150 hover:z-20 hover:shadow-lg ${isDragging ? '!opacity-30' : ''}`}
-      style={{ top: `${top}px`, height: `${Math.max(height, slotHeight)}px`, touchAction: isDraggable ? 'none' : undefined }}
-      title={`${appointment.client?.name || appointment.clientName || 'Cliente'} - ${serviceNames} (${time} - ${endTime})${isFromClient ? ' · App' : ' · Painel'}${isSubscription ? ' · Assinatura' : ''}${appointment.status === 'PENDING_PAYMENT' ? ' · Aguardando pagamento' : ''}`}
+      className={`absolute left-1 right-1 z-10 ${isDraggable ? 'cursor-grab touch-none select-none active:cursor-grabbing' : 'cursor-pointer'} overflow-hidden rounded-lg border ${colors.border} ${colors.bg} px-2 py-1 transition-all duration-150 hover:z-20 hover:shadow-lg ${isDragging ? '!opacity-30' : ''} ${conflictReason ? 'ring-2 ring-[#A63030] ring-offset-1 ring-offset-[var(--card-bg)]' : ''}`}
+      style={{ top: `${top}px`, height: `${Math.max(height - 1, slotHeight - 1)}px`, touchAction: isDraggable ? 'none' : undefined }}
+      title={`${appointment.client?.name || appointment.clientName || 'Cliente'} - ${serviceNames} (${time} - ${endTime})${isFromClient ? ' · App' : ' · Painel'}${isSubscription ? ' · Assinatura' : ''}${appointment.status === 'PENDING_PAYMENT' ? ' · Aguardando pagamento' : ''}${conflictReason ? ` · ⚠ ${conflictReason}` : ''}`}
       onPointerDown={(e) => {
         if (e.button === 0 && appointment.status === 'SCHEDULED') {
           onDragStart?.(e, appointment);
@@ -199,8 +200,11 @@ function AppointmentBlock({ appointment, onAppointmentClick, onDragStart, isDrag
       }}
     >
       <div className="flex h-full flex-col overflow-hidden">
-        <div className={`truncate text-xs font-semibold ${colors.text}`}>
-          {appointment.client?.name || appointment.clientName || 'Cliente'}
+        <div className={`flex items-center gap-1 truncate text-xs font-semibold ${colors.text}`}>
+          {conflictReason && (
+            <AlertCircle className="h-3 w-3 shrink-0 text-[#A63030]" />
+          )}
+          <span className="truncate">{appointment.client?.name || appointment.clientName || 'Cliente'}</span>
         </div>
         {height >= 40 && (
           <div className="flex items-center gap-1 overflow-hidden">
@@ -270,7 +274,7 @@ function TimeBlockItem({ block, onDelete, isDeleting, startHour, slotHeight }: T
       className={containerClass}
       style={{
         top: `${top}px`,
-        height: `${Math.max(height, slotHeight)}px`,
+        height: `${Math.max(height - 1, slotHeight - 1)}px`,
         backgroundImage: stripe,
       }}
       title={titleAttr}
@@ -946,27 +950,27 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-[var(--card-border)] bg-[var(--bg-primary)] px-3 py-2.5 sm:gap-4 sm:px-4">
             <span className="text-xs text-[var(--text-muted)]">Legenda:</span>
             <div className="flex items-center gap-1.5">
-              <div className="h-3 w-3 rounded border border-green-600/50 bg-green-500/35 dark:bg-green-500/20" />
+              <div className="h-3 w-3 rounded border border-green-600 bg-[#A8E6B5] dark:bg-[#1d5a31]" />
               <span className="text-xs text-[var(--text-muted)]">Agendado</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="h-3 w-3 rounded border border-[#C8923A]/60 bg-[#C8923A]/40 dark:bg-[#C8923A]/25" />
+              <div className="h-3 w-3 rounded border border-[#C8923A] bg-[#F4D785] dark:bg-[#7a5a1c]" />
               <span className="text-xs text-[var(--text-muted)]">Plano</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="h-3 w-3 rounded border border-blue-500/50 bg-blue-500/30 dark:bg-blue-500/20" />
+              <div className="h-3 w-3 rounded border border-blue-600 bg-[#A8C8F5] dark:bg-[#1e3a72]" />
               <span className="text-xs text-[var(--text-muted)]">Pagamento pendente</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="h-3 w-3 rounded border border-emerald-600/60 bg-emerald-500/45 dark:bg-emerald-500/25" />
+              <div className="h-3 w-3 rounded border border-emerald-600 bg-[#7DD89B] dark:bg-[#0f5a2a]" />
               <span className="text-xs text-[var(--text-muted)]">Pago</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="h-3 w-3 rounded border border-gray-500/50 bg-gray-500/35 dark:bg-gray-500/20" />
+              <div className="h-3 w-3 rounded border border-gray-500 bg-[#D4D4D8] dark:bg-[#3f3f46]" />
               <span className="text-xs text-[var(--text-muted)]">Finalizado</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="h-3 w-3 rounded border border-amber-500/50 bg-amber-500/35 dark:bg-amber-500/20" />
+              <div className="h-3 w-3 rounded border border-amber-600 bg-[#F5C77A] dark:bg-[#7a5217]" />
               <span className="text-xs text-[var(--text-muted)]">Faltou</span>
             </div>
             <div className="flex items-center gap-1.5">
@@ -1172,20 +1176,9 @@ function ProfessionalColumn({
         slotHeight={slotHeight}
       />
 
-      {/* Appointments */}
-      {(professional.appointments || []).map((apt) => (
-        <AppointmentBlock
-          key={apt.id}
-          appointment={apt}
-          onAppointmentClick={(a) => onAppointmentClick(a, professional.name)}
-          onDragStart={onAppointmentDragStart ? (e, a) => onAppointmentDragStart(e, a, professional.id) : undefined}
-          isDragging={draggingAppointmentId === apt.id}
-          startHour={startHour}
-          slotHeight={slotHeight}
-        />
-      ))}
-
-      {/* Time blocks */}
+      {/* Time blocks (renderizados antes dos agendamentos para que qualquer
+          agendamento conflitante fique visível por cima — assim conflitos com
+          almoço/bloqueio não ficam escondidos atrás do card de bloqueio) */}
       {(professional.timeBlocks || []).map((block) => (
         <TimeBlockItem
           key={block.id}
@@ -1196,6 +1189,40 @@ function ProfessionalColumn({
           slotHeight={slotHeight}
         />
       ))}
+
+      {/* Appointments */}
+      {(professional.appointments || []).map((apt) => {
+        // Detecta conflito com bloqueios/intervalos do mesmo profissional. Acontece
+        // quando o intervalo (almoço) é configurado depois do agendamento ter sido
+        // criado — a validação do backend só roda na criação/edição.
+        let conflictReason: string | null = null;
+        if (apt.status === 'SCHEDULED' || apt.status === 'PENDING_PAYMENT') {
+          const aptStart = timeToMinutes(extractTime(apt.scheduledAt));
+          const aptEnd = aptStart + (apt.totalDuration || 30);
+          for (const block of professional.timeBlocks || []) {
+            const blockStart = timeToMinutes(extractTime(block.startTime));
+            const blockEnd = timeToMinutes(extractTime(block.endTime));
+            if (aptStart < blockEnd && aptEnd > blockStart) {
+              conflictReason = block.recurring
+                ? `Conflita com intervalo (${block.reason || 'Intervalo'})`
+                : `Conflita com bloqueio (${block.reason || 'Bloqueado'})`;
+              break;
+            }
+          }
+        }
+        return (
+          <AppointmentBlock
+            key={apt.id}
+            appointment={apt}
+            onAppointmentClick={(a) => onAppointmentClick(a, professional.name)}
+            onDragStart={onAppointmentDragStart ? (e, a) => onAppointmentDragStart(e, a, professional.id) : undefined}
+            isDragging={draggingAppointmentId === apt.id}
+            startHour={startHour}
+            slotHeight={slotHeight}
+            conflictReason={conflictReason}
+          />
+        );
+      })}
 
       {/* Current time line */}
       <CurrentTimeLine isToday={isToday} startHour={startHour} endHour={endHour} slotHeight={slotHeight} />
