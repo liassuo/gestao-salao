@@ -61,7 +61,7 @@ export const appointmentsService = {
     await api.delete(`/appointments/block/${id}`);
   },
 
-  async update(id: string, data: { scheduledAt?: string; notes?: string; professionalId?: string }): Promise<Appointment> {
+  async update(id: string, data: { scheduledAt?: string; notes?: string; professionalId?: string; totalDuration?: number }): Promise<Appointment> {
     const response = await api.patch<Appointment>(`/appointments/${id}`, data);
     return response.data;
   },

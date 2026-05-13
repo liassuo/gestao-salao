@@ -1092,17 +1092,19 @@ export class AppointmentsService {
       throw new BadRequestException('Só é possível editar agendamentos com status SCHEDULED ou PENDING_PAYMENT');
     }
 
-    // Se mudou horário ou profissional, validar conflitos
+    // Se mudou horário, profissional ou duração, validar conflitos
     const newProfessionalId = dto.professionalId || appointment.professionalId;
     const newScheduledAt = dto.scheduledAt ? String(dto.scheduledAt) : appointment.scheduledAt;
+    const newDuration = dto.totalDuration ?? appointment.totalDuration;
     const scheduledChanged = dto.scheduledAt && String(dto.scheduledAt) !== appointment.scheduledAt;
     const professionalChanged = dto.professionalId && dto.professionalId !== appointment.professionalId;
+    const durationChanged = dto.totalDuration !== undefined && dto.totalDuration !== appointment.totalDuration;
 
-    if (scheduledChanged || professionalChanged) {
+    if (scheduledChanged || professionalChanged || durationChanged) {
       await this.validateScheduleConflicts(
         newProfessionalId,
         newScheduledAt,
-        appointment.totalDuration,
+        newDuration,
         id, // excluir o próprio agendamento da checagem de conflito
       );
     }
@@ -1111,6 +1113,7 @@ export class AppointmentsService {
     if (dto.scheduledAt) updateData.scheduledAt = String(dto.scheduledAt);
     if (dto.notes !== undefined) updateData.notes = dto.notes;
     if (dto.professionalId) updateData.professionalId = dto.professionalId;
+    if (dto.totalDuration !== undefined) updateData.totalDuration = dto.totalDuration;
 
     const { data: updated, error: updateError } = await this.supabase
       .from('appointments')

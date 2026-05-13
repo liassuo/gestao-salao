@@ -1,4 +1,4 @@
-import { IsDateString, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsDateString, IsInt, IsOptional, IsString, IsUUID, Min } from 'class-validator';
 
 export class UpdateAppointmentDto {
   @IsOptional()
@@ -12,4 +12,9 @@ export class UpdateAppointmentDto {
   @IsOptional()
   @IsUUID()
   professionalId?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(5)
+  totalDuration?: number;
 }

@@ -66,7 +66,7 @@ interface AppointmentDetailModalProps {
   onAttend: (id: string, paymentMethod?: string) => Promise<void>;
   onCancel: (id: string) => Promise<void>;
   onNoShow: (id: string) => Promise<void>;
-  onUpdate: (id: string, data: { scheduledAt?: string; notes?: string; professionalId?: string }) => Promise<void>;
+  onUpdate: (id: string, data: { scheduledAt?: string; notes?: string; professionalId?: string; totalDuration?: number }) => Promise<void>;
 }
 
 export function AppointmentDetailModal({
@@ -85,6 +85,7 @@ export function AppointmentDetailModal({
   const [editTime, setEditTime] = useState('');
   const [editProfessionalId, setEditProfessionalId] = useState('');
   const [editNotes, setEditNotes] = useState('');
+  const [editDuration, setEditDuration] = useState<number>(0);
   const [isSaving, setIsSaving] = useState(false);
   const [isConfirmingCancel, setIsConfirmingCancel] = useState(false);
   const [isActing, setIsActing] = useState(false);
@@ -117,6 +118,7 @@ export function AppointmentDetailModal({
     setEditTime(vals.time);
     setEditProfessionalId(appointment.professionalId || '');
     setEditNotes(appointment.notes || '');
+    setEditDuration(appointment.totalDuration || 0);
     setIsEditing(true);
     setIsConfirmingCancel(false);
   };
@@ -128,11 +130,13 @@ export function AppointmentDetailModal({
     try {
       const originalProfId = appointment.professionalId || '';
       const profChanged = editProfessionalId && editProfessionalId !== originalProfId;
+      const durationChanged = editDuration > 0 && editDuration !== appointment.totalDuration;
       await onUpdate(appointment.id, {
         scheduledAt: `${editDate}T${editTime}:00`,
         notes: editNotes || undefined,
         // Só envia professionalId se mudou — evita validar conflito sem necessidade no backend.
         ...(profChanged ? { professionalId: editProfessionalId } : {}),
+        ...(durationChanged ? { totalDuration: editDuration } : {}),
       });
       setIsEditing(false);
     } finally {
@@ -272,9 +276,29 @@ export function AppointmentDetailModal({
         <div className="rounded-xl border border-[var(--card-border)] bg-[var(--bg-primary)] p-3">
           <div className="mb-1 text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">Data e Horário</div>
           {isEditing ? (
-            <div className="flex gap-2">
-              <input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} className={inputClass} />
-              <input type="time" value={editTime} onChange={(e) => setEditTime(e.target.value)} className="w-32 rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#C8923A]" />
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} className={inputClass} />
+                <input type="time" value={editTime} onChange={(e) => setEditTime(e.target.value)} className="w-32 rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#C8923A]" />
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-[var(--text-muted)]">Duração</label>
+                <input
+                  type="number"
+                  min={5}
+                  step={5}
+                  value={editDuration || ''}
+                  onChange={(e) => setEditDuration(parseInt(e.target.value, 10) || 0)}
+                  className="w-24 rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#C8923A]"
+                />
+                <span className="text-xs text-[var(--text-muted)]">minutos</span>
+                {editDuration > 0 && editTime && (() => {
+                  const startMin = parseInt(editTime.split(':')[0], 10) * 60 + parseInt(editTime.split(':')[1], 10);
+                  const endMin = startMin + editDuration;
+                  const endStr = `${String(Math.floor(endMin / 60)).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}`;
+                  return <span className="text-xs text-[var(--text-muted)]">— termina às {endStr}</span>;
+                })()}
+              </div>
             </div>
           ) : (
             <div className="flex items-center gap-3">
