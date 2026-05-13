@@ -26,7 +26,7 @@ export function CashRegisterSummary({
 }: CashRegisterSummaryProps) {
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
         {[...Array(5)].map((_, i) => (
           <div key={i} className="animate-pulse rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-4">
             <div className="h-4 w-24 rounded bg-[var(--hover-bg)]" />
