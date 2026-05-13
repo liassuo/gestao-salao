@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Clock, Phone, Check, UserX, Edit2, Save, XCircle, Loader2, Plus, Trash2, Package, Scissors, Banknote, QrCode, CreditCard } from 'lucide-react';
 import { Modal } from '@/components/ui';
 import { useOrderByAppointment, useAddOrderItem, useRemoveOrderItem, useProducts, useServices } from '@/hooks';
-import type { CalendarAppointment } from '@/types';
+import type { CalendarAppointment, CalendarProfessional } from '@/types';
 
 const statusConfig: Record<string, { label: string; classes: string }> = {
   SCHEDULED: { label: 'Agendado', classes: 'text-[#D4A85C] bg-[#C8923A]/20 border border-[#C8923A]/40' },
@@ -59,17 +59,20 @@ function formatDuration(minutes: number): string {
 interface AppointmentDetailModalProps {
   appointment: CalendarAppointment | null;
   professionalName: string;
+  /** Lista usada para trocar o profissional na edição. O profissional atual sempre entra mesmo que esteja inativo. */
+  professionals?: CalendarProfessional[];
   isOpen: boolean;
   onClose: () => void;
   onAttend: (id: string, paymentMethod?: string) => Promise<void>;
   onCancel: (id: string) => Promise<void>;
   onNoShow: (id: string) => Promise<void>;
-  onUpdate: (id: string, data: { scheduledAt?: string; notes?: string }) => Promise<void>;
+  onUpdate: (id: string, data: { scheduledAt?: string; notes?: string; professionalId?: string }) => Promise<void>;
 }
 
 export function AppointmentDetailModal({
   appointment,
   professionalName,
+  professionals,
   isOpen,
   onClose,
   onAttend,
@@ -80,6 +83,7 @@ export function AppointmentDetailModal({
   const [isEditing, setIsEditing] = useState(false);
   const [editDate, setEditDate] = useState('');
   const [editTime, setEditTime] = useState('');
+  const [editProfessionalId, setEditProfessionalId] = useState('');
   const [editNotes, setEditNotes] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isConfirmingCancel, setIsConfirmingCancel] = useState(false);
@@ -111,6 +115,7 @@ export function AppointmentDetailModal({
     const vals = extractEditValues(appointment.scheduledAt);
     setEditDate(vals.date);
     setEditTime(vals.time);
+    setEditProfessionalId(appointment.professionalId || '');
     setEditNotes(appointment.notes || '');
     setIsEditing(true);
     setIsConfirmingCancel(false);
@@ -121,9 +126,13 @@ export function AppointmentDetailModal({
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      const originalProfId = appointment.professionalId || '';
+      const profChanged = editProfessionalId && editProfessionalId !== originalProfId;
       await onUpdate(appointment.id, {
         scheduledAt: `${editDate}T${editTime}:00`,
         notes: editNotes || undefined,
+        // Só envia professionalId se mudou — evita validar conflito sem necessidade no backend.
+        ...(profChanged ? { professionalId: editProfessionalId } : {}),
       });
       setIsEditing(false);
     } finally {
@@ -239,7 +248,23 @@ export function AppointmentDetailModal({
           {/* Professional */}
           <div className="rounded-xl border border-[var(--card-border)] bg-[var(--bg-primary)] p-3">
             <div className="mb-1 text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">Profissional</div>
-            <div className="text-sm font-semibold text-[var(--text-primary)]">{professionalName}</div>
+            {isEditing && professionals && professionals.length > 0 ? (
+              <select
+                value={editProfessionalId}
+                onChange={(e) => setEditProfessionalId(e.target.value)}
+                className={inputClass}
+              >
+                {/* Garante a opção atual mesmo se o profissional ficou inativo (não vem mais na lista do calendário). */}
+                {!professionals.some((p) => p.id === editProfessionalId) && editProfessionalId && (
+                  <option value={editProfessionalId}>{professionalName}</option>
+                )}
+                {professionals.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            ) : (
+              <div className="text-sm font-semibold text-[var(--text-primary)]">{professionalName}</div>
+            )}
           </div>
         </div>
 

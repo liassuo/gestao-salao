@@ -108,7 +108,7 @@ export function ProfessionalsTable({
                       professional.services.slice(0, 3).map((service) => (
                         <span
                           key={service.id}
-                          className="inline-block rounded bg-[#C8923A]/20 px-2 py-0.5 text-xs text-[#D4A85C]"
+                          className="inline-block rounded bg-[#C8923A] px-2 py-0.5 text-xs font-medium text-[#1c1006]"
                         >
                           {service.name}
                         </span>
@@ -117,7 +117,7 @@ export function ProfessionalsTable({
                       <span className="text-sm text-[var(--text-muted)]">Nenhum serviço</span>
                     )}
                     {professional.services && professional.services.length > 3 && (
-                      <span className="inline-block rounded bg-zinc-500/20 px-2 py-0.5 text-xs text-zinc-700 dark:text-zinc-300">
+                      <span className="inline-block rounded bg-[#5a4a2a] px-2 py-0.5 text-xs font-medium text-[#f5e6c8]">
                         +{professional.services.length - 3}
                       </span>
                     )}

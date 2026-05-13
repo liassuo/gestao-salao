@@ -132,17 +132,16 @@ function validateDropTarget(
   return null;
 }
 
-const statusColors: Record<string, { bg: string; border: string; text: string }> = {
+const statusColors: Record<string, { bg: string; border: string; text: string; sub: string }> = {
   // variantes de SCHEDULED (agendado)
-  SUBSCRIPTION: { bg: 'bg-[#C8923A]/20', border: 'border-[#C8923A]/40', text: 'text-[#D4A85C]' }, // âmbar — assinatura/plano
-  CASH_PENDING: { bg: 'bg-green-500/15', border: 'border-green-500/35', text: 'text-green-300' }, // verde — cliente marcou sem plano
-  PAID:         { bg: 'bg-green-500/25',  border: 'border-green-500/50',  text: 'text-green-300' }, // verde forte — pago (PIX/cartão)
+  SUBSCRIPTION:    { bg: 'bg-[#C8923A]/40 dark:bg-[#C8923A]/25',   border: 'border-[#C8923A]/60',     text: 'text-[#5a4112] dark:text-[#E8C77F]', sub: 'text-[#7a5a1c] dark:text-[#C8923A]' },
+  CASH_PENDING:    { bg: 'bg-green-500/35 dark:bg-green-500/20',   border: 'border-green-600/50',     text: 'text-green-950 dark:text-green-200',  sub: 'text-green-800 dark:text-green-300' },
+  PAID:            { bg: 'bg-emerald-500/45 dark:bg-emerald-500/25', border: 'border-emerald-600/60', text: 'text-emerald-950 dark:text-emerald-100', sub: 'text-emerald-800 dark:text-emerald-300' },
   // status de agendamento
-  PENDING_PAYMENT: { bg: 'bg-blue-500/15', border: 'border-blue-500/30',  text: 'text-blue-400'  }, // azul — aguardando PIX/cartão
-  // Atendido: cinza neutro que aparece nos dois temas (claro precisa de texto mais escuro).
-  ATTENDED:        { bg: 'bg-gray-500/20', border: 'border-gray-500/40', text: 'text-gray-700 dark:text-gray-300' },
-  NO_SHOW:         { bg: 'bg-amber-500/15', border: 'border-amber-500/30', text: 'text-amber-400' },
-  SCHEDULED:       { bg: 'bg-green-500/15', border: 'border-green-500/35', text: 'text-green-300' }, // fallback — agendado sem plano
+  PENDING_PAYMENT: { bg: 'bg-blue-500/30 dark:bg-blue-500/20',     border: 'border-blue-500/50',      text: 'text-blue-950 dark:text-blue-200',    sub: 'text-blue-800 dark:text-blue-300' },
+  ATTENDED:        { bg: 'bg-gray-500/35 dark:bg-gray-500/20',     border: 'border-gray-500/50',      text: 'text-gray-900 dark:text-gray-200',    sub: 'text-gray-700 dark:text-gray-400' },
+  NO_SHOW:         { bg: 'bg-amber-500/35 dark:bg-amber-500/20',   border: 'border-amber-500/50',     text: 'text-amber-950 dark:text-amber-200',  sub: 'text-amber-800 dark:text-amber-300' },
+  SCHEDULED:       { bg: 'bg-green-500/35 dark:bg-green-500/20',   border: 'border-green-600/50',     text: 'text-green-950 dark:text-green-200',  sub: 'text-green-800 dark:text-green-300' },
 };
 
 function generateTimeSlots(startHour: number, endHour: number): string[] {
@@ -184,7 +183,7 @@ function AppointmentBlock({ appointment, onAppointmentClick, onDragStart, isDrag
 
   return (
     <div
-      className={`absolute left-1 right-1 ${appointment.status === 'SCHEDULED' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} overflow-hidden rounded-lg border ${colors.border} ${colors.bg} px-2 py-1 backdrop-blur-sm transition-all duration-150 hover:z-20 hover:shadow-lg ${isDragging ? '!opacity-30' : ''}`}
+      className={`absolute left-1 right-1 ${appointment.status === 'SCHEDULED' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} overflow-hidden rounded-lg border ${colors.border} ${colors.bg} px-2 py-1 transition-all duration-150 hover:z-20 hover:shadow-lg ${isDragging ? '!opacity-30' : ''}`}
       style={{ top: `${top}px`, height: `${Math.max(height, slotHeight)}px` }}
       title={`${appointment.client?.name || appointment.clientName || 'Cliente'} - ${serviceNames} (${time} - ${endTime})${isFromClient ? ' · App' : ' · Painel'}${isSubscription ? ' · Assinatura' : ''}${appointment.status === 'PENDING_PAYMENT' ? ' · Aguardando pagamento' : ''}`}
       onPointerDown={(e) => {
@@ -203,25 +202,25 @@ function AppointmentBlock({ appointment, onAppointmentClick, onDragStart, isDrag
         </div>
         {height >= 40 && (
           <div className="flex items-center gap-1 overflow-hidden">
-            <span className={`shrink-0 ${colors.text} opacity-70`} title={isFromClient ? 'Agendado pelo app' : 'Agendado pelo painel'}>
+            <span className={`shrink-0 ${colors.sub}`} title={isFromClient ? 'Agendado pelo app' : 'Agendado pelo painel'}>
               {isFromClient
                 ? <Smartphone className="h-2.5 w-2.5" />
                 : <Monitor className="h-2.5 w-2.5" />}
             </span>
-            <span className="truncate text-[10px] text-[var(--text-muted)]">{serviceNames}</span>
+            <span className={`truncate text-[10px] ${colors.sub}`}>{serviceNames}</span>
           </div>
         )}
         {height >= 60 && (
-          <div className="mt-auto flex items-center gap-1 text-[10px] text-[var(--text-muted)]">
+          <div className={`mt-auto flex items-center gap-1 text-[10px] ${colors.sub}`}>
             <Clock className="h-2.5 w-2.5" />
             {time} - {endTime}
           </div>
         )}
         {height >= 80 && (
-          <div className="flex items-center gap-1 text-[10px] text-[var(--text-muted)]">
+          <div className={`flex items-center gap-1 text-[10px] ${colors.sub}`}>
             {formatCurrency(appointment.totalPrice)}
             {appointment.isPaid && (
-              <span className="rounded bg-emerald-500/20 px-1 text-emerald-400">Pago</span>
+              <span className="rounded bg-emerald-600/30 px-1 font-medium text-emerald-950 dark:bg-emerald-500/20 dark:text-emerald-300">Pago</span>
             )}
           </div>
         )}
@@ -483,17 +482,24 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
     }
   };
 
-  const handleDetailUpdate = async (id: string, data: { scheduledAt?: string; notes?: string }) => {
+  const handleDetailUpdate = async (id: string, data: { scheduledAt?: string; notes?: string; professionalId?: string }) => {
     try {
       await updateAppointment.mutateAsync({ id, data });
       // Atualizar o modal com os dados novos
       if (detailModal) {
+        // Quando o profissional muda, o card vai para outra coluna do calendário; o
+        // modal precisa refletir o nome novo para não mostrar dado obsoleto.
+        const newProfessionalName = data.professionalId
+          ? professionalsData.find((p) => p.id === data.professionalId)?.name ?? detailModal.professionalName
+          : detailModal.professionalName;
         setDetailModal({
           ...detailModal,
+          professionalName: newProfessionalName,
           appointment: {
             ...detailModal.appointment,
             ...(data.scheduledAt && { scheduledAt: data.scheduledAt }),
             ...(data.notes !== undefined && { notes: data.notes || null }),
+            ...(data.professionalId && { professionalId: data.professionalId }),
           },
         });
       }
@@ -918,27 +924,27 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-[var(--card-border)] bg-[var(--bg-primary)] px-3 py-2.5 sm:gap-4 sm:px-4">
             <span className="text-xs text-[var(--text-muted)]">Legenda:</span>
             <div className="flex items-center gap-1.5">
-              <div className="h-3 w-3 rounded border border-green-500/35 bg-green-500/15" />
+              <div className="h-3 w-3 rounded border border-green-600/50 bg-green-500/35 dark:bg-green-500/20" />
               <span className="text-xs text-[var(--text-muted)]">Agendado</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="h-3 w-3 rounded border border-[#C8923A]/40 bg-[#C8923A]/20" />
+              <div className="h-3 w-3 rounded border border-[#C8923A]/60 bg-[#C8923A]/40 dark:bg-[#C8923A]/25" />
               <span className="text-xs text-[var(--text-muted)]">Plano</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="h-3 w-3 rounded border border-blue-500/30 bg-blue-500/15" />
+              <div className="h-3 w-3 rounded border border-blue-500/50 bg-blue-500/30 dark:bg-blue-500/20" />
               <span className="text-xs text-[var(--text-muted)]">Pagamento pendente</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="h-3 w-3 rounded border border-green-500/50 bg-green-500/25" />
+              <div className="h-3 w-3 rounded border border-emerald-600/60 bg-emerald-500/45 dark:bg-emerald-500/25" />
               <span className="text-xs text-[var(--text-muted)]">Pago</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="h-3 w-3 rounded border border-gray-500/30 bg-gray-500/15" />
+              <div className="h-3 w-3 rounded border border-gray-500/50 bg-gray-500/35 dark:bg-gray-500/20" />
               <span className="text-xs text-[var(--text-muted)]">Finalizado</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="h-3 w-3 rounded border border-amber-500/30 bg-amber-500/15" />
+              <div className="h-3 w-3 rounded border border-amber-500/50 bg-amber-500/35 dark:bg-amber-500/20" />
               <span className="text-xs text-[var(--text-muted)]">Faltou</span>
             </div>
             <div className="flex items-center gap-1.5">
@@ -1034,6 +1040,7 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
         isOpen={!!detailModal}
         appointment={detailModal?.appointment ?? null}
         professionalName={detailModal?.professionalName ?? ''}
+        professionals={professionalsData}
         onClose={() => setDetailModal(null)}
         onAttend={handleDetailAttend}
         onCancel={handleDetailCancel}
