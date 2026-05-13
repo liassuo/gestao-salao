@@ -6,8 +6,9 @@ import { BlockTimeModal } from './BlockTimeModal';
 import { AppointmentDetailModal } from './AppointmentDetailModal';
 import type { CalendarAppointment, CalendarTimeBlock, CalendarProfessional } from '@/types';
 
-const SLOT_HEIGHT_DESKTOP = 20; // px per 10-min slot (desktop)
-const SLOT_HEIGHT_MOBILE = 14; // px per 10-min slot (mobile compact mode)
+const SLOT_MINUTES = 15; // granularidade da grade do calendário (1 slot = 15 min)
+const SLOT_HEIGHT_DESKTOP = 30; // px por slot de 15 min (desktop) → 1h = 120px
+const SLOT_HEIGHT_MOBILE = 21; // px por slot de 15 min (mobile compacto) → 1h = 84px
 const DEFAULT_START_HOUR = 8;
 const DEFAULT_END_HOUR = 21;
 const TIME_LABEL_WIDTH = 60; // px
@@ -59,11 +60,11 @@ function timeToMinutes(time: string): number {
 function getTopPosition(time: string, startHour: number, slotHeight: number): number {
   const minutes = timeToMinutes(time);
   const startMinutes = startHour * 60;
-  return ((minutes - startMinutes) / 10) * slotHeight;
+  return ((minutes - startMinutes) / SLOT_MINUTES) * slotHeight;
 }
 
 function getBlockHeight(durationMinutes: number, slotHeight: number): number {
-  return (durationMinutes / 10) * slotHeight;
+  return (durationMinutes / SLOT_MINUTES) * slotHeight;
 }
 
 function extractTime(isoString: string): string {
@@ -147,7 +148,7 @@ const statusColors: Record<string, { bg: string; border: string; text: string; s
 function generateTimeSlots(startHour: number, endHour: number): string[] {
   const slots: string[] = [];
   for (let h = startHour; h < endHour; h++) {
-    for (let m = 0; m < 60; m += 10) {
+    for (let m = 0; m < 60; m += SLOT_MINUTES) {
       slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
     }
   }
@@ -181,10 +182,11 @@ function AppointmentBlock({ appointment, onAppointmentClick, onDragStart, isDrag
   const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
   const isFromClient = appointment.source === 'CLIENT';
 
+  const isDraggable = appointment.status === 'SCHEDULED';
   return (
     <div
-      className={`absolute left-1 right-1 ${appointment.status === 'SCHEDULED' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} overflow-hidden rounded-lg border ${colors.border} ${colors.bg} px-2 py-1 transition-all duration-150 hover:z-20 hover:shadow-lg ${isDragging ? '!opacity-30' : ''}`}
-      style={{ top: `${top}px`, height: `${Math.max(height, slotHeight)}px` }}
+      className={`absolute left-1 right-1 ${isDraggable ? 'cursor-grab touch-none select-none active:cursor-grabbing' : 'cursor-pointer'} overflow-hidden rounded-lg border ${colors.border} ${colors.bg} px-2 py-1 transition-all duration-150 hover:z-20 hover:shadow-lg ${isDragging ? '!opacity-30' : ''}`}
+      style={{ top: `${top}px`, height: `${Math.max(height, slotHeight)}px`, touchAction: isDraggable ? 'none' : undefined }}
       title={`${appointment.client?.name || appointment.clientName || 'Cliente'} - ${serviceNames} (${time} - ${endTime})${isFromClient ? ' · App' : ' · Painel'}${isSubscription ? ' · Assinatura' : ''}${appointment.status === 'PENDING_PAYMENT' ? ' · Aguardando pagamento' : ''}`}
       onPointerDown={(e) => {
         if (e.button === 0 && appointment.status === 'SCHEDULED') {
@@ -330,7 +332,7 @@ function CurrentTimeLine({ isToday, startHour, endHour, slotHeight }: CurrentTim
 
   if (currentMinutes < startMinutes || currentMinutes > endMinutes) return null;
 
-  const top = ((currentMinutes - startMinutes) / 10) * slotHeight;
+  const top = ((currentMinutes - startMinutes) / SLOT_MINUTES) * slotHeight;
 
   return (
     <div
@@ -373,7 +375,7 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
 
   const isCompact = useIsCompact();
   const slotHeight = isCompact ? SLOT_HEIGHT_MOBILE : SLOT_HEIGHT_DESKTOP;
-  const hourHeight = slotHeight * 6;
+  const hourHeight = slotHeight * (60 / SLOT_MINUTES);
 
   // Horários dinâmicos baseados nas configurações
   const startHour = useMemo(() => {
@@ -432,7 +434,7 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
       return;
     }
     const startMinutes = startHour * 60;
-    const offsetPx = Math.max(0, ((targetMinutes - startMinutes) / 10) * slotHeight - hourHeight);
+    const offsetPx = Math.max(0, ((targetMinutes - startMinutes) / SLOT_MINUTES) * slotHeight - hourHeight);
     const maxScroll = scrollEl.scrollHeight - scrollEl.clientHeight;
     scrollEl.scrollTop = Math.max(0, Math.min(offsetPx, maxScroll));
   }, [selectedDate, isToday, settings?.openingTime, startHour, slotHeight, hourHeight]);
@@ -482,7 +484,7 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
     }
   };
 
-  const handleDetailUpdate = async (id: string, data: { scheduledAt?: string; notes?: string; professionalId?: string }) => {
+  const handleDetailUpdate = async (id: string, data: { scheduledAt?: string; notes?: string; professionalId?: string; totalDuration?: number }) => {
     try {
       await updateAppointment.mutateAsync({ id, data });
       // Atualizar o modal com os dados novos
@@ -500,6 +502,7 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
             ...(data.scheduledAt && { scheduledAt: data.scheduledAt }),
             ...(data.notes !== undefined && { notes: data.notes || null }),
             ...(data.professionalId && { professionalId: data.professionalId }),
+            ...(data.totalDuration !== undefined && { totalDuration: data.totalDuration }),
           },
         });
       }
@@ -549,6 +552,25 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
         document.body.style.cursor = 'grabbing';
       }
 
+      // Auto-scroll near edges of the calendar viewport (essential on mobile where
+      // other professional columns are off-screen).
+      const scrollEl = scrollRef.current;
+      if (scrollEl) {
+        const rect = scrollEl.getBoundingClientRect();
+        const edge = 48;
+        const speed = 14;
+        if (ev.clientX < rect.left + edge) {
+          scrollEl.scrollLeft -= speed;
+        } else if (ev.clientX > rect.right - edge) {
+          scrollEl.scrollLeft += speed;
+        }
+        if (ev.clientY < rect.top + edge) {
+          scrollEl.scrollTop -= speed;
+        } else if (ev.clientY > rect.bottom - edge) {
+          scrollEl.scrollTop += speed;
+        }
+      }
+
       cancelAnimationFrame(rafId.current);
       rafId.current = requestAnimationFrame(() => {
         // Vertical: snap to time slots
@@ -575,6 +597,7 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
     const handleUp = () => {
       document.removeEventListener('pointermove', handleMove);
       document.removeEventListener('pointerup', handleUp);
+      document.removeEventListener('pointercancel', handleUp);
       cancelAnimationFrame(rafId.current);
 
       if (dragThresholdMet.current) {
@@ -590,7 +613,7 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
 
         if (dragAppointmentRef.current) {
           const finalTop = dragGhostTopRef.current;
-          const newMinutes = startHour * 60 + (finalTop / slotHeight) * 10;
+          const newMinutes = startHour * 60 + (finalTop / slotHeight) * SLOT_MINUTES;
           const newTime = minutesToTimeStr(newMinutes);
           const oldTime = extractTime(dragAppointmentRef.current.scheduledAt);
           const sourceProf = dragSourceProfessionalId.current;
@@ -631,6 +654,7 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
 
     document.addEventListener('pointermove', handleMove);
     document.addEventListener('pointerup', handleUp);
+    document.addEventListener('pointercancel', handleUp);
   };
 
   const handleDragConfirm = async () => {
@@ -867,8 +891,6 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
                   {timeSlots.map((slot) => {
                     const [, m] = slot.split(':');
                     const isFullHour = m === '00';
-                    const isHalfHour = m === '30';
-                    if (!isFullHour && !isHalfHour) return null;
 
                     const top = getTopPosition(slot, startHour, slotHeight);
                     // O primeiro slot (top=0) ficaria escondido atrás do header
@@ -1123,7 +1145,6 @@ function ProfessionalColumn({
       {timeSlots.map((slot) => {
         const [, m] = slot.split(':');
         const isFullHour = m === '00';
-        const isHalfHour = m === '30';
         const top = getTopPosition(slot, startHour, slotHeight);
 
         return (
@@ -1133,10 +1154,9 @@ function ProfessionalColumn({
             style={{ top: `${top}px`, height: `${slotHeight}px` }}
             onClick={() => onSlotClick(professional.id, slot)}
           >
-            {isFullHour && (
+            {isFullHour ? (
               <div className="absolute inset-x-0 top-0 border-t border-[var(--border-color)]" />
-            )}
-            {isHalfHour && (
+            ) : (
               <div className="absolute inset-x-0 top-0 border-t border-[var(--border-color)] opacity-30" />
             )}
           </div>
@@ -1188,7 +1208,7 @@ function ProfessionalColumn({
         >
           <div className="flex h-full items-center gap-1 text-xs font-semibold text-[#C8923A]">
             <Clock className="h-3 w-3" />
-            {minutesToTimeStr(startHour * 60 + (dragGhostTop / slotHeight) * 10)}
+            {minutesToTimeStr(startHour * 60 + (dragGhostTop / slotHeight) * SLOT_MINUTES)}
           </div>
         </div>
       )}
