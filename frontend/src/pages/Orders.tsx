@@ -394,29 +394,29 @@ export function Orders() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#8B6914]"><ClipboardList className="h-5 w-5 text-white" /></div>
-          <div>
-            <h1 className="text-2xl font-bold text-[var(--text-primary)]">Comandas</h1>
-            <p className="text-sm text-[var(--text-muted)]">Gerenciamento de comandas</p>
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#8B6914]"><ClipboardList className="h-5 w-5 text-white" /></div>
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold text-[var(--text-primary)] sm:text-2xl">Comandas</h1>
+            <p className="text-xs text-[var(--text-muted)] sm:text-sm">Gerenciamento de comandas</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as OrderStatus | '')} className="rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-[var(--text-primary)] focus:ring-2 focus:ring-[#C8923A] focus:outline-none">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as OrderStatus | '')} className="rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:ring-2 focus:ring-[#C8923A] focus:outline-none">
             <option value="">Todos os status</option>
             <option value="PENDING">Pendente</option>
             <option value="PAID">Pago</option>
             <option value="PAID_AS_DEBT">Lançado como débito</option>
             <option value="CANCELED">Cancelado</option>
           </select>
-          <button onClick={() => { setCreateClientId(''); setCreateNotes(''); setCartItems([]); setCreateItemTab('PRODUCT'); setIsCreateModalOpen(true); }} className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-4 py-2.5 font-medium text-white transition-colors hover:bg-[#725510]">
-            <Plus className="h-4 w-4" /> Nova Comanda
+          <button onClick={() => { setCreateClientId(''); setCreateNotes(''); setCartItems([]); setCreateItemTab('PRODUCT'); setIsCreateModalOpen(true); }} className="flex items-center justify-center gap-2 rounded-xl bg-[#8B6914] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#725510] sm:text-base">
+            <Plus className="h-4 w-4 shrink-0" /> <span className="truncate">Nova Comanda</span>
           </button>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6 backdrop-blur-sm">
+      <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-3 backdrop-blur-sm sm:p-6">
         {isLoading ? (
           <div className="flex justify-center py-12"><div className="h-8 w-8 animate-spin rounded-full border-2 border-[#C8923A] border-t-transparent" /></div>
         ) : error ? (
@@ -426,58 +426,106 @@ export function Orders() {
             <ClipboardList className="h-12 w-12 mb-3 opacity-50" /><p>Nenhuma comanda encontrada</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-[var(--card-border)]">
-                  <th className="px-4 py-3 text-left text-sm font-medium text-[var(--text-muted)]">ID</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-[var(--text-muted)]">Cliente</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-[var(--text-muted)]">Itens</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-[var(--text-muted)]">Total</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-[var(--text-muted)]">Status</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-[var(--text-muted)]">Criado em</th>
-                  <th className="px-4 py-3 text-right text-sm font-medium text-[var(--text-muted)]">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.map((order) => (
-                  <tr key={order.id} className="border-b border-[var(--card-border)] transition-colors hover:bg-[var(--hover-bg)]">
-                    <td className="px-4 py-3 text-[var(--text-muted)] font-mono text-sm">{order.id.slice(0, 8)}</td>
-                    <td className="px-4 py-3 text-[var(--text-primary)]">
-                      {order.consumerType === 'PROFESSIONAL' ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-md bg-purple-500/15 px-2 py-0.5 text-xs font-medium text-purple-300">
-                          {order.consumerProfessional?.name || order.professional?.name || 'Profissional'} (débito)
-                        </span>
-                      ) : (
-                        order.client?.name || '-'
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-[var(--text-secondary)]">{order.items?.length ?? '-'}</td>
-                    <td className="px-4 py-3 font-medium text-[var(--text-primary)]">{formatCents(order.totalAmount)}</td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${orderStatusColors[order.status]}`}>{orderStatusLabels[order.status]}</span>
-                    </td>
-                    <td className="px-4 py-3 text-[var(--text-muted)]">{new Date(order.createdAt).toLocaleString('pt-BR')}</td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button onClick={async () => { try { const full = await ordersService.getById(order.id); setViewingOrder(full); } catch { setViewingOrder({ ...order, items: [] }); } }} className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-[#D4A85C]"><Eye className="h-4 w-4" /></button>
-                        {order.status === 'PENDING' && (
-                          <>
-                            <button onClick={() => openPayModal(order.id)} className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-green-400"><CreditCard className="h-4 w-4" /></button>
-                            <button onClick={() => handleCancel(order.id)} className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-yellow-400"><XCircle className="h-4 w-4" /></button>
-                          </>
-                        )}
-                        {order.status === 'PAID_AS_DEBT' && (
-                          <button onClick={() => handleCancel(order.id)} title="Cancelar (estorna estoque e anula débito)" className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-yellow-400"><XCircle className="h-4 w-4" /></button>
-                        )}
-                        <button onClick={() => setDeletingOrder(order)} className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-[#C45050]"><Trash2 className="h-4 w-4" /></button>
-                      </div>
-                    </td>
+          <>
+            {/* Tabela (desktop/tablet paisagem >= 1024px). */}
+            <div className="hidden overflow-x-auto lg:block">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-[var(--card-border)]">
+                    <th className="px-4 py-3 text-left text-sm font-medium text-[var(--text-muted)]">ID</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-[var(--text-muted)]">Cliente</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-[var(--text-muted)]">Itens</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-[var(--text-muted)]">Total</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-[var(--text-muted)]">Status</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-[var(--text-muted)]">Criado em</th>
+                    <th className="px-4 py-3 text-right text-sm font-medium text-[var(--text-muted)]">Ações</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {orders.map((order) => (
+                    <tr key={order.id} className="border-b border-[var(--card-border)] transition-colors hover:bg-[var(--hover-bg)]">
+                      <td className="px-4 py-3 text-[var(--text-muted)] font-mono text-sm">{order.id.slice(0, 8)}</td>
+                      <td className="px-4 py-3 text-[var(--text-primary)]">
+                        {order.consumerType === 'PROFESSIONAL' ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-md bg-purple-500/15 px-2 py-0.5 text-xs font-medium text-purple-300">
+                            {order.consumerProfessional?.name || order.professional?.name || 'Profissional'} (débito)
+                          </span>
+                        ) : (
+                          order.client?.name || '-'
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-[var(--text-secondary)]">{order.items?.length ?? '-'}</td>
+                      <td className="px-4 py-3 font-medium text-[var(--text-primary)]">{formatCents(order.totalAmount)}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${orderStatusColors[order.status]}`}>{orderStatusLabels[order.status]}</span>
+                      </td>
+                      <td className="px-4 py-3 text-[var(--text-muted)]">{new Date(order.createdAt).toLocaleString('pt-BR')}</td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button onClick={async () => { try { const full = await ordersService.getById(order.id); setViewingOrder(full); } catch { setViewingOrder({ ...order, items: [] }); } }} className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-[#D4A85C]"><Eye className="h-4 w-4" /></button>
+                          {order.status === 'PENDING' && (
+                            <>
+                              <button onClick={() => openPayModal(order.id)} className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-green-400"><CreditCard className="h-4 w-4" /></button>
+                              <button onClick={() => handleCancel(order.id)} className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-yellow-400"><XCircle className="h-4 w-4" /></button>
+                            </>
+                          )}
+                          {order.status === 'PAID_AS_DEBT' && (
+                            <button onClick={() => handleCancel(order.id)} title="Cancelar (estorna estoque e anula débito)" className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-yellow-400"><XCircle className="h-4 w-4" /></button>
+                          )}
+                          <button onClick={() => setDeletingOrder(order)} className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] hover:text-[#C45050]"><Trash2 className="h-4 w-4" /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Card list (mobile + tablet retrato). */}
+            <ul className="space-y-2 lg:hidden">
+              {orders.map((order) => (
+                <li key={order.id} className="rounded-xl border border-[var(--card-border)] bg-[var(--hover-bg)] p-3">
+                  {/* Linha 1: status + ID + total */}
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className={`inline-flex shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${orderStatusColors[order.status]}`}>
+                      {orderStatusLabels[order.status]}
+                    </span>
+                    <span className="font-mono text-[11px] text-[var(--text-muted)]">#{order.id.slice(0, 8)}</span>
+                    <span className="ml-auto text-base font-bold text-[var(--text-primary)]">{formatCents(order.totalAmount)}</span>
+                  </div>
+                  {/* Linha 2: cliente/profissional */}
+                  <div className="text-sm text-[var(--text-primary)]">
+                    {order.consumerType === 'PROFESSIONAL' ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-md bg-purple-500/15 px-2 py-0.5 text-xs font-medium text-purple-300">
+                        {order.consumerProfessional?.name || order.professional?.name || 'Profissional'} (débito)
+                      </span>
+                    ) : (
+                      <span className="font-medium">{order.client?.name || '—'}</span>
+                    )}
+                  </div>
+                  {/* Linha 3: meta + ações */}
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <span className="text-xs text-[var(--text-muted)]">
+                      {order.items?.length ?? 0} {order.items?.length === 1 ? 'item' : 'itens'} · {new Date(order.createdAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button onClick={async () => { try { const full = await ordersService.getById(order.id); setViewingOrder(full); } catch { setViewingOrder({ ...order, items: [] }); } }} className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--card-bg)] hover:text-[#D4A85C]" title="Detalhes"><Eye className="h-4 w-4" /></button>
+                      {order.status === 'PENDING' && (
+                        <>
+                          <button onClick={() => openPayModal(order.id)} className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--card-bg)] hover:text-green-400" title="Cobrar"><CreditCard className="h-4 w-4" /></button>
+                          <button onClick={() => handleCancel(order.id)} className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--card-bg)] hover:text-yellow-400" title="Cancelar"><XCircle className="h-4 w-4" /></button>
+                        </>
+                      )}
+                      {order.status === 'PAID_AS_DEBT' && (
+                        <button onClick={() => handleCancel(order.id)} title="Cancelar (estorna estoque e anula débito)" className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--card-bg)] hover:text-yellow-400"><XCircle className="h-4 w-4" /></button>
+                      )}
+                      <button onClick={() => setDeletingOrder(order)} className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-[var(--card-bg)] hover:text-[#C45050]" title="Excluir"><Trash2 className="h-4 w-4" /></button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
       </div>
 
