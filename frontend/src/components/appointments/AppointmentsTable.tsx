@@ -55,7 +55,8 @@ export function AppointmentsTable({
 
   return (
     <div className="overflow-hidden rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)]">
-      <div className="overflow-x-auto">
+      {/* Tabela (desktop / tablet paisagem >= 1024px). */}
+      <div className="hidden overflow-x-auto lg:block">
         <table className="w-full">
           <thead>
             <tr className="border-b border-[var(--border-color)] bg-[var(--hover-bg)]">
@@ -154,6 +155,79 @@ export function AppointmentsTable({
           </tbody>
         </table>
       </div>
+
+      {/* Card list (mobile + tablet retrato < 1024px). 8 colunas nao cabem
+          em 768-1023px sem rolagem horizontal cansativa. */}
+      <ul className="divide-y divide-[var(--border-color)] lg:hidden">
+        {appointments.map((appointment) => (
+          <li key={appointment.id} className="px-4 py-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1 space-y-1.5">
+                {/* Linha 1: data/hora + status */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold text-[var(--text-primary)]">
+                    {formatDateTime(appointment.scheduledAt)}
+                  </span>
+                  <span
+                    className={`inline-flex shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                      appointmentStatusColors[appointment.status]
+                    }`}
+                  >
+                    {appointmentStatusLabels[appointment.status]}
+                  </span>
+                  {appointment.isPaid && (
+                    <span className="inline-flex shrink-0 rounded-full bg-[#C8923A]/20 px-2 py-0.5 text-[10px] font-medium text-[#C8923A]">
+                      Pago
+                    </span>
+                  )}
+                </div>
+                {/* Linha 2: cliente + telefone */}
+                <div className="text-sm text-[var(--text-primary)]">
+                  <span className="font-medium">
+                    {appointment.client?.name || appointment.clientName || 'Cliente'}
+                  </span>
+                  {appointment.client?.phone && (
+                    <span className="ml-2 text-xs text-[var(--text-muted)]">
+                      {formatPhone(appointment.client.phone)}
+                    </span>
+                  )}
+                </div>
+                {/* Linha 3: profissional + valor */}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--text-muted)]">
+                  <span>com {appointment.professional?.name || 'Profissional'}</span>
+                  <span className="font-medium text-[var(--text-primary)]">
+                    {formatCurrency(appointment.totalPrice)}
+                  </span>
+                </div>
+                {/* Linha 4: servicos */}
+                {(appointment.services || []).length > 0 && (
+                  <div className="flex flex-wrap gap-1 pt-0.5">
+                    {(appointment.services || []).map((s) => (
+                      <span
+                        key={s.id}
+                        className="inline-block rounded bg-zinc-500/20 px-2 py-0.5 text-[11px] text-[var(--text-secondary)]"
+                      >
+                        {s.service?.name || 'Serviço'}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {/* Ações: kebab/menu — o componente ja lida com posicionamento. */}
+              <div className="shrink-0">
+                <AppointmentActions
+                  appointment={appointment}
+                  onAttend={onAttend}
+                  onCancel={onCancel}
+                  onNoShow={onNoShow}
+                  onGenerateDebt={onGenerateDebt}
+                  disabled={isLoading}
+                />
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
