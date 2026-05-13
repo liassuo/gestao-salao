@@ -81,8 +81,11 @@ export class AppointmentsService {
     // 2.1 Buscar promoções ativas + assinatura ATIVA do cliente (com descontos por
     // serviço e saldo de cortes do mês).
     // Regras: (a) entre promoção do serviço e desconto do plano, prevalece o MAIOR;
-    // (b) se o cliente clicar "usar corte" (useSubscriptionCut, fluxo do app), todos
-    // os serviços ficam zerados e o controller debita 1 corte (comportamento legado);
+    // (b) se o cliente clicar "usar corte" (useSubscriptionCut, fluxo do app), os
+    // serviços INCLUÍDOS no plano (override 100%) zeram e o controller debita 1 corte;
+    // serviços EXTRAS (fora do plano, ex.: sobrancelha avulsa) seguem o preço normal
+    // com desconto global do plano — sem essa distinção um agendamento "corte + extras"
+    // virava grátis;
     // (c) caso contrário (admin ou app sem flag), aplicamos a regra natural: serviço
     // com override 100% (incluído no plano) zera enquanto houver saldo de cortes; sem
     // saldo cai no `discountPercent` global do plano.
@@ -95,11 +98,21 @@ export class AppointmentsService {
     const consumedFlags: boolean[] = [];
 
     const getUnitPrice = (svc: { id: string; price: number }): number => {
-      if (useCut) {
-        consumedFlags.push(false); // legado: já será debitado 1 corte só pelo controller
-        return 0;
-      }
       const promoPercent = getPromoDiscountForService(activePromos, svc.id);
+      if (useCut) {
+        // Fluxo legado: cliente marcou "usar 1 corte" pelo app. O débito do corte
+        // é responsabilidade do controller (useCut()). Aqui zeramos APENAS os
+        // serviços efetivamente cobertos pelo plano (override 100%); extras seguem
+        // preço normal com desconto global do plano.
+        if (isPlanIncludedService(activeSub, svc.id)) {
+          consumedFlags.push(false);
+          return 0;
+        }
+        const planPercent = activeSub?.globalPercent ?? 0;
+        const percent = effectiveDiscountPercent(promoPercent, planPercent);
+        consumedFlags.push(false);
+        return applyDiscount(svc.price, percent);
+      }
       // Serviço incluído no plano (override 100%) consome crédito enquanto houver saldo.
       if (isPlanIncludedService(activeSub, svc.id) && remainingCuts > 0) {
         remainingCuts -= 1;
@@ -572,7 +585,20 @@ export class AppointmentsService {
     // Comanda 100% coberta por assinatura: total = 0, não há o que cobrar.
     // Fecha a comanda direto (PAID) sem criar payment nem mexer no caixa, e ignora
     // qualquer paymentMethod recebido (a UI manda 'CASH' por padrão).
-    const isZeroTotal = (appointment.totalPrice ?? 0) === 0;
+    // Lemos o total da COMANDA (não do agendamento) — o `appointment.totalPrice`
+    // congela na criação, então um agendamento que nasceu coberto pela assinatura
+    // (total=0) e teve extras adicionados na comanda depois ainda passaria como
+    // "isZeroTotal=true" e fecharia tudo PAID sem cobrar nada. Bug reportado.
+    const { data: linkedOrder } = await this.supabase
+      .from('orders')
+      .select('totalAmount')
+      .eq('appointmentId', id)
+      .eq('status', 'PENDING')
+      .order('createdAt', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const effectiveTotal = linkedOrder?.totalAmount ?? appointment.totalPrice ?? 0;
+    const isZeroTotal = effectiveTotal === 0;
 
     // Converter pagamento online não pago para pagamento no local
     const { data: pendingPayment } = isZeroTotal
@@ -646,7 +672,7 @@ export class AppointmentsService {
           id: paymentId,
           clientId: appointment.clientId,
           appointmentId: id,
-          amount: appointment.totalPrice,
+          amount: effectiveTotal,
           method: paymentMethod,
           paidAt: now,
           registeredBy: registeredBy || null,

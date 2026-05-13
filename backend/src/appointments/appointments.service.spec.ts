@@ -194,12 +194,28 @@ describe('AppointmentsService', () => {
 
     /**
      * Fluxo legado do app cliente: o checkbox "usar corte da assinatura" zera
-     * todos os serviços e o controller é quem chama `subscriptionsService.useCut()`
-     * (debita 1 corte só, fixo, independente de quantos serviços). Garantir que
-     * o auto-débito por override 100% NÃO duplica o débito nesse caminho.
+     * APENAS os serviços incluídos no plano (override 100%). Serviços extras
+     * (fora do plano) continuam sendo cobrados com o desconto global. O controller
+     * é quem chama `subscriptionsService.useCut()` (debita 1 corte só, fixo).
+     * Esse caminho NÃO pode marcar consumedSubscriptionCut nos itens nem chamar
+     * a RPC automática de débito — senão dupla contagem.
      */
-    it('useSubscriptionCut=true zera tudo, NÃO marca consumedSubscriptionCut e NÃO chama RPC de débito', async () => {
+    it('useSubscriptionCut=true zera apenas serviços do plano, cobra extras, e NÃO chama RPC', async () => {
       setupCreateSuccess();
+      // Plano cobre svc-1 (override 100%) com desconto global de 20% para extras.
+      chains['client_subscriptions'].maybeSingle.mockResolvedValue({
+        data: {
+          id: 'sub-1',
+          cutsUsedThisMonth: 0,
+          plan: {
+            id: 'plan-1',
+            cutsPerMonth: 4,
+            discountPercent: 20,
+            services: [{ serviceId: 'svc-1', discountPercent: 100 }],
+          },
+        },
+        error: null,
+      });
       // Mock rpc — se for chamada, falha o teste.
       (mockSupabase as any).rpc = jest.fn();
 
@@ -208,18 +224,21 @@ describe('AppointmentsService', () => {
       expect(result).toMatchObject({ id: 'mock-uuid-123' });
 
       const insertCall = chains['appointments'].insert.mock.calls[0][0];
-      // Total = 0 — flag legada zera tudo (independente do plano).
-      expect(insertCall.totalPrice).toBe(0);
+      // svc-1 (plano): 0
+      // svc-2 (extra): 5000 com max(promo=0, plano=20%) = 4000
+      expect(insertCall.totalPrice).toBe(4000);
       expect(insertCall.usedSubscriptionCut).toBe(true);
 
-      // Order items inseridos como zerados, mas SEM consumedSubscriptionCut
-      // (a contabilidade de cortes é feita pelo controller via useCut()).
+      // Order items: svc-1 zerado, svc-2 cobrando o extra. Nenhum com
+      // consumedSubscriptionCut (a contabilidade é do controller via useCut()).
       const itemInserts = chains['order_items'].insert.mock.calls.map((c: any[]) => c[0]);
       expect(itemInserts).toHaveLength(2);
-      for (const it of itemInserts) {
-        expect(it.unitPrice).toBe(0);
-        expect(it.consumedSubscriptionCut).toBe(false);
-      }
+      const svc1Item = itemInserts.find((i) => i.serviceId === 'svc-1');
+      const svc2Item = itemInserts.find((i) => i.serviceId === 'svc-2');
+      expect(svc1Item.unitPrice).toBe(0);
+      expect(svc1Item.consumedSubscriptionCut).toBe(false);
+      expect(svc2Item.unitPrice).toBe(4000);
+      expect(svc2Item.consumedSubscriptionCut).toBe(false);
 
       // Não pode haver chamada de débito automático — o controller cuida disso.
       expect((mockSupabase as any).rpc).not.toHaveBeenCalled();
