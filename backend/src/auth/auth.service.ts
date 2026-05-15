@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -173,15 +173,21 @@ export class AuthService {
   }
 
   async clientRegister(dto: { name: string; email: string; password: string; phone: string; birthDate?: string }): Promise<AuthResponseDto> {
-    // Verificar se email já existe
+    // Pre-check com maybeSingle (single() retorna erro quando 0 linhas, mascarando
+    // o resultado real — codigo antigo nao detectava email duplicado e ia direto
+    // pro insert, que entao estourava com 500 "duplicate key".
     const { data: existing } = await this.supabase
       .from('clients')
       .select('id')
       .ilike('email', escapeIlike(dto.email))
-      .single();
+      .limit(1)
+      .maybeSingle();
 
     if (existing) {
-      throw new UnauthorizedException('Email ja cadastrado');
+      throw new ConflictException({
+        code: 'EMAIL_ALREADY_EXISTS',
+        message: 'Email ja cadastrado',
+      });
     }
 
     const hashedPassword = await bcrypt.hash(dto.password, 6);
@@ -204,7 +210,18 @@ export class AuthService {
       .select()
       .single();
 
-    if (error) throw new Error(error.message);
+    if (error) {
+      // Postgres unique_violation (23505) cai aqui quando o pre-check escapa por
+      // race condition (2 cliques quase simultaneos). Devolve o mesmo erro
+      // estruturado pra UI tratar igual.
+      if ((error as any).code === '23505') {
+        throw new ConflictException({
+          code: 'EMAIL_ALREADY_EXISTS',
+          message: 'Email ja cadastrado',
+        });
+      }
+      throw new Error(error.message);
+    }
 
     const payload: JwtPayload = {
       sub: client.id,
