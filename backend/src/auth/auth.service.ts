@@ -247,7 +247,8 @@ export class AuthService {
       .from('clients')
       .select('*')
       .ilike('email', escapeIlike(email))
-      .single();
+      .limit(1)
+      .maybeSingle();
 
     if (!client) {
       throw new UnauthorizedException('Email não encontrado');
@@ -332,7 +333,8 @@ export class AuthService {
       .from('clients')
       .select('*')
       .ilike('email', escapeIlike(dto.email))
-      .single();
+      .limit(1)
+      .maybeSingle();
 
     if (!client) {
       throw new UnauthorizedException('Credenciais inválidas');
@@ -536,7 +538,8 @@ export class AuthService {
       .from('users')
       .select('id, name, email, password, isActive')
       .ilike('email', escapeIlike(email))
-      .single();
+      .limit(1)
+      .maybeSingle();
 
     // Retorno silencioso para não expor se o email existe
     if (!user || !user.isActive) return;
@@ -595,7 +598,8 @@ export class AuthService {
       .from('clients')
       .select('id, name, email, password, isActive, googleId')
       .ilike('email', escapeIlike(email))
-      .single();
+      .limit(1)
+      .maybeSingle();
 
     // Retorno silencioso para não expor se o email existe
     if (!client || !client.isActive) return;
@@ -676,7 +680,8 @@ export class AuthService {
       .from('clients')
       .select('*')
       .ilike('email', escapeIlike(email))
-      .single();
+      .limit(1)
+      .maybeSingle();
 
     let client;
 

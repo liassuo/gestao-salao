@@ -41,6 +41,7 @@ const mockChain = () => {
   chain.update = jest.fn().mockReturnValue(chain);
   chain.eq = jest.fn().mockReturnValue(chain);
   chain.ilike = jest.fn().mockReturnValue(chain);
+  chain.limit = jest.fn().mockReturnValue(chain);
   chain.single = jest.fn();
   chain.maybeSingle = jest.fn().mockResolvedValue({ data: null, error: null });
   return chain;
@@ -189,7 +190,7 @@ describe('AuthService', () => {
 
     it('should return accessToken and user on successful client login', async () => {
       const chain = mockChain();
-      chain.single.mockResolvedValue({ data: mockClient });
+      chain.maybeSingle.mockResolvedValue({ data: mockClient });
       mockSupabaseService.from.mockReturnValue(chain);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
@@ -198,7 +199,7 @@ describe('AuthService', () => {
       expect(mockSupabaseService.from).toHaveBeenCalledWith('clients');
       expect(chain.select).toHaveBeenCalledWith('*');
       expect(chain.ilike).toHaveBeenCalledWith('email', expect.any(String));
-      expect(chain.single).toHaveBeenCalled();
+      expect(chain.maybeSingle).toHaveBeenCalled();
       expect(bcrypt.compare).toHaveBeenCalledWith(clientLoginDto.password, mockClient.password);
       expect(mockJwtService.sign).toHaveBeenCalledWith({
         sub: mockClient.id,
@@ -218,7 +219,7 @@ describe('AuthService', () => {
 
     it('should throw UnauthorizedException when client is not found', async () => {
       const chain = mockChain();
-      chain.single.mockResolvedValue({ data: null });
+      chain.maybeSingle.mockResolvedValue({ data: null });
       mockSupabaseService.from.mockReturnValue(chain);
 
       await expect(service.clientLogin(clientLoginDto)).rejects.toThrow(
@@ -229,7 +230,7 @@ describe('AuthService', () => {
 
     it('should throw UnauthorizedException when client is inactive', async () => {
       const chain = mockChain();
-      chain.single.mockResolvedValue({ data: { ...mockClient, isActive: false } });
+      chain.maybeSingle.mockResolvedValue({ data: { ...mockClient, isActive: false } });
       mockSupabaseService.from.mockReturnValue(chain);
 
       await expect(service.clientLogin(clientLoginDto)).rejects.toThrow(
@@ -240,7 +241,7 @@ describe('AuthService', () => {
 
     it('should throw UnauthorizedException when client has no password (Google-only)', async () => {
       const chain = mockChain();
-      chain.single.mockResolvedValue({ data: { ...mockClient, password: null } });
+      chain.maybeSingle.mockResolvedValue({ data: { ...mockClient, password: null } });
       mockSupabaseService.from.mockReturnValue(chain);
 
       await expect(service.clientLogin(clientLoginDto)).rejects.toThrow(
@@ -251,7 +252,7 @@ describe('AuthService', () => {
 
     it('should throw UnauthorizedException when client password is wrong', async () => {
       const chain = mockChain();
-      chain.single.mockResolvedValue({ data: mockClient });
+      chain.maybeSingle.mockResolvedValue({ data: mockClient });
       mockSupabaseService.from.mockReturnValue(chain);
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
