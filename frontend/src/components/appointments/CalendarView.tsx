@@ -792,13 +792,12 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
             Hoje
           </button>
           <div className="relative">
-            <button
-              onClick={() => dateInputRef.current?.showPicker()}
+            <div
               className="rounded-lg p-2 text-[var(--text-muted)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
               title="Escolher data"
             >
               <CalendarDays className="h-5 w-5" />
-            </button>
+            </div>
             <input
               ref={dateInputRef}
               type="date"
@@ -806,8 +805,16 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
               onChange={(e) => {
                 if (e.target.value) setSelectedDate(e.target.value);
               }}
-              className="pointer-events-none absolute inset-0 h-full w-full opacity-0"
-              tabIndex={-1}
+              onClick={() => {
+                try {
+                  dateInputRef.current?.showPicker?.();
+                } catch {
+                  // Safari/iOS antigos nao suportam showPicker — clicar
+                  // no proprio input ja abre o picker nativo, entao no-op.
+                }
+              }}
+              aria-label="Escolher data"
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
             />
           </div>
           <h2 className="basis-full text-base font-semibold capitalize text-[var(--text-primary)] sm:text-lg md:basis-auto">
