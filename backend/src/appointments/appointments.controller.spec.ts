@@ -298,7 +298,7 @@ describe('AppointmentsController (integration)', () => {
         .query({ date: '2025-01-06' })
         .expect(200)
         .expect((res) => {
-          expect(mockService.getCalendarData).toHaveBeenCalledWith('2025-01-06');
+          expect(mockService.getCalendarData).toHaveBeenCalledWith('2025-01-06', undefined);
           expect(res.body).toEqual(
             expect.arrayContaining([
               expect.objectContaining({ id: VALID_UUID_2, name: 'Professional 1' }),
