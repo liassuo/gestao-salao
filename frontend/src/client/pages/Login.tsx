@@ -133,7 +133,18 @@ export function ClientLogin() {
       await register(name.trim(), email.trim(), password, phone.trim(), birthDateIso);
       navigate(from, { replace: true });
     } catch (err: any) {
-      const msg = err.response?.data?.message || 'Erro ao criar conta. Tente novamente.';
+      const responseData = err.response?.data;
+      // Email duplicado (race com pre-check ou usuario teimou em criar): manda
+      // pra tela de login com o email preservado em vez de mostrar erro tecnico.
+      if (responseData?.message?.code === 'EMAIL_ALREADY_EXISTS' || responseData?.code === 'EMAIL_ALREADY_EXISTS') {
+        setError('Este email ja esta cadastrado. Faça login com a sua senha.');
+        setPassword('');
+        setConfirmPassword('');
+        setStep('login');
+        setIsSubmitting(false);
+        return;
+      }
+      const msg = (typeof responseData?.message === 'string' ? responseData.message : null) || 'Erro ao criar conta. Tente novamente.';
       setError(msg);
     } finally {
       setIsSubmitting(false);
