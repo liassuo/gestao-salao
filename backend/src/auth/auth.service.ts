@@ -295,11 +295,16 @@ export class AuthService {
   }
 
   async checkClientEmail(email: string): Promise<{ status: 'new' | 'login' | 'setup_password' | 'google'; name?: string }> {
+    // single() retorna erro quando 0 OU 2+ linhas — e o codigo antigo so
+    // checava `data`, ignorando `error`. Em qualquer cenario de anomalia
+    // (registros duplicados por ilike, erro de DB) o usuario caia em
+    // status: 'new' e ia parar na tela de cadastro mesmo ja tendo conta.
     const { data: client } = await this.supabase
       .from('clients')
       .select('id, name, password, googleId, mustChangePassword, isActive')
       .ilike('email', escapeIlike(email))
-      .single();
+      .limit(1)
+      .maybeSingle();
 
     if (!client) {
       return { status: 'new' };
