@@ -32,6 +32,26 @@ export class CommissionsService {
     const startStr = `${dto.periodStart}T00:00:00`;
     const endStr = `${dto.periodEnd}T23:59:59`;
 
+    // Idempotência: se já existem comissões para EXATAMENTE este período,
+    // bloqueia se alguma estiver paga; caso contrário, remove as pendentes
+    // para regerar — evita duplicação ao clicar "Gerar" várias vezes.
+    const { data: existing } = await this.supabase
+      .from('commissions')
+      .select('id, status')
+      .eq('periodStart', startStr)
+      .eq('periodEnd', endStr);
+
+    if (existing && existing.length > 0) {
+      const hasPaid = existing.some((c: any) => c.status === 'PAID');
+      if (hasPaid) {
+        throw new BadRequestException(
+          'Já existem comissões pagas neste período. Exclua-as antes de regerar.',
+        );
+      }
+      const idsToDelete = existing.map((c: any) => c.id);
+      await this.supabase.from('commissions').delete().in('id', idsToDelete);
+    }
+
     // 1) Serviços avulsos (appointments sem assinatura)
     const { data: regularAppointments } = await this.supabase
       .from('appointments')
