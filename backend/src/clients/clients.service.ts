@@ -4,6 +4,14 @@ import { SupabaseService } from '../supabase/supabase.service';
 import { AsaasService } from '../asaas/asaas.service';
 import { CreateClientDto, UpdateClientDto } from './dto';
 
+// Normaliza email pra forma canonica (lowercase + trim) — pareada com a
+// gravacao normalizada no banco, queries usam .eq com igualdade direta.
+function normalizeEmail(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim().toLowerCase();
+  return trimmed || null;
+}
+
 export interface ClientFilters {
   search?: string;
   hasDebts?: boolean;
@@ -43,13 +51,14 @@ export class ClientsService {
 
   async create(dto: CreateClientDto) {
     const now = new Date().toISOString();
+    const normalizedEmail = normalizeEmail(dto.email);
     const { data: client, error } = await this.supabase
       .from('clients')
       .insert({
         id: randomUUID(),
         name: dto.name,
         phone: dto.phone,
-        email: dto.email || null,
+        email: normalizedEmail,
         cpf: dto.cpf || null,
         password: dto.password,
         googleId: dto.googleId,
@@ -75,7 +84,7 @@ export class ClientsService {
       try {
         const asaasCustomer = await this.asaasService.createCustomer({
           name: dto.name,
-          email: dto.email || undefined,
+          email: normalizedEmail || undefined,
           mobilePhone: dto.phone || undefined,
           cpfCnpj: dto.cpf || undefined,
           externalReference: client.id,
@@ -144,8 +153,9 @@ export class ClientsService {
     const { data: client } = await this.supabase
       .from('clients')
       .select('*')
-      .eq('email', email)
-      .single();
+      .eq('email', normalizeEmail(email) || '')
+      .limit(1)
+      .maybeSingle();
 
     return client;
   }
@@ -173,9 +183,14 @@ export class ClientsService {
       throw new NotFoundException('Cliente não encontrado');
     }
 
+    const updatePayload: any = { ...dto };
+    if (dto.email !== undefined) {
+      updatePayload.email = normalizeEmail(dto.email);
+    }
+
     const { data: updatedClient, error } = await this.supabase
       .from('clients')
-      .update(dto)
+      .update(updatePayload)
       .eq('id', id)
       .select('*')
       .single();

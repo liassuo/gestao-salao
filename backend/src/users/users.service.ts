@@ -7,10 +7,10 @@ import { SupabaseService } from '../supabase/supabase.service';
 import { CreateUserDto, UpdateUserDto } from './dto';
 import * as bcrypt from 'bcrypt';
 
-// Escapa wildcards de LIKE/ILIKE (`%`, `_`, `\`) para usar ilike como
-// igualdade case-insensitive sem o input ser interpretado como padrão.
-function escapeIlike(value: string): string {
-  return value.replace(/[\\%_]/g, (c) => `\\${c}`);
+// Normaliza email pra forma canonica (lowercase + trim) — pareada com a
+// gravacao normalizada no banco, queries usam .eq com igualdade direta.
+function normalizeEmail(value: string): string {
+  return value.trim().toLowerCase();
 }
 
 export interface User {
@@ -29,11 +29,14 @@ export class UsersService {
   constructor(private readonly supabase: SupabaseService) {}
 
   async create(dto: CreateUserDto): Promise<Omit<User, 'password'>> {
+    const normalizedEmail = normalizeEmail(dto.email);
+
     const { data: existingUser } = await this.supabase
       .from('users')
       .select('id')
-      .eq('email', dto.email)
-      .single();
+      .eq('email', normalizedEmail)
+      .limit(1)
+      .maybeSingle();
 
     if (existingUser) {
       throw new ConflictException('Email já cadastrado');
@@ -44,7 +47,7 @@ export class UsersService {
     const { data: user, error } = await this.supabase
       .from('users')
       .insert({
-        email: dto.email,
+        email: normalizedEmail,
         name: dto.name,
         password: hashedPassword,
         role: dto.role,
@@ -88,8 +91,9 @@ export class UsersService {
     const { data: user } = await this.supabase
       .from('users')
       .select('*')
-      .ilike('email', escapeIlike(email))
-      .single();
+      .eq('email', normalizeEmail(email))
+      .limit(1)
+      .maybeSingle();
 
     return user;
   }
@@ -98,8 +102,9 @@ export class UsersService {
     const { data: user } = await this.supabase
       .from('users')
       .select('*')
-      .ilike('email', escapeIlike(email))
-      .single();
+      .eq('email', normalizeEmail(email))
+      .limit(1)
+      .maybeSingle();
 
     return user;
   }
@@ -116,6 +121,9 @@ export class UsersService {
     }
 
     const updateData: any = { ...dto, updatedAt: new Date().toISOString() };
+    if (dto.email) {
+      updateData.email = normalizeEmail(dto.email);
+    }
     if (dto.password) {
       updateData.password = await bcrypt.hash(dto.password, 6);
     }

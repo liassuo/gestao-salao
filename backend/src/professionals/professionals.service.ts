@@ -24,17 +24,26 @@ function normalizeDate(value: any): string {
   return s.length >= 10 ? s.substring(0, 10) : s;
 }
 
+// Normaliza email pra forma canonica (lowercase + trim) — pareada com a
+// gravacao normalizada no banco, queries usam .eq com igualdade direta.
+function normalizeEmail(value: string): string {
+  return value.trim().toLowerCase();
+}
+
 @Injectable()
 export class ProfessionalsService {
   constructor(private readonly supabase: SupabaseService) {}
 
   async create(dto: CreateProfessionalDto) {
+    const normalizedEmail = normalizeEmail(dto.email);
+
     // Verificar se email já existe na tabela users
     const { data: existingUser } = await this.supabase
       .from('users')
       .select('id')
-      .eq('email', dto.email)
-      .single();
+      .eq('email', normalizedEmail)
+      .limit(1)
+      .maybeSingle();
 
     if (existingUser) {
       throw new ConflictException('Email já cadastrado no sistema');
@@ -70,7 +79,7 @@ export class ProfessionalsService {
       .from('users')
       .insert({
         id: userId,
-        email: dto.email,
+        email: normalizedEmail,
         name: dto.name,
         password: hashedPassword,
         role: 'PROFESSIONAL',
@@ -588,21 +597,23 @@ export class ProfessionalsService {
 
     // Atualiza email do user vinculado (login do profissional)
     if (email !== undefined && email !== null && email.trim() !== '') {
-      const normalizedEmail = email.trim();
+      const normalizedNewEmail = normalizeEmail(email);
 
       const { data: linkedUser } = await this.supabase
         .from('users')
         .select('id, email')
         .eq('professionalId', id)
-        .single();
+        .limit(1)
+        .maybeSingle();
 
-      if (linkedUser && linkedUser.email !== normalizedEmail) {
+      if (linkedUser && linkedUser.email !== normalizedNewEmail) {
         // Garante que o novo email não esteja em uso por outro usuário
         const { data: conflict } = await this.supabase
           .from('users')
           .select('id')
-          .ilike('email', normalizedEmail.replace(/[\\%_]/g, (c) => `\\${c}`))
+          .eq('email', normalizedNewEmail)
           .neq('id', linkedUser.id)
+          .limit(1)
           .maybeSingle();
 
         if (conflict) {
@@ -611,7 +622,7 @@ export class ProfessionalsService {
 
         const { error: userUpdateError } = await this.supabase
           .from('users')
-          .update({ email: normalizedEmail, updatedAt: new Date().toISOString() })
+          .update({ email: normalizedNewEmail, updatedAt: new Date().toISOString() })
           .eq('id', linkedUser.id);
 
         if (userUpdateError) throw userUpdateError;

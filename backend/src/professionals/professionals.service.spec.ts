@@ -20,6 +20,9 @@ const mockChain = () => {
   chain.gte = jest.fn().mockReturnValue(chain);
   chain.lte = jest.fn().mockReturnValue(chain);
   chain.order = jest.fn().mockReturnValue(chain);
+  chain.neq = jest.fn().mockReturnValue(chain);
+  chain.limit = jest.fn().mockReturnValue(chain);
+  chain.maybeSingle = jest.fn();
   chain.single = jest.fn();
   return chain;
 };
@@ -80,9 +83,7 @@ describe('ProfessionalsService', () => {
       // Mock users table: email check (not found) + user creation
       chains['users'] = mockChain();
       chains['users'].insert = jest.fn().mockReturnValue(chains['users']);
-      chains['users'].single
-        .mockResolvedValueOnce({ data: null, error: null })     // email check: not found
-        .mockResolvedValueOnce({ data: { id: 'user-1' }, error: null }); // user insert
+      chains['users'].maybeSingle.mockResolvedValue({ data: null, error: null }); // email check: not found
 
       const result = await service.create(dto);
 
@@ -108,9 +109,7 @@ describe('ProfessionalsService', () => {
       // Mock users table for email check (returns null = not found) + user creation
       chains['users'] = mockChain();
       chains['users'].insert = jest.fn().mockReturnValue(chains['users']);
-      chains['users'].single
-        .mockResolvedValueOnce({ data: null, error: null })     // email check: not found
-        .mockResolvedValueOnce({ data: { id: 'user-2' }, error: null }); // user insert
+      chains['users'].maybeSingle.mockResolvedValue({ data: null, error: null }); // email check: not found
 
       chains['professionals'] = mockChain();
       chains['professionals'].single.mockResolvedValue({ data: created, error: null });

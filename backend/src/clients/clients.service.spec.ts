@@ -17,6 +17,8 @@ const mockChain = () => {
   chain.gte = jest.fn().mockReturnValue(chain);
   chain.lte = jest.fn().mockReturnValue(chain);
   chain.order = jest.fn().mockReturnValue(chain);
+  chain.limit = jest.fn().mockReturnValue(chain);
+  chain.maybeSingle = jest.fn();
   chain.single = jest.fn();
   return chain;
 };
@@ -279,16 +281,17 @@ describe('ClientsService', () => {
   describe('findByEmail', () => {
     it('should return a client when email matches', async () => {
       const client = { id: 'uuid-1', email: 'maria@example.com' };
-      chain.single.mockResolvedValue({ data: client, error: null });
+      chain.maybeSingle.mockResolvedValue({ data: client, error: null });
 
-      const result = await service.findByEmail('maria@example.com');
+      const result = await service.findByEmail('Maria@Example.com');
 
+      // Lookup deve normalizar antes de bater no banco (lowercase + trim).
       expect(chain.eq).toHaveBeenCalledWith('email', 'maria@example.com');
       expect(result).toEqual(client);
     });
 
     it('should return null when no client matches', async () => {
-      chain.single.mockResolvedValue({ data: null, error: null });
+      chain.maybeSingle.mockResolvedValue({ data: null, error: null });
 
       const result = await service.findByEmail('nobody@example.com');
 
@@ -296,7 +299,7 @@ describe('ClientsService', () => {
     });
 
     it('should return undefined/null when supabase errors (no throw)', async () => {
-      chain.single.mockResolvedValue({ data: undefined, error: new Error('err') });
+      chain.maybeSingle.mockResolvedValue({ data: undefined, error: new Error('err') });
 
       const result = await service.findByEmail('bad@example.com');
 

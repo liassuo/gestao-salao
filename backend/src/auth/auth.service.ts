@@ -11,10 +11,10 @@ import { LoginDto, AuthResponseDto, GoogleAuthDto } from './dto';
 import { JwtPayload } from './strategies/jwt.strategy';
 import { UserRole } from '../common/enums/user-role.enum';
 
-// Escapa wildcards de LIKE/ILIKE (`%`, `_`, `\`) para usar ilike como
-// igualdade case-insensitive sem o input ser interpretado como padrão.
-function escapeIlike(value: string): string {
-  return value.replace(/[\\%_]/g, (c) => `\\${c}`);
+// Normaliza email pra forma canonica (lowercase + trim) — pareada com a
+// gravacao normalizada no banco, queries usam .eq com igualdade direta.
+function normalizeEmail(value: string): string {
+  return value.trim().toLowerCase();
 }
 
 @Injectable()
@@ -179,7 +179,7 @@ export class AuthService {
     const { data: existing } = await this.supabase
       .from('clients')
       .select('id')
-      .ilike('email', escapeIlike(dto.email))
+      .eq('email', normalizeEmail(dto.email))
       .limit(1)
       .maybeSingle();
 
@@ -198,7 +198,7 @@ export class AuthService {
       .insert({
         id: randomUUID(),
         name: dto.name,
-        email: dto.email,
+        email: normalizeEmail(dto.email),
         password: hashedPassword,
         phone: dto.phone,
         birthDate: dto.birthDate || null,
@@ -246,7 +246,7 @@ export class AuthService {
     const { data: client } = await this.supabase
       .from('clients')
       .select('*')
-      .ilike('email', escapeIlike(email))
+      .eq('email', normalizeEmail(email))
       .limit(1)
       .maybeSingle();
 
@@ -303,7 +303,7 @@ export class AuthService {
     const { data: client } = await this.supabase
       .from('clients')
       .select('id, name, password, googleId, mustChangePassword, isActive')
-      .ilike('email', escapeIlike(email))
+      .eq('email', normalizeEmail(email))
       .limit(1)
       .maybeSingle();
 
@@ -332,7 +332,7 @@ export class AuthService {
     const { data: client } = await this.supabase
       .from('clients')
       .select('*')
-      .ilike('email', escapeIlike(dto.email))
+      .eq('email', normalizeEmail(dto.email))
       .limit(1)
       .maybeSingle();
 
@@ -537,7 +537,7 @@ export class AuthService {
     const { data: user } = await this.supabase
       .from('users')
       .select('id, name, email, password, isActive')
-      .ilike('email', escapeIlike(email))
+      .eq('email', normalizeEmail(email))
       .limit(1)
       .maybeSingle();
 
@@ -597,7 +597,7 @@ export class AuthService {
     const { data: client } = await this.supabase
       .from('clients')
       .select('id, name, email, password, isActive, googleId')
-      .ilike('email', escapeIlike(email))
+      .eq('email', normalizeEmail(email))
       .limit(1)
       .maybeSingle();
 
@@ -679,7 +679,7 @@ export class AuthService {
     const { data: existingClient } = await this.supabase
       .from('clients')
       .select('*')
-      .ilike('email', escapeIlike(email))
+      .eq('email', normalizeEmail(email))
       .limit(1)
       .maybeSingle();
 
@@ -710,7 +710,7 @@ export class AuthService {
         .insert({
           id: randomUUID(),
           name: name || email.split('@')[0],
-          email,
+          email: normalizeEmail(email),
           googleId,
           phone: '',
           isActive: true,

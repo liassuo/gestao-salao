@@ -198,7 +198,7 @@ describe('AuthService', () => {
 
       expect(mockSupabaseService.from).toHaveBeenCalledWith('clients');
       expect(chain.select).toHaveBeenCalledWith('*');
-      expect(chain.ilike).toHaveBeenCalledWith('email', expect.any(String));
+      expect(chain.eq).toHaveBeenCalledWith('email', expect.any(String));
       expect(chain.maybeSingle).toHaveBeenCalled();
       expect(bcrypt.compare).toHaveBeenCalledWith(clientLoginDto.password, mockClient.password);
       expect(mockJwtService.sign).toHaveBeenCalledWith({
