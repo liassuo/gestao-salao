@@ -85,18 +85,17 @@ function exportDPotePDF(report: any, startDate: string, endDate: string) {
       `${report.barberPoolPercent}%`,
       servicesCount,
       prof.fichas,
-      prof.percentage.toFixed(1) + '%',
       formatCurrency(prof.shareOfPot),
       formatCurrency(barbCut),
       formatCurrency(prof.commission),
     ];
   });
 
-  rows.push(['TOTAL', '', report.totalServices, report.totalFichas, '100%', formatCurrency(report.totalSubscriptionValue), formatCurrency(totalBarbearia), formatCurrency(totalProfissionais)]);
+  rows.push(['TOTAL', '', report.totalServices, report.totalFichas, formatCurrency(report.totalSubscriptionValue), formatCurrency(totalBarbearia), formatCurrency(totalProfissionais)]);
 
   autoTable(doc, {
     startY: y + 4,
-    head: [['Profissional', 'Taxa', 'Servicos', 'Fichas', '%', 'Parte do Pote', 'Barbearia', 'Profissional']],
+    head: [['Profissional', 'Taxa', 'Servicos', 'Fichas', 'Parte do Pote', 'Barbearia', 'Profissional']],
     body: rows,
     styles: { fontSize: 8 },
     headStyles: { fillColor: gold },
@@ -366,7 +365,6 @@ export function DPote() {
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Taxa</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Serviços</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Fichas</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">%</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Parte do Pote</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Barbearia</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Profissional</th>
@@ -386,7 +384,6 @@ export function DPote() {
                         <td className="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-muted)]">{report.barberPoolPercent}%</td>
                         <td className="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-muted)]">{prof.services.reduce((sum: number, s: any) => sum + s.count, 0)}</td>
                         <td className="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-muted)]">{prof.fichas}</td>
-                        <td className="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-muted)]">{prof.percentage.toFixed(1)}%</td>
                         <td className="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-muted)]">{formatCurrency(prof.shareOfPot)}</td>
                         <td className="whitespace-nowrap px-4 py-3 text-sm text-[#C8923A] font-medium">{formatCurrency(barbCut)}</td>
                         <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-emerald-400">{formatCurrency(prof.commission)}</td>
@@ -394,7 +391,7 @@ export function DPote() {
                     );
                   })}
                   {report.byProfessional.length === 0 && (
-                    <tr><td colSpan={8} className="px-4 py-8 text-center text-sm text-[var(--text-muted)]">Nenhum atendimento de assinatura encontrado no período</td></tr>
+                    <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-[var(--text-muted)]">Nenhum atendimento de assinatura encontrado no período</td></tr>
                   )}
                 </tbody>
                 {report.byProfessional.length > 0 && totals && (
@@ -404,7 +401,6 @@ export function DPote() {
                       <td className="px-4 py-3" />
                       <td className="px-4 py-3 text-sm font-semibold text-[var(--text-primary)]">{report.totalServices}</td>
                       <td className="px-4 py-3 text-sm font-semibold text-[var(--text-primary)]">{report.totalFichas}</td>
-                      <td className="px-4 py-3 text-sm font-semibold text-[var(--text-primary)]">100%</td>
                       <td className="px-4 py-3 text-sm font-semibold text-[var(--text-primary)]">{formatCurrency(report.totalSubscriptionValue)}</td>
                       <td className="px-4 py-3 text-sm font-semibold text-[#C8923A]">{formatCurrency(totals.totalBarbearia)}</td>
                       <td className="px-4 py-3 text-sm font-semibold text-emerald-400">{formatCurrency(totals.totalProfissionais)}</td>
