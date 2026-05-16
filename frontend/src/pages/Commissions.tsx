@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Percent, Download, DollarSign, Scissors, PieChart, Package, Clock, CheckCircle, Building2, Users } from 'lucide-react';
 import {
   useCommissions,
@@ -205,15 +206,24 @@ function CommissionsContent() {
             <p className="text-sm text-[var(--text-muted)]">Gerencie as comissões dos profissionais</p>
           </div>
         </div>
-        {list.length > 0 && (
-          <button
-            onClick={() => exportCommissionsPDF(list, filters)}
-            className="flex items-center gap-2 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] px-4 py-2.5 text-sm font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--hover-bg)]"
+        <div className="flex items-center gap-2">
+          <Link
+            to="/financeiro/dpote"
+            className="flex items-center gap-2 rounded-xl border border-[#C8923A]/30 bg-[#C8923A]/10 px-4 py-2.5 text-sm font-medium text-[#C8923A] transition-colors hover:bg-[#C8923A]/20"
           >
-            <Download className="h-4 w-4" />
-            Exportar PDF
-          </button>
-        )}
+            <PieChart className="h-4 w-4" />
+            Ver D'Pote
+          </Link>
+          {list.length > 0 && (
+            <button
+              onClick={() => exportCommissionsPDF(list, filters)}
+              className="flex items-center gap-2 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] px-4 py-2.5 text-sm font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--hover-bg)]"
+            >
+              <Download className="h-4 w-4" />
+              Exportar PDF
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Filtros */}

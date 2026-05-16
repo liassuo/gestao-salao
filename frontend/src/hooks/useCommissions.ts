@@ -39,10 +39,15 @@ export function useMarkCommissionAsPaid() {
   });
 }
 
-export function usePoteReport(periodStart?: string, periodEnd?: string) {
+export function usePoteReport(
+  periodStart?: string,
+  periodEnd?: string,
+  revenueOverride?: number,
+) {
   return useQuery({
-    queryKey: [...COMMISSIONS_KEY, 'pote-report', periodStart, periodEnd],
-    queryFn: () => commissionsService.getPoteReport(periodStart!, periodEnd!),
+    queryKey: [...COMMISSIONS_KEY, 'pote-report', periodStart, periodEnd, revenueOverride],
+    queryFn: () =>
+      commissionsService.getPoteReport(periodStart!, periodEnd!, revenueOverride),
     enabled: !!periodStart && !!periodEnd,
   });
 }

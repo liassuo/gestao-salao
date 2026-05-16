@@ -30,8 +30,17 @@ export class CommissionsController {
   async getPoteReport(
     @Query('periodStart') periodStart: string,
     @Query('periodEnd') periodEnd: string,
+    @Query('revenueOverride') revenueOverride?: string,
   ) {
-    return this.commissionsService.getPoteReport(periodStart, periodEnd);
+    const override =
+      revenueOverride !== undefined && revenueOverride !== ''
+        ? Number(revenueOverride)
+        : undefined;
+    return this.commissionsService.getPoteReport(
+      periodStart,
+      periodEnd,
+      Number.isFinite(override as number) ? override : undefined,
+    );
   }
 
   @Get()

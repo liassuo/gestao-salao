@@ -93,6 +93,8 @@ export interface GenerateCommissionPayload {
   periodStart: string;
   periodEnd: string;
   branchId?: string;
+  // Faturamento de assinaturas em centavos (sobrescreve o auto-calculado)
+  subscriptionRevenueOverride?: number;
 }
 
 export interface CommissionFilters {

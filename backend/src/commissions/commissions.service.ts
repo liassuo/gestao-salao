@@ -102,17 +102,10 @@ export class CommissionsService {
 
     // Calcular o pote: valor total das assinaturas que se sobrepõem ao período
     if (totalFichas > 0) {
-      const { data: activeSubscriptions } = await this.supabase
-        .from('client_subscriptions')
-        .select('plan:subscription_plans(price)')
-        .in('status', ['ACTIVE', 'SUSPENDED'])
-        .lte('startDate', endStr)
-        .gte('endDate', startStr);
-
-      const totalSubscriptionValue = (activeSubscriptions || []).reduce(
-        (sum: number, sub: any) => sum + (sub.plan?.price || 0),
-        0,
-      );
+      const totalSubscriptionValue =
+        dto.subscriptionRevenueOverride !== undefined
+          ? dto.subscriptionRevenueOverride
+          : await this.computeSubscriptionRevenue(startStr, endStr);
 
       // 50% da receita fica com a barbearia, 50% vira pote dos barbeiros
       const barberPool = Math.round((totalSubscriptionValue * SUBSCRIPTION_BARBER_POOL_PERCENT) / 100);
@@ -212,7 +205,11 @@ export class CommissionsService {
     return createdCommissions;
   }
 
-  async getPoteReport(periodStart: string, periodEnd: string) {
+  async getPoteReport(
+    periodStart: string,
+    periodEnd: string,
+    revenueOverride?: number,
+  ) {
     const startStr = `${periodStart}T00:00:00`;
     const endStr = `${periodEnd}T23:59:59`;
 
@@ -225,7 +222,7 @@ export class CommissionsService {
       .gte('scheduledAt', startStr)
       .lte('scheduledAt', endStr);
 
-    // Buscar assinaturas que se sobrepõem ao período
+    // Buscar assinaturas que se sobrepõem ao período (apenas para a contagem)
     const { data: activeSubscriptions } = await this.supabase
       .from('client_subscriptions')
       .select('plan:subscription_plans(name, price)')
@@ -233,10 +230,16 @@ export class CommissionsService {
       .lte('startDate', endStr)
       .gte('endDate', startStr);
 
-    const totalSubscriptionValue = (activeSubscriptions || []).reduce(
+    const autoSubscriptionValue = (activeSubscriptions || []).reduce(
       (sum: number, sub: any) => sum + (sub.plan?.price || 0),
       0,
     );
+
+    // Se houver override do usuário, ele tem precedência sobre o auto-cálculo
+    const totalSubscriptionValue =
+      revenueOverride !== undefined && revenueOverride >= 0
+        ? revenueOverride
+        : autoSubscriptionValue;
 
     // Agrupar fichas por profissional e por serviço
     const profMap = new Map<string, { fichas: number; services: Map<string, { name: string; count: number; fichas: number }> }>();
@@ -306,10 +309,30 @@ export class CommissionsService {
       totalServices,
       totalFichas,
       totalSubscriptionValue,
+      autoSubscriptionValue,
+      isOverridden:
+        revenueOverride !== undefined && revenueOverride !== autoSubscriptionValue,
       barberPoolPercent: SUBSCRIPTION_BARBER_POOL_PERCENT,
       activeSubscriptions: activeSubscriptions?.length || 0,
       byProfessional,
     };
+  }
+
+  private async computeSubscriptionRevenue(
+    startStr: string,
+    endStr: string,
+  ): Promise<number> {
+    const { data: activeSubscriptions } = await this.supabase
+      .from('client_subscriptions')
+      .select('plan:subscription_plans(price)')
+      .in('status', ['ACTIVE', 'SUSPENDED'])
+      .lte('startDate', endStr)
+      .gte('endDate', startStr);
+
+    return (activeSubscriptions || []).reduce(
+      (sum: number, sub: any) => sum + (sub.plan?.price || 0),
+      0,
+    );
   }
 
   async findAll(query: QueryCommissionDto) {

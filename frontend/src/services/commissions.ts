@@ -33,10 +33,14 @@ export const commissionsService = {
     await api.delete(`/commissions/${id}`);
   },
 
-  async getPoteReport(periodStart: string, periodEnd: string) {
-    const response = await api.get('/commissions/pote-report', {
-      params: { periodStart, periodEnd },
-    });
+  async getPoteReport(
+    periodStart: string,
+    periodEnd: string,
+    revenueOverride?: number,
+  ) {
+    const params: Record<string, string | number> = { periodStart, periodEnd };
+    if (revenueOverride !== undefined) params.revenueOverride = revenueOverride;
+    const response = await api.get('/commissions/pote-report', { params });
     return response.data;
   },
 };

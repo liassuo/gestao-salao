@@ -1,7 +1,13 @@
-import { useState } from 'react';
-import { PieChart, Users, Hash, DollarSign, Download, Building2 } from 'lucide-react';
-import { usePoteReport, useActiveBranches } from '@/hooks';
-import { SkeletonTable, PeriodShortcuts } from '@/components/ui';
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { PieChart, Users, Hash, DollarSign, Download, Building2, RotateCcw, Sparkles, Percent } from 'lucide-react';
+import {
+  usePoteReport,
+  useActiveBranches,
+  useGenerateCommissions,
+  getApiErrorMessage,
+} from '@/hooks';
+import { SkeletonTable, PeriodShortcuts, useToast, ConfirmModal } from '@/components/ui';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -130,6 +136,18 @@ function exportDPotePDF(report: any, startDate: string, endDate: string) {
   doc.save(`dpote-${startDate}-${endDate}.pdf`);
 }
 
+function parseBRLToCents(input: string): number {
+  // Aceita "5.727,70", "5727,70", "5727.70", "5727"
+  const cleaned = input.replace(/\s|R\$/g, '').replace(/\./g, '').replace(',', '.');
+  const value = Number(cleaned);
+  if (!Number.isFinite(value) || value < 0) return 0;
+  return Math.round(value * 100);
+}
+
+function centsToBRL(cents: number): string {
+  return (cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 export function DPote() {
   const today = new Date();
   const firstDay = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
@@ -140,7 +158,50 @@ export function DPote() {
   const { data: branches } = useActiveBranches();
   const [branchId, setBranchId] = useState<string>('');
 
-  const { data: report, isLoading } = usePoteReport(startDate, endDate);
+  // Override do faturamento. undefined = usar auto-cálculo.
+  const [revenueInput, setRevenueInput] = useState<string>('');
+  const [touchedRevenue, setTouchedRevenue] = useState(false);
+
+  const overrideCents = useMemo(() => {
+    if (!touchedRevenue || revenueInput.trim() === '') return undefined;
+    return parseBRLToCents(revenueInput);
+  }, [revenueInput, touchedRevenue]);
+
+  const { data: report, isLoading } = usePoteReport(startDate, endDate, overrideCents);
+
+  // Quando o auto-cálculo chega e o usuário ainda não tocou no campo, preenche
+  // o input com o valor auto (igual ao painel do Cashbarber).
+  useEffect(() => {
+    if (!touchedRevenue && report?.autoSubscriptionValue !== undefined) {
+      setRevenueInput(centsToBRL(report.autoSubscriptionValue));
+    }
+  }, [report?.autoSubscriptionValue, touchedRevenue]);
+
+  const resetRevenue = () => {
+    setTouchedRevenue(false);
+    if (report?.autoSubscriptionValue !== undefined) {
+      setRevenueInput(centsToBRL(report.autoSubscriptionValue));
+    }
+  };
+
+  const generateCommissions = useGenerateCommissions();
+  const toast = useToast();
+  const [confirmGenerate, setConfirmGenerate] = useState(false);
+
+  const handleGenerate = async () => {
+    setConfirmGenerate(false);
+    try {
+      await generateCommissions.mutateAsync({
+        periodStart: startDate,
+        periodEnd: endDate,
+        branchId: branchId || undefined,
+        subscriptionRevenueOverride: overrideCents,
+      });
+      toast.success('Comissões geradas', 'As comissões foram calculadas com base no pote.');
+    } catch (err) {
+      toast.error('Erro', getApiErrorMessage(err));
+    }
+  };
 
   const totals = report?.byProfessional?.length ? calcDPoteTotals(report) : null;
 
@@ -157,15 +218,24 @@ export function DPote() {
             <p className="text-sm text-[var(--text-muted)]">Distribuição do pote de assinaturas entre os profissionais</p>
           </div>
         </div>
-        {report && report.byProfessional.length > 0 && (
-          <button
-            onClick={() => exportDPotePDF(report, startDate, endDate)}
+        <div className="flex items-center gap-2">
+          <Link
+            to="/financeiro/comissoes"
             className="flex items-center gap-2 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] px-4 py-2.5 text-sm font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--hover-bg)]"
           >
-            <Download className="h-4 w-4" />
-            Exportar PDF
-          </button>
-        )}
+            <Percent className="h-4 w-4" />
+            Ver comissões geradas
+          </Link>
+          {report && report.byProfessional.length > 0 && (
+            <button
+              onClick={() => exportDPotePDF(report, startDate, endDate)}
+              className="flex items-center gap-2 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] px-4 py-2.5 text-sm font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--hover-bg)]"
+            >
+              <Download className="h-4 w-4" />
+              Exportar PDF
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Filtros */}
@@ -189,6 +259,58 @@ export function DPote() {
         )}
         <div className="w-full">
           <PeriodShortcuts onSelect={(s, e) => { setStartDate(s); setEndDate(e); }} />
+        </div>
+      </div>
+
+      {/* Faturamento mensal de assinaturas — editável (igual painel 3/3 do Cashbarber) */}
+      <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-4">
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="flex-1 min-w-[220px]">
+            <label className="mb-1 block text-xs font-medium text-[var(--text-muted)]">
+              Faturamento de assinaturas no período (R$)
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                inputMode="decimal"
+                value={revenueInput}
+                onChange={(e) => { setRevenueInput(e.target.value); setTouchedRevenue(true); }}
+                placeholder="0,00"
+                className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#C8923A]"
+              />
+              {report?.isOverridden && (
+                <button
+                  type="button"
+                  onClick={resetRevenue}
+                  title="Restaurar valor auto-calculado"
+                  className="flex items-center gap-1 rounded-xl border border-[var(--border-color)] px-3 py-2.5 text-xs text-[var(--text-muted)] hover:bg-[var(--hover-bg)]"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" /> Auto
+                </button>
+              )}
+            </div>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              Auto-calculado: R$ {report ? centsToBRL(report.autoSubscriptionValue ?? 0) : '0,00'}
+              {report?.isOverridden && ' · usando valor manual'}
+            </p>
+          </div>
+          <div className="min-w-[160px]">
+            <label className="mb-1 block text-xs font-medium text-[var(--text-muted)]">
+              % do pote (profissionais)
+            </label>
+            <div className="rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)]">
+              {report?.barberPoolPercent ?? 50}% / {100 - (report?.barberPoolPercent ?? 50)}% barbearia
+            </div>
+          </div>
+          <button
+            type="button"
+            disabled={!report || report.byProfessional.length === 0 || generateCommissions.isPending}
+            onClick={() => setConfirmGenerate(true)}
+            className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Sparkles className="h-4 w-4" />
+            {generateCommissions.isPending ? 'Gerando…' : 'Gerar comissões'}
+          </button>
         </div>
       </div>
 
@@ -299,6 +421,21 @@ export function DPote() {
           <p className="text-sm text-[var(--text-muted)]">Selecione um período para visualizar o relatório do pote</p>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={confirmGenerate}
+        onClose={() => setConfirmGenerate(false)}
+        onConfirm={handleGenerate}
+        title="Gerar comissões"
+        message={
+          report
+            ? `Serão geradas comissões para o período de ${formatDateBR(startDate)} a ${formatDateBR(endDate)} usando R$ ${centsToBRL(report.totalSubscriptionValue)} como faturamento de assinaturas. Confirmar?`
+            : 'Confirmar geração?'
+        }
+        confirmLabel="Gerar"
+        variant="info"
+        isLoading={generateCommissions.isPending}
+      />
     </div>
   );
 }
