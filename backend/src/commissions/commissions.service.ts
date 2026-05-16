@@ -222,17 +222,18 @@ export class CommissionsService {
       .gte('scheduledAt', startStr)
       .lte('scheduledAt', endStr);
 
-    // Buscar assinaturas que se sobrepõem ao período (apenas para a contagem)
+    // Contagem de assinaturas ativas no período (apenas para exibição)
     const { data: activeSubscriptions } = await this.supabase
       .from('client_subscriptions')
-      .select('plan:subscription_plans(name, price)')
+      .select('id')
       .in('status', ['ACTIVE', 'SUSPENDED'])
       .lte('startDate', endStr)
       .gte('endDate', startStr);
 
-    const autoSubscriptionValue = (activeSubscriptions || []).reduce(
-      (sum: number, sub: any) => sum + (sub.plan?.price || 0),
-      0,
+    // Faturamento real = soma de pagamentos de assinatura no período
+    const autoSubscriptionValue = await this.computeSubscriptionRevenue(
+      startStr,
+      endStr,
     );
 
     // Se houver override do usuário, ele tem precedência sobre o auto-cálculo
@@ -318,19 +319,27 @@ export class CommissionsService {
     };
   }
 
+  /**
+   * Faturamento real de assinaturas no período = soma dos pagamentos
+   * com subscriptionId não-nulo cujo paidAt cai dentro do intervalo.
+   *
+   * Antes somávamos plan.price × assinaturas-ativas-no-período, o que
+   * inflava o valor (contava planos não pagos no período e ignorava
+   * descontos / valores efetivamente recebidos).
+   */
   private async computeSubscriptionRevenue(
     startStr: string,
     endStr: string,
   ): Promise<number> {
-    const { data: activeSubscriptions } = await this.supabase
-      .from('client_subscriptions')
-      .select('plan:subscription_plans(price)')
-      .in('status', ['ACTIVE', 'SUSPENDED'])
-      .lte('startDate', endStr)
-      .gte('endDate', startStr);
+    const { data: paidPayments } = await this.supabase
+      .from('payments')
+      .select('amount')
+      .not('subscriptionId', 'is', null)
+      .gte('paidAt', startStr)
+      .lte('paidAt', endStr);
 
-    return (activeSubscriptions || []).reduce(
-      (sum: number, sub: any) => sum + (sub.plan?.price || 0),
+    return (paidPayments || []).reduce(
+      (sum: number, p: any) => sum + (p.amount || 0),
       0,
     );
   }
