@@ -340,12 +340,17 @@ export class CommissionsService {
   }
 
   /**
-   * Faturamento real de assinaturas no período = soma dos pagamentos
-   * com subscriptionId não-nulo cujo paidAt cai dentro do intervalo.
+   * Faturamento de referência das assinaturas no período.
    *
-   * Antes somávamos plan.price × assinaturas-ativas-no-período, o que
-   * inflava o valor (contava planos não pagos no período e ignorava
-   * descontos / valores efetivamente recebidos).
+   * Estratégia híbrida:
+   * 1. Soma os pagamentos com subscriptionId não-nulo no período
+   *    (caminho ideal — reflete o que realmente entrou no caixa).
+   * 2. Se não houver nenhum pagamento vinculado (caso de assinaturas
+   *    quitadas manualmente sem vincular subscriptionId), faz fallback
+   *    para soma de plan.price das assinaturas ativas que se sobrepõem
+   *    ao período — é o valor mensal de referência.
+   *
+   * O usuário pode sempre sobrescrever o resultado no campo editável.
    */
   private async computeSubscriptionRevenue(
     startStr: string,
@@ -358,8 +363,23 @@ export class CommissionsService {
       .gte('paidAt', startStr)
       .lte('paidAt', endStr);
 
-    return (paidPayments || []).reduce(
+    const fromPayments = (paidPayments || []).reduce(
       (sum: number, p: any) => sum + (p.amount || 0),
+      0,
+    );
+
+    if (fromPayments > 0) return fromPayments;
+
+    // Fallback: soma plan.price das assinaturas com sobreposição ao período
+    const { data: activeSubscriptions } = await this.supabase
+      .from('client_subscriptions')
+      .select('plan:subscription_plans(price)')
+      .in('status', ['ACTIVE', 'SUSPENDED'])
+      .lte('startDate', endStr)
+      .gte('endDate', startStr);
+
+    return (activeSubscriptions || []).reduce(
+      (sum: number, sub: any) => sum + (sub.plan?.price || 0),
       0,
     );
   }
