@@ -82,7 +82,7 @@ function exportDPotePDF(report: any, startDate: string, endDate: string) {
     const servicesCount = prof.services.reduce((s: number, sv: any) => s + sv.count, 0);
     return [
       prof.professionalName,
-      `${prof.commissionRate}%`,
+      `${report.barberPoolPercent}%`,
       servicesCount,
       prof.fichas,
       prof.percentage.toFixed(1) + '%',
@@ -383,7 +383,7 @@ export function DPote() {
                             {prof.services.map((s: any) => `${s.name}: ${s.count} (${s.fichas} fichas)`).join(' | ')}
                           </div>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-muted)]">{prof.commissionRate}%</td>
+                        <td className="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-muted)]">{report.barberPoolPercent}%</td>
                         <td className="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-muted)]">{prof.services.reduce((sum: number, s: any) => sum + s.count, 0)}</td>
                         <td className="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-muted)]">{prof.fichas}</td>
                         <td className="whitespace-nowrap px-4 py-3 text-sm text-[var(--text-muted)]">{prof.percentage.toFixed(1)}%</td>
