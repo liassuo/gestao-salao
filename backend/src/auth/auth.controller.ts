@@ -165,6 +165,16 @@ export class AuthController {
   ) {
     return this.authService.resetProfessionalPassword(professionalId);
   }
+
+  @Post('reset-client-password/:clientId')
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Admin reseta senha de um cliente' })
+  async resetClientPassword(
+    @Param('clientId') clientId: string,
+  ) {
+    return this.authService.resetClientPassword(clientId);
+  }
 }
 
 

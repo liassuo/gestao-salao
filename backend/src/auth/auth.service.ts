@@ -531,6 +531,32 @@ export class AuthService {
     return { message: 'Senha resetada. O profissional deverá criar uma nova senha no próximo login.' };
   }
 
+  async resetClientPassword(clientId: string): Promise<{ message: string }> {
+    const { data: client } = await this.supabase
+      .from('clients')
+      .select('id')
+      .eq('id', clientId)
+      .single();
+
+    if (!client) {
+      throw new UnauthorizedException('Cliente não encontrado');
+    }
+
+    const tempPassword = randomUUID();
+    const hashedPassword = await bcrypt.hash(tempPassword, 6);
+
+    await this.supabase
+      .from('clients')
+      .update({
+        password: hashedPassword,
+        mustChangePassword: true,
+        updatedAt: new Date().toISOString(),
+      })
+      .eq('id', clientId);
+
+    return { message: 'Senha resetada. O cliente deverá criar uma nova senha no próximo login.' };
+  }
+
   // ── Recuperação de senha — Usuários (admin/profissionais) ─────────────────
 
   async forgotPassword(email: string): Promise<void> {

@@ -34,4 +34,9 @@ export const clientsService = {
   async permanentDelete(id: string): Promise<void> {
     await api.delete(`/clients/${id}/permanent`);
   },
+
+  async resetPassword(clientId: string): Promise<{ message: string }> {
+    const response = await api.post<{ message: string }>(`/auth/reset-client-password/${clientId}`);
+    return response.data;
+  },
 };

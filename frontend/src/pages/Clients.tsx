@@ -87,6 +87,18 @@ export function Clients() {
     }
   };
 
+  const handleResetPassword = async (client: Client) => {
+    if (!confirm(`Tem certeza que deseja resetar a senha de ${client.name}? O cliente precisará criar uma nova senha no próximo login.`)) {
+      return;
+    }
+    try {
+      await clientsService.resetPassword(client.id);
+      toast.success('Senha resetada', `${client.name} precisará criar uma nova senha no próximo login.`);
+    } catch {
+      toast.error('Erro', 'Não foi possível resetar a senha do cliente.');
+    }
+  };
+
   const handleDeleteClient = async () => {
     if (!deletingClient) return;
     try {
@@ -197,6 +209,7 @@ export function Clients() {
           clients={filteredClients || []}
           onEdit={handleOpenEditModal}
           onDelete={setDeletingClient}
+          onResetPassword={tab === 'active' ? handleResetPassword : undefined}
           isLoading={deleteClient.isPending}
           onNewClient={tab === 'active' ? handleOpenCreateModal : undefined}
         />

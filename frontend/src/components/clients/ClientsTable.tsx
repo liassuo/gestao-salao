@@ -1,4 +1,4 @@
-import { Users, Phone, Mail, MoreVertical, Edit2, Trash2 } from 'lucide-react';
+import { Users, Phone, Mail, MoreVertical, Edit2, Trash2, KeyRound } from 'lucide-react';
 import { useState, useRef } from 'react';
 import { EmptyState } from '@/components/ui';
 import { formatPhone } from '@/utils/format';
@@ -8,6 +8,7 @@ interface ClientsTableProps {
   clients: Client[];
   onEdit: (client: Client) => void;
   onDelete: (client: Client) => void;
+  onResetPassword?: (client: Client) => void;
   isLoading?: boolean;
   onNewClient?: () => void;
 }
@@ -33,6 +34,7 @@ export function ClientsTable({
   clients,
   onEdit,
   onDelete,
+  onResetPassword,
   isLoading,
   onNewClient,
 }: ClientsTableProps) {
@@ -169,6 +171,18 @@ export function ClientsTable({
                             <Edit2 className="h-4 w-4" />
                             Editar
                           </button>
+                          {onResetPassword && (
+                            <button
+                              onClick={() => {
+                                onResetPassword(client);
+                                setOpenMenuId(null);
+                              }}
+                              className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[#C8923A] hover:bg-[#C8923A]/10"
+                            >
+                              <KeyRound className="h-4 w-4" />
+                              Resetar Senha
+                            </button>
+                          )}
                           <button
                             onClick={() => {
                               onDelete(client);
