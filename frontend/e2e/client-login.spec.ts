@@ -65,7 +65,7 @@ test.describe('Client Login', () => {
 
   test('should navigate to register form when clicking "Criar conta"', async ({ page }) => {
     await page.getByRole('button', { name: 'Criar conta' }).click();
-    await expect(page.locator('text=Criar Conta')).toBeVisible();
+    await expect(page.getByRole('paragraph').filter({ hasText: 'Criar Conta' })).toBeVisible();
     await expect(page.locator('#name')).toBeVisible();
     await expect(page.locator('#phone')).toBeVisible();
     await expect(page.locator('#birthDate')).toBeVisible();
