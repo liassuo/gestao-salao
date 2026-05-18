@@ -3,18 +3,17 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { CLIENT_PATHS } from '../utils/paths';
 import { GoogleLogin } from '@react-oauth/google';
 import type { CredentialResponse } from '@react-oauth/google';
-import { Mail, Lock, ArrowRight, ArrowLeft, User, Phone, CalendarDays } from 'lucide-react';
+import { Mail, Lock, ArrowLeft, User, Phone, CalendarDays } from 'lucide-react';
 import { useClientAuth } from '../auth';
 import { clientAuthApi, storage } from '../services/api';
 import { formatPhoneInput, formatDateBrInput, dateBrToIso } from '@/utils/format';
 import { GOOGLE_CLIENT_ID } from '@/app/providers';
-import type { CheckEmailResponse } from '../services/api';
 import { BrandWordmark } from '@/components/ui';
 
-type Step = 'email' | 'login' | 'register' | 'setup_password';
+type Step = 'main' | 'register' | 'setup_password';
 
 export function ClientLogin() {
-  const [step, setStep] = useState<Step>('email');
+  const [step, setStep] = useState<Step>('main');
   const [email, setEmail] = useState('');
   const [clientName, setClientName] = useState('');
   const [name, setName] = useState('');
@@ -24,6 +23,8 @@ export function ClientLogin() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loginFailed, setLoginFailed] = useState(false);
+  const [checkingSetup, setCheckingSetup] = useState(false);
 
   const { login, loginWithGoogle, register } = useClientAuth();
   const navigate = useNavigate();
@@ -37,44 +38,12 @@ export function ClientLogin() {
     return null;
   };
 
-  const handleCheckEmail = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) {
       setError('Digite seu email');
       return;
     }
-
-    setIsSubmitting(true);
-    setError(null);
-
-    try {
-      const result: CheckEmailResponse = await clientAuthApi.checkEmail(email.trim());
-
-      switch (result.status) {
-        case 'new':
-          setStep('register');
-          break;
-        case 'login':
-          setClientName(result.name || '');
-          setStep('login');
-          break;
-        case 'setup_password':
-          setClientName(result.name || '');
-          setStep('setup_password');
-          break;
-        case 'google':
-          setError(`Esta conta usa login com Google. Use o botão "Continuar com Google" acima.`);
-          break;
-      }
-    } catch {
-      setError('Erro ao verificar email. Tente novamente.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
     if (!password.trim()) {
       setError('Digite sua senha');
       return;
@@ -82,6 +51,7 @@ export function ClientLogin() {
 
     setIsSubmitting(true);
     setError(null);
+    setLoginFailed(false);
 
     try {
       const result = await login(email.trim(), password);
@@ -91,19 +61,53 @@ export function ClientLogin() {
         navigate(from, { replace: true });
       }
     } catch {
-      setError('Senha incorreta. Tente novamente.');
+      setError('Email ou senha incorretos.');
+      setLoginFailed(true);
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const handleFirstAccess = async () => {
+    if (!email.trim()) {
+      setError('Digite seu email primeiro');
+      return;
+    }
+
+    setCheckingSetup(true);
+    setError(null);
+
+    try {
+      const result = await clientAuthApi.checkEmail(email.trim());
+      if (result.status === 'setup_password') {
+        setClientName(result.name || '');
+        setPassword('');
+        setConfirmPassword('');
+        setStep('setup_password');
+      } else if (result.status === 'login') {
+        setError('Esta conta já tem senha definida. Tente novamente ou use "Esqueceu sua senha?".');
+      } else if (result.status === 'new') {
+        setError('Email não cadastrado. Clique em "Criar conta" abaixo.');
+      } else {
+        setError('Não foi possível definir senha para este email.');
+      }
+    } catch {
+      setError('Erro ao verificar email. Tente novamente.');
+    } finally {
+      setCheckingSetup(false);
+    }
+  };
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email.trim()) {
+      setError('Digite seu email');
+      return;
+    }
     if (!name.trim()) {
       setError('Digite seu nome');
       return;
     }
-
     if (!phone.trim()) {
       setError('Digite seu telefone');
       return;
@@ -134,13 +138,11 @@ export function ClientLogin() {
       navigate(from, { replace: true });
     } catch (err: any) {
       const responseData = err.response?.data;
-      // Email duplicado (race com pre-check ou usuario teimou em criar): manda
-      // pra tela de login com o email preservado em vez de mostrar erro tecnico.
       if (responseData?.message?.code === 'EMAIL_ALREADY_EXISTS' || responseData?.code === 'EMAIL_ALREADY_EXISTS') {
-        setError('Este email ja esta cadastrado. Faça login com a sua senha.');
+        setError('Este email já está cadastrado. Faça login com a sua senha.');
         setPassword('');
         setConfirmPassword('');
-        setStep('login');
+        setStep('main');
         setIsSubmitting(false);
         return;
       }
@@ -169,9 +171,7 @@ export function ClientLogin() {
     setError(null);
 
     try {
-      // Criar senha e obter token definitivo em uma única chamada (sem auth)
       const response = await clientAuthApi.initSetupPassword(email.trim(), password);
-      // Salvar dados no storage e context
       storage.setToken(response.accessToken);
       storage.setUser(response.user);
       navigate(from, { replace: true });
@@ -203,25 +203,32 @@ export function ClientLogin() {
   };
 
   const handleBack = () => {
-    setStep('email');
+    setStep('main');
     setPassword('');
     setConfirmPassword('');
     setError(null);
+    setLoginFailed(false);
+  };
+
+  const goToRegister = () => {
+    setStep('register');
+    setPassword('');
+    setConfirmPassword('');
+    setError(null);
+    setLoginFailed(false);
   };
 
   const getStepTitle = () => {
     switch (step) {
-      case 'email': return 'Portal do Cliente';
-      case 'login': return `Ola, ${clientName.split(' ')[0]}!`;
+      case 'main': return 'Portal do Cliente';
       case 'register': return 'Criar Conta';
-      case 'setup_password': return `Bem-vindo, ${clientName.split(' ')[0]}!`;
+      case 'setup_password': return clientName ? `Bem-vindo, ${clientName.split(' ')[0]}!` : 'Primeiro Acesso';
     }
   };
 
   const getStepSubtitle = () => {
     switch (step) {
-      case 'email': return null;
-      case 'login': return 'Digite sua senha para entrar';
+      case 'main': return null;
       case 'register': return 'Preencha seus dados para criar sua conta';
       case 'setup_password': return 'Crie uma senha para acessar sua conta';
     }
@@ -275,8 +282,8 @@ export function ClientLogin() {
             </div>
           )}
 
-          {/* Google Login - só na etapa de email e se configurado */}
-          {step === 'email' && GOOGLE_CLIENT_ID && (
+          {/* Google Login - só na tela principal e se configurado */}
+          {step === 'main' && GOOGLE_CLIENT_ID && (
             <>
               <div className="mb-5">
                 <GoogleLogin
@@ -299,13 +306,11 @@ export function ClientLogin() {
             </>
           )}
 
-          {/* === ETAPA 1: EMAIL === */}
-          {step === 'email' && (
-            <form onSubmit={handleCheckEmail}>
+          {/* === TELA PRINCIPAL: LOGIN (email + senha) === */}
+          {step === 'main' && (
+            <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
-                <label htmlFor="email" className="block text-sm font-medium text-[#D4C4A0]">
-                  Email
-                </label>
+                <label htmlFor="email" className="block text-sm font-medium text-[#D4C4A0]">Email</label>
                 <div className="relative">
                   <div className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#8B7D6B]">
                     <Mail className="h-5 w-5" />
@@ -314,44 +319,17 @@ export function ClientLogin() {
                     type="email"
                     id="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => { setEmail(e.target.value); setLoginFailed(false); }}
                     placeholder="seu@email.com"
                     disabled={isSubmitting}
                     autoFocus
                     className={inputClass}
                   />
-                  <button
-                    type="submit"
-                    disabled={isSubmitting || !email.trim()}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-r from-[#8B2020] to-[#A63030] text-[#F2E8D5] transition-all hover:from-[#A63030] hover:to-[#8B2020] disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {isSubmitting ? (
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#F2E8D5] border-t-transparent" />
-                    ) : (
-                      <ArrowRight className="h-4 w-4" />
-                    )}
-                  </button>
                 </div>
-              </div>
-            </form>
-          )}
-
-          {/* === ETAPA 2A: LOGIN (email existente com senha) === */}
-          {step === 'login' && (
-            <form onSubmit={handleLogin} className="space-y-4">
-              {/* Email (readonly) */}
-              <div className="flex items-center gap-2 rounded-xl border border-[#3D2B1F]/50 bg-[#15100A]/50 px-4 py-2.5 text-sm text-[#8B7D6B]">
-                <Mail className="h-4 w-4 shrink-0" />
-                <span className="truncate">{email}</span>
-                <button type="button" onClick={handleBack} className="ml-auto shrink-0 text-[#C8923A] hover:text-[#D4A85C] transition-colors">
-                  <ArrowLeft className="h-4 w-4" />
-                </button>
               </div>
 
               <div className="space-y-2">
-                <label htmlFor="password" className="block text-sm font-medium text-[#D4C4A0]">
-                  Senha
-                </label>
+                <label htmlFor="password" className="block text-sm font-medium text-[#D4C4A0]">Senha</label>
                 <div className="relative">
                   <div className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#8B7D6B]">
                     <Lock className="h-5 w-5" />
@@ -363,16 +341,25 @@ export function ClientLogin() {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Sua senha"
                     disabled={isSubmitting}
-                    autoFocus
                     className={inputClass}
                   />
                 </div>
               </div>
 
-              <div className="text-right">
-                <Link to={CLIENT_PATHS.esqueceuSenha} className="text-xs text-[#8B7D6B] hover:text-[#C8923A] transition-colors">
+              <div className="flex items-center justify-between text-xs">
+                <Link to={CLIENT_PATHS.esqueceuSenha} className="text-[#8B7D6B] hover:text-[#C8923A] transition-colors">
                   Esqueceu sua senha?
                 </Link>
+                {loginFailed && (
+                  <button
+                    type="button"
+                    onClick={handleFirstAccess}
+                    disabled={checkingSetup}
+                    className="text-[#C8923A] hover:text-[#D4A85C] transition-colors disabled:opacity-50"
+                  >
+                    {checkingSetup ? 'Verificando...' : 'Primeiro acesso? Defina sua senha'}
+                  </button>
+                )}
               </div>
 
               <button
@@ -390,19 +377,31 @@ export function ClientLogin() {
                   <span>Entrar</span>
                 )}
               </button>
+
+              <p className="text-center text-sm text-[#8B7D6B]">
+                Não tem conta?{' '}
+                <button
+                  type="button"
+                  onClick={goToRegister}
+                  className="font-medium text-[#C8923A] hover:text-[#D4A85C] transition-colors"
+                >
+                  Criar conta
+                </button>
+              </p>
             </form>
           )}
 
-          {/* === ETAPA 2B: REGISTRO (email novo) === */}
+          {/* === REGISTRO === */}
           {step === 'register' && (
             <form onSubmit={handleRegister} className="space-y-4">
-              {/* Email (readonly) */}
-              <div className="flex items-center gap-2 rounded-xl border border-[#3D2B1F]/50 bg-[#15100A]/50 px-4 py-2.5 text-sm text-[#8B7D6B]">
-                <Mail className="h-4 w-4 shrink-0" />
-                <span className="truncate">{email}</span>
-                <button type="button" onClick={handleBack} className="ml-auto shrink-0 text-[#C8923A] hover:text-[#D4A85C] transition-colors">
-                  <ArrowLeft className="h-4 w-4" />
-                </button>
+              <div className="space-y-2">
+                <label htmlFor="reg-email" className="block text-sm font-medium text-[#D4C4A0]">Email *</label>
+                <div className="relative">
+                  <div className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#8B7D6B]">
+                    <Mail className="h-5 w-5" />
+                  </div>
+                  <input type="email" id="reg-email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="seu@email.com" disabled={isSubmitting} autoFocus className={inputClass} />
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -411,7 +410,7 @@ export function ClientLogin() {
                   <div className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#8B7D6B]">
                     <User className="h-5 w-5" />
                   </div>
-                  <input type="text" id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu nome completo" disabled={isSubmitting} autoFocus className={inputClass} />
+                  <input type="text" id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu nome completo" disabled={isSubmitting} className={inputClass} />
                 </div>
               </div>
 
@@ -482,10 +481,21 @@ export function ClientLogin() {
                   <span>Criar Conta</span>
                 )}
               </button>
+
+              <p className="text-center text-sm text-[#8B7D6B]">
+                Já tem conta?{' '}
+                <button
+                  type="button"
+                  onClick={handleBack}
+                  className="font-medium text-[#C8923A] hover:text-[#D4A85C] transition-colors"
+                >
+                  Entrar
+                </button>
+              </p>
             </form>
           )}
 
-          {/* === ETAPA 2C: SETUP PASSWORD (email existente sem senha) === */}
+          {/* === SETUP PASSWORD (primeiro acesso) === */}
           {step === 'setup_password' && (
             <form onSubmit={handleSetupPassword} className="space-y-4">
               {/* Email (readonly) */}
