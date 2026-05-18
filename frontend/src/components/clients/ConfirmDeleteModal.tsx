@@ -8,6 +8,7 @@ interface ConfirmDeleteModalProps {
   onConfirm: () => Promise<void>;
   client: Client | null;
   isLoading: boolean;
+  mode?: 'active' | 'inactive';
 }
 
 export function ConfirmDeleteModal({
@@ -16,21 +17,31 @@ export function ConfirmDeleteModal({
   onConfirm,
   client,
   isLoading,
+  mode = 'active',
 }: ConfirmDeleteModalProps) {
   if (!client) return null;
 
+  const isPermanent = mode === 'inactive';
+  const title = isPermanent ? 'Excluir Cliente' : 'Inativar Cliente';
+  const verb = isPermanent ? 'excluir permanentemente' : 'inativar';
+  const description = isPermanent
+    ? 'Esta ação não pode ser desfeita. O cliente será removido em definitivo da base de dados.'
+    : 'O cliente será movido para a aba de Inativos e não aparecerá mais na lista de ativos. Você pode reativá-lo depois.';
+  const confirmLabel = isPermanent ? 'Excluir' : 'Inativar';
+  const loadingLabel = isPermanent ? 'Excluindo...' : 'Inativando...';
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Excluir Cliente" size="sm">
+    <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm">
       <div className="space-y-4">
         <div className="flex items-start gap-3 rounded-xl bg-red-500/20 p-4">
           <AlertTriangle className="mt-0.5 h-5 w-5 text-[#A63030]" />
           <div>
             <p className="font-medium text-[#A63030]">Atenção</p>
             <p className="text-sm text-[#C45050]">
-              Tem certeza que deseja excluir o cliente <strong>{client.name}</strong>?
+              Tem certeza que deseja {verb} o cliente <strong>{client.name}</strong>?
             </p>
             <p className="mt-1 text-sm text-[#C45050]/80">
-              O cliente será desativado e não aparecerá mais na lista.
+              {description}
             </p>
           </div>
         </div>
@@ -51,7 +62,7 @@ export function ConfirmDeleteModal({
             className="flex items-center gap-2 rounded-xl bg-[#8B2020] px-4 py-2 text-sm font-medium text-white hover:bg-[#6B1818] disabled:opacity-50"
           >
             {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-            {isLoading ? 'Excluindo...' : 'Excluir'}
+            {isLoading ? loadingLabel : confirmLabel}
           </button>
         </div>
       </div>

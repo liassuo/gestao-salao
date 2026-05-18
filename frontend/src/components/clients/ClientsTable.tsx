@@ -1,4 +1,4 @@
-import { Users, Phone, Mail, MoreVertical, Edit2, Trash2, KeyRound } from 'lucide-react';
+import { Users, Phone, Mail, MoreVertical, Edit2, Trash2, KeyRound, UserX } from 'lucide-react';
 import { useState, useRef } from 'react';
 import { EmptyState } from '@/components/ui';
 import { formatPhone } from '@/utils/format';
@@ -11,6 +11,7 @@ interface ClientsTableProps {
   onResetPassword?: (client: Client) => void;
   isLoading?: boolean;
   onNewClient?: () => void;
+  mode?: 'active' | 'inactive';
 }
 
 function formatDate(date: string): string {
@@ -37,7 +38,11 @@ export function ClientsTable({
   onResetPassword,
   isLoading,
   onNewClient,
+  mode = 'active',
 }: ClientsTableProps) {
+  const isInactive = mode === 'inactive';
+  const ActionIcon = isInactive ? Trash2 : UserX;
+  const actionLabel = isInactive ? 'Excluir' : 'Inativar';
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
   const menuBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -140,7 +145,12 @@ export function ClientsTable({
                           const btn = menuBtnRefs.current[client.id];
                           if (btn) {
                             const rect = btn.getBoundingClientRect();
-                            setMenuPos({ top: rect.bottom + 4, left: rect.right - 144 });
+                            const menuHeight = onResetPassword ? 132 : 92;
+                            const spaceBelow = window.innerHeight - rect.bottom;
+                            const top = spaceBelow < menuHeight + 8
+                              ? rect.top - menuHeight - 4
+                              : rect.bottom + 4;
+                            setMenuPos({ top, left: rect.right - 144 });
                           }
                           setOpenMenuId(client.id);
                         }
@@ -190,8 +200,8 @@ export function ClientsTable({
                             }}
                             className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[#A63030] hover:bg-red-500/10"
                           >
-                            <Trash2 className="h-4 w-4" />
-                            Excluir
+                            <ActionIcon className="h-4 w-4" />
+                            {actionLabel}
                           </button>
                         </div>
                       </>

@@ -212,6 +212,7 @@ export function Clients() {
           onResetPassword={tab === 'active' ? handleResetPassword : undefined}
           isLoading={deleteClient.isPending}
           onNewClient={tab === 'active' ? handleOpenCreateModal : undefined}
+          mode={tab}
         />
       )}
 
@@ -249,6 +250,7 @@ export function Clients() {
         onConfirm={handleDeleteClient}
         client={deletingClient}
         isLoading={deleteClient.isPending}
+        mode={tab}
       />
     </div>
   );
