@@ -99,6 +99,15 @@ export function Clients() {
     }
   };
 
+  const handleReactivateClient = async (client: Client) => {
+    try {
+      await updateClient.mutateAsync({ id: client.id, payload: { isActive: true } });
+      toast.success('Cliente reativado', `${client.name} foi reativado e voltou para a lista de ativos.`);
+    } catch {
+      toast.error('Erro', 'Não foi possível reativar o cliente.');
+    }
+  };
+
   const handleDeleteClient = async () => {
     if (!deletingClient) return;
     try {
@@ -210,6 +219,7 @@ export function Clients() {
           onEdit={handleOpenEditModal}
           onDelete={setDeletingClient}
           onResetPassword={tab === 'active' ? handleResetPassword : undefined}
+          onReactivate={tab === 'inactive' ? handleReactivateClient : undefined}
           isLoading={deleteClient.isPending}
           onNewClient={tab === 'active' ? handleOpenCreateModal : undefined}
           mode={tab}

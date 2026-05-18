@@ -1,4 +1,4 @@
-import { Users, Phone, Mail, MoreVertical, Edit2, Trash2, KeyRound, UserX } from 'lucide-react';
+import { Users, Phone, Mail, MoreVertical, Edit2, Trash2, KeyRound, UserX, UserCheck } from 'lucide-react';
 import { useState, useRef } from 'react';
 import { EmptyState } from '@/components/ui';
 import { formatPhone } from '@/utils/format';
@@ -9,6 +9,7 @@ interface ClientsTableProps {
   onEdit: (client: Client) => void;
   onDelete: (client: Client) => void;
   onResetPassword?: (client: Client) => void;
+  onReactivate?: (client: Client) => void;
   isLoading?: boolean;
   onNewClient?: () => void;
   mode?: 'active' | 'inactive';
@@ -36,6 +37,7 @@ export function ClientsTable({
   onEdit,
   onDelete,
   onResetPassword,
+  onReactivate,
   isLoading,
   onNewClient,
   mode = 'active',
@@ -145,7 +147,8 @@ export function ClientsTable({
                           const btn = menuBtnRefs.current[client.id];
                           if (btn) {
                             const rect = btn.getBoundingClientRect();
-                            const menuHeight = onResetPassword ? 132 : 92;
+                            const itemCount = 2 + (onResetPassword ? 1 : 0) + (onReactivate ? 1 : 0);
+                            const menuHeight = itemCount * 40 + 12;
                             const spaceBelow = window.innerHeight - rect.bottom;
                             const top = spaceBelow < menuHeight + 8
                               ? rect.top - menuHeight - 4
@@ -191,6 +194,18 @@ export function ClientsTable({
                             >
                               <KeyRound className="h-4 w-4" />
                               Resetar Senha
+                            </button>
+                          )}
+                          {onReactivate && (
+                            <button
+                              onClick={() => {
+                                onReactivate(client);
+                                setOpenMenuId(null);
+                              }}
+                              className="flex w-full items-center gap-2 px-4 py-2 text-sm text-emerald-500 hover:bg-emerald-500/10"
+                            >
+                              <UserCheck className="h-4 w-4" />
+                              Ativar
                             </button>
                           )}
                           <button
