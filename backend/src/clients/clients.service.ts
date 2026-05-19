@@ -88,6 +88,7 @@ export class ClientsService {
           mobilePhone: dto.phone || undefined,
           cpfCnpj: dto.cpf || undefined,
           externalReference: client.id,
+          notificationDisabled: true,
         });
         await this.supabase
           .from('clients')
@@ -280,6 +281,7 @@ export class ClientsService {
       email: client.email || undefined,
       mobilePhone: client.phone || undefined,
       externalReference: client.id,
+      notificationDisabled: true,
     };
 
     if (client.asaasCustomerId) {
