@@ -301,10 +301,10 @@ function TimeBlockItem({ block, onDelete, isDeleting, startHour, slotHeight }: T
               onDelete(block.id);
             }}
             disabled={isDeleting}
-            className="shrink-0 rounded p-0.5 text-[#C45050]/60 opacity-0 transition-opacity hover:bg-red-500/20 hover:text-[#C45050] group-hover:opacity-100"
+            className="shrink-0 rounded p-1 text-white/90 transition-colors hover:bg-red-500/40 hover:text-white"
             title="Remover bloqueio"
           >
-            <Trash2 className="h-3 w-3" />
+            <Trash2 className="h-4 w-4" />
           </button>
         )}
       </div>
