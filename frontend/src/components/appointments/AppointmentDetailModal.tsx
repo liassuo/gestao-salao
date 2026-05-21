@@ -131,31 +131,41 @@ export function AppointmentDetailModal({
   // Total a cobrar = subtotal - desconto manual
   const orderTotal = Math.max(0, subtotal - manualDiscount);
 
-  // Inicializa input de desconto quando a comanda carrega (em reais, com vírgula)
+  // Mascara de moeda: digita digitos e o sistema preenche da direita pra esquerda
+  // (centavos -> reais -> dezenas...). Vazio = sem desconto.
+  const formatCentsBR = (cents: number): string => {
+    if (cents <= 0) return '';
+    const reais = Math.floor(cents / 100);
+    const c = cents % 100;
+    const reaisStr = reais.toLocaleString('pt-BR');
+    return `${reaisStr},${String(c).padStart(2, '0')}`;
+  };
+
+  // Inicializa input de desconto quando a comanda carrega
   if (order && !discountInitialized) {
-    const reais = manualDiscount / 100;
-    setDiscountInput(reais > 0 ? reais.toFixed(2).replace('.', ',') : '');
+    setDiscountInput(formatCentsBR(manualDiscount));
     setDiscountInitialized(true);
   }
 
-  const parseDiscountToCents = (raw: string): number | null => {
-    if (!raw.trim()) return 0;
-    const normalized = raw.replace(/\./g, '').replace(',', '.');
-    const value = parseFloat(normalized);
-    if (Number.isNaN(value) || value < 0) return null;
-    return Math.round(value * 100);
+  const handleDiscountChange = (raw: string) => {
+    const digits = raw.replace(/\D/g, '');
+    if (!digits) {
+      setDiscountInput('');
+      return;
+    }
+    const cents = parseInt(digits, 10);
+    setDiscountInput(formatCentsBR(cents));
   };
 
   const handleSaveDiscount = async () => {
     if (!order) return;
-    const cents = parseDiscountToCents(discountInput);
-    if (cents === null) {
-      toast.error('Desconto inválido', 'Digite um valor numérico maior ou igual a zero.');
-      return;
-    }
+    const digits = discountInput.replace(/\D/g, '');
+    const cents = digits ? parseInt(digits, 10) : 0;
     if (cents === manualDiscount) return;
     if (cents > subtotal) {
       toast.error('Desconto inválido', 'O desconto não pode ser maior que o subtotal da comanda.');
+      // Restaura o valor anterior pra UI não ficar inconsistente
+      setDiscountInput(formatCentsBR(manualDiscount));
       return;
     }
     setSavingDiscount(true);
@@ -482,9 +492,9 @@ export function AppointmentDetailModal({
                     <div className="flex items-center gap-1">
                       <input
                         type="text"
-                        inputMode="decimal"
+                        inputMode="numeric"
                         value={discountInput}
-                        onChange={(e) => setDiscountInput(e.target.value)}
+                        onChange={(e) => handleDiscountChange(e.target.value)}
                         onBlur={handleSaveDiscount}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
