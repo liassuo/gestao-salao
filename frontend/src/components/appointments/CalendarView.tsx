@@ -578,15 +578,8 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
 
       cancelAnimationFrame(rafId.current);
       rafId.current = requestAnimationFrame(() => {
-        // Vertical: snap to time slots
-        const rawTop = dragOriginalTop.current + deltaY;
-        const snappedTop = Math.round(rawTop / slotHeight) * slotHeight;
-        const maxTop = totalHours * hourHeight - height;
-        const clampedTop = Math.max(0, Math.min(snappedTop, maxTop));
-        setDragGhostTop(clampedTop);
-        dragGhostTopRef.current = clampedTop;
-
-        // Horizontal: detect target professional column
+        // Horizontal: detect target professional column (antes do snap p/ usar edges
+        // do profissional correto quando arrasta entre colunas)
         const el = document.elementFromPoint(ev.clientX, ev.clientY);
         const col = el?.closest<HTMLElement>('[data-professional-id]');
         if (col) {
@@ -596,6 +589,48 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
             setDragProfessionalId(targetId);
           }
         }
+
+        // Vertical: snap. Prioridade — encostar em fim/começo de cards e bloqueios
+        // do profissional alvo quando estiver perto; senão, snap clássico de 15 min.
+        const rawTop = dragOriginalTop.current + deltaY;
+        const targetProfId = dragTargetProfessionalRef.current;
+        const targetProf = professionalsData.find((p) => p.id === targetProfId);
+        const edges: number[] = [];
+        if (targetProf) {
+          for (const apt of targetProf.appointments || []) {
+            if (apt.id === appointment.id) continue;
+            const t = extractTime(apt.scheduledAt);
+            const aTop = getTopPosition(t, startHour, slotHeight);
+            const aHeight = getBlockHeight(apt.totalDuration, slotHeight);
+            edges.push(aTop + aHeight); // logo depois do fim de outro card
+            edges.push(aTop - height);  // logo antes do inicio de outro card
+          }
+          for (const block of targetProf.timeBlocks || []) {
+            const bStart = extractTime(block.startTime);
+            const bEnd = extractTime(block.endTime);
+            const bTop = getTopPosition(bStart, startHour, slotHeight);
+            const bBot = getTopPosition(bEnd, startHour, slotHeight);
+            edges.push(bBot);          // logo depois do bloqueio/intervalo
+            edges.push(bTop - height); // logo antes do bloqueio/intervalo
+          }
+        }
+        const threshold = slotHeight * 0.5;
+        let bestEdge: number | null = null;
+        let bestDist = threshold;
+        for (const edge of edges) {
+          const d = Math.abs(edge - rawTop);
+          if (d < bestDist) {
+            bestDist = d;
+            bestEdge = edge;
+          }
+        }
+        const snappedTop = bestEdge !== null
+          ? bestEdge
+          : Math.round(rawTop / slotHeight) * slotHeight;
+        const maxTop = totalHours * hourHeight - height;
+        const clampedTop = Math.max(0, Math.min(snappedTop, maxTop));
+        setDragGhostTop(clampedTop);
+        dragGhostTopRef.current = clampedTop;
       });
     };
 
@@ -618,7 +653,7 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
 
         if (dragAppointmentRef.current) {
           const finalTop = dragGhostTopRef.current;
-          const newMinutes = startHour * 60 + (finalTop / slotHeight) * SLOT_MINUTES;
+          const newMinutes = Math.round(startHour * 60 + (finalTop / slotHeight) * SLOT_MINUTES);
           const newTime = minutesToTimeStr(newMinutes);
           const oldTime = extractTime(dragAppointmentRef.current.scheduledAt);
           const sourceProf = dragSourceProfessionalId.current;
