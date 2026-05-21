@@ -128,6 +128,14 @@ export class AsaasWebhookController {
           const now = nowLocalIsoString();
           const newId = require('crypto').randomUUID();
 
+          // paidAt e NOT NULL na tabela: como o webhook esta confirmando o pagamento
+          // (status CONFIRMED/RECEIVED), preferimos a data confirmada do Asaas;
+          // caso ausente, caimos no agora local.
+          const confirmedAt =
+            paymentData.confirmedDate ||
+            paymentData.clientPaymentDate ||
+            paymentData.paymentDate ||
+            now;
           const { error: insertError } = await this.supabase
             .from('payments')
             .insert({
@@ -140,7 +148,7 @@ export class AsaasWebhookController {
               notes: `Reconciliação webhook (cobrança ${asaasPaymentId})`,
               asaasPaymentId,
               asaasStatus: status,
-              paidAt: null,
+              paidAt: confirmedAt,
               invoiceUrl: paymentData.invoiceUrl || null,
               bankSlipUrl: paymentData.bankSlipUrl || null,
               createdAt: now,
@@ -165,7 +173,7 @@ export class AsaasWebhookController {
             amount: amountCentavos,
             subscriptionId: linkedSub.id,
             asaasStatus: status,
-            paidAt: null,
+            paidAt: confirmedAt,
             notes: `Reconciliação webhook (cobrança ${asaasPaymentId})`,
           };
         }
