@@ -30,6 +30,14 @@ export const ordersService = {
     return response.data;
   },
 
+  async update(
+    id: string,
+    payload: { notes?: string; manualDiscount?: number; clientId?: string; professionalId?: string },
+  ): Promise<Order> {
+    const response = await api.patch<Order>(`/orders/${id}`, payload);
+    return response.data;
+  },
+
   async addItem(orderId: string, payload: AddOrderItemPayload): Promise<Order> {
     const response = await api.post<Order>(`/orders/${orderId}/items`, payload);
     return response.data;
@@ -55,6 +63,11 @@ export const ordersService = {
 
   async cancel(id: string): Promise<Order> {
     const response = await api.patch<Order>(`/orders/${id}/cancel`);
+    return response.data;
+  },
+
+  async reopen(id: string): Promise<Order> {
+    const response = await api.patch<Order>(`/orders/${id}/reopen`);
     return response.data;
   },
 

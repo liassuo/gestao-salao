@@ -591,13 +591,16 @@ export class AppointmentsService {
     // "isZeroTotal=true" e fecharia tudo PAID sem cobrar nada. Bug reportado.
     const { data: linkedOrder } = await this.supabase
       .from('orders')
-      .select('totalAmount')
+      .select('totalAmount, manualDiscount')
       .eq('appointmentId', id)
       .eq('status', 'PENDING')
       .order('createdAt', { ascending: false })
       .limit(1)
       .maybeSingle();
-    const effectiveTotal = linkedOrder?.totalAmount ?? appointment.totalPrice ?? 0;
+    const linkedOrderNet = linkedOrder
+      ? Math.max(0, (linkedOrder.totalAmount ?? 0) - ((linkedOrder as any).manualDiscount ?? 0))
+      : undefined;
+    const effectiveTotal = linkedOrderNet ?? appointment.totalPrice ?? 0;
     const isZeroTotal = effectiveTotal === 0;
 
     // Converter pagamento online não pago para pagamento no local

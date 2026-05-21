@@ -14,6 +14,8 @@ export class Order {
   id: string;
   status: OrderStatus | string;
   totalAmount: number;
+  /** Desconto manual (centavos) aplicado no fechamento. Liquido = totalAmount - manualDiscount. */
+  manualDiscount: number;
   notes?: string;
   clientId?: string;
   professionalId?: string;

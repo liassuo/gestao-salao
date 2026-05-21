@@ -69,6 +69,11 @@ export class OrdersController {
     return this.ordersService.cancel(id);
   }
 
+  @Patch(':id/reopen')
+  async reopen(@Param('id', ParseUUIDPipe) id: string) {
+    return this.ordersService.reopen(id);
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param('id', ParseUUIDPipe) id: string) {

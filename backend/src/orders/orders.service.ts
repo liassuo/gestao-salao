@@ -595,12 +595,25 @@ export class OrdersService {
   async update(id: string, dto: UpdateOrderDto) {
     const { data: order, error: findError } = await this.supabase
       .from('orders')
-      .select('id')
+      .select('id, totalAmount, status')
       .eq('id', id)
       .single();
 
     if (findError || !order) {
       throw new NotFoundException('Comanda não encontrada');
+    }
+
+    // manualDiscount só pode ser ajustado enquanto a comanda está pendente
+    // (mexer no desconto de uma comanda paga descasaria o caixa).
+    if (dto.manualDiscount !== undefined) {
+      if (order.status !== 'PENDING') {
+        throw new BadRequestException(
+          'Desconto só pode ser alterado em comandas pendentes',
+        );
+      }
+      if (dto.manualDiscount > order.totalAmount) {
+        throw new BadRequestException('Desconto não pode ser maior que o total da comanda');
+      }
     }
 
     const { data: updated, error } = await this.supabase
@@ -612,6 +625,13 @@ export class OrdersService {
 
     if (error) throw error;
     return updated;
+  }
+
+  /** Total liquido (a cobrar / a debitar / a enviar pro Asaas). */
+  private netTotal(order: any): number {
+    const t = order?.totalAmount ?? 0;
+    const d = order?.manualDiscount ?? 0;
+    return Math.max(0, t - d);
   }
 
   async pay(id: string, dto?: PayOrderDto) {
@@ -701,7 +721,7 @@ export class OrdersService {
           id: randomUUID(),
           clientId: order.clientId,
           appointmentId: (order as any).appointmentId ?? null,
-          amount: order.totalAmount,
+          amount: this.netTotal(order),
           method: paymentMethod,
           paidAt: payNow,
           registeredBy: registeredBy,
@@ -789,7 +809,7 @@ export class OrdersService {
     const asaasCharge = await this.asaasService.createCharge({
       customer: asaasCustomerId,
       billingType,
-      value: this.asaasService.centavosToReais(order.totalAmount),
+      value: this.asaasService.centavosToReais(this.netTotal(order)),
       dueDate,
       description: `Comanda #${order.id.slice(0, 8)}`,
       externalReference: order.id,
@@ -808,7 +828,7 @@ export class OrdersService {
         id: randomUUID(),
         clientId: order.clientId,
         appointmentId: (order as any).appointmentId ?? null,
-        amount: order.totalAmount,
+        amount: this.netTotal(order),
         method: paymentMethodMap[dto.billingType!] || 'PIX',
         // paidAt fica NULL até o webhook Asaas confirmar — caso contrário
         // cobranças geradas e nunca pagas entram no caixa do dia da geração.
@@ -908,7 +928,7 @@ export class OrdersService {
     await this.professionalDebtsService.createFromOrder({
       professionalId: consumerProfessionalId,
       orderId: order.id,
-      amount: order.totalAmount,
+      amount: this.netTotal(order),
       description: `Comanda #${order.id.slice(0, 8)}`,
     });
 
@@ -1014,5 +1034,119 @@ export class OrdersService {
 
     await this.supabase.from('order_items').delete().eq('orderId', id);
     await this.supabase.from('orders').delete().eq('id', id);
+  }
+
+  /**
+   * Reabre uma comanda fechada (PAID ou PAID_AS_DEBT) — volta para PENDING.
+   *
+   * Reversões aplicadas:
+   *  - Estoque: reentrada (ENTRY) para cada item PRODUCT
+   *  - Pagamento: registro deletado (somente pagamento manual local)
+   *  - Débito do profissional: débito da comanda é anulado (PAID_AS_DEBT)
+   *  - Agendamento vinculado: isPaid=false, status=SCHEDULED, attendedAt=null
+   *
+   * Bloqueios:
+   *  - Pagamento Asaas confirmado (asaasPaymentId presente) — não dá pra estornar
+   *    dinheiro do gateway por aqui
+   *  - Caixa do pagamento já fechado — alteraria relatórios de fechamento
+   */
+  async reopen(id: string) {
+    const order = await this.findOne(id);
+
+    if (order.status !== 'PAID' && order.status !== 'PAID_AS_DEBT') {
+      throw new BadRequestException(
+        'Apenas comandas pagas ou lançadas como débito podem ser reabertas',
+      );
+    }
+
+    const paymentId = (order as any).paymentId as string | undefined;
+
+    // Pagamento Asaas confirmado → bloqueia
+    if (paymentId) {
+      const { data: payment } = await this.supabase
+        .from('payments')
+        .select('id, asaasPaymentId, cashRegisterId')
+        .eq('id', paymentId)
+        .maybeSingle();
+
+      if (payment?.asaasPaymentId) {
+        throw new BadRequestException(
+          'Comanda paga via Asaas não pode ser reaberta por aqui (estorno deve ser feito pelo gateway).',
+        );
+      }
+
+      // Caixa fechado → bloqueia
+      if (payment?.cashRegisterId) {
+        const { data: cashRegister } = await this.supabase
+          .from('cash_registers')
+          .select('id, isOpen')
+          .eq('id', payment.cashRegisterId)
+          .maybeSingle();
+
+        if (cashRegister && cashRegister.isOpen === false) {
+          throw new BadRequestException(
+            'Comanda vinculada a um caixa já fechado não pode ser reaberta.',
+          );
+        }
+      }
+    }
+
+    // Reverter débito do profissional (PAID_AS_DEBT)
+    if (order.status === 'PAID_AS_DEBT') {
+      try {
+        await this.professionalDebtsService.voidByOrder(id);
+      } catch (err) {
+        this.logger.error(`Erro ao anular débitos da comanda ${id}: ${err.message}`);
+        throw new BadRequestException(
+          `Erro ao reverter débito do profissional: ${err.message}`,
+        );
+      }
+    }
+
+    // Reentrada no estoque para produtos
+    const productItems = ((order as any).items || []).filter(
+      (i: any) => i.itemType === 'PRODUCT' && i.productId,
+    );
+    for (const item of productItems) {
+      try {
+        await this.stockService.create({
+          productId: item.productId,
+          type: 'ENTRY',
+          quantity: item.quantity,
+          reason: `Reabertura de comanda #${id.slice(0, 8)}`,
+        });
+      } catch (err) {
+        this.logger.error(
+          `Erro ao estornar estoque do produto ${item.productId}: ${err.message}`,
+        );
+        throw new BadRequestException(`Erro ao estornar estoque: ${err.message}`);
+      }
+    }
+
+    // Apagar pagamento manual (já validamos que não é Asaas)
+    if (paymentId) {
+      await this.supabase.from('payments').delete().eq('id', paymentId);
+    }
+
+    // Voltar comanda para PENDING
+    await this.supabase
+      .from('orders')
+      .update({ status: 'PENDING', paymentId: null, updatedAt: nowLocalIsoString() })
+      .eq('id', id);
+
+    // Voltar agendamento vinculado para SCHEDULED
+    if ((order as any).appointmentId) {
+      await this.supabase
+        .from('appointments')
+        .update({
+          isPaid: false,
+          status: 'SCHEDULED',
+          attendedAt: null,
+          updatedAt: nowLocalIsoString(),
+        })
+        .eq('id', (order as any).appointmentId);
+    }
+
+    return this.findOne(id);
   }
 }

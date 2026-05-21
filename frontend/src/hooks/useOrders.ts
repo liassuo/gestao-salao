@@ -39,6 +39,26 @@ export function useCreateOrder() {
   });
 }
 
+export function useUpdateOrder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...payload
+    }: {
+      id: string;
+      notes?: string;
+      manualDiscount?: number;
+      clientId?: string;
+      professionalId?: string;
+    }) => ordersService.update(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ORDERS_KEY });
+    },
+  });
+}
+
 export function useAddOrderItem() {
   const queryClient = useQueryClient();
 
@@ -93,6 +113,22 @@ export function useCancelOrder() {
     mutationFn: (id: string) => ordersService.cancel(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ORDERS_KEY });
+      queryClient.invalidateQueries({ queryKey: ['professional-debts'] });
+      queryClient.invalidateQueries({ queryKey: ['stock'] });
+    },
+  });
+}
+
+export function useReopenOrder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => ordersService.reopen(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ORDERS_KEY });
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['calendar'] });
+      queryClient.invalidateQueries({ queryKey: ['payments'] });
       queryClient.invalidateQueries({ queryKey: ['professional-debts'] });
       queryClient.invalidateQueries({ queryKey: ['stock'] });
     },

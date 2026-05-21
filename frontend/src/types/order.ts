@@ -2,6 +2,8 @@ export interface Order {
   id: string;
   status: OrderStatus;
   totalAmount: number;
+  /** Desconto manual em centavos. Total liquido = totalAmount - manualDiscount. */
+  manualDiscount?: number;
   notes?: string | null;
   appointmentId?: string | null;
   consumerType?: OrderConsumerType;

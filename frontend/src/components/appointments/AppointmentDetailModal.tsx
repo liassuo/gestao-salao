@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Clock, Phone, Check, UserX, Edit2, Save, XCircle, Loader2, Plus, Trash2, Package, Scissors, Banknote, QrCode, CreditCard } from 'lucide-react';
-import { Modal } from '@/components/ui';
-import { useOrderByAppointment, useAddOrderItem, useRemoveOrderItem, useProducts, useServices } from '@/hooks';
+import { Clock, Phone, Check, UserX, Edit2, Save, XCircle, Loader2, Plus, Trash2, Package, Scissors, Banknote, QrCode, CreditCard, RotateCcw } from 'lucide-react';
+import { Modal, useToast } from '@/components/ui';
+import { useOrderByAppointment, useAddOrderItem, useRemoveOrderItem, useReopenOrder, useUpdateOrder, useProducts, useServices, getApiErrorMessage } from '@/hooks';
 import type { CalendarAppointment, CalendarProfessional } from '@/types';
 
 const statusConfig: Record<string, { label: string; classes: string }> = {
@@ -98,12 +98,20 @@ export function AppointmentDetailModal({
   const [addItemType, setAddItemType] = useState<'SERVICE' | 'PRODUCT'>('PRODUCT');
   const [selectedItems, setSelectedItems] = useState<Map<string, number>>(new Map());
   const [isAdding, setIsAdding] = useState(false);
+  const [isConfirmingReopen, setIsConfirmingReopen] = useState(false);
+  const [isReopening, setIsReopening] = useState(false);
 
   const { data: order, refetch: refetchOrder } = useOrderByAppointment(appointment?.id);
   const { data: products } = useProducts();
   const { data: services } = useServices();
   const addOrderItem = useAddOrderItem();
   const removeOrderItem = useRemoveOrderItem();
+  const reopenOrder = useReopenOrder();
+  const updateOrder = useUpdateOrder();
+  const toast = useToast();
+  const [discountInput, setDiscountInput] = useState<string>('');
+  const [discountInitialized, setDiscountInitialized] = useState(false);
+  const [savingDiscount, setSavingDiscount] = useState(false);
 
   if (!appointment) return null;
 
@@ -117,9 +125,50 @@ export function AppointmentDetailModal({
   // backend em order.hasActiveSubscription) e cai pra flag histórica
   // do agendamento — assim cliente que assinou depois também aparece marcado.
   const hasSubscription = !!(order as any)?.hasActiveSubscription || !!appointment.usedSubscriptionCut;
-  // Total a cobrar = total da comanda (que reflete extras adicionados depois),
-  // não o totalPrice congelado do agendamento.
-  const orderTotal = order?.totalAmount ?? appointment.totalPrice;
+  // Subtotal = soma dos itens da comanda (ou totalPrice congelado quando não há comanda)
+  const subtotal = order?.totalAmount ?? appointment.totalPrice;
+  const manualDiscount = order?.manualDiscount ?? 0;
+  // Total a cobrar = subtotal - desconto manual
+  const orderTotal = Math.max(0, subtotal - manualDiscount);
+
+  // Inicializa input de desconto quando a comanda carrega (em reais, com vírgula)
+  if (order && !discountInitialized) {
+    const reais = manualDiscount / 100;
+    setDiscountInput(reais > 0 ? reais.toFixed(2).replace('.', ',') : '');
+    setDiscountInitialized(true);
+  }
+
+  const parseDiscountToCents = (raw: string): number | null => {
+    if (!raw.trim()) return 0;
+    const normalized = raw.replace(/\./g, '').replace(',', '.');
+    const value = parseFloat(normalized);
+    if (Number.isNaN(value) || value < 0) return null;
+    return Math.round(value * 100);
+  };
+
+  const handleSaveDiscount = async () => {
+    if (!order) return;
+    const cents = parseDiscountToCents(discountInput);
+    if (cents === null) {
+      toast.error('Desconto inválido', 'Digite um valor numérico maior ou igual a zero.');
+      return;
+    }
+    if (cents === manualDiscount) return;
+    if (cents > subtotal) {
+      toast.error('Desconto inválido', 'O desconto não pode ser maior que o subtotal da comanda.');
+      return;
+    }
+    setSavingDiscount(true);
+    try {
+      await updateOrder.mutateAsync({ id: order.id, manualDiscount: cents });
+      await refetchOrder();
+      toast.success('Desconto aplicado', cents === 0 ? 'Desconto removido.' : `Desconto de ${formatCurrency(cents)} aplicado à comanda.`);
+    } catch (err) {
+      toast.error('Erro', getApiErrorMessage(err));
+    } finally {
+      setSavingDiscount(false);
+    }
+  };
 
   const handleStartEdit = () => {
     const vals = extractEditValues(appointment.scheduledAt);
@@ -224,6 +273,25 @@ export function AppointmentDetailModal({
       // handled by mutation
     }
   };
+
+  const handleReopen = async () => {
+    if (!order) return;
+    setIsReopening(true);
+    try {
+      await reopenOrder.mutateAsync(order.id);
+      toast.success('Comanda reaberta', 'O agendamento voltou para "Agendado" e a comanda está pendente de novo.');
+      onClose();
+    } catch (err) {
+      toast.error('Erro', getApiErrorMessage(err));
+    } finally {
+      setIsReopening(false);
+      setIsConfirmingReopen(false);
+    }
+  };
+
+  const canReopen = appointment.status === 'ATTENDED'
+    && !!order
+    && (order.status === 'PAID' || order.status === 'PAID_AS_DEBT');
 
   const inputClass =
     'w-full rounded-xl border bg-[var(--hover-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#C8923A] border-[var(--card-border)]';
@@ -395,14 +463,59 @@ export function AppointmentDetailModal({
                   </div>
                 </div>
               ))}
-              {/* Total */}
-              <div className="flex items-center justify-between border-t border-[var(--border-color)] px-3 pt-2">
-                <span className="text-sm font-semibold text-[var(--text-primary)]">Total</span>
-                <span className="text-sm font-semibold text-[var(--text-primary)]">
-                  {hasSubscription && order.totalAmount === 0
-                    ? 'Assinatura'
-                    : formatCurrency(order.totalAmount)}
-                </span>
+              {/* Subtotal / Desconto / Total */}
+              <div className="space-y-1 border-t border-[var(--border-color)] px-3 pt-2">
+                {/* Subtotal — só mostra quando há desconto, pra não poluir */}
+                {(canEditOrder || manualDiscount > 0) && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-[var(--text-muted)]">Subtotal</span>
+                    <span className="text-xs text-[var(--text-muted)]">
+                      {hasSubscription && subtotal === 0 ? 'Assinatura' : formatCurrency(subtotal)}
+                    </span>
+                  </div>
+                )}
+
+                {/* Input de desconto (somente comanda pendente) */}
+                {canEditOrder && (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-[var(--text-muted)]">Desconto (R$)</span>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={discountInput}
+                        onChange={(e) => setDiscountInput(e.target.value)}
+                        onBlur={handleSaveDiscount}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            (e.target as HTMLInputElement).blur();
+                          }
+                        }}
+                        disabled={savingDiscount}
+                        placeholder="0,00"
+                        className="w-24 rounded-lg border border-[var(--card-border)] bg-[var(--hover-bg)] px-2 py-1 text-right text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[#C8923A] focus:outline-none focus:ring-1 focus:ring-[#C8923A] disabled:opacity-50"
+                      />
+                      {savingDiscount && <Loader2 className="h-3 w-3 animate-spin text-[var(--text-muted)]" />}
+                    </div>
+                  </div>
+                )}
+
+                {/* Desconto aplicado (modo visualização ou já fechada) */}
+                {!canEditOrder && manualDiscount > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-[var(--text-muted)]">Desconto</span>
+                    <span className="text-xs text-[#C8923A]">- {formatCurrency(manualDiscount)}</span>
+                  </div>
+                )}
+
+                {/* Total final */}
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-sm font-semibold text-[var(--text-primary)]">Total</span>
+                  <span className="text-sm font-semibold text-[var(--text-primary)]">
+                    {hasSubscription && orderTotal === 0 ? 'Assinatura' : formatCurrency(orderTotal)}
+                  </span>
+                </div>
               </div>
             </div>
           ) : (
@@ -500,6 +613,33 @@ export function AppointmentDetailModal({
             <div className="mb-1 text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">Observações</div>
             <p className="text-sm text-[var(--text-secondary)]">{appointment.notes}</p>
           </div>
+        )}
+
+        {/* Reabrir comanda — quando atendido + comanda fechada */}
+        {!isEditing && canReopen && (
+          isConfirmingReopen ? (
+            <div className="rounded-xl border border-[#C8923A]/30 bg-[#C8923A]/10 p-4">
+              <p className="mb-3 text-sm text-[var(--text-secondary)]">
+                Reabrir esta comanda vai estornar o pagamento, devolver itens ao estoque (se houver) e voltar o agendamento para <strong>Agendado</strong>. Deseja continuar?
+              </p>
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setIsConfirmingReopen(false)} disabled={isReopening} className="rounded-xl border border-[var(--card-border)] px-3 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] disabled:opacity-50">Não</button>
+                <button onClick={handleReopen} disabled={isReopening} className="flex items-center gap-1.5 rounded-xl bg-[#8B6914] px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[#725510] disabled:opacity-50">
+                  {isReopening && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Confirmar Reabertura
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setIsConfirmingReopen(true)}
+              disabled={isReopening}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#C8923A]/40 bg-[#C8923A]/10 px-3 py-2 text-sm font-medium text-[#C8923A] transition-colors hover:bg-[#C8923A]/20 disabled:opacity-50"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Reabrir Comanda
+            </button>
+          )
         )}
 
         {/* Actions */}
