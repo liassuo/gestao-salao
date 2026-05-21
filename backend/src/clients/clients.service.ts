@@ -234,6 +234,19 @@ export class ClientsService {
     if (error) throw error;
   }
 
+  /**
+   * "Exclusao permanente" via anonimizacao:
+   * - A linha do cliente PERMANECE (preserva integridade referencial de
+   *   appointments/payments/orders/subscriptions sem precisar apagar historico).
+   * - Todos os dados pessoais sao limpos (nome generico, sem PII).
+   * - CPF, email e googleId sao liberados (NULL) para nao bloquearem cadastros futuros.
+   * - asaasCustomerId NULL para nao casar com webhook de outro cliente.
+   * - isActive=false mantem o cliente fora das listas/buscas.
+   *
+   * Tentar DELETE direto fica bloqueado pelas FKs (appointments_clientId_fkey, etc),
+   * que e o comportamento correto: nao podemos perder o historico de quem ja teve
+   * agendamentos/pagamentos no salao.
+   */
   async hardDelete(id: string) {
     const { data: client, error: findError } = await this.supabase
       .from('clients')
@@ -245,9 +258,29 @@ export class ClientsService {
       throw new NotFoundException('Cliente não encontrado');
     }
 
+    const suffix = id.slice(0, 8);
     const { error } = await this.supabase
       .from('clients')
-      .delete()
+      .update({
+        name: `Cliente removido (${suffix})`,
+        email: null,
+        password: null,
+        googleId: null,
+        cpf: null,
+        birthDate: null,
+        address: null,
+        addressNumber: null,
+        neighborhood: null,
+        city: null,
+        state: null,
+        notes: null,
+        asaasCustomerId: null,
+        lastVisitAt: null,
+        hasDebts: false,
+        isActive: false,
+        mustChangePassword: false,
+        updatedAt: new Date().toISOString(),
+      })
       .eq('id', id);
 
     if (error) throw error;
