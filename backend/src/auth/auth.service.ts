@@ -1,5 +1,5 @@
 import { Injectable, UnauthorizedException, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
-import { randomUUID } from 'crypto';
+import { randomUUID, randomInt } from 'crypto';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -15,6 +15,20 @@ import { UserRole } from '../common/enums/user-role.enum';
 // gravacao normalizada no banco, queries usam .eq com igualdade direta.
 function normalizeEmail(value: string): string {
   return value.trim().toLowerCase();
+}
+
+// Alfabeto sem caracteres ambiguos (0/O, 1/I/L) — a senha vai ser ditada no
+// WhatsApp ou copiada a mao, entao trocamos legibilidade por um pouco de
+// entropia. 8 chars deste alfabeto ~= 2^41, suficiente pra senha temporaria
+// que precisa ser trocada no primeiro login.
+const TEMP_PASSWORD_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+
+function generateTempPassword(length = 8): string {
+  let out = '';
+  for (let i = 0; i < length; i++) {
+    out += TEMP_PASSWORD_ALPHABET[randomInt(0, TEMP_PASSWORD_ALPHABET.length)];
+  }
+  return out;
 }
 
 @Injectable()
@@ -329,10 +343,15 @@ export class AuthService {
   }
 
   async clientLogin(dto: LoginDto): Promise<AuthResponseDto & { mustChangePassword?: boolean }> {
+    const normalized = normalizeEmail(dto.email);
+    // ilike (sem wildcards) = match case-insensitive exato. Necessario porque
+    // clientes cadastrados antes do `normalizeEmail` ficaram com email no case
+    // original ("Foo@Bar.com"); um `.eq()` falharia mesmo quando o cliente
+    // digita o email "correto". Login deve ser sempre case-insensitive.
     const { data: client } = await this.supabase
       .from('clients')
       .select('*')
-      .eq('email', normalizeEmail(dto.email))
+      .ilike('email', normalized)
       .limit(1)
       .maybeSingle();
 
@@ -531,10 +550,15 @@ export class AuthService {
     return { message: 'Senha resetada. O profissional deverá criar uma nova senha no próximo login.' };
   }
 
-  async resetClientPassword(clientId: string): Promise<{ message: string }> {
+  async resetClientPassword(clientId: string): Promise<{
+    message: string;
+    tempPassword: string;
+    clientName: string;
+    clientPhone: string | null;
+  }> {
     const { data: client } = await this.supabase
       .from('clients')
-      .select('id')
+      .select('id, name, phone')
       .eq('id', clientId)
       .single();
 
@@ -542,10 +566,16 @@ export class AuthService {
       throw new UnauthorizedException('Cliente não encontrado');
     }
 
-    const tempPassword = randomUUID();
+    // Senha legivel (sem 0/O/1/I/L) — vai ser ditada ou copiada pro WhatsApp.
+    // Retornamos em texto puro UMA UNICA VEZ; depois disso so o hash existe.
+    const tempPassword = generateTempPassword();
     const hashedPassword = await bcrypt.hash(tempPassword, 6);
 
-    await this.supabase
+    // IMPORTANTE: checar `error` do update. Sem isso, qualquer falha (RLS,
+    // coluna inexistente, conflito de schema) fica silenciosa e a gente
+    // retorna uma senha "valida" que nunca foi persistida → cliente nao
+    // consegue logar e ninguem entende o porque.
+    const { error: updateError } = await this.supabase
       .from('clients')
       .update({
         password: hashedPassword,
@@ -554,7 +584,18 @@ export class AuthService {
       })
       .eq('id', clientId);
 
-    return { message: 'Senha resetada. O cliente deverá criar uma nova senha no próximo login.' };
+    if (updateError) {
+      throw new BadRequestException(
+        `Falha ao gravar nova senha: ${updateError.message}`,
+      );
+    }
+
+    return {
+      message: 'Senha resetada. O cliente deverá criar uma nova senha no próximo login.',
+      tempPassword,
+      clientName: client.name,
+      clientPhone: client.phone ?? null,
+    };
   }
 
   // ── Recuperação de senha — Usuários (admin/profissionais) ─────────────────
