@@ -21,7 +21,10 @@ import { MailModule } from '../mail/mail.module';
       useFactory: (configService: ConfigService): JwtModuleOptions => ({
         secret: configService.get<string>('JWT_SECRET', 'default-secret-change-me'),
         signOptions: {
-          expiresIn: configService.get('JWT_EXPIRES_IN', '24h'),
+          // Default longo (30d) pra evitar deslogar admin/cliente toda hora.
+          // O front nao tem refresh token; quando o JWT expira o usuario cai
+          // pra tela de login. Pra prod, override via JWT_EXPIRES_IN.
+          expiresIn: configService.get('JWT_EXPIRES_IN', '30d'),
         },
       }),
     }),
