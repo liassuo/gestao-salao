@@ -396,7 +396,7 @@ export class SubscriptionsService {
     // Re-fetch com relações (fallback se o select com join falhar)
     const { data: subscription, error: refetchError } = await this.supabase
       .from('client_subscriptions')
-      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
+      .select('*, client:clients(id, name, phone), plan:subscription_plans!planId(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
       .eq('id', insertedSub.id)
       .single();
 
@@ -423,7 +423,7 @@ export class SubscriptionsService {
   async findSubscription(id: string) {
     const { data: subscription, error } = await this.supabase
       .from('client_subscriptions')
-      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
+      .select('*, client:clients(id, name, phone), plan:subscription_plans!planId(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
       .eq('id', id)
       .single();
 
@@ -462,7 +462,7 @@ export class SubscriptionsService {
   async findAllSubscriptions(status?: string) {
     let queryBuilder = this.supabase
       .from('client_subscriptions')
-      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
+      .select('*, client:clients(id, name, phone), plan:subscription_plans!planId(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
       .order('createdAt', { ascending: false });
 
     if (status) {
@@ -484,7 +484,7 @@ export class SubscriptionsService {
     // por status='ACTIVE' no pricing.helper) aplicaria desconto — divergência.
     const { data: allSubs } = await this.supabase
       .from('client_subscriptions')
-      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
+      .select('*, client:clients(id, name, phone), plan:subscription_plans!planId(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
       .eq('clientId', clientId)
       .order('createdAt', { ascending: false });
 
@@ -543,7 +543,7 @@ export class SubscriptionsService {
           .from('client_subscriptions')
           .update({ status: 'SUSPENDED', updatedAt: now })
           .eq('id', subscription.id)
-          .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
+          .select('*, client:clients(id, name, phone), plan:subscription_plans!planId(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
           .single();
         this.logger.log(`Assinatura ${subscription.id} suspensa automaticamente (endDate ${subscription.endDate} vencido)`);
         return suspended ?? subscription;
@@ -559,7 +559,7 @@ export class SubscriptionsService {
           .from('client_subscriptions')
           .update({ status: 'CANCELED', updatedAt: now })
           .eq('id', subscription.id)
-          .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
+          .select('*, client:clients(id, name, phone), plan:subscription_plans!planId(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
           .single();
         this.logger.log(`Assinatura ${subscription.id} cancelada automaticamente (PENDING_PAYMENT expirado, endDate ${subscription.endDate})`);
         return canceled ?? subscription;
@@ -658,7 +658,7 @@ export class SubscriptionsService {
       .from('client_subscriptions')
       .update({ cutsUsedThisMonth: cutsUsed + 1 })
       .eq('id', subscription.id)
-      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
+      .select('*, client:clients(id, name, phone), plan:subscription_plans!planId(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
       .single();
 
     if (error) throw error;
@@ -677,7 +677,7 @@ export class SubscriptionsService {
       .from('client_subscriptions')
       .update({ cutsUsedThisMonth: 0, lastResetDate: now })
       .eq('id', subscription.id)
-      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
+      .select('*, client:clients(id, name, phone), plan:subscription_plans!planId(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
       .single();
 
     if (error) throw error;
@@ -802,7 +802,7 @@ export class SubscriptionsService {
         updatedAt: nowIso,
       })
       .eq('id', subscription.id)
-      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
+      .select('*, client:clients(id, name, phone), plan:subscription_plans!planId(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
       .single();
 
     if (error) throw error;
@@ -863,7 +863,7 @@ export class SubscriptionsService {
         updatedAt: now.toISOString(),
       })
       .eq('id', subscription.id)
-      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
+      .select('*, client:clients(id, name, phone), plan:subscription_plans!planId(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
       .single();
 
     if (error) {
@@ -1349,7 +1349,7 @@ export class SubscriptionsService {
           updatedAt: nowLocal,
         })
         .eq('id', subscription.id)
-        .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent)), pendingPlan:subscription_plans!pendingPlanId(id, name, price, cutsPerMonth)')
+        .select('*, client:clients(id, name, phone), plan:subscription_plans!planId(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent)), pendingPlan:subscription_plans!pendingPlanId(id, name, price, cutsPerMonth)')
         .single();
 
       if (error) throw error;
@@ -1462,7 +1462,7 @@ export class SubscriptionsService {
     // Buscar assinatura suspensa
     const { data: results } = await this.supabase
       .from('client_subscriptions')
-      .select('*, client:clients(id, name, phone, asaasCustomerId, email), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
+      .select('*, client:clients(id, name, phone, asaasCustomerId, email), plan:subscription_plans!planId(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
       .eq('clientId', clientId)
       .eq('status', 'SUSPENDED')
       .order('createdAt', { ascending: false })
@@ -1566,7 +1566,7 @@ export class SubscriptionsService {
     // Re-fetch atualizado
     const { data: updated } = await this.supabase
       .from('client_subscriptions')
-      .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
+      .select('*, client:clients(id, name, phone), plan:subscription_plans!planId(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
       .eq('id', subscription.id)
       .single();
 

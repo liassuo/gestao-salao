@@ -376,7 +376,7 @@ export class AsaasWebhookController {
       // Buscar nome do plano para descrição da dívida
       const { data: sub } = await this.supabase
         .from('client_subscriptions')
-        .select('id, status, plan:subscription_plans(name)')
+        .select('id, status, plan:subscription_plans!planId(name)')
         .eq('id', localPayment.subscriptionId)
         .single();
 

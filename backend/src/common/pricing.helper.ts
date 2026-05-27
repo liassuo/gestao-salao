@@ -96,7 +96,7 @@ export async function getActiveClientSubscription(
   if (!clientId) return null;
   const { data } = await supabase
     .from('client_subscriptions')
-    .select('id, cutsUsedThisMonth, plan:subscription_plans(id, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
+    .select('id, cutsUsedThisMonth, plan:subscription_plans!planId(id, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
     .eq('clientId', clientId)
     .eq('status', 'ACTIVE')
     .maybeSingle();

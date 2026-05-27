@@ -373,7 +373,7 @@ export class CommissionsService {
     // Fallback: soma plan.price das assinaturas com sobreposição ao período
     const { data: activeSubscriptions } = await this.supabase
       .from('client_subscriptions')
-      .select('plan:subscription_plans(price)')
+      .select('plan:subscription_plans!planId(price)')
       .in('status', ['ACTIVE', 'SUSPENDED'])
       .lte('startDate', endStr)
       .gte('endDate', startStr);
