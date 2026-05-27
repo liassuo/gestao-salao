@@ -27,9 +27,15 @@ function calcBase(commissionAmount: number, rate: number): number {
   return rate > 0 ? Math.round((commissionAmount * 100) / rate) : 0;
 }
 
+/** Liquido = comissao - debito deduzido, nunca negativo (mesma regra da tabela). */
+function netAmount(c: Commission): number {
+  return Math.max(0, c.amount - (c.amountDeductedDebts ?? 0));
+}
+
 function calcTotals(commissions: Commission[]) {
   let totalComServices = 0, totalComSub = 0, totalComProducts = 0;
   let totalBaseServices = 0, totalBaseSub = 0, totalBaseProducts = 0;
+  let totalDebts = 0;
 
   for (const c of commissions) {
     const rate = c.professional?.commissionRate ?? 0;
@@ -39,16 +45,24 @@ function calcTotals(commissions: Commission[]) {
     totalBaseServices += calcBase(c.amountServices ?? 0, rate);
     totalBaseSub += calcBase(c.amountSubscription ?? 0, rate);
     totalBaseProducts += calcBase(c.amountProducts ?? 0, rate);
+    totalDebts += c.amountDeductedDebts ?? 0;
   }
 
-  const totalCommission = totalComServices + totalComSub + totalComProducts;
+  // Soma das comissoes bruta e liquida (pos-debito) — usa-se a liquida nos cards
+  // pra refletir o que de fato sai do bolso da barbearia ao pagar os barbeiros.
+  const totalCommissionGross = totalComServices + totalComSub + totalComProducts;
+  const totalCommission = Math.max(0, totalCommissionGross - totalDebts);
   const totalBase = totalBaseServices + totalBaseSub + totalBaseProducts;
-  const totalBarbearia = totalBase - totalCommission;
-  const totalPending = commissions.filter((c) => c.status === 'PENDING').reduce((s, c) => s + c.amount, 0);
-  const totalPaid = commissions.filter((c) => c.status === 'PAID').reduce((s, c) => s + c.amount, 0);
+  const totalBarbearia = totalBase - totalCommissionGross;
+  const totalPending = commissions
+    .filter((c) => c.status === 'PENDING')
+    .reduce((s, c) => s + netAmount(c), 0);
+  const totalPaid = commissions
+    .filter((c) => c.status === 'PAID')
+    .reduce((s, c) => s + netAmount(c), 0);
 
   return {
-    totalBase, totalBarbearia, totalCommission,
+    totalBase, totalBarbearia, totalCommission, totalDebts,
     totalComServices, totalComSub, totalComProducts,
     totalBaseServices, totalBaseSub, totalBaseProducts,
     totalPending, totalPaid,
