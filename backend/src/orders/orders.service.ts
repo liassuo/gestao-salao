@@ -469,30 +469,16 @@ export class OrdersService {
       .update({ totalAmount: newTotal })
       .eq('id', orderId);
 
-    // Sincronizar agendamento vinculado (totalPrice + totalDuration se for serviço)
+    // Sincronizar agendamento vinculado (somente totalPrice — totalDuration NAO muda
+    // ao adicionar serviço pela comanda: o admin pediu que o card no calendario
+    // mantenha o tamanho original do agendamento mesmo que serviços extras sejam
+    // emendados. Fichas continuam sendo contadas via appointment_services e
+    // comissao continua via totalPrice).
     if (order.appointmentId) {
       const updateData: any = { totalPrice: newTotal, updatedAt: nowLocalIsoString() };
 
       if (dto.itemType === 'SERVICE' && dto.serviceId) {
-        const { data: svc } = await this.supabase
-          .from('services')
-          .select('duration')
-          .eq('id', dto.serviceId)
-          .single();
-
-        if (svc) {
-          const { data: appt } = await this.supabase
-            .from('appointments')
-            .select('totalDuration')
-            .eq('id', order.appointmentId)
-            .single();
-
-          if (appt) {
-            updateData.totalDuration = appt.totalDuration + svc.duration;
-          }
-        }
-
-        // Vincular serviço ao agendamento (appointment_services)
+        // Vincular serviço ao agendamento (appointment_services) — base das fichas
         await this.supabase.from('appointment_services').insert({
           id: randomUUID(),
           appointmentId: order.appointmentId,
@@ -554,29 +540,13 @@ export class OrdersService {
       .update({ totalAmount: newTotal })
       .eq('id', orderId);
 
-    // Sincronizar agendamento vinculado
+    // Sincronizar agendamento vinculado — totalDuration NAO encolhe ao remover
+    // item da comanda (espelho da regra de addItem: o card mantem o tamanho
+    // original do agendamento).
     if (order.appointmentId) {
       const updateData: any = { totalPrice: newTotal, updatedAt: nowLocalIsoString() };
 
       if (item.itemType === 'SERVICE' && item.serviceId) {
-        const { data: svc } = await this.supabase
-          .from('services')
-          .select('duration')
-          .eq('id', item.serviceId)
-          .single();
-
-        if (svc) {
-          const { data: appt } = await this.supabase
-            .from('appointments')
-            .select('totalDuration')
-            .eq('id', order.appointmentId)
-            .single();
-
-          if (appt) {
-            updateData.totalDuration = Math.max(0, appt.totalDuration - svc.duration);
-          }
-        }
-
         // Remover vínculo do serviço com o agendamento
         await this.supabase
           .from('appointment_services')
