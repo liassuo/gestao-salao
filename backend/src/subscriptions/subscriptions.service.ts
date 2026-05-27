@@ -128,7 +128,7 @@ export class SubscriptionsService {
   async findAllPlans(activeOnly: boolean = true) {
     let queryBuilder = this.supabase
       .from('subscription_plans')
-      .select('*, subscriptions:client_subscriptions(id), services:subscription_plan_services(id, serviceId, discountPercent, service:services(id, name, price))')
+      .select('*, subscriptions:client_subscriptions!planId(id), services:subscription_plan_services(id, serviceId, discountPercent, service:services(id, name, price))')
       .order('displayOrder', { ascending: true })
       .order('price', { ascending: true });
 
