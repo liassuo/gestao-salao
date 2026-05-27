@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Percent, Download, DollarSign, Scissors, PieChart, Package, Clock, CheckCircle, Building2, Users } from 'lucide-react';
+import { Percent, Download, PieChart, Clock, CheckCircle, Users } from 'lucide-react';
 import {
   useCommissions,
   useGenerateCommissions,
@@ -234,25 +234,13 @@ function CommissionsContent() {
         isGenerating={generateCommissions.isPending}
       />
 
-      {/* Funil de valores */}
+      {/* Resumo */}
       {list.length > 0 && (
-        <>
-          {/* Linha 1: Funil principal */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <FunnelCard icon={DollarSign} label="Faturamento Bruto" value={formatCurrency(t.totalBase)} sub="Receita total gerada" color="default" />
-            <FunnelCard icon={Building2} label="Parte da Barbearia" value={formatCurrency(t.totalBarbearia)} sub={`${t.totalBase > 0 ? Math.round((t.totalBarbearia / t.totalBase) * 100) : 0}% do faturamento`} color="gold" />
-            <FunnelCard icon={Users} label="Parte dos Profissionais" value={formatCurrency(t.totalCommission)} sub={`${t.totalBase > 0 ? Math.round((t.totalCommission / t.totalBase) * 100) : 0}% do faturamento`} color="green" />
-          </div>
-
-          {/* Linha 2: Detalhamento por fonte */}
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-            <SummaryCard icon={Scissors} label="Serv. Avulsos" value={formatCurrency(t.totalComServices)} sub={`Base: ${formatCurrency(t.totalBaseServices)}`} />
-            <SummaryCard icon={PieChart} label="Serv. Assinatura" value={formatCurrency(t.totalComSub)} sub={`Base: ${formatCurrency(t.totalBaseSub)}`} />
-            <SummaryCard icon={Package} label="Produtos" value={formatCurrency(t.totalComProducts)} sub={`Base: ${formatCurrency(t.totalBaseProducts)}`} />
-            <SummaryCard icon={Clock} label="Pendente" value={formatCurrency(t.totalPending)} variant="warning" />
-            <SummaryCard icon={CheckCircle} label="Pago" value={formatCurrency(t.totalPaid)} variant="success" />
-          </div>
-        </>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <FunnelCard icon={Users} label="Total a pagar" value={formatCurrency(t.totalCommission)} sub="Soma das comissões geradas" color="green" />
+          <SummaryCard icon={Clock} label="Pendente" value={formatCurrency(t.totalPending)} variant="warning" />
+          <SummaryCard icon={CheckCircle} label="Pago" value={formatCurrency(t.totalPaid)} variant="success" />
+        </div>
       )}
 
       {/* Tabela */}
