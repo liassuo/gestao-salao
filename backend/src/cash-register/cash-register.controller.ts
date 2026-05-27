@@ -37,6 +37,11 @@ export class CashRegisterController {
     return this.cashRegisterService.closeRegister(id, closeCashRegisterDto);
   }
 
+  @Patch(':id/reopen')
+  async reopen(@Param('id', ParseUUIDPipe) id: string) {
+    return this.cashRegisterService.reopenRegister(id);
+  }
+
   @Get('today')
   async getToday() {
     const register = await this.cashRegisterService.getTodayRegister();

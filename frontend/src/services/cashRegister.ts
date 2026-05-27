@@ -77,4 +77,9 @@ export const cashRegisterService = {
     const response = await api.patch<CashRegister>(`/cash-register/${id}/close`, payload);
     return response.data;
   },
+
+  async reopen(id: string): Promise<CashRegister> {
+    const response = await api.patch<CashRegister>(`/cash-register/${id}/reopen`);
+    return response.data;
+  },
 };

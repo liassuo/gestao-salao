@@ -8,12 +8,14 @@ import {
   Banknote,
   Smartphone,
   CreditCard,
+  RotateCcw,
 } from 'lucide-react';
 import {
   useCashRegisterToday,
   useCashRegisterOpen,
   useOpenCashRegister,
   useCloseCashRegister,
+  useReopenCashRegister,
   useCashRegisters,
   useCashRegisterSummary,
   getApiErrorMessage,
@@ -43,15 +45,36 @@ function formatCurrency(cents: number): string {
   }).format(cents / 100);
 }
 
+/**
+ * Trata o datetime do backend como horario local independente do sufixo de tz
+ * que o Postgres adiciona (Z / +00:00). Sem isso, "09:00:00+00:00" virava 06:00
+ * no navegador brasileiro.
+ */
+function parseLocalDate(dateStr: string): Date {
+  const clean = dateStr.replace(/Z$/, '').replace(/[+-]\d{2}:\d{2}$/, '');
+  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+    return new Date(clean + 'T12:00:00');
+  }
+  return new Date(clean);
+}
+
 function formatTime(dateStr: string): string {
-  return new Date(dateStr).toLocaleTimeString('pt-BR', {
+  return parseLocalDate(dateStr).toLocaleTimeString('pt-BR', {
     hour: '2-digit',
     minute: '2-digit',
   });
 }
 
 /** Componente para quando o caixa já foi fechado hoje */
-function ClosedTodaySummary({ cashRegister }: { cashRegister: CashRegisterType }) {
+function ClosedTodaySummary({
+  cashRegister,
+  onReopen,
+  isReopening,
+}: {
+  cashRegister: CashRegisterType;
+  onReopen: () => void;
+  isReopening: boolean;
+}) {
   const totalRevenue = cashRegister.totalRevenue ?? 0;
   const totalCash = cashRegister.totalCash ?? 0;
   const totalPix = cashRegister.totalPix ?? 0;
@@ -89,17 +112,28 @@ function ClosedTodaySummary({ cashRegister }: { cashRegister: CashRegisterType }
             <p className="text-2xl font-bold">{formatCurrency(totalRevenue)}</p>
           </div>
         </div>
-        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-zinc-300">
-          <div className="flex items-center gap-1.5">
-            <Clock className="h-3.5 w-3.5" />
-            Aberto as {formatTime(cashRegister.openedAt)}
-          </div>
-          {cashRegister.closedAt && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm text-zinc-300">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <div className="flex items-center gap-1.5">
               <Clock className="h-3.5 w-3.5" />
-              Fechado as {formatTime(cashRegister.closedAt)}
+              Aberto as {formatTime(cashRegister.openedAt)}
             </div>
-          )}
+            {cashRegister.closedAt && (
+              <div className="flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5" />
+                Fechado as {formatTime(cashRegister.closedAt)}
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onReopen}
+            disabled={isReopening}
+            className="flex items-center gap-1.5 rounded-lg border border-white/30 bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-white/20 disabled:opacity-50"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            {isReopening ? 'Reabrindo…' : 'Reabrir Caixa'}
+          </button>
         </div>
       </div>
 
@@ -188,7 +222,18 @@ export function CashRegister() {
 
   const openCashRegister = useOpenCashRegister();
   const closeCashRegister = useCloseCashRegister();
+  const reopenCashRegister = useReopenCashRegister();
   const toast = useToast();
+
+  const handleReopenCashRegister = async () => {
+    if (!todayCashRegister) return;
+    try {
+      await reopenCashRegister.mutateAsync(todayCashRegister.id);
+      toast.success('Caixa reaberto', 'Os totais serão recalculados ao fechar de novo.');
+    } catch (err) {
+      toast.error('Erro', getApiErrorMessage(err));
+    }
+  };
 
   const handleOpenCashRegister = async (payload: OpenCashRegisterPayload) => {
     setOpenError(null);
@@ -302,7 +347,11 @@ export function CashRegister() {
               onClose={handleOpenCloseModal}
             />
           ) : isClosed ? (
-            <ClosedTodaySummary cashRegister={todayCashRegister!} />
+            <ClosedTodaySummary
+              cashRegister={todayCashRegister!}
+              onReopen={handleReopenCashRegister}
+              isReopening={reopenCashRegister.isPending}
+            />
           ) : hasOldOpenRegister ? (
             <div className="mx-auto max-w-lg space-y-4">
               <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-5">

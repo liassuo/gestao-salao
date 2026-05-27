@@ -161,6 +161,61 @@ export class CashRegisterService {
     return closedRegister;
   }
 
+  /**
+   * Reabre um caixa fechado. Mantém openingBalance e openedAt originais —
+   * limpa apenas os campos de fechamento (closedAt, closingBalance, totalCash/Pix/
+   * Card/Revenue, discrepancy) para que ao fechar de novo recalcule do zero.
+   * Bloqueia se ja houver outro caixa aberto (regra unique enforced no openRegister).
+   */
+  async reopenRegister(id: string) {
+    const { data: register, error } = await this.supabase
+      .from('cash_registers')
+      .select('id, isOpen')
+      .eq('id', id)
+      .single();
+
+    if (error || !register) {
+      throw new NotFoundException('Caixa não encontrado');
+    }
+
+    if (register.isOpen) {
+      throw new BadRequestException('Este caixa já está aberto');
+    }
+
+    const { data: alreadyOpen } = await this.supabase
+      .from('cash_registers')
+      .select('id')
+      .eq('isOpen', true)
+      .maybeSingle();
+
+    if (alreadyOpen) {
+      throw new BadRequestException(
+        'Já existe um caixa aberto. Feche-o antes de reabrir este.',
+      );
+    }
+
+    const { data: reopened, error: updateError } = await this.supabase
+      .from('cash_registers')
+      .update({
+        isOpen: true,
+        closedAt: null,
+        closedBy: null,
+        closingBalance: null,
+        totalCash: null,
+        totalPix: null,
+        totalCard: null,
+        totalRevenue: null,
+        discrepancy: null,
+        updatedAt: this.getLocalDateTimeStr(),
+      })
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (updateError) throw updateError;
+    return reopened;
+  }
+
   async getTodayRegister() {
     const todayStr = this.getLocalDateStr();
     const startOfDay = `${todayStr}T00:00:00`;
