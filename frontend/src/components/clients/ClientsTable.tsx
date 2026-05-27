@@ -1,4 +1,4 @@
-import { Users, Phone, Mail, MoreVertical, Edit2, Trash2, KeyRound, UserX, UserCheck } from 'lucide-react';
+import { Users, Phone, Mail, MoreVertical, Edit2, Trash2, KeyRound, UserX, UserCheck, MessageCircle } from 'lucide-react';
 import { useState, useRef } from 'react';
 import { EmptyState } from '@/components/ui';
 import { formatPhone } from '@/utils/format';
@@ -137,7 +137,20 @@ export function ClientsTable({
                   {client.lastVisitAt ? formatDate(client.lastVisitAt) : '-'}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-center">
-                  <div className="relative inline-block">
+                  <div className="inline-flex items-center gap-1">
+                    {client.phone && (
+                      <a
+                        href={`https://wa.me/55${client.phone.replace(/\D/g, '')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="rounded-lg p-1.5 text-green-500 hover:bg-green-500/10"
+                        title={`Abrir WhatsApp de ${client.name}`}
+                      >
+                        <MessageCircle className="h-5 w-5" />
+                      </a>
+                    )}
+                    <div className="relative inline-block">
                     <button
                       ref={(el) => { menuBtnRefs.current[client.id] = el; }}
                       onClick={() => {
@@ -221,6 +234,7 @@ export function ClientsTable({
                         </div>
                       </>
                     )}
+                    </div>
                   </div>
                 </td>
               </tr>
