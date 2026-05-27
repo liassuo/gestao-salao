@@ -14,7 +14,15 @@ function formatBirthday(birthDate: string): string {
 
 export function BirthdayClientsCard({ clients = [] }: BirthdayClientsCardProps) {
   const today = new Date().getDate();
-  const upcoming = clients.filter((c) => c.day >= today);
+  // Mostra o mes inteiro: hoje + futuros primeiro, ja passados no final (apagados).
+  // Antes filtrava por c.day >= today, escondendo todo mundo cujo aniversario
+  // ja tinha passado nesse mes — incoerente com o titulo "do Mes".
+  const sorted = [...clients].sort((a, b) => {
+    const aPast = a.day < today;
+    const bPast = b.day < today;
+    if (aPast !== bPast) return aPast ? 1 : -1;
+    return a.day - b.day;
+  });
 
   return (
     <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6 backdrop-blur-sm transition-colors duration-200">
@@ -25,12 +33,13 @@ export function BirthdayClientsCard({ clients = [] }: BirthdayClientsCardProps) 
         <h3 className="text-lg font-semibold text-[var(--text-primary)]">Aniversariantes do Mês</h3>
       </div>
 
-      {upcoming.length === 0 ? (
-        <p className="text-[var(--text-muted)]">Nenhum aniversariante nos proximos dias.</p>
+      {sorted.length === 0 ? (
+        <p className="text-[var(--text-muted)]">Nenhum aniversariante neste mês.</p>
       ) : (
         <div className="space-y-3">
-          {upcoming.map((client) => {
+          {sorted.map((client) => {
             const isToday = client.day === today;
+            const isPast = client.day < today;
 
             return (
               <div
@@ -38,6 +47,8 @@ export function BirthdayClientsCard({ clients = [] }: BirthdayClientsCardProps) 
                 className={`flex items-center justify-between rounded-lg border p-3 ${
                   isToday
                     ? 'border-pink-500/30 bg-pink-500/10'
+                    : isPast
+                    ? 'border-[var(--border-color)] bg-[var(--hover-bg)] opacity-60'
                     : 'border-[var(--border-color)] bg-[var(--hover-bg)]'
                 }`}
               >
