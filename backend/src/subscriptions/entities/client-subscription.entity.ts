@@ -12,6 +12,14 @@ export class ClientSubscription {
   endDate: Date | null;
   cutsUsedThisMonth: number;
   lastResetDate: Date;
+  /** Quando NOT NULL e status ainda ACTIVE: cliente cancelou mas mantem beneficios ate endDate. */
+  canceledAt: Date | null;
+  /**
+   * Troca de plano agendada. Quando setado, o cron de renovacao no fim do ciclo
+   * vai virar planId=pendingPlanId e limpar este campo. Usado em downgrade/lateral
+   * para preservar o ciclo ja pago pelo cliente.
+   */
+  pendingPlanId: string | null;
   createdAt: Date;
   updatedAt: Date;
 

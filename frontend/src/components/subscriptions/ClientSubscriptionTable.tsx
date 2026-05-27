@@ -146,10 +146,14 @@ export function ClientSubscriptionTable({
                   <td className="whitespace-nowrap px-4 py-4">
                     <span
                       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                        subscriptionStatusColors[subscription.status]
+                        subscription.canceledAt && subscription.status === 'ACTIVE'
+                          ? 'bg-amber-500/15 text-amber-400'
+                          : subscriptionStatusColors[subscription.status]
                       }`}
                     >
-                      {subscriptionStatusLabels[subscription.status]}
+                      {subscription.canceledAt && subscription.status === 'ACTIVE'
+                        ? `Cancela em ${subscription.endDate ? formatDate(subscription.endDate) : '—'}`
+                        : subscriptionStatusLabels[subscription.status]}
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-4 py-4 text-center">

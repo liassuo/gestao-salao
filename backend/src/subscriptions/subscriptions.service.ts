@@ -358,6 +358,8 @@ export class SubscriptionsService {
           endDate: endDate.toISOString(),
           cutsUsedThisMonth: 0,
           status: initialStatus,
+          // Reativacao: limpa canceledAt para nao parecer "cancelado pendente"
+          canceledAt: null,
           updatedAt: subNow,
         })
         .eq('id', existingSub.id);
@@ -570,7 +572,7 @@ export class SubscriptionsService {
   async cancelSubscription(id: string) {
     const { data: subscription, error: findError } = await this.supabase
       .from('client_subscriptions')
-      .select('id, status, asaasSubscriptionId')
+      .select('id, status, asaasSubscriptionId, endDate')
       .eq('id', id)
       .single();
 
@@ -582,16 +584,9 @@ export class SubscriptionsService {
       throw new BadRequestException('Assinatura não pode ser cancelada');
     }
 
-    const { data: updated, error } = await this.supabase
-      .from('client_subscriptions')
-      .update({ status: 'CANCELED' })
-      .eq('id', id)
-      .select('*')
-      .single();
+    const updated = await this.applyCancellation(subscription);
 
-    if (error) throw error;
-
-    // Cancelar assinatura no Asaas (se vinculada)
+    // Cancelar assinatura no Asaas (se vinculada) — para nao cobrar proximo ciclo
     if (this.asaasService.configured && subscription.asaasSubscriptionId) {
       try {
         await this.asaasService.cancelSubscription(subscription.asaasSubscriptionId);
@@ -601,6 +596,36 @@ export class SubscriptionsService {
       }
     }
 
+    return updated;
+  }
+
+  /**
+   * Aplica cancelamento "lazy": se ainda ha tempo de plano (endDate > now), mantem
+   * status ACTIVE com canceledAt setado (cliente continua usando ate vencer); senao
+   * vira CANCELED imediatamente. Usado por cancelSubscription e cancelMySubscription.
+   */
+  private async applyCancellation(subscription: {
+    id: string;
+    status: string;
+    endDate: string | Date | null;
+  }) {
+    const now = nowLocalIsoString();
+    const endDate = subscription.endDate ? new Date(subscription.endDate as any) : null;
+    const stillEntitled =
+      subscription.status === 'ACTIVE' && endDate !== null && endDate.getTime() > Date.now();
+
+    const updateFields: any = stillEntitled
+      ? { canceledAt: now, updatedAt: now }
+      : { status: 'CANCELED', canceledAt: now, updatedAt: now };
+
+    const { data: updated, error } = await this.supabase
+      .from('client_subscriptions')
+      .update(updateFields)
+      .eq('id', subscription.id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
     return updated;
   }
 
@@ -1214,19 +1239,13 @@ export class SubscriptionsService {
       throw new BadRequestException('Assinatura não pode ser cancelada');
     }
 
-    const { data: updated, error } = await this.supabase
-      .from('client_subscriptions')
-      .update({ status: 'CANCELED', updatedAt: nowLocalIsoString() })
-      .eq('id', subscription.id)
-      .select('*')
-      .single();
+    const updated = await this.applyCancellation({
+      id: subscription.id,
+      status: subscription.status,
+      endDate: (subscription as any).endDate ?? null,
+    });
 
-    if (error) {
-      this.logger.error(`Erro ao cancelar assinatura ${subscription.id}: ${JSON.stringify(error)}`);
-      throw error;
-    }
-
-    // Cancelar assinatura no Asaas (se vinculada)
+    // Cancelar assinatura no Asaas (se vinculada) — para nao cobrar proximo ciclo
     if (this.asaasService.configured && subscription.asaasSubscriptionId) {
       try {
         await this.asaasService.cancelSubscription(subscription.asaasSubscriptionId);
@@ -1237,6 +1256,200 @@ export class SubscriptionsService {
     }
 
     return updated;
+  }
+
+  /**
+   * Troca de plano da assinatura ACTIVE de um cliente.
+   *
+   * Comportamento (Opcao B do projeto):
+   *  - UPGRADE (preco do plano novo > do atual): troca IMEDIATA. Cancela cobranca
+   *    recorrente antiga no Asaas, atualiza planId, reseta o ciclo (startDate=now,
+   *    endDate=now+1m, cuts=0, status=PENDING_PAYMENT), e gera uma NOVA cobranca
+   *    do plano novo. Retorna a cobranca para a UI mostrar QR Code/invoice.
+   *  - DOWNGRADE ou LATERAL (preco <=): troca AGENDADA. Define pendingPlanId, cancela
+   *    cobranca recorrente Asaas para nao cobrar o valor antigo, e mantem ciclo
+   *    atual intacto (cliente continua usando o plano antigo ate endDate). Quando
+   *    o ciclo terminar, o cron flipa planId=pendingPlanId, limpa pendingPlanId e
+   *    coloca em PENDING_PAYMENT para o admin/cliente fazer nova cobranca.
+   *
+   * Sempre comunique ao usuario CLARAMENTE que uma cobranca nova vai ser gerada
+   * (imediata em upgrade, no proximo ciclo em downgrade).
+   */
+  /**
+   * Versao do changePlan para o admin que recebe o id da assinatura.
+   * Resolve clientId internamente e delega ao changePlan principal.
+   */
+  async changePlanBySubscriptionId(
+    subscriptionId: string,
+    dto: { newPlanId: string; billingType?: 'PIX' | 'CREDIT_CARD' },
+  ) {
+    const { data: sub } = await this.supabase
+      .from('client_subscriptions')
+      .select('id, clientId')
+      .eq('id', subscriptionId)
+      .single();
+
+    if (!sub) {
+      throw new NotFoundException('Assinatura não encontrada');
+    }
+    return this.changePlan(sub.clientId, dto);
+  }
+
+  async changePlan(clientId: string, dto: { newPlanId: string; billingType?: 'PIX' | 'CREDIT_CARD' }) {
+    const subscription = await this.findClientSubscription(clientId);
+    if (!subscription) {
+      throw new NotFoundException('Nenhuma assinatura encontrada para este cliente');
+    }
+
+    if (subscription.status !== 'ACTIVE') {
+      throw new BadRequestException('Só é possível trocar de plano em assinaturas ativas');
+    }
+
+    if (subscription.planId === dto.newPlanId) {
+      throw new BadRequestException('O plano novo é igual ao plano atual');
+    }
+
+    const { data: newPlan } = await this.supabase
+      .from('subscription_plans')
+      .select('id, name, price, cutsPerMonth, isActive')
+      .eq('id', dto.newPlanId)
+      .single();
+
+    if (!newPlan || !newPlan.isActive) {
+      throw new NotFoundException('Plano novo não encontrado ou inativo');
+    }
+
+    const currentPrice = subscription.plan?.price ?? 0;
+    const isUpgrade = newPlan.price > currentPrice;
+    const now = new Date();
+    const nowIso = now.toISOString();
+    const nowLocal = nowLocalIsoString();
+
+    // Cancela a cobrança recorrente antiga em ambos os casos (pra nunca cobrar
+    // o valor velho de novo). A nova cobrança é criada imediatamente no upgrade
+    // ou na renovação no caso de downgrade.
+    if (this.asaasService.configured && (subscription as any).asaasSubscriptionId) {
+      try {
+        await this.asaasService.cancelSubscription((subscription as any).asaasSubscriptionId);
+        this.logger.log(
+          `[change-plan] Asaas subscription ${(subscription as any).asaasSubscriptionId} cancelada (troca de plano)`,
+        );
+      } catch (e) {
+        this.logger.warn(`[change-plan] falha ao cancelar Asaas recurring: ${e}`);
+      }
+    }
+
+    if (!isUpgrade) {
+      // DOWNGRADE / LATERAL — agenda para a renovacao
+      const { data: updated, error } = await this.supabase
+        .from('client_subscriptions')
+        .update({
+          pendingPlanId: dto.newPlanId,
+          asaasSubscriptionId: null,
+          updatedAt: nowLocal,
+        })
+        .eq('id', subscription.id)
+        .select('*, client:clients(id, name, phone), plan:subscription_plans(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent)), pendingPlan:subscription_plans!pendingPlanId(id, name, price, cutsPerMonth)')
+        .single();
+
+      if (error) throw error;
+      this.logger.log(`[change-plan] downgrade agendado: assinatura ${subscription.id} → plano ${dto.newPlanId} em ${subscription.endDate}`);
+      return { kind: 'SCHEDULED' as const, subscription: updated };
+    }
+
+    // UPGRADE — imediato + cobrança nova
+    const billingTypeRaw = dto.billingType;
+    const parsed = parseAsaasBillingType(billingTypeRaw);
+    const effectiveBilling =
+      parsed === AsaasBillingType.CREDIT_CARD ? AsaasBillingType.CREDIT_CARD : AsaasBillingType.PIX;
+
+    const newEndDate = new Date(now);
+    newEndDate.setMonth(newEndDate.getMonth() + 1);
+
+    const initialStatus = this.asaasService.configured ? 'PENDING_PAYMENT' : 'ACTIVE';
+
+    const { error: updateError } = await this.supabase
+      .from('client_subscriptions')
+      .update({
+        planId: dto.newPlanId,
+        startDate: nowIso,
+        endDate: newEndDate.toISOString(),
+        cutsUsedThisMonth: 0,
+        lastResetDate: nowIso,
+        status: initialStatus,
+        canceledAt: null,
+        pendingPlanId: null,
+        asaasSubscriptionId: null,
+        updatedAt: nowLocal,
+      })
+      .eq('id', subscription.id);
+
+    if (updateError) throw updateError;
+
+    let invoiceUrl: string | null = null;
+    let pixData: any = null;
+    let chargeId: string | null = null;
+
+    if (this.asaasService.configured) {
+      try {
+        const asaasCustomerId = await this.ensureAsaasCustomer(clientId);
+        const today = nowLocal.split('T')[0];
+        const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:5173');
+
+        const charge = await this.asaasService.createCharge({
+          customer: asaasCustomerId,
+          billingType: effectiveBilling,
+          value: this.asaasService.centavosToReais(newPlan.price),
+          dueDate: today,
+          description: `Upgrade para plano ${newPlan.name}`,
+          externalReference: subscription.id,
+          callback: {
+            successUrl: `${frontendUrl}/planos`,
+            autoRedirect: true,
+          },
+        });
+
+        invoiceUrl = charge.invoiceUrl || null;
+        chargeId = charge.id;
+        const localMethod = asaasBillingToLocalPaymentMethod(effectiveBilling);
+
+        await this.supabase.from('payments').insert({
+          id: randomUUID(),
+          clientId,
+          subscriptionId: subscription.id,
+          amount: newPlan.price,
+          method: localMethod,
+          registeredBy: clientId,
+          notes: `Upgrade para plano ${newPlan.name} #${charge.id}`,
+          asaasPaymentId: charge.id,
+          asaasStatus: charge.status,
+          paidAt: null,
+          invoiceUrl,
+          bankSlipUrl: charge.bankSlipUrl || null,
+          createdAt: nowLocal,
+          updatedAt: nowLocal,
+        });
+
+        if (effectiveBilling === AsaasBillingType.PIX) {
+          try {
+            pixData = await this.asaasService.getPixQrCode(charge.id);
+          } catch {
+            this.logger.warn('[change-plan] QR Code PIX não disponível imediatamente');
+          }
+        }
+      } catch (e) {
+        this.logger.error(`[change-plan] falha ao criar cobrança Asaas no upgrade: ${e}`);
+        // Não revertemos a troca de plano local — admin pode tentar gerar cobrança depois.
+      }
+    }
+
+    const fresh = await this.findClientSubscription(clientId);
+    this.logger.log(`[change-plan] upgrade aplicado: assinatura ${subscription.id} → plano ${dto.newPlanId}`);
+    return {
+      kind: 'IMMEDIATE' as const,
+      subscription: fresh,
+      charge: chargeId ? { id: chargeId, invoiceUrl, pixData } : null,
+    };
   }
 
   async reactivateMySubscription(clientId: string, body: ReactivateMeDto) {
@@ -1273,6 +1486,7 @@ export class SubscriptionsService {
         startDate: now.toISOString(),
         endDate: newEndDate.toISOString(),
         cutsUsedThisMonth: 0,
+        canceledAt: null,
         updatedAt: now.toISOString(),
       })
       .eq('id', subscription.id);
@@ -1417,6 +1631,86 @@ export class SubscriptionsService {
       payment,
       asaasCharge,
     };
+  }
+
+  /**
+   * Sweep das trocas de plano agendadas (downgrade/lateral) cujo ciclo venceu.
+   * Cliente trocou com pendingPlanId setado, mantivemos o ciclo atual ate endDate.
+   * Ao vencer, flipa planId=pendingPlanId, limpa pendingPlanId, reseta o ciclo
+   * (cuts=0, endDate=now+1m) e marca PENDING_PAYMENT para o admin/cliente cobrar
+   * o plano novo.
+   */
+  @Cron(CronExpression.EVERY_10_MINUTES)
+  async applyPendingPlanChangesCron() {
+    const nowIso = new Date().toISOString();
+    const { data: due } = await this.supabase
+      .from('client_subscriptions')
+      .select('id, pendingPlanId')
+      .eq('status', 'ACTIVE')
+      .not('pendingPlanId', 'is', null)
+      .lt('endDate', nowIso)
+      .limit(200);
+
+    if (!due || due.length === 0) return;
+
+    let flipped = 0;
+    for (const sub of due) {
+      try {
+        const now = new Date();
+        const newEnd = new Date(now);
+        newEnd.setMonth(newEnd.getMonth() + 1);
+        const { error } = await this.supabase
+          .from('client_subscriptions')
+          .update({
+            planId: sub.pendingPlanId,
+            pendingPlanId: null,
+            startDate: now.toISOString(),
+            endDate: newEnd.toISOString(),
+            cutsUsedThisMonth: 0,
+            lastResetDate: now.toISOString(),
+            status: 'PENDING_PAYMENT',
+            updatedAt: nowLocalIsoString(),
+          })
+          .eq('id', sub.id);
+        if (!error) flipped += 1;
+      } catch (e) {
+        this.logger.warn(`[apply-pending-plan-cron] falha em ${sub.id}: ${e}`);
+      }
+    }
+    if (flipped > 0) {
+      this.logger.log(`[apply-pending-plan-cron] ${flipped} troca(s) de plano aplicada(s)`);
+    }
+  }
+
+  /**
+   * Sweep das assinaturas canceladas com periodo vigente que ja venceram.
+   * Cliente canceou (canceledAt setado) mas mantivemos status ACTIVE ate endDate.
+   * Quando endDate passa, finalmente vira CANCELED de fato e perde os beneficios.
+   */
+  @Cron(CronExpression.EVERY_10_MINUTES)
+  async expireCanceledSubscriptionsCron() {
+    const nowIso = new Date().toISOString();
+    const { data: expired } = await this.supabase
+      .from('client_subscriptions')
+      .select('id')
+      .eq('status', 'ACTIVE')
+      .not('canceledAt', 'is', null)
+      .lt('endDate', nowIso)
+      .limit(200);
+
+    if (!expired || expired.length === 0) return;
+
+    const ids = expired.map((s: any) => s.id);
+    const { error } = await this.supabase
+      .from('client_subscriptions')
+      .update({ status: 'CANCELED', updatedAt: nowLocalIsoString() })
+      .in('id', ids);
+
+    if (error) {
+      this.logger.warn(`[expire-canceled-cron] falha ao expirar ${ids.length} assinatura(s): ${error.message}`);
+      return;
+    }
+    this.logger.log(`[expire-canceled-cron] ${ids.length} assinatura(s) cancelada(s) ao vencer`);
   }
 
   /**

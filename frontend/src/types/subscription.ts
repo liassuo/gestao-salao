@@ -37,6 +37,8 @@ export interface ClientSubscription {
   cutsUsedThisMonth: number;
   lastResetDate: string;
   asaasSubscriptionId?: string | null;
+  /** Setado quando cliente cancelou mas ainda esta dentro do periodo pago. */
+  canceledAt?: string | null;
   createdAt: string;
   client: {
     id: string;

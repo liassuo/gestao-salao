@@ -26,6 +26,7 @@ import {
   SubscribeClientDto,
   SubscribeMeDto,
   ReactivateMeDto,
+  ChangePlanDto,
 } from './dto';
 
 interface RequestWithUser extends Request {
@@ -98,6 +99,18 @@ export class SubscriptionsController {
     @Body() body: ReactivateMeDto,
   ) {
     return this.subscriptionsService.reactivateMySubscription(req.user.id, body);
+  }
+
+  /**
+   * POST /subscriptions/me/change-plan
+   * Troca o plano da assinatura ativa do cliente autenticado.
+   * - Upgrade (preco maior): imediato + gera cobranca nova.
+   * - Downgrade/lateral: agenda para a proxima renovacao.
+   */
+  @UseGuards(JwtAuthGuard)
+  @Post('me/change-plan')
+  async changeMyPlan(@Req() req: RequestWithUser, @Body() body: ChangePlanDto) {
+    return this.subscriptionsService.changePlan(req.user.id, body);
   }
 
   // ============================================
@@ -215,6 +228,21 @@ export class SubscriptionsController {
   @Post(':id/cancel')
   async cancelSubscription(@Param('id', ParseUUIDPipe) id: string) {
     return this.subscriptionsService.cancelSubscription(id);
+  }
+
+  /**
+   * POST /subscriptions/:id/change-plan
+   * Admin troca o plano de uma assinatura. Mesma logica do /me/change-plan
+   * (upgrade imediato + cobranca nova / downgrade agendado).
+   */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @Post(':id/change-plan')
+  async changeSubscriptionPlan(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: ChangePlanDto,
+  ) {
+    return this.subscriptionsService.changePlanBySubscriptionId(id, body);
   }
 
   /**
