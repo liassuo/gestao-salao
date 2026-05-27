@@ -8,10 +8,10 @@ import {
   useDeleteClient,
   getApiErrorMessage,
 } from '@/hooks';
-import { ClientsTable, ClientForm, ConfirmDeleteModal } from '@/components/clients';
-import { Modal, SkeletonTable, useToast } from '@/components/ui';
+import { ClientsTable, ClientForm, ConfirmDeleteModal, ResetPasswordResultModal } from '@/components/clients';
+import { ConfirmModal, Modal, SkeletonTable, useToast } from '@/components/ui';
 import type { Client, ClientFilters, CreateClientPayload, UpdateClientPayload } from '@/types';
-import { clientsService } from '@/services/clients';
+import { clientsService, type ResetClientPasswordResponse } from '@/services/clients';
 
 export function Clients() {
   const [tab, setTab] = useState<'active' | 'inactive'>('active');
@@ -21,6 +21,13 @@ export function Clients() {
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [deletingClient, setDeletingClient] = useState<Client | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  // Cliente a confirmar reset (modal de confirmacao). null = modal fechado.
+  const [confirmingResetClient, setConfirmingResetClient] = useState<Client | null>(null);
+  // Estado de loading do reset — trava o botao "Resetar" enquanto a request roda.
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
+  // Resultado do reset de senha (modal mostra senha + botoes copiar/WhatsApp).
+  // null = modal fechado. So existe no estado entre o reset e o usuario fechar.
+  const [resetResult, setResetResult] = useState<ResetClientPasswordResponse | null>(null);
 
   const queryFilters: ClientFilters = {
     ...filters,
@@ -87,15 +94,36 @@ export function Clients() {
     }
   };
 
-  const handleResetPassword = async (client: Client) => {
-    if (!confirm(`Tem certeza que deseja resetar a senha de ${client.name}? O cliente precisará criar uma nova senha no próximo login.`)) {
-      return;
-    }
+  // 1ª etapa: clique em "Resetar senha" → abre o ConfirmModal abaixo.
+  const handleResetPassword = (client: Client) => {
+    setConfirmingResetClient(client);
+  };
+
+  // 2ª etapa: usuario clicou "Resetar" no ConfirmModal → faz a chamada e abre
+  // o modal de resultado com a senha em texto puro (so retorna UMA vez).
+  const handleConfirmResetPassword = async () => {
+    if (!confirmingResetClient) return;
+    const client = confirmingResetClient;
+    setIsResettingPassword(true);
     try {
-      await clientsService.resetPassword(client.id);
-      toast.success('Senha resetada', `${client.name} precisará criar uma nova senha no próximo login.`);
+      const result = await clientsService.resetPassword(client.id);
+      // Checagem defensiva: se por qualquer motivo o backend antigo (sem o
+      // novo retorno) ainda estiver rodando, o tempPassword vem undefined.
+      // Melhor falhar alto do que abrir o modal com senha vazia.
+      if (!result?.tempPassword) {
+        toast.error(
+          'Erro',
+          'Senha foi resetada mas o servidor nao retornou a senha temporaria. Reinicie o backend e tente novamente.',
+        );
+        setConfirmingResetClient(null);
+        return;
+      }
+      setConfirmingResetClient(null);
+      setResetResult(result);
     } catch {
       toast.error('Erro', 'Não foi possível resetar a senha do cliente.');
+    } finally {
+      setIsResettingPassword(false);
     }
   };
 
@@ -261,6 +289,33 @@ export function Clients() {
         client={deletingClient}
         isLoading={deleteClient.isPending}
         mode={tab}
+      />
+
+      {/* Confirmacao do reset de senha — substitui o window.confirm() que
+          era bloqueante e perdia foco quando o usuario clicava OK rapido. */}
+      <ConfirmModal
+        isOpen={!!confirmingResetClient}
+        onClose={() => !isResettingPassword && setConfirmingResetClient(null)}
+        onConfirm={handleConfirmResetPassword}
+        title="Resetar senha"
+        message={
+          confirmingResetClient
+            ? `Tem certeza que deseja resetar a senha de ${confirmingResetClient.name}? Uma nova senha temporaria sera gerada e voce podera encaminha-la para o cliente.`
+            : ''
+        }
+        confirmLabel={isResettingPassword ? 'Resetando...' : 'Resetar senha'}
+        variant="warning"
+        isLoading={isResettingPassword}
+      />
+
+      {/* Resultado do reset de senha — mostra a senha temporaria e botoes
+          de copiar / enviar pelo WhatsApp pro admin encaminhar ao cliente. */}
+      <ResetPasswordResultModal
+        isOpen={!!resetResult}
+        onClose={() => setResetResult(null)}
+        clientName={resetResult?.clientName ?? ''}
+        clientPhone={resetResult?.clientPhone ?? null}
+        tempPassword={resetResult?.tempPassword ?? ''}
       />
     </div>
   );
