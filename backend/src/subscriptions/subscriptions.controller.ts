@@ -246,6 +246,20 @@ export class SubscriptionsController {
   }
 
   /**
+   * POST /subscriptions/admin/reconcile-asaas
+   * Forca a reconciliacao on-demand de todas as assinaturas PENDING_PAYMENT
+   * com o Asaas. Mesma rotina do cron que ja roda de 10 em 10 min — esta versao
+   * permite ao admin disparar manualmente quando ha suspeita de pagamento que
+   * nao bateu no sistema (cliente reclamou que pagou).
+   */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @Post('admin/reconcile-asaas')
+  async reconcileWithAsaas() {
+    return this.subscriptionsService.reconcilePendingWithAsaas();
+  }
+
+  /**
    * POST /subscriptions/:id/use-cut
    * Registers a cut usage from subscription
    */

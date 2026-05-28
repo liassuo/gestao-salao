@@ -1721,6 +1721,50 @@ export class SubscriptionsService {
    * (token errado, rede, servidor fora do ar) e o cliente nunca abriu o app".
    * Sem este cron a assinatura ficaria presa até alguém olhar.
    */
+  /**
+   * Reconciliacao on-demand das assinaturas PENDING_PAYMENT com o Asaas.
+   * Mesma logica do cron, mas pode ser acionada pelo admin para forcar a
+   * verificacao na hora (ex.: cliente reclamou que pagou e nada apareceu).
+   * Retorna estatisticas do que foi processado.
+   */
+  async reconcilePendingWithAsaas(): Promise<{ checked: number; activated: number; errors: number; configured: boolean }> {
+    if (!this.asaasService.configured) {
+      return { checked: 0, activated: 0, errors: 0, configured: false };
+    }
+
+    const { data: pending } = await this.supabase
+      .from('client_subscriptions')
+      .select('id, clientId')
+      .eq('status', 'PENDING_PAYMENT')
+      .limit(200);
+
+    const items = pending || [];
+    if (items.length === 0) {
+      return { checked: 0, activated: 0, errors: 0, configured: true };
+    }
+
+    let activated = 0;
+    let errors = 0;
+    for (const sub of items) {
+      try {
+        const before = await this.findSubscription(sub.id).catch(() => null);
+        if (!before) continue;
+        const after = await this.syncWithAsaas(sub.id);
+        if (after?.status === 'ACTIVE' && before.status !== 'ACTIVE') {
+          activated += 1;
+        }
+      } catch (e) {
+        errors += 1;
+        this.logger.warn(`[reconcile-manual] falha em ${sub.id}: ${e}`);
+      }
+    }
+
+    this.logger.log(
+      `[reconcile-manual] checked=${items.length} activated=${activated} errors=${errors}`,
+    );
+    return { checked: items.length, activated, errors, configured: true };
+  }
+
   @Cron(CronExpression.EVERY_10_MINUTES)
   async reconcilePendingSubscriptionsCron() {
     if (!this.asaasService.configured) return;

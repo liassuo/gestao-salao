@@ -68,6 +68,13 @@ export const subscriptionsService = {
     return response.data;
   },
 
+  async reconcileWithAsaas(): Promise<{ checked: number; activated: number; errors: number; configured: boolean }> {
+    const response = await api.post<{ checked: number; activated: number; errors: number; configured: boolean }>(
+      '/subscriptions/admin/reconcile-asaas',
+    );
+    return response.data;
+  },
+
   async useCut(id: string): Promise<ClientSubscription> {
     const response = await api.post<ClientSubscription>(`/subscriptions/${id}/use-cut`);
     return response.data;

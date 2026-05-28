@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { CreditCard, AlertCircle, Plus, Users, Search, X } from 'lucide-react';
+import { CreditCard, AlertCircle, Plus, Users, Search, X, RefreshCw } from 'lucide-react';
+import { subscriptionsService } from '@/services/subscriptions';
 import {
   useSubscriptionPlans,
   useClientSubscriptions,
@@ -174,6 +175,26 @@ export function Subscriptions() {
     setIsSubscribeModalOpen(true);
   };
 
+  const [isReconciling, setIsReconciling] = useState(false);
+  const handleReconcileWithAsaas = async () => {
+    setIsReconciling(true);
+    try {
+      const result = await subscriptionsService.reconcileWithAsaas();
+      if (!result.configured) {
+        toast.warning('Asaas não configurado', 'A integração com o Asaas não está ativa neste servidor.');
+        return;
+      }
+      const parts = [`${result.checked} assinatura(s) verificada(s)`];
+      if (result.activated > 0) parts.push(`${result.activated} ativada(s) retroativamente`);
+      if (result.errors > 0) parts.push(`${result.errors} erro(s)`);
+      toast.success('Reconciliação concluída', parts.join(' · '));
+    } catch (err) {
+      toast.error('Erro', getApiErrorMessage(err));
+    } finally {
+      setIsReconciling(false);
+    }
+  };
+
   const handleCloseSubscribeModal = () => {
     setIsSubscribeModalOpen(false);
     setSubscribeError(null);
@@ -332,13 +353,24 @@ export function Subscriptions() {
             Novo Plano
           </button>
         ) : (
-          <button
-            onClick={handleOpenSubscribeModal}
-            className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-4 py-2.5 font-medium text-white transition-colors hover:bg-[#725510] focus:outline-none focus:ring-2 focus:ring-[#C8923A] focus:ring-offset-2 focus:ring-offset-[var(--bg-primary)]"
-          >
-            <Plus className="h-5 w-5" />
-            Nova Assinatura
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleReconcileWithAsaas}
+              disabled={isReconciling}
+              title="Verifica no Asaas se ha pagamentos confirmados que ainda nao bateram aqui"
+              className="flex items-center gap-2 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-2.5 text-sm font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--hover-bg)] disabled:opacity-50"
+            >
+              <RefreshCw className={`h-4 w-4 ${isReconciling ? 'animate-spin' : ''}`} />
+              {isReconciling ? 'Reconciliando…' : 'Reconciliar com Asaas'}
+            </button>
+            <button
+              onClick={handleOpenSubscribeModal}
+              className="flex items-center gap-2 rounded-xl bg-[#8B6914] px-4 py-2.5 font-medium text-white transition-colors hover:bg-[#725510] focus:outline-none focus:ring-2 focus:ring-[#C8923A] focus:ring-offset-2 focus:ring-offset-[var(--bg-primary)]"
+            >
+              <Plus className="h-5 w-5" />
+              Nova Assinatura
+            </button>
+          </div>
         )}
       </div>
 
