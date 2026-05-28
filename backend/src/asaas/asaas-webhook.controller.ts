@@ -144,7 +144,10 @@ export class AsaasWebhookController {
               subscriptionId: linkedSub.id,
               amount: amountCentavos,
               method: localMethod,
-              registeredBy: linkedSub.clientId,
+              // registeredBy = NULL porque webhook nao tem usuario admin associado.
+              // Antes passava linkedSub.clientId, que e id de cliente (nao de usuario),
+              // violando a FK payments_registeredBy_fkey.
+              registeredBy: null,
               notes: `Reconciliação webhook (cobrança ${asaasPaymentId})`,
               asaasPaymentId,
               asaasStatus: status,
