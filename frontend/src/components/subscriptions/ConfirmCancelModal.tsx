@@ -1,10 +1,11 @@
+import { useEffect, useState } from 'react';
 import { AlertTriangle, Loader2, X } from 'lucide-react';
 import type { ClientSubscription } from '@/types';
 
 interface ConfirmCancelModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: () => Promise<void>;
+  onConfirm: (immediate: boolean) => Promise<void>;
   subscription: ClientSubscription | null;
   isLoading: boolean;
 }
@@ -27,7 +28,19 @@ export function ConfirmCancelModal({
   subscription,
   isLoading,
 }: ConfirmCancelModalProps) {
+  // Modo de cancelamento. Default = lazy (mantem acesso ate vencer), pro-consumer.
+  // immediate = revoga acesso na hora, util pra cliente problematico/inadimplente.
+  const [mode, setMode] = useState<'lazy' | 'immediate'>('lazy');
+
+  // Reseta para "lazy" toda vez que o modal abrir, evitando que uma escolha
+  // arriscada (revogar agora) fique "grudada" entre cancelamentos diferentes.
+  useEffect(() => {
+    if (isOpen) setMode('lazy');
+  }, [isOpen]);
+
   if (!isOpen || !subscription) return null;
+
+  const endDateLabel = subscription.endDate ? formatDate(subscription.endDate) : '—';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -87,11 +100,57 @@ export function ConfirmCancelModal({
             </p>
           </div>
 
-          <div className="mb-6 rounded-xl bg-red-500/10 p-3">
-            <p className="text-sm text-[#A63030]">
-              <span className="font-medium">Atenção:</span> Esta ação não pode ser desfeita.
-              O cliente perderá acesso aos benefícios do plano imediatamente.
+          {/* Escolha do modo de cancelamento */}
+          <div className="mb-6 space-y-2">
+            <p className="mb-2 text-sm font-medium text-[var(--text-primary)]">
+              Como cancelar?
             </p>
+            <label
+              className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors ${
+                mode === 'lazy'
+                  ? 'border-[#C8923A]/50 bg-[#C8923A]/10'
+                  : 'border-[var(--border-color)] hover:bg-[var(--hover-bg)]'
+              }`}
+            >
+              <input
+                type="radio"
+                name="cancel-mode"
+                checked={mode === 'lazy'}
+                onChange={() => setMode('lazy')}
+                className="mt-1"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-[var(--text-primary)]">
+                  Cancelar (acesso até {endDateLabel}) <span className="text-xs text-[var(--text-muted)]">— recomendado</span>
+                </p>
+                <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+                  Cliente continua usando o plano até o vencimento. Sem cobrança no próximo ciclo. Justo: ele já pagou esse mês.
+                </p>
+              </div>
+            </label>
+            <label
+              className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors ${
+                mode === 'immediate'
+                  ? 'border-[#A63030]/50 bg-red-500/10'
+                  : 'border-[var(--border-color)] hover:bg-[var(--hover-bg)]'
+              }`}
+            >
+              <input
+                type="radio"
+                name="cancel-mode"
+                checked={mode === 'immediate'}
+                onChange={() => setMode('immediate')}
+                className="mt-1"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-[#C45050]">
+                  Revogar acesso agora
+                </p>
+                <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+                  Cliente perde os benefícios na hora — não consegue mais usar cortes nem descontos. Use só pra inadimplência ou problema sério.
+                </p>
+              </div>
+            </label>
           </div>
 
           {/* Botoes */}
@@ -106,12 +165,20 @@ export function ConfirmCancelModal({
             </button>
             <button
               type="button"
-              onClick={onConfirm}
+              onClick={() => onConfirm(mode === 'immediate')}
               disabled={isLoading}
-              className="flex items-center gap-2 rounded-xl bg-[#8B2020] px-4 py-2 text-sm font-medium text-white hover:bg-[#6B1818] disabled:cursor-not-allowed disabled:opacity-50"
+              className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50 ${
+                mode === 'immediate'
+                  ? 'bg-[#8B2020] hover:bg-[#6B1818]'
+                  : 'bg-[#8B6914] hover:bg-[#725510]'
+              }`}
             >
               {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {isLoading ? 'Cancelando...' : 'Confirmar Cancelamento'}
+              {isLoading
+                ? 'Cancelando...'
+                : mode === 'immediate'
+                ? 'Revogar Acesso Agora'
+                : 'Confirmar Cancelamento'}
             </button>
           </div>
         </div>

@@ -24,6 +24,7 @@ import {
   ClientSubscriptionTable,
   SubscribeClientModal,
   ConfirmCancelModal,
+  ReconcileAsaasModal,
 } from '@/components/subscriptions';
 import { Modal, SkeletonTable, useToast, PixPaymentModal, ConfirmModal } from '@/components/ui';
 import type {
@@ -175,25 +176,7 @@ export function Subscriptions() {
     setIsSubscribeModalOpen(true);
   };
 
-  const [isReconciling, setIsReconciling] = useState(false);
-  const handleReconcileWithAsaas = async () => {
-    setIsReconciling(true);
-    try {
-      const result = await subscriptionsService.reconcileWithAsaas();
-      if (!result.configured) {
-        toast.warning('Asaas não configurado', 'A integração com o Asaas não está ativa neste servidor.');
-        return;
-      }
-      const parts = [`${result.checked} assinatura(s) verificada(s)`];
-      if (result.activated > 0) parts.push(`${result.activated} ativada(s) retroativamente`);
-      if (result.errors > 0) parts.push(`${result.errors} erro(s)`);
-      toast.success('Reconciliação concluída', parts.join(' · '));
-    } catch (err) {
-      toast.error('Erro', getApiErrorMessage(err));
-    } finally {
-      setIsReconciling(false);
-    }
-  };
+  const [isReconcileModalOpen, setIsReconcileModalOpen] = useState(false);
 
   const handleCloseSubscribeModal = () => {
     setIsSubscribeModalOpen(false);
@@ -221,12 +204,19 @@ export function Subscriptions() {
     }
   };
 
-  const handleCancelSubscription = async () => {
+  const handleCancelSubscription = async (immediate: boolean) => {
     if (!cancelingSubscription) return;
     try {
-      await cancelSubscription.mutateAsync(cancelingSubscription.id);
+      await cancelSubscription.mutateAsync({ id: cancelingSubscription.id, immediate });
       setCancelingSubscription(null);
-      toast.success('Assinatura cancelada', 'A assinatura foi cancelada com sucesso.');
+      if (immediate) {
+        toast.success('Acesso revogado', 'A assinatura foi cancelada e o acesso revogado imediatamente.');
+      } else {
+        const dt = cancelingSubscription.endDate
+          ? new Date(cancelingSubscription.endDate).toLocaleDateString('pt-BR')
+          : 'o vencimento';
+        toast.success('Assinatura cancelada', `O cliente mantém acesso até ${dt}. Sem cobrança no próximo ciclo.`);
+      }
     } catch (err) {
       toast.error('Erro', getApiErrorMessage(err));
     }
@@ -355,13 +345,12 @@ export function Subscriptions() {
         ) : (
           <div className="flex items-center gap-2">
             <button
-              onClick={handleReconcileWithAsaas}
-              disabled={isReconciling}
-              title="Verifica no Asaas se ha pagamentos confirmados que ainda nao bateram aqui"
-              className="flex items-center gap-2 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-2.5 text-sm font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--hover-bg)] disabled:opacity-50"
+              onClick={() => setIsReconcileModalOpen(true)}
+              title="Lista cobrancas Asaas confirmadas que nao bateram com o sistema. Voce revisa e decide caso a caso."
+              className="flex items-center gap-2 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-2.5 text-sm font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--hover-bg)]"
             >
-              <RefreshCw className={`h-4 w-4 ${isReconciling ? 'animate-spin' : ''}`} />
-              {isReconciling ? 'Reconciliando…' : 'Reconciliar com Asaas'}
+              <RefreshCw className="h-4 w-4" />
+              Reconciliar com Asaas
             </button>
             <button
               onClick={handleOpenSubscribeModal}
@@ -583,6 +572,12 @@ export function Subscriptions() {
         error={subscribeError}
       />
 
+      {/* Modal de reconciliacao com Asaas */}
+      <ReconcileAsaasModal
+        isOpen={isReconcileModalOpen}
+        onClose={() => setIsReconcileModalOpen(false)}
+      />
+
       {/* Modal de cancelamento de assinatura */}
       <ConfirmCancelModal
         isOpen={!!cancelingSubscription}
@@ -599,7 +594,9 @@ export function Subscriptions() {
         onExpire={async () => {
           if (pixModalData?.subscriptionId) {
             try {
-              await cancelSubscription.mutateAsync(pixModalData.subscriptionId);
+              // PIX expirou e nunca foi pago — cancelamento imediato faz sentido aqui
+              // (nao tem "ate endDate" pra manter; cliente nunca chegou a pagar).
+              await cancelSubscription.mutateAsync({ id: pixModalData.subscriptionId, immediate: true });
               toast.warning('PIX expirado', 'O prazo de pagamento venceu e a assinatura foi cancelada automaticamente.');
             } catch {
               // silently ignore

@@ -93,7 +93,8 @@ export function useCancelSubscription() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => subscriptionsService.cancelSubscription(id),
+    mutationFn: ({ id, immediate }: { id: string; immediate?: boolean }) =>
+      subscriptionsService.cancelSubscription(id, immediate),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [SUBSCRIPTIONS_KEY] });
       queryClient.invalidateQueries({ queryKey: [SUBSCRIPTION_PLANS_KEY] });

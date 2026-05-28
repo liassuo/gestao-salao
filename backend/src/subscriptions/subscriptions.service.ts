@@ -569,7 +569,7 @@ export class SubscriptionsService {
     return subscription;
   }
 
-  async cancelSubscription(id: string) {
+  async cancelSubscription(id: string, immediate: boolean = false) {
     const { data: subscription, error: findError } = await this.supabase
       .from('client_subscriptions')
       .select('id, status, asaasSubscriptionId, endDate')
@@ -584,7 +584,7 @@ export class SubscriptionsService {
       throw new BadRequestException('Assinatura não pode ser cancelada');
     }
 
-    const updated = await this.applyCancellation(subscription);
+    const updated = await this.applyCancellation(subscription, immediate);
 
     // Cancelar assinatura no Asaas (se vinculada) — para nao cobrar proximo ciclo
     if (this.asaasService.configured && subscription.asaasSubscriptionId) {
@@ -600,19 +600,28 @@ export class SubscriptionsService {
   }
 
   /**
-   * Aplica cancelamento "lazy": se ainda ha tempo de plano (endDate > now), mantem
-   * status ACTIVE com canceledAt setado (cliente continua usando ate vencer); senao
-   * vira CANCELED imediatamente. Usado por cancelSubscription e cancelMySubscription.
+   * Aplica cancelamento. Dois modos:
+   *  - lazy (padrao, pro-consumer): se ainda ha tempo de plano (endDate > now),
+   *    mantem status ACTIVE com canceledAt setado, cliente continua usando ate vencer.
+   *  - immediate=true (admin): forca status=CANCELED na hora, revoga acesso imediatamente.
+   *    Usado pra cliente problematico/inadimplente que admin precisa cortar acesso.
+   * Se a assinatura ja venceu (endDate < now), o resultado e o mesmo nos dois modos.
    */
-  private async applyCancellation(subscription: {
-    id: string;
-    status: string;
-    endDate: string | Date | null;
-  }) {
+  private async applyCancellation(
+    subscription: {
+      id: string;
+      status: string;
+      endDate: string | Date | null;
+    },
+    immediate: boolean = false,
+  ) {
     const now = nowLocalIsoString();
     const endDate = subscription.endDate ? new Date(subscription.endDate as any) : null;
     const stillEntitled =
-      subscription.status === 'ACTIVE' && endDate !== null && endDate.getTime() > Date.now();
+      !immediate &&
+      subscription.status === 'ACTIVE' &&
+      endDate !== null &&
+      endDate.getTime() > Date.now();
 
     const updateFields: any = stillEntitled
       ? { canceledAt: now, updatedAt: now }
@@ -1721,6 +1730,341 @@ export class SubscriptionsService {
    * (token errado, rede, servidor fora do ar) e o cliente nunca abriu o app".
    * Sem este cron a assinatura ficaria presa até alguém olhar.
    */
+  /**
+   * Gera relatorio de cobrancas Asaas confirmadas/recebidas nos ultimos N dias
+   * que estao desalinhadas com o estado local. Lista 3 tipos de problema:
+   *  - PAYMENT_MISSING: Asaas confirmou mas nao existe linha em payments
+   *  - PAYMENT_UNPAID: existe linha mas paidAt esta NULL
+   *  - APPOINTMENT_CANCELED: pagamento liga a um appointment que foi cancelado
+   * O admin revisa cada linha e clica "Resolver" para aplicar o fix.
+   */
+  async getAsaasReconciliationReport(daysBack: number = 7): Promise<{
+    configured: boolean;
+    issues: Array<{
+      asaasPaymentId: string;
+      asaasStatus: string;
+      amount: number;
+      confirmedAt: string | null;
+      issue: 'PAYMENT_MISSING' | 'PAYMENT_UNPAID' | 'APPOINTMENT_CANCELED';
+      kind: 'subscription' | 'appointment' | 'unknown';
+      clientId: string | null;
+      clientName: string | null;
+      description: string;
+      suggestedAction: string;
+    }>;
+  }> {
+    if (!this.asaasService.configured) {
+      return { configured: false, issues: [] };
+    }
+
+    const since = new Date();
+    since.setDate(since.getDate() - Math.max(1, daysBack));
+    const dateCreatedGe = since.toISOString().split('T')[0];
+
+    const [recv, conf] = await Promise.all([
+      this.asaasService
+        .getPayments({ status: 'RECEIVED', 'dateCreated[ge]': dateCreatedGe, limit: 100 })
+        .catch(() => ({ data: [] as any[] })),
+      this.asaasService
+        .getPayments({ status: 'CONFIRMED', 'dateCreated[ge]': dateCreatedGe, limit: 100 })
+        .catch(() => ({ data: [] as any[] })),
+    ]);
+
+    const charges = [...((recv as any).data || []), ...((conf as any).data || [])];
+    if (charges.length === 0) return { configured: true, issues: [] };
+
+    const issues: any[] = [];
+
+    for (const charge of charges) {
+      const asaasPaymentId = charge.id;
+      const amount = Math.round(Number(charge.value || 0) * 100);
+      const confirmedAt =
+        charge.confirmedDate || charge.clientPaymentDate || charge.paymentDate || null;
+      const externalRef: string | undefined = charge.externalReference;
+
+      const { data: localPayment } = await this.supabase
+        .from('payments')
+        .select('id, paidAt, subscriptionId, appointmentId')
+        .eq('asaasPaymentId', asaasPaymentId)
+        .maybeSingle();
+
+      if (!localPayment) {
+        const ctx = await this.resolveChargeContext(externalRef);
+        issues.push({
+          asaasPaymentId,
+          asaasStatus: charge.status,
+          amount,
+          confirmedAt,
+          issue: 'PAYMENT_MISSING',
+          kind: ctx.kind,
+          clientId: ctx.clientId,
+          clientName: ctx.clientName,
+          description: ctx.description || `Cobrança ${asaasPaymentId.slice(0, 12)}`,
+          suggestedAction:
+            ctx.kind === 'subscription'
+              ? 'Registrar pagamento e ativar assinatura'
+              : ctx.kind === 'appointment'
+              ? 'Registrar pagamento e marcar agendamento como pago'
+              : 'Registrar pagamento (sem vínculo)',
+        });
+        continue;
+      }
+
+      if (!(localPayment as any).paidAt) {
+        const ctx = await this.resolveChargeContext(externalRef, localPayment);
+        issues.push({
+          asaasPaymentId,
+          asaasStatus: charge.status,
+          amount,
+          confirmedAt,
+          issue: 'PAYMENT_UNPAID',
+          kind: ctx.kind,
+          clientId: ctx.clientId,
+          clientName: ctx.clientName,
+          description: ctx.description || `Cobrança ${asaasPaymentId.slice(0, 12)}`,
+          suggestedAction: 'Marcar pagamento como pago',
+        });
+        continue;
+      }
+
+      if ((localPayment as any).appointmentId) {
+        const { data: appt } = await this.supabase
+          .from('appointments')
+          .select('id, status, clientId, scheduledAt, client:clients(name)')
+          .eq('id', (localPayment as any).appointmentId)
+          .maybeSingle();
+        if (appt && (appt as any).status === 'CANCELED') {
+          const clientName = (appt as any).client?.name || null;
+          const date = (appt as any).scheduledAt
+            ? new Date((appt as any).scheduledAt).toLocaleDateString('pt-BR')
+            : '?';
+          issues.push({
+            asaasPaymentId,
+            asaasStatus: charge.status,
+            amount,
+            confirmedAt,
+            issue: 'APPOINTMENT_CANCELED',
+            kind: 'appointment',
+            clientId: (appt as any).clientId,
+            clientName,
+            description: `Agendamento ${date}${clientName ? ' — ' + clientName : ''}`,
+            suggestedAction:
+              'Registrar pagamento (agendamento fica cancelado — decida à parte se estorna ou reagenda)',
+          });
+        }
+      }
+    }
+
+    return { configured: true, issues };
+  }
+
+  private async resolveChargeContext(
+    externalRef?: string,
+    localPayment?: any,
+  ): Promise<{
+    kind: 'subscription' | 'appointment' | 'unknown';
+    clientId: string | null;
+    clientName: string | null;
+    description: string | null;
+  }> {
+    const refSub = localPayment?.subscriptionId || externalRef;
+    if (refSub) {
+      const { data: sub } = await this.supabase
+        .from('client_subscriptions')
+        .select('clientId, plan:subscription_plans!planId(name), client:clients(name)')
+        .eq('id', refSub)
+        .maybeSingle();
+      if (sub) {
+        const clientName = (sub as any).client?.name || null;
+        const planName = (sub as any).plan?.name || 'Assinatura';
+        return {
+          kind: 'subscription',
+          clientId: (sub as any).clientId,
+          clientName,
+          description: `${planName}${clientName ? ' — ' + clientName : ''}`,
+        };
+      }
+    }
+    const refAppt = localPayment?.appointmentId;
+    if (refAppt) {
+      const { data: appt } = await this.supabase
+        .from('appointments')
+        .select('clientId, scheduledAt, client:clients(name)')
+        .eq('id', refAppt)
+        .maybeSingle();
+      if (appt) {
+        const clientName = (appt as any).client?.name || null;
+        const date = (appt as any).scheduledAt
+          ? new Date((appt as any).scheduledAt).toLocaleDateString('pt-BR')
+          : '?';
+        return {
+          kind: 'appointment',
+          clientId: (appt as any).clientId,
+          clientName,
+          description: `Agendamento ${date}${clientName ? ' — ' + clientName : ''}`,
+        };
+      }
+    }
+    return { kind: 'unknown', clientId: null, clientName: null, description: null };
+  }
+
+  /**
+   * Aplica a correcao para uma cobranca Asaas especifica. Faz o fix correto
+   * (criar payment, marcar como pago, restaurar agendamento ou ativar assinatura)
+   * baseado no estado local. Idempotente.
+   */
+  async applyAsaasReconciliation(asaasPaymentId: string): Promise<{
+    success: boolean;
+    action: string;
+    message: string;
+  }> {
+    if (!this.asaasService.configured) {
+      return { success: false, action: 'NONE', message: 'Asaas não está configurado' };
+    }
+
+    let charge: any;
+    try {
+      charge = await this.asaasService.getCharge(asaasPaymentId);
+    } catch (e: any) {
+      return { success: false, action: 'NONE', message: `Cobrança não encontrada no Asaas: ${e?.message || e}` };
+    }
+
+    const validStatuses = ['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'];
+    if (!validStatuses.includes(charge.status)) {
+      return {
+        success: false,
+        action: 'NONE',
+        message: `Cobrança não está confirmada no Asaas (status=${charge.status}). Aguarde a confirmação antes de reconciliar.`,
+      };
+    }
+
+    const externalRef: string | undefined = charge.externalReference;
+    const amount = Math.round(Number(charge.value || 0) * 100);
+    const confirmedAt =
+      charge.confirmedDate || charge.clientPaymentDate || charge.paymentDate || nowLocalIsoString();
+    const now = nowLocalIsoString();
+    const billingType = charge.billingType || 'PIX';
+    const localMethod = billingType === 'CREDIT_CARD' ? 'CARD' : 'PIX';
+
+    let subscriptionId: string | null = null;
+    let appointmentId: string | null = null;
+    let clientId: string | null = null;
+
+    if (externalRef) {
+      const { data: sub } = await this.supabase
+        .from('client_subscriptions')
+        .select('id, clientId')
+        .eq('id', externalRef)
+        .maybeSingle();
+      if (sub) {
+        subscriptionId = (sub as any).id;
+        clientId = (sub as any).clientId;
+      } else {
+        const { data: appt } = await this.supabase
+          .from('appointments')
+          .select('id, clientId')
+          .eq('id', externalRef)
+          .maybeSingle();
+        if (appt) {
+          appointmentId = (appt as any).id;
+          clientId = (appt as any).clientId;
+        }
+      }
+    }
+
+    const { data: existingPayment } = await this.supabase
+      .from('payments')
+      .select('id, paidAt, appointmentId, subscriptionId, clientId')
+      .eq('asaasPaymentId', asaasPaymentId)
+      .maybeSingle();
+
+    let paymentId: string;
+    if (existingPayment) {
+      paymentId = (existingPayment as any).id;
+      if (!(existingPayment as any).paidAt) {
+        await this.supabase
+          .from('payments')
+          .update({ paidAt: confirmedAt, asaasStatus: charge.status, updatedAt: now })
+          .eq('id', paymentId);
+      }
+      subscriptionId = subscriptionId || (existingPayment as any).subscriptionId || null;
+      appointmentId = appointmentId || (existingPayment as any).appointmentId || null;
+      clientId = clientId || (existingPayment as any).clientId || null;
+    } else {
+      paymentId = randomUUID();
+      const { error: insertError } = await this.supabase.from('payments').insert({
+        id: paymentId,
+        clientId,
+        subscriptionId,
+        appointmentId,
+        amount,
+        method: localMethod,
+        registeredBy: null,
+        notes: `Reconciliação manual (cobrança ${asaasPaymentId})`,
+        asaasPaymentId,
+        asaasStatus: charge.status,
+        paidAt: confirmedAt,
+        invoiceUrl: charge.invoiceUrl || null,
+        bankSlipUrl: charge.bankSlipUrl || null,
+        createdAt: now,
+        updatedAt: now,
+      });
+      if (insertError) {
+        return { success: false, action: 'NONE', message: `Falha ao criar pagamento: ${insertError.message}` };
+      }
+    }
+
+    if (subscriptionId) {
+      const { data: sub } = await this.supabase
+        .from('client_subscriptions')
+        .select('id, status, endDate')
+        .eq('id', subscriptionId)
+        .maybeSingle();
+      if (sub && (sub as any).status !== 'ACTIVE') {
+        const subEnd = (sub as any).endDate ? new Date((sub as any).endDate) : null;
+        const newEnd = !subEnd || subEnd < new Date() ? new Date() : subEnd;
+        if (!subEnd || subEnd < new Date()) newEnd.setMonth(newEnd.getMonth() + 1);
+        await this.supabase
+          .from('client_subscriptions')
+          .update({
+            status: 'ACTIVE',
+            endDate: newEnd.toISOString(),
+            cutsUsedThisMonth: 0,
+            lastResetDate: now,
+            updatedAt: now,
+          })
+          .eq('id', subscriptionId);
+        return { success: true, action: 'SUBSCRIPTION_ACTIVATED', message: 'Assinatura ativada e pagamento registrado.' };
+      }
+      return { success: true, action: 'PAYMENT_REGISTERED', message: 'Pagamento registrado.' };
+    }
+
+    if (appointmentId) {
+      const { data: appt } = await this.supabase
+        .from('appointments')
+        .select('id, status')
+        .eq('id', appointmentId)
+        .maybeSingle();
+      // Agendamento ja cancelado: nao restaura nem marca como pago. Apenas registra
+      // o pagamento (ja foi feito acima). Admin decide a parte se estorna ou reagenda.
+      if (appt && (appt as any).status === 'CANCELED') {
+        return {
+          success: true,
+          action: 'PAYMENT_REGISTERED_APPOINTMENT_CANCELED',
+          message:
+            'Pagamento registrado. O agendamento permanece cancelado — decida à parte se restaura, reagenda ou estorna o cliente.',
+        };
+      }
+      await this.supabase
+        .from('appointments')
+        .update({ isPaid: true, paymentId, updatedAt: now })
+        .eq('id', appointmentId);
+      return { success: true, action: 'APPOINTMENT_MARKED_PAID', message: 'Agendamento marcado como pago.' };
+    }
+
+    return { success: true, action: 'PAYMENT_REGISTERED', message: 'Pagamento registrado (sem vínculo).' };
+  }
+
   /**
    * Reconciliacao on-demand das assinaturas PENDING_PAYMENT com o Asaas.
    * Mesma logica do cron, mas pode ser acionada pelo admin para forcar a

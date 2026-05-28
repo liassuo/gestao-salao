@@ -220,14 +220,19 @@ export class SubscriptionsController {
   }
 
   /**
-   * POST /subscriptions/:id/cancel
-   * Cancels a subscription
+   * POST /subscriptions/:id/cancel?immediate=true
+   * Cancels a subscription. Por padrao usa cancelamento "lazy" (cliente mantem
+   * acesso ate endDate). Use immediate=true para revogar acesso na hora — util
+   * para cliente problematico/inadimplente que admin precisa cortar.
    */
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Post(':id/cancel')
-  async cancelSubscription(@Param('id', ParseUUIDPipe) id: string) {
-    return this.subscriptionsService.cancelSubscription(id);
+  async cancelSubscription(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('immediate') immediate?: string,
+  ) {
+    return this.subscriptionsService.cancelSubscription(id, immediate === 'true');
   }
 
   /**
@@ -257,6 +262,31 @@ export class SubscriptionsController {
   @Post('admin/reconcile-asaas')
   async reconcileWithAsaas() {
     return this.subscriptionsService.reconcilePendingWithAsaas();
+  }
+
+  /**
+   * GET /subscriptions/admin/reconcile-report?days=7
+   * Lista cobrancas Asaas confirmadas desalinhadas com o banco local
+   * (pagamento ausente, nao marcado como pago, ou agendamento cancelado).
+   */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @Get('admin/reconcile-report')
+  async getReconcileReport(@Query('days') days?: string) {
+    const n = days ? parseInt(days, 10) : 7;
+    return this.subscriptionsService.getAsaasReconciliationReport(isNaN(n) ? 7 : n);
+  }
+
+  /**
+   * POST /subscriptions/admin/reconcile-apply/:asaasPaymentId
+   * Aplica a correcao para uma cobranca especifica. O sistema descobre sozinho
+   * qual e o problema e aplica o fix correspondente.
+   */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @Post('admin/reconcile-apply/:asaasPaymentId')
+  async applyReconciliation(@Param('asaasPaymentId') asaasPaymentId: string) {
+    return this.subscriptionsService.applyAsaasReconciliation(asaasPaymentId);
   }
 
   /**

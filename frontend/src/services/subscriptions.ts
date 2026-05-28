@@ -63,8 +63,11 @@ export const subscriptionsService = {
     return response.data;
   },
 
-  async cancelSubscription(id: string): Promise<ClientSubscription> {
-    const response = await api.post<ClientSubscription>(`/subscriptions/${id}/cancel`);
+  async cancelSubscription(id: string, immediate?: boolean): Promise<ClientSubscription> {
+    const url = immediate
+      ? `/subscriptions/${id}/cancel?immediate=true`
+      : `/subscriptions/${id}/cancel`;
+    const response = await api.post<ClientSubscription>(url);
     return response.data;
   },
 
@@ -72,6 +75,30 @@ export const subscriptionsService = {
     const response = await api.post<{ checked: number; activated: number; errors: number; configured: boolean }>(
       '/subscriptions/admin/reconcile-asaas',
     );
+    return response.data;
+  },
+
+  async getReconcileReport(days = 7): Promise<{
+    configured: boolean;
+    issues: Array<{
+      asaasPaymentId: string;
+      asaasStatus: string;
+      amount: number;
+      confirmedAt: string | null;
+      issue: 'PAYMENT_MISSING' | 'PAYMENT_UNPAID' | 'APPOINTMENT_CANCELED';
+      kind: 'subscription' | 'appointment' | 'unknown';
+      clientId: string | null;
+      clientName: string | null;
+      description: string;
+      suggestedAction: string;
+    }>;
+  }> {
+    const response = await api.get('/subscriptions/admin/reconcile-report', { params: { days } });
+    return response.data;
+  },
+
+  async applyReconciliation(asaasPaymentId: string): Promise<{ success: boolean; action: string; message: string }> {
+    const response = await api.post(`/subscriptions/admin/reconcile-apply/${asaasPaymentId}`);
     return response.data;
   },
 
