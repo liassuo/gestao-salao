@@ -4,3 +4,4 @@ export { ClientSubscriptionTable } from './ClientSubscriptionTable';
 export { SubscribeClientModal } from './SubscribeClientModal';
 export { ConfirmCancelModal } from './ConfirmCancelModal';
 export { SubscriptionStatusBanner } from './SubscriptionStatusBanner';
+export { ReconcileAsaasModal } from './ReconcileAsaasModal';
