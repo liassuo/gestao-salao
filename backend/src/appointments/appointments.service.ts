@@ -170,6 +170,33 @@ export class AppointmentsService {
           );
         }
       }
+
+      // 3.2 Bloquear quando cliente ja tem agendamento ATIVO no mesmo dia.
+      //   - Admin (source != 'CLIENT') tem bypass — pode marcar varios mesmo
+      //   - NO_SHOW, CANCELED, ATTENDED nao contam (cliente pode remarcar / voltar)
+      //   - SCHEDULED e PENDING_PAYMENT contam
+      if (dto.source === 'CLIENT') {
+        const scheduledDate = String(dto.scheduledAt).slice(0, 10); // YYYY-MM-DD
+        const dayStart = `${scheduledDate}T00:00:00`;
+        const dayEnd = `${scheduledDate}T23:59:59`;
+        const { data: sameDayActive } = await this.supabase
+          .from('appointments')
+          .select('id, scheduledAt, status')
+          .eq('clientId', dto.clientId)
+          .in('status', ['SCHEDULED', 'PENDING_PAYMENT'])
+          .gte('scheduledAt', dayStart)
+          .lte('scheduledAt', dayEnd)
+          .limit(1);
+
+        if (sameDayActive && sameDayActive.length > 0) {
+          const existing = sameDayActive[0];
+          const time = String(existing.scheduledAt).slice(11, 16);
+          const [yyyy, mm, dd] = scheduledDate.split('-');
+          throw new BadRequestException(
+            `Você já tem um agendamento marcado para ${dd}/${mm}/${yyyy} às ${time}. Cancele-o antes de agendar outro no mesmo dia.`,
+          );
+        }
+      }
     } else if (!dto.clientName) {
       throw new BadRequestException('Informe o cliente ou o nome do cliente avulso');
     }
