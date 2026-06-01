@@ -26,6 +26,12 @@ export class Service {
    */
   fichas: number;
 
+  /**
+   * Ordem de exibicao do servico nas listas. Menor numero aparece primeiro.
+   * Empate cai no fallback (price asc).
+   */
+  displayOrder: number;
+
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;

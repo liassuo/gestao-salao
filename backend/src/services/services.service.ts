@@ -17,11 +17,13 @@ export class ServicesService {
         description: dto.description,
         price: dto.price,
         duration: dto.duration,
+        fichas: dto.fichas ?? 0,
+        displayOrder: dto.displayOrder ?? 0,
         isActive: true,
         createdAt: now,
         updatedAt: now,
       })
-      .select('id, name, description, price, duration, isActive, createdAt')
+      .select('id, name, description, price, duration, fichas, displayOrder, isActive, createdAt')
       .single();
 
     if (error) throw error;
@@ -31,8 +33,10 @@ export class ServicesService {
   async findAll(activeOnly: boolean = true, isActive?: boolean) {
     let query = this.supabase
       .from('services')
-      .select('id, name, description, price, duration, isActive')
-      .order('name', { ascending: true });
+      .select('id, name, description, price, duration, isActive, displayOrder')
+      // Ordem definida pelo admin (displayOrder ASC); empates caem em preço ASC.
+      .order('displayOrder', { ascending: true })
+      .order('price', { ascending: true });
 
     if (isActive !== undefined) {
       query = query.eq('isActive', isActive);
@@ -49,9 +53,10 @@ export class ServicesService {
   async findActive() {
     const { data: services, error } = await this.supabase
       .from('services')
-      .select('id, name, description, price, duration')
+      .select('id, name, description, price, duration, displayOrder')
       .eq('isActive', true)
-      .order('name', { ascending: true });
+      .order('displayOrder', { ascending: true })
+      .order('price', { ascending: true });
 
     if (error) throw error;
     return services || [];

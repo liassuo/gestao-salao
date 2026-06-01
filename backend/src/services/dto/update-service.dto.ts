@@ -27,4 +27,9 @@ export class UpdateServiceDto {
   @IsNumber()
   @Min(0)
   fichas?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  displayOrder?: number;
 }

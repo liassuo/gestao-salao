@@ -9,6 +9,7 @@ interface ServiceFormData {
   price: string;
   duration: number;
   fichas: number;
+  displayOrder: number;
 }
 
 interface ServiceFormProps {
@@ -55,6 +56,7 @@ export function ServiceForm({ service, onSubmit, isLoading, error }: ServiceForm
       price: service?.price ? String(service.price) : '',
       duration: service?.duration || 30,
       fichas: service?.fichas || 0,
+      displayOrder: service?.displayOrder ?? 0,
     },
   });
 
@@ -79,6 +81,7 @@ export function ServiceForm({ service, onSubmit, isLoading, error }: ServiceForm
       price: priceInCents,
       duration: data.duration,
       fichas: data.fichas || 0,
+      displayOrder: data.displayOrder || 0,
     });
   };
 
@@ -182,6 +185,21 @@ export function ServiceForm({ service, onSubmit, isLoading, error }: ServiceForm
             placeholder="0 = usa duração"
             className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A]"
           />
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
+            Ordem de exibição
+          </label>
+          <input
+            type="number"
+            {...register('displayOrder', { valueAsNumber: true, min: 0 })}
+            placeholder="0 = padrão (por preço)"
+            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#C8923A]"
+          />
+          <p className="mt-1 text-xs text-[var(--text-muted)]">
+            Menor número aparece primeiro. Empate cai no preço.
+          </p>
         </div>
       </div>
 

@@ -3,8 +3,13 @@ import { NotFoundException } from '@nestjs/common';
 import { ServicesService } from './services.service';
 import { SupabaseService } from '../supabase/supabase.service';
 
+// Mock thenable: cadeia de calls (eq/order/in/...) sempre retorna chain;
+// quando `await` cai num chain, ele resolve com `chain._result`.
+// Tests setam chain._result = { data, error } pra controlar o retorno.
+// `single()` mantem o padrao antigo (jest.fn() configurada com mockResolvedValue).
 const mockChain = () => {
   const chain: any = {};
+  chain._result = { data: null, error: null };
   chain.select = jest.fn().mockReturnValue(chain);
   chain.insert = jest.fn().mockReturnValue(chain);
   chain.update = jest.fn().mockReturnValue(chain);
@@ -13,6 +18,9 @@ const mockChain = () => {
   chain.in = jest.fn().mockReturnValue(chain);
   chain.order = jest.fn().mockReturnValue(chain);
   chain.single = jest.fn();
+  // Thenable: permite que `await query` resolva com _result mesmo apos N .order/.eq encadeados.
+  chain.then = (onFulfilled: any, onRejected: any) =>
+    Promise.resolve(chain._result).then(onFulfilled, onRejected);
   return chain;
 };
 
@@ -77,7 +85,7 @@ describe('ServicesService', () => {
         }),
       );
       expect(chain.select).toHaveBeenCalledWith(
-        'id, name, description, price, duration, isActive, createdAt',
+        'id, name, description, price, duration, fichas, displayOrder, isActive, createdAt',
       );
       expect(chain.single).toHaveBeenCalled();
       expect(result).toEqual(createdService);
@@ -98,21 +106,22 @@ describe('ServicesService', () => {
     ];
 
     it('should return active services by default', async () => {
-      chain.eq.mockResolvedValue({ data: servicesList, error: null });
+      chain._result = { data: servicesList, error: null };
 
       const result = await service.findAll();
 
       expect(supabaseService.from).toHaveBeenCalledWith('services');
       expect(chain.select).toHaveBeenCalledWith(
-        'id, name, description, price, duration, isActive',
+        'id, name, description, price, duration, isActive, displayOrder',
       );
-      expect(chain.order).toHaveBeenCalledWith('name', { ascending: true });
+      expect(chain.order).toHaveBeenCalledWith('displayOrder', { ascending: true });
+      expect(chain.order).toHaveBeenCalledWith('price', { ascending: true });
       expect(chain.eq).toHaveBeenCalledWith('isActive', true);
       expect(result).toEqual(servicesList);
     });
 
     it('should return all services when activeOnly is false', async () => {
-      chain.order.mockResolvedValue({ data: servicesList, error: null });
+      chain._result = { data: servicesList, error: null };
 
       const result = await service.findAll(false);
 
@@ -121,7 +130,7 @@ describe('ServicesService', () => {
     });
 
     it('should return empty array when data is null', async () => {
-      chain.eq.mockResolvedValue({ data: null, error: null });
+      chain._result = { data: null, error: null };
 
       const result = await service.findAll(true);
 
@@ -130,7 +139,7 @@ describe('ServicesService', () => {
 
     it('should throw when supabase returns an error', async () => {
       const dbError = new Error('Query failed');
-      chain.eq.mockResolvedValue({ data: null, error: dbError });
+      chain._result = { data: null, error: dbError };
 
       await expect(service.findAll()).rejects.toThrow('Query failed');
     });
@@ -142,22 +151,23 @@ describe('ServicesService', () => {
       { id: '2', name: 'Corte', description: null, price: 5000, duration: 30 },
     ];
 
-    it('should return active services ordered by name', async () => {
-      chain.order.mockResolvedValue({ data: activeServices, error: null });
+    it('should return active services ordered by displayOrder then price', async () => {
+      chain._result = { data: activeServices, error: null };
 
       const result = await service.findActive();
 
       expect(supabaseService.from).toHaveBeenCalledWith('services');
       expect(chain.select).toHaveBeenCalledWith(
-        'id, name, description, price, duration',
+        'id, name, description, price, duration, displayOrder',
       );
       expect(chain.eq).toHaveBeenCalledWith('isActive', true);
-      expect(chain.order).toHaveBeenCalledWith('name', { ascending: true });
+      expect(chain.order).toHaveBeenCalledWith('displayOrder', { ascending: true });
+      expect(chain.order).toHaveBeenCalledWith('price', { ascending: true });
       expect(result).toEqual(activeServices);
     });
 
     it('should return empty array when data is null', async () => {
-      chain.order.mockResolvedValue({ data: null, error: null });
+      chain._result = { data: null, error: null };
 
       const result = await service.findActive();
 
@@ -166,7 +176,7 @@ describe('ServicesService', () => {
 
     it('should throw when supabase returns an error', async () => {
       const dbError = new Error('Query failed');
-      chain.order.mockResolvedValue({ data: null, error: dbError });
+      chain._result = { data: null, error: dbError };
 
       await expect(service.findActive()).rejects.toThrow('Query failed');
     });

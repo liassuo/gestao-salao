@@ -20,4 +20,10 @@ export class CreateServiceDto {
   @IsNumber()
   @Min(0)
   fichas?: number;
+
+  // Ordem em que o servico aparece nas listas (menor primeiro). Default 0.
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  displayOrder?: number;
 }
