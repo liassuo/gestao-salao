@@ -505,6 +505,9 @@ describe('AsaasWebhookController (e2e)', () => {
         ],
         payments: [], // sumiu
         cash_registers: [{ id: 'caixa-1', isOpen: true, date: '2026-05-07' }],
+        // O webhook fallback agora exige um admin para usar como registeredBy
+        // (FK NOT NULL pra users.id).
+        users: [{ id: 'admin-1', role: 'ADMIN' }],
       });
 
       await controller.handleWebhook(

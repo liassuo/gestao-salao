@@ -140,6 +140,23 @@ export class AsaasWebhookController {
             paymentData.clientPaymentDate ||
             paymentData.paymentDate ||
             now;
+          // registeredBy é NOT NULL e FK pra users.id. Webhook não tem admin
+          // associado, então pegamos o primeiro admin disponivel como "registrante
+          // sistema". Mesmo padrao do cash-register.service.ts:openRegister.
+          const { data: systemAdmin } = await this.supabase
+            .from('users')
+            .select('id')
+            .eq('role', 'ADMIN')
+            .limit(1)
+            .maybeSingle();
+
+          if (!systemAdmin) {
+            this.logger.error(
+              `Webhook fallback: nenhum admin encontrado para usar como registeredBy de ${asaasPaymentId}. Cron de reconciliacao vai cobrir.`,
+            );
+            return;
+          }
+
           const { error: insertError } = await this.supabase
             .from('payments')
             .insert({
@@ -148,10 +165,7 @@ export class AsaasWebhookController {
               subscriptionId: linkedSub.id,
               amount: amountCentavos,
               method: localMethod,
-              // registeredBy = NULL porque webhook nao tem usuario admin associado.
-              // Antes passava linkedSub.clientId, que e id de cliente (nao de usuario),
-              // violando a FK payments_registeredBy_fkey.
-              registeredBy: null,
+              registeredBy: systemAdmin.id,
               notes: `Reconciliação webhook (cobrança ${asaasPaymentId})`,
               asaasPaymentId,
               asaasStatus: status,

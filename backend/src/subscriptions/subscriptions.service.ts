@@ -1752,6 +1752,21 @@ export class SubscriptionsService {
       appointmentId = appointmentId || (existingPayment as any).appointmentId || null;
       clientId = clientId || (existingPayment as any).clientId || null;
     } else {
+      // registeredBy e NOT NULL: usa o primeiro admin como registrante "sistema"
+      const { data: systemAdmin } = await this.supabase
+        .from('users')
+        .select('id')
+        .eq('role', 'ADMIN')
+        .limit(1)
+        .maybeSingle();
+      if (!systemAdmin) {
+        return {
+          success: false,
+          action: 'NONE',
+          message: 'Nenhum admin encontrado para registrar o pagamento. Crie um usuario admin antes.',
+        };
+      }
+
       paymentId = randomUUID();
       const { error: insertError } = await this.supabase.from('payments').insert({
         id: paymentId,
@@ -1760,7 +1775,7 @@ export class SubscriptionsService {
         appointmentId,
         amount,
         method: localMethod,
-        registeredBy: null,
+        registeredBy: systemAdmin.id,
         notes: `Reconciliação manual (cobrança ${asaasPaymentId})`,
         asaasPaymentId,
         asaasStatus: charge.status,
