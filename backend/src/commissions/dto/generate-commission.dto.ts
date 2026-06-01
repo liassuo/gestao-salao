@@ -1,4 +1,4 @@
-import { IsDateString, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsBoolean, IsDateString, IsInt, IsOptional, IsString, Min } from 'class-validator';
 
 export class GenerateCommissionDto {
   @IsDateString({}, { message: 'Data de início deve ser uma data válida' })
@@ -17,4 +17,10 @@ export class GenerateCommissionDto {
   @IsInt()
   @Min(0)
   subscriptionRevenueOverride?: number;
+
+  // Quando true, apaga comissoes PENDING que se sobrepoem ao periodo antes de
+  // gerar. Usado pelo frontend depois que o usuario confirma no dialogo.
+  @IsOptional()
+  @IsBoolean()
+  force?: boolean;
 }

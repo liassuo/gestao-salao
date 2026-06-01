@@ -186,20 +186,58 @@ export function DPote() {
   const generateCommissions = useGenerateCommissions();
   const toast = useToast();
   const [confirmGenerate, setConfirmGenerate] = useState(false);
+  // Mesmo dialogo de sobreposicao da pagina Comissoes.
+  const [overlapConfirm, setOverlapConfirm] = useState<{
+    pendingOverlaps: Array<{ id: string; periodStart: string; periodEnd: string; professionalName: string }>;
+    retryPayload: { periodStart: string; periodEnd: string; branchId?: string; subscriptionRevenueOverride?: number };
+  } | null>(null);
+
+  const runGenerate = async (payload: {
+    periodStart: string;
+    periodEnd: string;
+    branchId?: string;
+    subscriptionRevenueOverride?: number;
+    force?: boolean;
+  }) => {
+    try {
+      await generateCommissions.mutateAsync(payload);
+      toast.success('Comissões geradas', 'As comissões foram calculadas com base no pote.');
+      setOverlapConfirm(null);
+    } catch (err: any) {
+      const body = err?.response?.data;
+      if (body?.code === 'COMMISSIONS_PENDING_OVERLAP') {
+        setOverlapConfirm({
+          pendingOverlaps: body.pendingOverlaps || [],
+          retryPayload: {
+            periodStart: payload.periodStart,
+            periodEnd: payload.periodEnd,
+            branchId: payload.branchId,
+            subscriptionRevenueOverride: payload.subscriptionRevenueOverride,
+          },
+        });
+        return;
+      }
+      if (body?.code === 'COMMISSIONS_PAID_OVERLAP') {
+        toast.error('Comissões pagas no período', body.message);
+        return;
+      }
+      toast.error('Erro', getApiErrorMessage(err));
+    }
+  };
 
   const handleGenerate = async () => {
     setConfirmGenerate(false);
-    try {
-      await generateCommissions.mutateAsync({
-        periodStart: startDate,
-        periodEnd: endDate,
-        branchId: branchId || undefined,
-        subscriptionRevenueOverride: overrideCents,
-      });
-      toast.success('Comissões geradas', 'As comissões foram calculadas com base no pote.');
-    } catch (err) {
-      toast.error('Erro', getApiErrorMessage(err));
-    }
+    await runGenerate({
+      periodStart: startDate,
+      periodEnd: endDate,
+      branchId: branchId || undefined,
+      subscriptionRevenueOverride: overrideCents,
+    });
+  };
+
+  const handleConfirmOverlap = async () => {
+    if (!overlapConfirm) return;
+    await runGenerate({ ...overlapConfirm.retryPayload, force: true });
   };
 
   const totals = report?.byProfessional?.length ? calcDPoteTotals(report) : null;
@@ -430,6 +468,26 @@ export function DPote() {
         }
         confirmLabel="Gerar"
         variant="info"
+        isLoading={generateCommissions.isPending}
+      />
+      <ConfirmModal
+        isOpen={!!overlapConfirm}
+        onClose={() => setOverlapConfirm(null)}
+        onConfirm={handleConfirmOverlap}
+        title="Comissões pendentes sobrepostas"
+        message={
+          overlapConfirm
+            ? `Existem ${overlapConfirm.pendingOverlaps.length} comissão(ões) pendente(s) cujo período se sobrepõe ao novo. Gerar agora vai duplicar os valores. Deseja apagar as pendentes sobrepostas e gerar do zero?\n\n${overlapConfirm.pendingOverlaps
+                .slice(0, 5)
+                .map(
+                  (o) =>
+                    `• ${o.professionalName}: ${formatDateBR(o.periodStart)} – ${formatDateBR(o.periodEnd)}`,
+                )
+                .join('\n')}${overlapConfirm.pendingOverlaps.length > 5 ? `\n• ... e mais ${overlapConfirm.pendingOverlaps.length - 5}` : ''}`
+            : ''
+        }
+        confirmLabel="Apagar e gerar"
+        variant="danger"
         isLoading={generateCommissions.isPending}
       />
     </div>

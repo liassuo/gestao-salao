@@ -165,21 +165,50 @@ function CommissionsContent() {
   const deleteCommission = useDeleteCommission();
   const toast = useToast();
 
+  // Dialogo de confirmacao quando o backend detecta comissoes pendentes sobrepostas.
+  // Guarda os detalhes pra mostrar no modal e o payload original pra reenviar com force.
+  const [overlapConfirm, setOverlapConfirm] = useState<{
+    pendingOverlaps: Array<{ id: string; periodStart: string; periodEnd: string; professionalName: string }>;
+    retryPayload: { periodStart: string; periodEnd: string; branchId?: string };
+  } | null>(null);
+
+  const runGenerate = async (payload: { periodStart: string; periodEnd: string; branchId?: string; force?: boolean }) => {
+    try {
+      await generateCommissions.mutateAsync(payload);
+      toast.success('Comissões geradas', 'As comissões foram calculadas com sucesso.');
+      setOverlapConfirm(null);
+    } catch (err: any) {
+      const body = err?.response?.data;
+      if (body?.code === 'COMMISSIONS_PENDING_OVERLAP') {
+        setOverlapConfirm({
+          pendingOverlaps: body.pendingOverlaps || [],
+          retryPayload: { periodStart: payload.periodStart, periodEnd: payload.periodEnd, branchId: payload.branchId },
+        });
+        return;
+      }
+      if (body?.code === 'COMMISSIONS_PAID_OVERLAP') {
+        toast.error('Comissões pagas no período', body.message);
+        return;
+      }
+      toast.error('Erro', getApiErrorMessage(err));
+    }
+  };
+
   const handleGenerate = async () => {
     if (!filters.startDate || !filters.endDate) {
       toast.error('Erro', 'Selecione a data inicial e final para gerar comissões.');
       return;
     }
-    try {
-      await generateCommissions.mutateAsync({
-        periodStart: filters.startDate,
-        periodEnd: filters.endDate,
-        branchId: filters.branchId,
-      });
-      toast.success('Comissões geradas', 'As comissões foram calculadas com sucesso.');
-    } catch (err) {
-      toast.error('Erro', getApiErrorMessage(err));
-    }
+    await runGenerate({
+      periodStart: filters.startDate,
+      periodEnd: filters.endDate,
+      branchId: filters.branchId,
+    });
+  };
+
+  const handleConfirmOverlap = async () => {
+    if (!overlapConfirm) return;
+    await runGenerate({ ...overlapConfirm.retryPayload, force: true });
   };
 
   const handleMarkAsPaid = async () => {
@@ -288,6 +317,26 @@ function CommissionsContent() {
         confirmLabel="Excluir"
         variant="danger"
         isLoading={deleteCommission.isPending}
+      />
+      <ConfirmModal
+        isOpen={!!overlapConfirm}
+        onClose={() => setOverlapConfirm(null)}
+        onConfirm={handleConfirmOverlap}
+        title="Comissões pendentes sobrepostas"
+        message={
+          overlapConfirm
+            ? `Existem ${overlapConfirm.pendingOverlaps.length} comissão(ões) pendente(s) cujo período se sobrepõe ao novo. Gerar agora vai duplicar os valores. Deseja apagar as pendentes sobrepostas e gerar do zero?\n\n${overlapConfirm.pendingOverlaps
+                .slice(0, 5)
+                .map(
+                  (o) =>
+                    `• ${o.professionalName}: ${formatDateBR(o.periodStart)} – ${formatDateBR(o.periodEnd)}`,
+                )
+                .join('\n')}${overlapConfirm.pendingOverlaps.length > 5 ? `\n• ... e mais ${overlapConfirm.pendingOverlaps.length - 5}` : ''}`
+            : ''
+        }
+        confirmLabel="Apagar e gerar"
+        variant="danger"
+        isLoading={generateCommissions.isPending}
       />
     </div>
   );

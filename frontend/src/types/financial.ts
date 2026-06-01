@@ -95,6 +95,9 @@ export interface GenerateCommissionPayload {
   branchId?: string;
   // Faturamento de assinaturas em centavos (sobrescreve o auto-calculado)
   subscriptionRevenueOverride?: number;
+  // Quando true, apaga comissoes PENDING sobrepostas antes de gerar.
+  // Usado depois que o usuario confirma no dialogo de sobreposicao.
+  force?: boolean;
 }
 
 export interface CommissionFilters {

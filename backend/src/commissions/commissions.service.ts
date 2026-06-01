@@ -32,24 +32,56 @@ export class CommissionsService {
     const startStr = `${dto.periodStart}T00:00:00`;
     const endStr = `${dto.periodEnd}T23:59:59`;
 
-    // Idempotência: se já existem comissões para EXATAMENTE este período,
-    // bloqueia se alguma estiver paga; caso contrário, remove as pendentes
-    // para regerar — evita duplicação ao clicar "Gerar" várias vezes.
-    const { data: existing } = await this.supabase
+    // Detecta SOBREPOSICAO (nao so duplicata exata): qualquer comissao cujo
+    // intervalo de periodo cruza o novo periodo causa duplo-conto. Antes a checagem
+    // era so por periodo EXATO, entao gerar "Semana 1" + "Mes todo" criava 2x cada
+    // atendimento. Agora bloqueamos por overlap.
+    //
+    // Regra:
+    //  - Se ha qualquer comissao PAID sobreposta: bloqueia hard (nao pode mexer em pago).
+    //  - Se ha PENDING sobrepostas e force=true: apaga as pendentes e segue.
+    //  - Se ha PENDING sobrepostas e force=false: lanca erro estruturado para o
+    //    frontend mostrar dialogo de confirmacao com a lista.
+    const { data: overlapping } = await this.supabase
       .from('commissions')
-      .select('id, status')
-      .eq('periodStart', startStr)
-      .eq('periodEnd', endStr);
+      .select('id, status, periodStart, periodEnd, professional:professionals(name)')
+      .lte('periodStart', endStr)
+      .gte('periodEnd', startStr);
 
-    if (existing && existing.length > 0) {
-      const hasPaid = existing.some((c: any) => c.status === 'PAID');
-      if (hasPaid) {
-        throw new BadRequestException(
-          'Já existem comissões pagas neste período. Exclua-as antes de regerar.',
-        );
+    if (overlapping && overlapping.length > 0) {
+      const paidOverlaps = overlapping.filter((c: any) => c.status === 'PAID');
+      if (paidOverlaps.length > 0) {
+        throw new BadRequestException({
+          code: 'COMMISSIONS_PAID_OVERLAP',
+          message:
+            'Existem comissões pagas que se sobrepõem a este período. Exclua-as manualmente antes de regerar.',
+          paidOverlaps: paidOverlaps.map((c: any) => ({
+            id: c.id,
+            periodStart: c.periodStart,
+            periodEnd: c.periodEnd,
+            professionalName: c.professional?.name || 'Profissional',
+          })),
+        });
       }
-      const idsToDelete = existing.map((c: any) => c.id);
-      await this.supabase.from('commissions').delete().in('id', idsToDelete);
+
+      const pendingOverlaps = overlapping.filter((c: any) => c.status === 'PENDING');
+      if (pendingOverlaps.length > 0) {
+        if (!dto.force) {
+          throw new BadRequestException({
+            code: 'COMMISSIONS_PENDING_OVERLAP',
+            message: `Já existem ${pendingOverlaps.length} comissão(ões) pendente(s) que se sobrepõem ao período. Confirme se quer apagá-las e gerar novamente.`,
+            pendingOverlaps: pendingOverlaps.map((c: any) => ({
+              id: c.id,
+              periodStart: c.periodStart,
+              periodEnd: c.periodEnd,
+              professionalName: c.professional?.name || 'Profissional',
+            })),
+          });
+        }
+        // force=true: apaga as pendentes sobrepostas
+        const idsToDelete = pendingOverlaps.map((c: any) => c.id);
+        await this.supabase.from('commissions').delete().in('id', idsToDelete);
+      }
     }
 
     // 1) Serviços avulsos (appointments sem assinatura)
