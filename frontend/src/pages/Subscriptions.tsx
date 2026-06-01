@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react';
 import { CreditCard, AlertCircle, Plus, Users, Search, X, RefreshCw } from 'lucide-react';
-import { subscriptionsService } from '@/services/subscriptions';
 import {
   useSubscriptionPlans,
   useClientSubscriptions,
