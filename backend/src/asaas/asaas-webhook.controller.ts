@@ -107,6 +107,10 @@ export class AsaasWebhookController {
       .eq('asaasPaymentId', asaasPaymentId)
       .maybeSingle();
 
+    // Flag para diferenciar "payment recem-criado pelo fallback" de "payment pre-existente
+    // ja confirmado". A checagem de idempotencia abaixo so deve disparar no segundo caso.
+    let justCreatedByFallback = false;
+
     // Fallback: se o payments local sumiu, mas o webhook traz externalReference apontando
     // para uma assinatura existente, recria o registro local antes de seguir.
     // Cobre o caso "cliente pagou PIX, Asaas confirmou, payments local nunca foi inserido
@@ -179,6 +183,7 @@ export class AsaasWebhookController {
             paidAt: confirmedAt,
             notes: `Reconciliação webhook (cobrança ${asaasPaymentId})`,
           };
+          justCreatedByFallback = true;
         }
       }
     }
@@ -190,8 +195,15 @@ export class AsaasWebhookController {
       return;
     }
 
-    // Idempotência: se já foi confirmado/recebido, não processar novamente
-    if (localPayment.paidAt && (localPayment.asaasStatus === 'RECEIVED' || localPayment.asaasStatus === 'CONFIRMED')) {
+    // Idempotência: se ja estava confirmado/recebido (NAO recem-criado pelo fallback),
+    // nao processar novamente. Sem o flag justCreatedByFallback, o fix anterior que
+    // preenche paidAt no INSERT do fallback faria esta checagem disparar e a
+    // assinatura nunca ativaria.
+    if (
+      !justCreatedByFallback &&
+      localPayment.paidAt &&
+      (localPayment.asaasStatus === 'RECEIVED' || localPayment.asaasStatus === 'CONFIRMED')
+    ) {
       this.logger.log(`Webhook duplicado ignorado: ${asaasPaymentId} já processado (${localPayment.asaasStatus})`);
       return;
     }
