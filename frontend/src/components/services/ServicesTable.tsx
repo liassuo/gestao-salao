@@ -55,6 +55,9 @@ export function ServicesTable({
         <table className="w-full">
           <thead>
             <tr className="border-b border-[var(--border-color)] bg-[var(--hover-bg)]">
+              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] w-16">
+                Ordem
+              </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Serviço
               </th>
@@ -72,6 +75,15 @@ export function ServicesTable({
           <tbody className="divide-y divide-[var(--border-color)]">
             {services.map((service) => (
               <tr key={service.id} className="hover:bg-[var(--hover-bg)]">
+                <td className="whitespace-nowrap px-4 py-4 text-center">
+                  {service.displayOrder && service.displayOrder > 0 ? (
+                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#C8923A]/15 text-sm font-semibold text-[#C8923A]">
+                      {service.displayOrder}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-[var(--text-muted)]">—</span>
+                  )}
+                </td>
                 <td className="px-4 py-4">
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#C8923A]/20 text-[#C8923A]">
