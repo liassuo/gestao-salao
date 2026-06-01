@@ -32,16 +32,13 @@ export class CommissionsService {
     const startStr = `${dto.periodStart}T00:00:00`;
     const endStr = `${dto.periodEnd}T23:59:59`;
 
-    // Detecta SOBREPOSICAO (nao so duplicata exata): qualquer comissao cujo
-    // intervalo de periodo cruza o novo periodo causa duplo-conto. Antes a checagem
-    // era so por periodo EXATO, entao gerar "Semana 1" + "Mes todo" criava 2x cada
-    // atendimento. Agora bloqueamos por overlap.
+    // Regerar comissoes e idempotente: apagamos qualquer PENDING sobreposta e
+    // recriamos do zero. So bloqueamos hard se houver comissao PAID sobreposta —
+    // ai admin precisa decidir manualmente o que fazer (excluir/refund/etc).
     //
-    // Regra:
-    //  - Se ha qualquer comissao PAID sobreposta: bloqueia hard (nao pode mexer em pago).
-    //  - Se ha PENDING sobrepostas e force=true: apaga as pendentes e segue.
-    //  - Se ha PENDING sobrepostas e force=false: lanca erro estruturado para o
-    //    frontend mostrar dialogo de confirmacao com a lista.
+    // "Sobreposta" = periodo da comissao existente cruza o novo periodo, mesmo que
+    // datas nao batam exatamente. Isso evita duplicacao quando alguem gera "Semana"
+    // e depois "Mes todo" sem perceber que se sobrepoem.
     const { data: overlapping } = await this.supabase
       .from('commissions')
       .select('id, status, periodStart, periodEnd, professional:professionals(name)')
@@ -64,23 +61,13 @@ export class CommissionsService {
         });
       }
 
-      const pendingOverlaps = overlapping.filter((c: any) => c.status === 'PENDING');
-      if (pendingOverlaps.length > 0) {
-        if (!dto.force) {
-          throw new BadRequestException({
-            code: 'COMMISSIONS_PENDING_OVERLAP',
-            message: `Já existem ${pendingOverlaps.length} comissão(ões) pendente(s) que se sobrepõem ao período. Confirme se quer apagá-las e gerar novamente.`,
-            pendingOverlaps: pendingOverlaps.map((c: any) => ({
-              id: c.id,
-              periodStart: c.periodStart,
-              periodEnd: c.periodEnd,
-              professionalName: c.professional?.name || 'Profissional',
-            })),
-          });
-        }
-        // force=true: apaga as pendentes sobrepostas
-        const idsToDelete = pendingOverlaps.map((c: any) => c.id);
-        await this.supabase.from('commissions').delete().in('id', idsToDelete);
+      // Apaga silenciosamente as PENDING sobrepostas — clicar "Gerar" de novo
+      // deve sempre dar o resultado atualizado sem friction.
+      const pendingIds = overlapping
+        .filter((c: any) => c.status === 'PENDING')
+        .map((c: any) => c.id);
+      if (pendingIds.length > 0) {
+        await this.supabase.from('commissions').delete().in('id', pendingIds);
       }
     }
 
