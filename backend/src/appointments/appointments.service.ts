@@ -1734,7 +1734,9 @@ export class AppointmentsService {
     const workStart = startHour * 60 + startMinute;
     const workEnd = endHour * 60 + endMinute;
 
-    for (let slotMinutes = workStart; slotMinutes < workEnd; slotMinutes += 30) {
+    // Slots de 15 em 15 min — mesma granularidade da grade do admin no calendario,
+    // mais flexivel pro cliente (ex: serviço de 20 min pode comecar 14:00, 14:15...).
+    for (let slotMinutes = workStart; slotMinutes < workEnd; slotMinutes += 15) {
       const hour = Math.floor(slotMinutes / 60);
       const minutes = slotMinutes % 60;
       const slotTime = `${hour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
