@@ -218,13 +218,13 @@ export class AppointmentsService {
         }
       }
 
-      // 3.4 Penalidade anti-abuso (somente AVULSO): so pune o cancelamento EM CIMA
-      //   DA HORA — quando o cliente cancelou faltando menos de 1h para o horario do
-      //   agendamento (canceledAt a menos de LATE_CANCEL_HOURS de scheduledAt). Esse
-      //   cancelamento tardio deixa o horario "perdido"; o cliente fica PENALTY_HOURS
-      //   sem remarcar. Cancelar com antecedencia NAO pune (libera o horario a tempo).
-      //   Assinante NAO sofre penalidade; admin (source != CLIENT) tem bypass.
-      if (dto.source === 'CLIENT' && !activeSub) {
+      // 3.4 Penalidade anti-abuso (TODOS os clientes — avulso e assinante): so pune
+      //   o cancelamento EM CIMA DA HORA — quando o cliente cancelou faltando menos
+      //   de 1h para o horario do agendamento (canceledAt a menos de LATE_CANCEL_HOURS
+      //   de scheduledAt). Esse cancelamento tardio deixa o horario "perdido"; o
+      //   cliente fica PENALTY_HOURS sem remarcar. Cancelar com antecedencia NAO pune
+      //   (libera o horario a tempo). Admin (source != CLIENT) tem bypass.
+      if (dto.source === 'CLIENT') {
         const PENALTY_HOURS = 4;
         const LATE_CANCEL_HOURS = 1;
         const cutoff = new Date(Date.now() - PENALTY_HOURS * 60 * 60 * 1000);
