@@ -1,10 +1,11 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
-import { nowLocalIsoString } from '../common/datetime.util';
+import { nowLocalIsoString, resolveBusinessDate } from '../common/datetime.util';
 import { AsaasService } from '../asaas/asaas.service';
 import { StockService } from '../stock/stock.service';
 import { ProfessionalDebtsService } from '../professional-debts/professional-debts.service';
+import { CashRegisterService } from '../cash-register/cash-register.service';
 import { AsaasBillingType } from '../asaas/asaas.types';
 import { CreateOrderDto, UpdateOrderDto, AddOrderItemDto, QueryOrderDto, PayOrderDto } from './dto';
 import {
@@ -30,6 +31,7 @@ export class OrdersService {
     private readonly asaasService: AsaasService,
     private readonly stockService: StockService,
     private readonly professionalDebtsService: ProfessionalDebtsService,
+    private readonly cashRegisterService: CashRegisterService,
   ) {}
 
   async create(dto: CreateOrderDto) {
@@ -604,6 +606,19 @@ export class OrdersService {
     return Math.max(0, t - d);
   }
 
+  /** Busca o scheduledAt do agendamento (ou null se não houver appointmentId). */
+  private async getAppointmentScheduledAt(
+    appointmentId: string | null | undefined,
+  ): Promise<string | null> {
+    if (!appointmentId) return null;
+    const { data: appt } = await this.supabase
+      .from('appointments')
+      .select('scheduledAt')
+      .eq('id', appointmentId)
+      .maybeSingle();
+    return (appt as any)?.scheduledAt ?? null;
+  }
+
   async pay(id: string, dto?: PayOrderDto) {
     const order = await this.findOne(id);
 
@@ -685,6 +700,14 @@ export class OrdersService {
     const registeredBy = dto?.registeredBy || order.clientId;
 
     if (order.clientId) {
+      // Data contábil: dia do atendimento (scheduledAt) quando há agendamento;
+      // senão o próprio pagamento. Faz a venda cair no caixa do dia do atendimento
+      // mesmo que paga em outro dia.
+      const businessDate = resolveBusinessDate(
+        await this.getAppointmentScheduledAt((order as any).appointmentId),
+        payNow,
+      );
+
       const { data: payment } = await this.supabase
         .from('payments')
         .insert({
@@ -694,6 +717,7 @@ export class OrdersService {
           amount: this.netTotal(order),
           method: paymentMethod,
           paidAt: payNow,
+          businessDate,
           registeredBy: registeredBy,
           notes: `Pagamento comanda #${order.id.slice(0, 8)}`,
           createdAt: payNow,
@@ -704,18 +728,13 @@ export class OrdersService {
 
       paymentId = payment?.id;
 
-      // Vincular ao caixa aberto
-      const { data: openRegister } = await this.supabase
-        .from('cash_registers')
-        .select('id')
-        .eq('isOpen', true)
-        .maybeSingle();
-
-      if (openRegister && paymentId) {
-        await this.supabase
-          .from('payments')
-          .update({ cashRegisterId: openRegister.id })
-          .eq('id', paymentId);
+      // Vincular ao caixa do dia contábil (do atendimento), que pode não ser o
+      // caixa aberto agora. Se aquele caixa já estiver fechado, recalcula seus totais.
+      if (paymentId) {
+        await this.cashRegisterService.linkPaymentToBusinessDateRegister(
+          paymentId,
+          businessDate,
+        );
       }
     }
 

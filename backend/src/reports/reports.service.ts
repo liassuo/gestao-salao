@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { SupabaseService } from '../supabase/supabase.service';
+import { fetchPaymentsByBusinessDate } from '../common/business-date.helper';
 
 export interface ReportFilters {
   startDate: string; // "YYYY-MM-DDT00:00:00"
@@ -14,15 +15,22 @@ export class ReportsService {
   async getSalesReport(filters: ReportFilters) {
     const { startDate, endDate } = filters;
 
-    const { data: payments } = await this.supabase
-      .from('payments')
-      .select('*')
-      .gte('paidAt', startDate)
-      .lte('paidAt', endDate)
-      .order('paidAt', { ascending: false });
+    // Relatório de vendas pelo DIA CONTÁBIL (businessDate, fallback paidAt) —
+    // coerente com o caixa e o dashboard.
+    const fetched = await fetchPaymentsByBusinessDate(
+      this.supabase,
+      '*',
+      startDate,
+      endDate,
+    );
+    const payments = fetched.sort((a, b) =>
+      String(b.businessDate ?? b.paidAt ?? '').localeCompare(
+        String(a.businessDate ?? a.paidAt ?? ''),
+      ),
+    );
 
-    const totalRevenue = (payments || []).reduce((sum, p) => sum + p.amount, 0);
-    const averageTicket = (payments || []).length > 0 ? totalRevenue / (payments || []).length : 0;
+    const totalRevenue = payments.reduce((sum, p) => sum + p.amount, 0);
+    const averageTicket = payments.length > 0 ? totalRevenue / payments.length : 0;
 
     const byMethod = {
       CASH: { total: 0, count: 0 },

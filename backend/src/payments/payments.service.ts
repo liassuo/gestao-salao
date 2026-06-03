@@ -5,12 +5,17 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
-import { nowLocalIsoString } from '../common/datetime.util';
+import { nowLocalIsoString, resolveBusinessDate } from '../common/datetime.util';
+import { fetchPaymentsByBusinessDate } from '../common/business-date.helper';
+import { CashRegisterService } from '../cash-register/cash-register.service';
 import { CreatePaymentDto, UpdatePaymentDto } from './dto';
 
 @Injectable()
 export class PaymentsService {
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(
+    private readonly supabase: SupabaseService,
+    private readonly cashRegisterService: CashRegisterService,
+  ) {}
 
   async registerPayment(dto: CreatePaymentDto) {
     // 1. Verificar se o cliente existe
@@ -36,10 +41,11 @@ export class PaymentsService {
     }
 
     // 3. Se tem appointmentId, validar agendamento
+    let appointmentScheduledAt: string | null = null;
     if (dto.appointmentId) {
       const { data: appointment, error: apptError } = await this.supabase
         .from('appointments')
-        .select('id, isPaid, clientId')
+        .select('id, isPaid, clientId, scheduledAt')
         .eq('id', dto.appointmentId)
         .single();
 
@@ -54,11 +60,17 @@ export class PaymentsService {
       if (appointment.clientId !== dto.clientId) {
         throw new BadRequestException('O agendamento não pertence a este cliente');
       }
+
+      appointmentScheduledAt = (appointment as any).scheduledAt ?? null;
     }
 
     // 4. Criar o pagamento
     const d = new Date();
     const now = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+    const paidAt = dto.paidAt ? String(dto.paidAt) : now;
+    // Data contábil: dia do atendimento quando vinculado a agendamento; senão o
+    // dia do pagamento (balcão/avulso).
+    const businessDate = resolveBusinessDate(appointmentScheduledAt, paidAt);
     const { data: payment, error: payError } = await this.supabase
       .from('payments')
       .insert({
@@ -67,7 +79,8 @@ export class PaymentsService {
         appointmentId: dto.appointmentId,
         amount: dto.amount,
         method: dto.method,
-        paidAt: dto.paidAt ?? now,
+        paidAt,
+        businessDate,
         registeredBy: dto.registeredBy,
         notes: dto.notes,
         createdAt: now,
@@ -93,20 +106,13 @@ export class PaymentsService {
         .eq('status', 'PENDING');
     }
 
-    // 6. Vincular ao caixa aberto (se houver)
+    // 6. Vincular ao caixa do DIA CONTÁBIL (do atendimento, quando houver). Se o
+    // caixa daquele dia já estiver fechado, o serviço recalcula seus totais.
     if (payment) {
-      const { data: openRegister } = await this.supabase
-        .from('cash_registers')
-        .select('id')
-        .eq('isOpen', true)
-        .maybeSingle();
-
-      if (openRegister) {
-        await this.supabase
-          .from('payments')
-          .update({ cashRegisterId: openRegister.id })
-          .eq('id', payment.id);
-      }
+      await this.cashRegisterService.linkPaymentToBusinessDateRegister(
+        payment.id,
+        businessDate,
+      );
     }
 
     return payment;
@@ -197,13 +203,13 @@ export class PaymentsService {
     startDate: string,
     endDate: string,
   ): Promise<{ cash: number; pix: number; card: number; total: number }> {
-    const { data: payments, error } = await this.supabase
-      .from('payments')
-      .select('amount, method')
-      .gte('paidAt', startDate)
-      .lte('paidAt', endDate);
-
-    if (error) throw error;
+    // Totais por método pelo DIA CONTÁBIL (businessDate, fallback paidAt).
+    const payments = await fetchPaymentsByBusinessDate(
+      this.supabase,
+      'amount, method',
+      startDate,
+      endDate,
+    );
 
     const totals = { cash: 0, pix: 0, card: 0, total: 0 };
     const methodMap: Record<string, keyof typeof totals> = {
@@ -212,7 +218,7 @@ export class PaymentsService {
       CARD: 'card',
     };
 
-    for (const payment of payments || []) {
+    for (const payment of payments) {
       const key = methodMap[payment.method];
       if (key) totals[key] += payment.amount;
       totals.total += payment.amount;

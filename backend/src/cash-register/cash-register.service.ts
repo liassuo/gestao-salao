@@ -328,12 +328,28 @@ export class CashRegisterService {
     const startOfDay = `${dateStr}T00:00:00`;
     const endOfDay = `${dateStr}T23:59:59`;
 
-    const { data: payments, error: paymentsError } = await this.supabase
+    // O caixa contabiliza pelo DIA CONTÁBIL (businessDate): dia do atendimento
+    // quando há agendamento; senão dia do pagamento. Como o Postgres/Supabase não
+    // expõe coalesce direto no filtro, fazemos coalesce(businessDate, paidAt) em
+    // duas queries:
+    //   (a) pagamentos cujo businessDate cai no dia (regra nova);
+    //   (b) LEGADO: businessDate nulo e paidAt no dia (histórico, conta como antes).
+    // Cobranças Asaas pendentes têm paidAt e businessDate nulos → não entram em
+    // nenhuma das duas (só contam quando o webhook confirma e preenche os campos).
+    const { data: byBusiness, error: bErr } = await this.supabase
       .from('payments')
       .select('amount, method, asaasStatus, subscriptionId')
+      .gte('businessDate', startOfDay)
+      .lte('businessDate', endOfDay);
+
+    const { data: byPaidLegacy, error: pErr } = await this.supabase
+      .from('payments')
+      .select('amount, method, asaasStatus, subscriptionId')
+      .is('businessDate', null)
       .gte('paidAt', startOfDay)
       .lte('paidAt', endOfDay);
 
+    const paymentsError = bErr || pErr;
     // Falha ruidosamente: caixa zerado por erro silencioso de query é bug crítico.
     if (paymentsError) {
       throw new Error(
@@ -341,9 +357,10 @@ export class CashRegisterService {
       );
     }
 
+    const payments = [...(byBusiness || []), ...(byPaidLegacy || [])];
     const totals = { cash: 0, pix: 0, card: 0, boleto: 0, total: 0, subscriptions: 0 };
 
-    for (const payment of payments || []) {
+    for (const payment of payments) {
       // Ignorar pagamentos Asaas que foram estornados ou deletados
       if (payment.asaasStatus && ['REFUNDED', 'DELETED', 'CANCELED'].includes(payment.asaasStatus)) {
         continue;
@@ -415,5 +432,66 @@ export class CashRegisterService {
         .update({ cashRegisterId: todayRegister.id })
         .eq('id', paymentId);
     }
+  }
+
+  /**
+   * Vincula um pagamento ao caixa do DIA CONTÁBIL (businessDate) — dia do
+   * atendimento quando há agendamento, e que pode não ser o caixa aberto agora
+   * (ex.: atendimento de ontem pago de madrugada). Se o caixa daquele dia já
+   * estiver FECHADO, recalcula e persiste seus totais para refletir o pagamento
+   * atrasado (a receita de um dia passado muda — acordado com o cliente).
+   *
+   * Centraliza a regra para os fluxos de pagamento (comanda manual, comanda
+   * Asaas via webhook, pagamento avulso) chamarem o mesmo ponto.
+   */
+  async linkPaymentToBusinessDateRegister(paymentId: string, businessDate: string) {
+    const dayStr = businessDate.substring(0, 10);
+    const { data: register } = await this.supabase
+      .from('cash_registers')
+      .select('id, isOpen')
+      .gte('date', `${dayStr}T00:00:00`)
+      .lte('date', `${dayStr}T23:59:59`)
+      .maybeSingle();
+
+    if (!register) return;
+
+    await this.supabase
+      .from('payments')
+      .update({ cashRegisterId: register.id })
+      .eq('id', paymentId);
+
+    if (register.isOpen === false) {
+      await this.recalcRegisterTotals(register.id);
+    }
+  }
+
+  /**
+   * Recalcula e persiste os totais de um caixa (normalmente já fechado) somando
+   * os pagamentos cujo dia contábil cai no dia do caixa. Usa
+   * coalesce(businessDate, paidAt): pagamentos legados (businessDate nulo)
+   * continuam contando pela data de pagamento.
+   */
+  async recalcRegisterTotals(registerId: string) {
+    const { data: register } = await this.supabase
+      .from('cash_registers')
+      .select('id, date, openingBalance, closingBalance')
+      .eq('id', registerId)
+      .single();
+    if (!register) return;
+
+    const totals = await this.calculateDailyTotals(register.date);
+    const expectedClosing = (register.openingBalance ?? 0) + totals.cash;
+    const discrepancy = (register.closingBalance ?? 0) - expectedClosing;
+
+    await this.supabase
+      .from('cash_registers')
+      .update({
+        totalCash: totals.cash,
+        totalPix: totals.pix,
+        totalCard: totals.card,
+        totalRevenue: totals.total,
+        discrepancy,
+      })
+      .eq('id', register.id);
   }
 }

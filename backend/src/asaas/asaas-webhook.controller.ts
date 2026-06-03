@@ -11,8 +11,9 @@ import {
 import { ApiTags, ApiOperation, ApiExcludeEndpoint } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../supabase/supabase.service';
-import { nowLocalIsoString } from '../common/datetime.util';
+import { nowLocalIsoString, resolveBusinessDate } from '../common/datetime.util';
 import { AsaasService } from './asaas.service';
+import { CashRegisterService } from '../cash-register/cash-register.service';
 import { AsaasWebhookEvent, AsaasChargeStatus } from './asaas.types';
 import { Public } from '../auth/decorators/public.decorator';
 import { SkipThrottle } from '@nestjs/throttler';
@@ -28,6 +29,7 @@ export class AsaasWebhookController {
     private readonly configService: ConfigService,
     private readonly supabase: SupabaseService,
     private readonly asaasService: AsaasService,
+    private readonly cashRegisterService: CashRegisterService,
   ) {}
 
   @Post('asaas')
@@ -170,6 +172,8 @@ export class AsaasWebhookController {
               asaasPaymentId,
               asaasStatus: status,
               paidAt: confirmedAt,
+              // Assinatura não tem agendamento → data contábil = dia do pagamento.
+              businessDate: resolveBusinessDate(null, confirmedAt),
               invoiceUrl: paymentData.invoiceUrl || null,
               bankSlipUrl: paymentData.bankSlipUrl || null,
               createdAt: now,
@@ -222,12 +226,28 @@ export class AsaasWebhookController {
       return;
     }
 
-    // Atualizar status do pagamento
+    // Atualizar status do pagamento. Data contábil (businessDate): dia do
+    // atendimento quando há agendamento; senão o dia da confirmação (agora).
+    // Confirmação é o momento em que o pagamento de fato entra — por isso é aqui
+    // que o businessDate é definido (no insert Asaas a cobrança ainda é pendente).
+    const confirmNow = nowLocalIsoString();
+    let confirmScheduledAt: string | null = null;
+    if (localPayment.appointmentId) {
+      const { data: appt } = await this.supabase
+        .from('appointments')
+        .select('scheduledAt')
+        .eq('id', localPayment.appointmentId)
+        .maybeSingle();
+      confirmScheduledAt = (appt as any)?.scheduledAt ?? null;
+    }
+    const confirmBusinessDate = resolveBusinessDate(confirmScheduledAt, confirmNow);
+
     await this.supabase
       .from('payments')
       .update({
         asaasStatus: status,
-        paidAt: nowLocalIsoString(),
+        paidAt: confirmNow,
+        businessDate: confirmBusinessDate,
       })
       .eq('id', localPayment.id);
 
@@ -275,19 +295,13 @@ export class AsaasWebhookController {
       }
     }
 
-    // Vincular ao caixa aberto (se existir)
-    const { data: openRegister } = await this.supabase
-      .from('cash_registers')
-      .select('id')
-      .eq('isOpen', true)
-      .maybeSingle();
-
-    if (openRegister) {
-      await this.supabase
-        .from('payments')
-        .update({ cashRegisterId: openRegister.id })
-        .eq('id', localPayment.id);
-    }
+    // Vincular ao caixa do DIA CONTÁBIL (businessDate) — dia do atendimento quando
+    // há agendamento. Pode não ser o caixa aberto agora. Se aquele caixa já estiver
+    // fechado, o serviço recalcula seus totais para refletir este pagamento.
+    await this.cashRegisterService.linkPaymentToBusinessDateRegister(
+      localPayment.id,
+      confirmBusinessDate,
+    );
 
     // Se vinculado a assinatura, ativar e estender endDate + resetar cortes
     if (localPayment.subscriptionId) {

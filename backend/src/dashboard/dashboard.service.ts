@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { SupabaseService } from '../supabase/supabase.service';
+import {
+  fetchPaymentsByBusinessDate,
+  paymentBusinessDay,
+} from '../common/business-date.helper';
 
 @Injectable()
 export class DashboardService {
@@ -25,11 +29,13 @@ export class DashboardService {
     const now = new Date();
     const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01T00:00:00`;
 
-    // Paraleliza todas as 9 queries independentes (era sequencial)
+    // Paraleliza todas as queries independentes (era sequencial).
+    // Receita do dia/mês passam a contar pelo DIA CONTÁBIL (businessDate, com
+    // fallback paidAt) — coerente com o caixa.
     const [
       { count: todayAppointments },
-      { data: todayPayments },
-      { data: monthPayments },
+      todayPaymentsArr,
+      monthPaymentsArr,
       { count: totalClients },
       { count: clientsWithDebts },
       { data: debts },
@@ -43,15 +49,8 @@ export class DashboardService {
         .gte('scheduledAt', todayStart)
         .lte('scheduledAt', todayEnd)
         .in('status', ['SCHEDULED', 'ATTENDED']),
-      this.supabase
-        .from('payments')
-        .select('amount')
-        .gte('paidAt', todayStart)
-        .lte('paidAt', todayEnd),
-      this.supabase
-        .from('payments')
-        .select('amount')
-        .gte('paidAt', monthStart),
+      fetchPaymentsByBusinessDate(this.supabase, 'amount', todayStart, todayEnd),
+      fetchPaymentsByBusinessDate(this.supabase, 'amount', monthStart),
       this.supabase
         .from('clients')
         .select('id', { count: 'exact', head: true }),
@@ -79,8 +78,8 @@ export class DashboardService {
         .eq('isActive', true),
     ]);
 
-    const todayRevenue = (todayPayments || []).reduce((sum, p) => sum + p.amount, 0);
-    const monthRevenue = (monthPayments || []).reduce((sum, p) => sum + p.amount, 0);
+    const todayRevenue = todayPaymentsArr.reduce((sum, p) => sum + p.amount, 0);
+    const monthRevenue = monthPaymentsArr.reduce((sum, p) => sum + p.amount, 0);
     const totalDebts = (debts || []).reduce((sum, d) => sum + d.remainingBalance, 0);
 
     return {
@@ -281,22 +280,22 @@ export class DashboardService {
   }
 
   async getRevenueByMethod(start?: Date, end?: Date) {
-    let queryBuilder = this.supabase
-      .from('payments')
-      .select('amount, method');
+    // Receita por método pelo DIA CONTÁBIL (businessDate, fallback paidAt).
+    // Sem `start`, usa uma base bem antiga para abranger todo o histórico.
+    const startOfDay = start
+      ? `${this.getLocalDateStr(start)}T00:00:00`
+      : '1970-01-01T00:00:00';
+    const endOfDay = end ? `${this.getLocalDateStr(end)}T23:59:59` : undefined;
 
-    if (start) {
-      queryBuilder = queryBuilder.gte('paidAt', `${this.getLocalDateStr(start)}T00:00:00`);
-    }
-    if (end) {
-      queryBuilder = queryBuilder.lte('paidAt', `${this.getLocalDateStr(end)}T23:59:59`);
-    }
-
-    const { data: payments, error } = await queryBuilder;
-    if (error) throw error;
+    const payments = await fetchPaymentsByBusinessDate(
+      this.supabase,
+      'amount, method',
+      startOfDay,
+      endOfDay,
+    );
 
     const byMethod: Record<string, number> = {};
-    for (const p of payments || []) {
+    for (const p of payments) {
       byMethod[p.method] = (byMethod[p.method] || 0) + p.amount;
     }
 
@@ -340,21 +339,22 @@ export class DashboardService {
     startDate.setDate(startDate.getDate() - days);
     const startStr = `${this.getLocalDateStr(startDate)}T00:00:00`;
 
-    const { data: payments, error } = await this.supabase
-      .from('payments')
-      .select('amount, paidAt')
-      .gte('paidAt', startStr)
-      .order('paidAt', { ascending: true });
-
-    if (error) throw error;
+    // Agrupa pelo DIA CONTÁBIL (businessDate, fallback paidAt).
+    const payments = await fetchPaymentsByBusinessDate(
+      this.supabase,
+      'amount, paidAt, businessDate',
+      startStr,
+    );
 
     const byDay: Record<string, number> = {};
-    for (const p of payments || []) {
-      const day = String(p.paidAt).substring(0, 10);
+    for (const p of payments) {
+      const day = paymentBusinessDay(p);
       byDay[day] = (byDay[day] || 0) + p.amount;
     }
 
-    return Object.entries(byDay).map(([date, total]) => ({ date, total }));
+    return Object.entries(byDay)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([date, total]) => ({ date, total }));
   }
 
   async getServicesPopularity(limit: number = 10) {
@@ -386,7 +386,7 @@ export class DashboardService {
     // Paraleliza todas as queries independentes (era sequencial: ~16 queries → 4 paralelas)
     const [
       { count: activePlans },
-      { data: allPayments12m },
+      allPayments12m,
       { data: professionals },
       { data: monthAppointments },
     ] = await Promise.all([
@@ -394,10 +394,12 @@ export class DashboardService {
         .from('client_subscriptions')
         .select('id', { count: 'exact', head: true })
         .eq('status', 'ACTIVE'),
-      this.supabase
-        .from('payments')
-        .select('amount, paidAt')
-        .gte('paidAt', yearHistoryStart),
+      // Receita histórica pelo DIA CONTÁBIL (businessDate, fallback paidAt).
+      fetchPaymentsByBusinessDate(
+        this.supabase,
+        'amount, paidAt, businessDate',
+        yearHistoryStart,
+      ),
       this.supabase
         .from('professionals')
         .select('id, name')
@@ -415,12 +417,14 @@ export class DashboardService {
     let yearlyRevenue = 0;
     const monthlyBuckets: Record<string, number> = {};
 
-    for (const p of allPayments12m || []) {
-      const paidMonth = String(p.paidAt).substring(0, 7); // "YYYY-MM"
-      monthlyBuckets[paidMonth] = (monthlyBuckets[paidMonth] || 0) + p.amount;
+    for (const p of allPayments12m) {
+      // Dia contábil (businessDate, fallback paidAt) como referência temporal.
+      const refDate = String(p.businessDate ?? p.paidAt ?? '');
+      const refMonth = refDate.substring(0, 7); // "YYYY-MM"
+      monthlyBuckets[refMonth] = (monthlyBuckets[refMonth] || 0) + p.amount;
 
-      if (p.paidAt >= yearStart) yearlyRevenue += p.amount;
-      if (p.paidAt >= monthStart) monthlyRevenue += p.amount;
+      if (refDate >= yearStart) yearlyRevenue += p.amount;
+      if (refDate >= monthStart) monthlyRevenue += p.amount;
     }
 
     // Histórico mensal — monta a partir do bucket (sem queries adicionais)

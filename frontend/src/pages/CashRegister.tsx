@@ -65,6 +65,15 @@ function formatTime(dateStr: string): string {
   });
 }
 
+/**
+ * Formata uma data (dd/mm/aaaa) tratando-a como LOCAL. Sem isso, uma data pura
+ * "2026-06-02" é interpretada como UTC por new Date() e, em fuso negativo (Brasil),
+ * volta um dia — exibindo 01/06 em vez de 02/06.
+ */
+function formatDateShort(dateStr: string): string {
+  return parseLocalDate(dateStr).toLocaleDateString('pt-BR');
+}
+
 /** Componente para quando o caixa já foi fechado hoje */
 function ClosedTodaySummary({
   cashRegister,
@@ -361,7 +370,7 @@ export function CashRegister() {
                   <p className="mt-1 text-sm text-[var(--text-secondary)]">
                     O caixa do dia{' '}
                     <span className="font-medium text-[var(--text-primary)]">
-                      {new Date(openRegister!.date).toLocaleDateString('pt-BR')}
+                      {formatDateShort(openRegister!.date)}
                     </span>{' '}
                     ainda está aberto. Feche-o antes de abrir o caixa de hoje.
                   </p>
@@ -370,7 +379,7 @@ export function CashRegister() {
                     onClick={handleOpenCloseModal}
                     className="mt-3 flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600 transition-colors active:scale-[0.98]"
                   >
-                    Fechar caixa de {new Date(openRegister!.date).toLocaleDateString('pt-BR')}
+                    Fechar caixa de {formatDateShort(openRegister!.date)}
                   </button>
                 </div>
               </div>
