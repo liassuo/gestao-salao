@@ -30,6 +30,8 @@ export interface ActiveClientSubscription extends ActiveClientPlan {
   subscriptionId: string;
   cutsPerMonth: number;
   cutsUsedThisMonth: number;
+  /** Fim do ciclo vigente (ISO/UTC). Null em planos sem data de fim. */
+  endDate: string | null;
 }
 
 /** 99 é a sentinela usada nos planos para "ilimitado". */
@@ -123,6 +125,7 @@ export async function getActiveClientSubscription(
     servicePercents,
     cutsPerMonth: typeof plan.cutsPerMonth === 'number' ? plan.cutsPerMonth : 0,
     cutsUsedThisMonth: typeof row.cutsUsedThisMonth === 'number' ? row.cutsUsedThisMonth : 0,
+    endDate: row.endDate ?? null,
   };
 }
 

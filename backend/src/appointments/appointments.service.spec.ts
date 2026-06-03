@@ -244,6 +244,68 @@ describe('AppointmentsService', () => {
       expect((mockSupabase as any).rpc).not.toHaveBeenCalled();
     });
 
+    // Assinante so pode agendar ate o dia em que a assinatura vence (inclusive).
+    // A assinatura precisa estar VIGENTE hoje (endDate > agora, senao o helper
+    // getActiveClientSubscription ja a trata como vencida e retorna null); o que
+    // a regra 3.3 barra e agendar para uma data DEPOIS desse endDate ainda futuro.
+    // Datas relativas a Date.now() para o teste nao depender do calendario real.
+    const DAY = 24 * 60 * 60 * 1000;
+    const isoInDays = (n: number) => new Date(Date.now() + n * DAY).toISOString();
+    const localDayInDays = (n: number) => {
+      const d = new Date(Date.now() + n * DAY);
+      const p = (x: number) => String(x).padStart(2, '0');
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T12:00:00`;
+    };
+
+    function setupActiveSubWithEndDate(endDate: string) {
+      setupCreateSuccess();
+      chains['client_subscriptions'].maybeSingle.mockResolvedValue({
+        data: {
+          id: 'sub-1',
+          endDate,
+          cutsUsedThisMonth: 0,
+          plan: { id: 'plan-1', cutsPerMonth: 4, discountPercent: 0, services: [] },
+        },
+        error: null,
+      });
+      // source:'CLIENT' ativa a trava de "mesmo dia", cuja query termina em
+      // .lte().limit(1) — diferente da query de conflito, que termina em .lte().
+      // Fazemos .lte() devolver um objeto HIBRIDO: thenable (await direto ->
+      // {data:[]}, atende o conflito) E com .limit() resolvido (atende o mesmo
+      // dia). Sem mexer no setupCreateSuccess usado pelos demais testes.
+      const empty = { data: [], error: null };
+      const lteResult: any = {
+        then: (resolve: any) => resolve(empty),
+        limit: jest.fn().mockResolvedValue(empty),
+        neq: jest.fn().mockReturnThis(),
+      };
+      chains['appointments'].lte.mockReturnValue(lteResult);
+    }
+
+    it('bloqueia assinante de agendar para depois do vencimento da assinatura', async () => {
+      // Vence em +2 dias (ainda vigente); cliente tenta agendar em +5 dias.
+      // Ambas as datas estao dentro da janela de 7 dias de agendamento, entao o
+      // bloqueio aqui e especificamente da regra 3.3 (vencimento), nao da janela.
+      // scheduledAt e passado como STRING local "YYYY-MM-DDTHH:mm:ss" (igual ao
+      // que o controller monta na producao), nao como Date.
+      setupActiveSubWithEndDate(isoInDays(2));
+      await expect(
+        service.create({ ...dto, source: 'CLIENT', scheduledAt: localDayInDays(5) as any }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('permite assinante agendar quando a data está dentro da validade', async () => {
+      // Vence em +30 dias; agendamento em +5 dias -> dentro da validade da
+      // assinatura E dentro da janela de 7 dias de agendamento do cliente.
+      setupActiveSubWithEndDate(isoInDays(30));
+      const result = await service.create({
+        ...dto,
+        source: 'CLIENT',
+        scheduledAt: localDayInDays(5) as any,
+      });
+      expect(result).toMatchObject({ id: 'mock-uuid-123' });
+    });
+
     it('should throw NotFoundException when professional not found', async () => {
       // services precisa passar antes de chegar em validateScheduleConflicts
       chains['services'] = mockChain();

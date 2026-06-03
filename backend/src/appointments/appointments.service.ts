@@ -8,7 +8,7 @@ import {
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
-import { nowLocalIsoString } from '../common/datetime.util';
+import { nowLocalIsoString, localDateString } from '../common/datetime.util';
 import {
   CreateAppointmentDto,
   CreateTimeBlockDto,
@@ -199,6 +199,22 @@ export class AppointmentsService {
           throw new BadRequestException(
             `Você já tem um agendamento marcado para ${dd}/${mm}/${yyyy} às ${time}. Cancele-o antes de agendar outro no mesmo dia.`,
           );
+        }
+
+        // 3.3 Assinante so pode agendar ATE o dia em que a assinatura vence
+        //   (inclusive). Comparacao por dia-calendario: o endDate (UTC) e
+        //   convertido para o dia local do Brasil via localDateString, e o
+        //   scheduledAt ja e data local. Ambos viram "YYYY-MM-DD" e sao
+        //   comparados lexicograficamente. Ex: vence 20/06 -> pode marcar
+        //   ate 20/06 23:59; 21/06 em diante e bloqueado.
+        if (activeSub.endDate) {
+          const expiryDay = localDateString(new Date(activeSub.endDate)); // YYYY-MM-DD local
+          if (scheduledDate > expiryDay) {
+            const [ey, em, ed] = expiryDay.split('-');
+            throw new BadRequestException(
+              `Sua assinatura é válida até ${ed}/${em}/${ey}. Escolha uma data até essa ou renove o plano para agendar depois.`,
+            );
+          }
         }
       }
     } else if (!dto.clientName) {

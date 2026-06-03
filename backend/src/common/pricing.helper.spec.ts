@@ -327,7 +327,7 @@ describe('pricing.helper', () => {
       const sub = {
         subscriptionId: 's1', planId: 'p1', globalPercent: 0,
         servicePercents: new Map<string, number>(),
-        cutsPerMonth: 4, cutsUsedThisMonth: 1,
+        cutsPerMonth: 4, cutsUsedThisMonth: 1, endDate: null,
       };
       expect(getRemainingCuts(sub)).toBe(3);
     });
@@ -336,7 +336,7 @@ describe('pricing.helper', () => {
       const sub = {
         subscriptionId: 's1', planId: 'p1', globalPercent: 0,
         servicePercents: new Map<string, number>(),
-        cutsPerMonth: 4, cutsUsedThisMonth: 4,
+        cutsPerMonth: 4, cutsUsedThisMonth: 4, endDate: null,
       };
       expect(getRemainingCuts(sub)).toBe(0);
     });
@@ -345,7 +345,7 @@ describe('pricing.helper', () => {
       const sub = {
         subscriptionId: 's1', planId: 'p1', globalPercent: 0,
         servicePercents: new Map<string, number>(),
-        cutsPerMonth: UNLIMITED_CUTS, cutsUsedThisMonth: 50,
+        cutsPerMonth: UNLIMITED_CUTS, cutsUsedThisMonth: 50, endDate: null,
       };
       expect(getRemainingCuts(sub)).toBe(Number.POSITIVE_INFINITY);
     });
