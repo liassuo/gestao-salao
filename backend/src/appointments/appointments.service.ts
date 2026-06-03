@@ -171,11 +171,15 @@ export class AppointmentsService {
         }
       }
 
-      // 3.2 Bloquear quando cliente ja tem agendamento ATIVO no mesmo dia.
+      // 3.2 Bloquear quando ASSINANTE ja tem agendamento ATIVO no mesmo dia.
+      //   - So vale para cliente de assinatura (activeSub) — evita esgotar os cortes
+      //     do plano num dia so. Cliente avulso pode marcar varios no mesmo dia
+      //     (ex: com profissionais diferentes); nesse caso so vale o conflito por
+      //     profissional/horario de validateScheduleConflicts.
       //   - Admin (source != 'CLIENT') tem bypass — pode marcar varios mesmo
       //   - NO_SHOW, CANCELED, ATTENDED nao contam (cliente pode remarcar / voltar)
       //   - SCHEDULED e PENDING_PAYMENT contam
-      if (dto.source === 'CLIENT') {
+      if (dto.source === 'CLIENT' && activeSub) {
         const scheduledDate = String(dto.scheduledAt).slice(0, 10); // YYYY-MM-DD
         const dayStart = `${scheduledDate}T00:00:00`;
         const dayEnd = `${scheduledDate}T23:59:59`;
