@@ -246,10 +246,15 @@ export class AppointmentsController {
     return this.appointmentsService.update(id, updateAppointmentDto);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Patch(':id/cancel')
   async cancel(@Param('id', ParseUUIDPipe) id: string, @Req() req: RequestWithUser) {
+    // Autorização por papel: profissional só cancela a própria agenda; cliente só
+    // os próprios agendamentos; admin (demais papéis) cancela qualquer um.
     if (req.user?.role === 'PROFESSIONAL') {
       await this.appointmentsService.assertOwnedByProfessional(id, req.user.professionalId);
+    } else if (req.user?.role === 'CLIENT') {
+      await this.appointmentsService.assertOwnedByClient(id, req.user.id);
     }
     const result = await this.appointmentsService.cancel(id);
 

@@ -1,11 +1,9 @@
 import { useState, useEffect } from 'react';
-import { formatDate, formatTime, formatEndTime, formatPrice, hoursUntil } from '../utils/format';
+import { formatDate, formatTime, formatEndTime, formatPrice } from '../utils/format';
 import { clientApi } from '../services/api';
 import { appointmentsApi } from '../services/appointments';
 import type { Appointment, AppointmentStatus } from '../types';
 import { PixPaymentModal } from './ui';
-
-const CANCELLATION_HOURS_LIMIT = 1;
 
 // Cache do WhatsApp para não buscar toda hora
 let cachedWhatsapp: string | null = null;
@@ -52,11 +50,13 @@ export function AppointmentCard({
   subscription = null,
 }: AppointmentCardProps) {
   const status = STATUS_CONFIG[appointment.status] || STATUS_CONFIG.SCHEDULED;
-  const hours = hoursUntil(appointment.scheduledAt);
   const isScheduled = appointment.status === 'SCHEDULED';
   const isPendingPayment = appointment.status === 'PENDING_PAYMENT';
-  const canCancel = (isScheduled && hours > CANCELLATION_HOURS_LIMIT) || isPendingPayment;
-  const showContactButton = isScheduled && hours > 0 && hours <= CANCELLATION_HOURS_LIMIT;
+  // Cliente pode cancelar SEMPRE (inclusive em cima da hora) — decisão do dono.
+  // Anti-abuso: a penalidade fica no backend (avulso que cancela não consegue
+  // remarcar por 4h). Por isso não há mais janela de "falar com a barbearia".
+  const canCancel = isScheduled || isPendingPayment;
+  const showContactButton = false;
 
   const isHighlight = variant === 'highlight';
   const [whatsapp, setWhatsapp] = useState('');

@@ -44,6 +44,8 @@ describe('AppointmentsController (integration)', () => {
     findUnpaid: jest.fn().mockResolvedValue([mockAppointment]),
     update: jest.fn().mockResolvedValue(mockAppointment),
     cancel: jest.fn().mockResolvedValue({ ...mockAppointment, status: 'CANCELED' }),
+    assertOwnedByClient: jest.fn().mockResolvedValue(undefined),
+    assertOwnedByProfessional: jest.fn().mockResolvedValue(undefined),
     markAsAttended: jest.fn().mockResolvedValue({ ...mockAppointment, status: 'ATTENDED' }),
     markAsNoShow: jest.fn().mockResolvedValue({ ...mockAppointment, status: 'NO_SHOW' }),
     getAvailableSlots: jest.fn().mockResolvedValue([

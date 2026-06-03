@@ -217,6 +217,35 @@ export class AppointmentsService {
           }
         }
       }
+
+      // 3.4 Penalidade anti-abuso (somente AVULSO): se o cliente cancelou um
+      //   agendamento nas ultimas 4 horas, fica bloqueado de remarcar nesse
+      //   intervalo. Evita o cliente cancelar e re-segurar horarios em sequencia.
+      //   Assinante NAO sofre penalidade (paga mensalidade). Admin (source != CLIENT)
+      //   tem bypass. Baseado em canceledAt (qualquer profissional).
+      if (dto.source === 'CLIENT' && !activeSub) {
+        const PENALTY_HOURS = 4;
+        const cutoff = new Date(Date.now() - PENALTY_HOURS * 60 * 60 * 1000);
+        const cutoffStr = nowLocalIsoString(cutoff);
+        const { data: recentCancels } = await this.supabase
+          .from('appointments')
+          .select('id, canceledAt')
+          .eq('clientId', dto.clientId)
+          .eq('status', 'CANCELED')
+          .gte('canceledAt', cutoffStr)
+          .order('canceledAt', { ascending: false })
+          .limit(1);
+
+        if (recentCancels && recentCancels.length > 0) {
+          const canceledAt = new Date(String(recentCancels[0].canceledAt));
+          const liberaEm = new Date(canceledAt.getTime() + PENALTY_HOURS * 60 * 60 * 1000);
+          const hh = String(liberaEm.getHours()).padStart(2, '0');
+          const mm = String(liberaEm.getMinutes()).padStart(2, '0');
+          throw new BadRequestException(
+            `Você cancelou um agendamento recentemente. Por isso, só poderá agendar novamente a partir das ${hh}:${mm}. (Bloqueio de ${PENALTY_HOURS}h após cancelamento.)`,
+          );
+        }
+      }
     } else if (!dto.clientName) {
       throw new BadRequestException('Informe o cliente ou o nome do cliente avulso');
     }
@@ -1150,6 +1179,24 @@ export class AppointmentsService {
     }
     if (data.professionalId !== professionalId) {
       throw new BadRequestException('Você só pode gerenciar agendamentos da sua própria agenda');
+    }
+  }
+
+  /** Garante que o agendamento pertence ao cliente autenticado (app do cliente). */
+  async assertOwnedByClient(appointmentId: string, clientId: string | undefined): Promise<void> {
+    if (!clientId) {
+      throw new BadRequestException('Cliente não identificado');
+    }
+    const { data, error } = await this.supabase
+      .from('appointments')
+      .select('id, clientId')
+      .eq('id', appointmentId)
+      .single();
+    if (error || !data) {
+      throw new NotFoundException('Agendamento não encontrado');
+    }
+    if (data.clientId !== clientId) {
+      throw new BadRequestException('Você só pode cancelar seus próprios agendamentos');
     }
   }
 
