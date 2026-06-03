@@ -3,6 +3,7 @@ import type {
   CashRegister,
   CashRegisterFilters,
   CashRegisterSummary,
+  CashRegisterTransactions,
   OpenCashRegisterPayload,
   CloseCashRegisterPayload,
 } from '@/types';
@@ -80,6 +81,13 @@ export const cashRegisterService = {
 
   async reopen(id: string): Promise<CashRegister> {
     const response = await api.patch<CashRegister>(`/cash-register/${id}/reopen`);
+    return response.data;
+  },
+
+  async getTransactions(id: string): Promise<CashRegisterTransactions> {
+    const response = await api.get<CashRegisterTransactions>(
+      `/cash-register/${id}/transactions`,
+    );
     return response.data;
   },
 };

@@ -71,6 +71,12 @@ export class CashRegisterController {
     );
   }
 
+  @Get(':id/transactions')
+  async getTransactions(@Param('id', ParseUUIDPipe) id: string) {
+    const register = await this.cashRegisterService.findOne(id);
+    return this.cashRegisterService.getDailyTransactions((register as any).date);
+  }
+
   @Get(':id')
   async findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.cashRegisterService.findOne(id);

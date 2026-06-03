@@ -402,6 +402,113 @@ export class CashRegisterService {
     return totals;
   }
 
+  /**
+   * Relação detalhada dos atendimentos/pagamentos que compõem a receita de um dia
+   * (pelo DIA CONTÁBIL — businessDate, com fallback paidAt). Para cada pagamento
+   * traz cliente, profissional (via comanda) e os itens/serviços, para o admin
+   * conferir a soma do caixa linha a linha.
+   *
+   * Ignora pagamentos estornados/cancelados/deletados do Asaas (não entram no caixa).
+   */
+  async getDailyTransactions(dateInput: Date | string) {
+    const dateStr =
+      typeof dateInput === 'string'
+        ? dateInput.substring(0, 10)
+        : this.getLocalDateStr(dateInput);
+    const startOfDay = `${dateStr}T00:00:00`;
+    const nextDayStart = `${this.nextDayStr(dateStr)}T00:00:00`;
+
+    // Pagamentos do dia contábil (regra nova) + legado (businessDate nulo, por paidAt).
+    const sel =
+      'id, amount, method, paidAt, businessDate, asaasStatus, subscriptionId, clientId, appointmentId';
+    const { data: byBusiness, error: bErr } = await this.supabase
+      .from('payments')
+      .select(sel)
+      .gte('businessDate', startOfDay)
+      .lt('businessDate', nextDayStart);
+    const { data: byPaidLegacy, error: pErr } = await this.supabase
+      .from('payments')
+      .select(sel)
+      .is('businessDate', null)
+      .gte('paidAt', startOfDay)
+      .lt('paidAt', nextDayStart);
+
+    if (bErr || pErr) {
+      throw new Error(
+        `Falha ao listar atendimentos do caixa para ${dateStr}: ${(bErr || pErr)!.message}`,
+      );
+    }
+
+    const payments = [...(byBusiness || []), ...(byPaidLegacy || [])].filter(
+      (p) =>
+        !(
+          p.asaasStatus &&
+          ['REFUNDED', 'DELETED', 'CANCELED'].includes(p.asaasStatus)
+        ),
+    );
+
+    // Enriquecimento: cliente, profissional (via order) e itens da comanda.
+    const transactions = [];
+    for (const p of payments) {
+      // Cliente
+      let clientName: string | null = null;
+      if (p.clientId) {
+        const { data: client } = await this.supabase
+          .from('clients')
+          .select('name')
+          .eq('id', p.clientId)
+          .maybeSingle();
+        clientName = (client as any)?.name ?? null;
+      }
+
+      // Comanda vinculada a este pagamento (para profissional + itens)
+      const { data: order } = await this.supabase
+        .from('orders')
+        .select(
+          'id, professionalId, items:order_items(itemType, quantity, unitPrice, service:services(name), product:products(name))',
+        )
+        .eq('paymentId', p.id)
+        .maybeSingle();
+
+      let professionalName: string | null = null;
+      const profId = (order as any)?.professionalId;
+      if (profId) {
+        const { data: prof } = await this.supabase
+          .from('professionals')
+          .select('name')
+          .eq('id', profId)
+          .maybeSingle();
+        professionalName = (prof as any)?.name ?? null;
+      }
+
+      const items = ((order as any)?.items || []).map((it: any) => ({
+        name: it.service?.name ?? it.product?.name ?? '—',
+        quantity: it.quantity,
+        unitPrice: it.unitPrice,
+      }));
+
+      transactions.push({
+        id: p.id,
+        paidAt: p.paidAt,
+        businessDate: p.businessDate,
+        amount: p.amount,
+        method: p.method,
+        clientName,
+        professionalName,
+        isSubscription: !!p.subscriptionId,
+        items,
+      });
+    }
+
+    // Ordena por horário do pagamento
+    transactions.sort((a, b) =>
+      String(a.paidAt ?? '').localeCompare(String(b.paidAt ?? '')),
+    );
+
+    const total = transactions.reduce((s, t) => s + t.amount, 0);
+    return { date: dateStr, count: transactions.length, total, transactions };
+  }
+
   async getSummary(startDate: Date, endDate: Date) {
     const startStr = `${this.getLocalDateStr(startDate)}T00:00:00`;
     const endStr = `${this.getLocalDateStr(endDate)}T23:59:59`;

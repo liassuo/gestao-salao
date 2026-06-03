@@ -1,6 +1,7 @@
 export { useAppointments, useAppointmentActions, useCalendarData, useCreateTimeBlock, useCreateTimeBlockRange, useDeleteTimeBlock, useUpdateAppointment } from './useAppointments';
 export { useCashRegisters } from './useCashRegisters';
 export { useCashRegisterSummary } from './useCashRegisterSummary';
+export { useCashRegisterTransactions } from './useCashRegisterTransactions';
 export { useCashRegisterToday, useCashRegisterOpen, CASH_REGISTER_QUERY_KEY } from './useCashRegisterToday';
 export { useClients, useClient, useCreateClient, useUpdateClient, useDeleteClient } from './useClients';
 export { useCloseCashRegister } from './useCloseCashRegister';

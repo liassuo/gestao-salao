@@ -10,6 +10,7 @@ import {
   Crown,
 } from 'lucide-react';
 import type { CashRegister } from '@/types';
+import { DailyTransactionsTable } from './DailyTransactionsTable';
 
 interface CashRegisterStatusProps {
   cashRegister: CashRegister;
@@ -255,6 +256,9 @@ export function CashRegisterStatus({ cashRegister, onClose }: CashRegisterStatus
           </div>
         </div>
       </div>
+
+      {/* Relação dos atendimentos do dia — justifica a soma da receita */}
+      <DailyTransactionsTable cashRegisterId={cashRegister.id} />
     </div>
   );
 }

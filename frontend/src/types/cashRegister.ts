@@ -41,6 +41,31 @@ export interface CashRegisterFilters {
   endDate?: string;
 }
 
+export interface CashRegisterTransactionItem {
+  name: string;
+  quantity: number;
+  unitPrice: number; // centavos
+}
+
+export interface CashRegisterTransaction {
+  id: string;
+  paidAt: string;
+  businessDate?: string | null;
+  amount: number; // centavos
+  method: string; // CASH | PIX | CARD | BOLETO
+  clientName?: string | null;
+  professionalName?: string | null;
+  isSubscription: boolean;
+  items: CashRegisterTransactionItem[];
+}
+
+export interface CashRegisterTransactions {
+  date: string;
+  count: number;
+  total: number; // centavos
+  transactions: CashRegisterTransaction[];
+}
+
 // Labels para exibição
 export const cashRegisterStatusLabels = {
   open: 'Aberto',
