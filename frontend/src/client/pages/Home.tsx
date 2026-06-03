@@ -8,6 +8,7 @@ import { AppointmentCard } from '../components/AppointmentCard';
 import { LoadingState, EmptyState } from '../components/ui';
 import { PromotionBanners } from '../components/PromotionBanners';
 import { clientApi } from '../services/api';
+import { safeParseDate } from '../utils/format';
 import type { Appointment } from '../types';
 
 const PLANS_POPUP_KEY = 'hasSeenPlansPopup';
@@ -16,6 +17,7 @@ export interface ActiveSubscriptionInfo {
   planName: string;
   cutsPerMonth: number;
   cutsUsedThisMonth: number;
+  endDate?: string;
 }
 
 export function ClientHome() {
@@ -65,13 +67,14 @@ export function ClientHome() {
   }, [fetchAppointments]);
 
   useEffect(() => {
-    clientApi.get<{ id: string; status: string; cutsUsedThisMonth: number; plan: { name: string; cutsPerMonth: number } } | null>('/subscriptions/me')
+    clientApi.get<{ id: string; status: string; cutsUsedThisMonth: number; endDate?: string; plan: { name: string; cutsPerMonth: number } } | null>('/subscriptions/me')
       .then((res) => {
         if (res.data && res.data.status === 'ACTIVE') {
           setActiveSubscription({
             planName: res.data.plan.name,
             cutsPerMonth: res.data.plan.cutsPerMonth,
             cutsUsedThisMonth: res.data.cutsUsedThisMonth,
+            endDate: res.data.endDate,
           });
         }
       })
@@ -138,6 +141,30 @@ export function ClientHome() {
 
       {/* Banners de Promoções */}
       <PromotionBanners />
+
+      {/* Assinatura ativa — mostra o plano e até quando é válido */}
+      {activeSubscription && (
+        <div className="px-5 mb-2">
+          <button
+            onClick={() => navigate(CLIENT_PATHS.planos)}
+            className="w-full flex items-center justify-between rounded-2xl bg-gradient-to-br from-[#8B6914] to-[#C8923A] px-4 py-3 text-left text-white"
+          >
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider opacity-80">
+                Plano {activeSubscription.planName}
+              </p>
+              {activeSubscription.endDate && (
+                <p className="text-sm font-bold mt-0.5">
+                  Válido até {safeParseDate(activeSubscription.endDate).toLocaleDateString('pt-BR')}
+                </p>
+              )}
+            </div>
+            <svg className="w-5 h-5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+      )}
 
       {/* Content */}
       <div className="px-5 pb-24">

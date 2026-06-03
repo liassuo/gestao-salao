@@ -75,6 +75,9 @@ export function ClientSubscriptionTable({
                 Início
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                Vencimento
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Status
               </th>
               <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
@@ -141,6 +144,11 @@ export function ClientSubscriptionTable({
                   <td className="whitespace-nowrap px-4 py-4">
                     <span className="text-sm text-[var(--text-secondary)]">
                       {formatDate(subscription.startDate)}
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-4">
+                    <span className="text-sm text-[var(--text-secondary)]">
+                      {subscription.endDate ? formatDate(subscription.endDate) : '—'}
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-4 py-4">

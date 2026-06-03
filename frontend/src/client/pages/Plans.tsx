@@ -4,7 +4,7 @@ import { CLIENT_PATHS } from '../utils/paths';
 import { clientApi } from '../services/api';
 import { useClientAuth } from '../auth';
 import { LoadingState, PixPaymentModal, CreditCardModal } from '../components/ui';
-import { formatPrice } from '../utils/format';
+import { formatPrice, safeParseDate } from '../utils/format';
 
 interface SubscriptionPlan {
   id: string;
@@ -21,6 +21,7 @@ interface ClientSubscription {
   status: string;
   cutsUsedThisMonth: number;
   startDate: string;
+  endDate?: string;
   plan: SubscriptionPlan;
   latestPayment?: {
     invoiceUrl?: string;
@@ -331,6 +332,16 @@ export function ClientPlans() {
                 </>
               )}
             </div>
+
+            {/* Vencimento da assinatura */}
+            {mySubscription.endDate && (
+              <div className="mt-3 flex items-center justify-between rounded-xl bg-white/10 px-4 py-2.5">
+                <span className="text-xs opacity-80">Válido até</span>
+                <span className="text-sm font-semibold">
+                  {safeParseDate(mySubscription.endDate).toLocaleDateString('pt-BR')}
+                </span>
+              </div>
+            )}
 
             {showCancelConfirm ? (
               <div className="mt-4 rounded-xl bg-white/10 p-4">
