@@ -218,31 +218,48 @@ export class AppointmentsService {
         }
       }
 
-      // 3.4 Penalidade anti-abuso (somente AVULSO): se o cliente cancelou um
-      //   agendamento nas ultimas 4 horas, fica bloqueado de remarcar nesse
-      //   intervalo. Evita o cliente cancelar e re-segurar horarios em sequencia.
-      //   Assinante NAO sofre penalidade (paga mensalidade). Admin (source != CLIENT)
-      //   tem bypass. Baseado em canceledAt (qualquer profissional).
+      // 3.4 Penalidade anti-abuso (somente AVULSO): so pune o cancelamento EM CIMA
+      //   DA HORA — quando o cliente cancelou faltando menos de 1h para o horario do
+      //   agendamento (canceledAt a menos de LATE_CANCEL_HOURS de scheduledAt). Esse
+      //   cancelamento tardio deixa o horario "perdido"; o cliente fica PENALTY_HOURS
+      //   sem remarcar. Cancelar com antecedencia NAO pune (libera o horario a tempo).
+      //   Assinante NAO sofre penalidade; admin (source != CLIENT) tem bypass.
       if (dto.source === 'CLIENT' && !activeSub) {
         const PENALTY_HOURS = 4;
+        const LATE_CANCEL_HOURS = 1;
         const cutoff = new Date(Date.now() - PENALTY_HOURS * 60 * 60 * 1000);
         const cutoffStr = nowLocalIsoString(cutoff);
+        // Cancelamentos do cliente nas ultimas PENALTY_HOURS (traz scheduledAt p/
+        // decidir se foi tardio).
         const { data: recentCancels } = await this.supabase
           .from('appointments')
-          .select('id, canceledAt')
+          .select('id, canceledAt, scheduledAt')
           .eq('clientId', dto.clientId)
           .eq('status', 'CANCELED')
           .gte('canceledAt', cutoffStr)
-          .order('canceledAt', { ascending: false })
-          .limit(1);
+          .order('canceledAt', { ascending: false });
 
-        if (recentCancels && recentCancels.length > 0) {
-          const canceledAt = new Date(String(recentCancels[0].canceledAt));
-          const liberaEm = new Date(canceledAt.getTime() + PENALTY_HOURS * 60 * 60 * 1000);
+        // Acha o cancelamento TARDIO mais recente (scheduledAt - canceledAt < 1h,
+        // inclusive cancelamento apos o horario) cuja janela de 4h ainda vale.
+        const lateMs = LATE_CANCEL_HOURS * 60 * 60 * 1000;
+        let liberaEm: Date | null = null;
+        for (const c of recentCancels || []) {
+          if (!c.canceledAt || !c.scheduledAt) continue;
+          const canceledAt = new Date(String(c.canceledAt));
+          const scheduledAt = new Date(String(c.scheduledAt));
+          const foiTardio = scheduledAt.getTime() - canceledAt.getTime() < lateMs;
+          if (!foiTardio) continue;
+          const fim = new Date(canceledAt.getTime() + PENALTY_HOURS * 60 * 60 * 1000);
+          if (fim.getTime() > Date.now() && (!liberaEm || fim > liberaEm)) {
+            liberaEm = fim;
+          }
+        }
+
+        if (liberaEm) {
           const hh = String(liberaEm.getHours()).padStart(2, '0');
           const mm = String(liberaEm.getMinutes()).padStart(2, '0');
           throw new BadRequestException(
-            `Você cancelou um agendamento recentemente. Por isso, só poderá agendar novamente a partir das ${hh}:${mm}. (Bloqueio de ${PENALTY_HOURS}h após cancelamento.)`,
+            `Você cancelou um agendamento em cima da hora. Por isso, só poderá agendar novamente a partir das ${hh}:${mm}. (Bloqueio de ${PENALTY_HOURS}h.)`,
           );
         }
       }
