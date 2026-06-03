@@ -794,14 +794,11 @@ export class SubscriptionsService {
     const now = new Date();
     const nowIso = now.toISOString();
 
-    // Se endDate já venceu, renovar para now + 1 mês
-    let newEndDate: Date;
-    if (subscription.endDate && new Date(subscription.endDate) > now) {
-      newEndDate = new Date(subscription.endDate);
-    } else {
-      newEndDate = new Date(now);
-      newEndDate.setMonth(newEndDate.getMonth() + 1);
-    }
+    // 1ª ativação (sempre vem de PENDING_PAYMENT): o ciclo começa AGORA, então o
+    // vencimento é agora + 1 mês. NÃO reaproveitar o endDate da criação — ele já
+    // era "agora + 1 mês" e mantê-lo/estendê-lo inflava o prazo (bug do +2 meses).
+    const newEndDate = new Date(now);
+    newEndDate.setMonth(newEndDate.getMonth() + 1);
 
     const { data: updated, error } = await this.supabase
       .from('client_subscriptions')
@@ -859,9 +856,10 @@ export class SubscriptionsService {
     await this.upsertLocalPaymentFromCharge(subscription, paid, true);
 
     const now = new Date();
-    const currentEnd = subscription.endDate ? new Date(subscription.endDate) : now;
-    const baseDate = currentEnd < now ? now : currentEnd;
-    const newEndDate = new Date(baseDate);
+    // Ativação retroativa a partir de status não-ACTIVE (PENDING/SUSPENDED): o ciclo
+    // recomeça no pagamento → agora + 1 mês. (Antes estendia do endDate atual, que já
+    // vinha "agora + 1 mês" da criação, inflando para 2 meses.)
+    const newEndDate = new Date(now);
     newEndDate.setMonth(newEndDate.getMonth() + 1);
 
     const { data: updated, error } = await this.supabase
@@ -1839,9 +1837,10 @@ export class SubscriptionsService {
         .eq('id', subscriptionId)
         .maybeSingle();
       if (sub && (sub as any).status !== 'ACTIVE') {
-        const subEnd = (sub as any).endDate ? new Date((sub as any).endDate) : null;
-        const newEnd = !subEnd || subEnd < new Date() ? new Date() : subEnd;
-        if (!subEnd || subEnd < new Date()) newEnd.setMonth(newEnd.getMonth() + 1);
+        // 1ª ativação (status não-ACTIVE): ciclo começa no pagamento → agora + 1 mês.
+        // Não reaproveitar o endDate da criação (já era "agora + 1 mês" → inflaria).
+        const newEnd = new Date();
+        newEnd.setMonth(newEnd.getMonth() + 1);
         await this.supabase
           .from('client_subscriptions')
           .update({

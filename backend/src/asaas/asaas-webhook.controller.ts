@@ -307,16 +307,21 @@ export class AsaasWebhookController {
     if (localPayment.subscriptionId) {
       const now = new Date();
 
-      // Buscar endDate atual para estender 1 mês (mantém o dia de cobrança)
       const { data: currentSub } = await this.supabase
         .from('client_subscriptions')
-        .select('endDate')
+        .select('status, endDate')
         .eq('id', localPayment.subscriptionId)
         .single();
 
+      // Regra do vencimento:
+      //  - 1ª ativação (assinatura ainda NÃO estava ACTIVE — veio de PENDING_PAYMENT/
+      //    SUSPENDED): o ciclo começa no pagamento → agora + 1 mês. Não estender o
+      //    endDate da criação (que já era "agora + 1 mês"), senão infla p/ 2 meses.
+      //  - Renovação recorrente (já estava ACTIVE): acumula a partir do endDate atual
+      //    (ou de hoje, se já venceu), preservando o dia de cobrança.
+      const wasActive = currentSub?.status === 'ACTIVE';
       const currentEnd = currentSub?.endDate ? new Date(currentSub.endDate) : now;
-      // Se endDate já passou, estende a partir de hoje; senão, estende a partir do endDate atual
-      const baseDate = currentEnd < now ? now : currentEnd;
+      const baseDate = wasActive && currentEnd > now ? currentEnd : now;
       const newEndDate = new Date(baseDate);
       newEndDate.setMonth(newEndDate.getMonth() + 1);
 
