@@ -9,6 +9,7 @@ import {
   Smartphone,
   CreditCard,
   RotateCcw,
+  Eye,
 } from 'lucide-react';
 import {
   useCashRegisterToday,
@@ -210,6 +211,7 @@ function ClosedTodaySummary({
 export function CashRegister() {
   const [activeTab, setActiveTab] = useState<Tab>('today');
   const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
+  const [showOldRegisterDetail, setShowOldRegisterDetail] = useState(false);
   const [historyFilters, setHistoryFilters] = useState<CashRegisterFiltersType>({});
   const [openError, setOpenError] = useState<string | null>(null);
   const [closeError, setCloseError] = useState<string | null>(null);
@@ -362,10 +364,14 @@ export function CashRegister() {
               isReopening={reopenCashRegister.isPending}
             />
           ) : hasOldOpenRegister ? (
-            <div className="mx-auto max-w-lg space-y-4">
+            <div
+              className={`mx-auto space-y-4 ${
+                showOldRegisterDetail ? 'max-w-3xl' : 'max-w-lg'
+              }`}
+            >
               <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-5">
                 <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
-                <div>
+                <div className="flex-1">
                   <h3 className="font-semibold text-amber-500">Caixa anterior aberto</h3>
                   <p className="mt-1 text-sm text-[var(--text-secondary)]">
                     O caixa do dia{' '}
@@ -374,15 +380,35 @@ export function CashRegister() {
                     </span>{' '}
                     ainda está aberto. Feche-o antes de abrir o caixa de hoje.
                   </p>
-                  <button
-                    type="button"
-                    onClick={handleOpenCloseModal}
-                    className="mt-3 flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600 transition-colors active:scale-[0.98]"
-                  >
-                    Fechar caixa de {formatDateShort(openRegister!.date)}
-                  </button>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={handleOpenCloseModal}
+                      className="flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600 transition-colors active:scale-[0.98]"
+                    >
+                      Fechar caixa de {formatDateShort(openRegister!.date)}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowOldRegisterDetail((v) => !v)}
+                      className="flex items-center gap-2 rounded-lg border border-amber-500/40 px-4 py-2 text-sm font-medium text-amber-500 hover:bg-amber-500/10 transition-colors active:scale-[0.98]"
+                    >
+                      <Eye className="h-4 w-4" />
+                      {showOldRegisterDetail
+                        ? 'Ocultar detalhes'
+                        : `Visualizar caixa de ${formatDateShort(openRegister!.date)}`}
+                    </button>
+                  </div>
                 </div>
               </div>
+
+              {/* Resumo completo do caixa anterior (receita, métodos, esperado) */}
+              {showOldRegisterDetail && (
+                <CashRegisterStatus
+                  cashRegister={openRegister!}
+                  onClose={handleOpenCloseModal}
+                />
+              )}
             </div>
           ) : (
             <OpenCashRegisterForm
