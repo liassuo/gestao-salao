@@ -96,13 +96,18 @@ export async function getActiveClientSubscription(
   if (!clientId) return null;
   const { data } = await supabase
     .from('client_subscriptions')
-    .select('id, cutsUsedThisMonth, plan:subscription_plans!planId(id, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
+    .select('id, endDate, cutsUsedThisMonth, plan:subscription_plans!planId(id, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
     .eq('clientId', clientId)
     .eq('status', 'ACTIVE')
     .maybeSingle();
   const row = data as any;
   const plan = row?.plan;
   if (!row?.id || !plan?.id) return null;
+  // Trata como nao-assinante se o endDate ja venceu mas o status ainda nao foi
+  // atualizado (webhook do Asaas atrasado / cron de expiracao ainda nao rodou).
+  // Evita aplicar beneficios de plano vencido (desconto e trava de 1 agend./dia).
+  // Comparacao por instante (UTC), igual ao resto do fluxo de assinatura.
+  if (row.endDate && new Date(row.endDate).getTime() <= Date.now()) return null;
   const servicePercents = new Map<string, number>();
   for (const s of (plan.services || []) as { serviceId: string; discountPercent: number }[]) {
     if (typeof s.discountPercent === 'number' && s.discountPercent >= 0) {

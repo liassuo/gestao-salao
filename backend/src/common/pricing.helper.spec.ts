@@ -400,5 +400,27 @@ describe('pricing.helper', () => {
       expect(isPlanIncludedService(sub, 'svc-corte')).toBe(true);
       expect(getRemainingCuts(sub)).toBe(2); // ainda pode usar 2 cortes este mês
     });
+
+    const planRow = (endDate: string | null) => ({
+      id: 'sub-123',
+      endDate,
+      cutsUsedThisMonth: 0,
+      plan: { id: 'plan-1', cutsPerMonth: 4, discountPercent: 10, services: [] },
+    });
+
+    it('retorna null quando status ACTIVE mas endDate já venceu', async () => {
+      // Janela onde o webhook/cron ainda não virou o status: não tratar como assinante.
+      const ontem = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const supabase = makeSupabase(planRow(ontem));
+      expect(await getActiveClientSubscription(supabase, 'c1')).toBeNull();
+    });
+
+    it('mantém assinatura quando endDate ainda está no futuro', async () => {
+      const amanha = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      const supabase = makeSupabase(planRow(amanha));
+      const sub = await getActiveClientSubscription(supabase, 'c1');
+      expect(sub).not.toBeNull();
+      expect(sub!.subscriptionId).toBe('sub-123');
+    });
   });
 });
