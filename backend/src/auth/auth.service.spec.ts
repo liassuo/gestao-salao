@@ -198,7 +198,9 @@ describe('AuthService', () => {
 
       expect(mockSupabaseService.from).toHaveBeenCalledWith('clients');
       expect(chain.select).toHaveBeenCalledWith('*');
-      expect(chain.eq).toHaveBeenCalledWith('email', expect.any(String));
+      // Login de cliente é case-insensitive: usa ilike (sem wildcards) sobre o
+      // email normalizado, não eq. Cobre clientes cadastrados antes da normalização.
+      expect(chain.ilike).toHaveBeenCalledWith('email', expect.any(String));
       expect(chain.maybeSingle).toHaveBeenCalled();
       expect(bcrypt.compare).toHaveBeenCalledWith(clientLoginDto.password, mockClient.password);
       expect(mockJwtService.sign).toHaveBeenCalledWith({
