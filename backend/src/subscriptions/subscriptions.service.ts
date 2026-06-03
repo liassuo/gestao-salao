@@ -8,8 +8,9 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { randomUUID } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../supabase/supabase.service';
-import { nowLocalIsoString } from '../common/datetime.util';
+import { nowLocalIsoString, resolveBusinessDate } from '../common/datetime.util';
 import { AsaasService } from '../asaas/asaas.service';
+import { CashRegisterService } from '../cash-register/cash-register.service';
 import {
   AsaasBillingType,
   AsaasSubscriptionCycle,
@@ -32,6 +33,7 @@ export class SubscriptionsService {
     private readonly supabase: SupabaseService,
     private readonly asaasService: AsaasService,
     private readonly configService: ConfigService,
+    private readonly cashRegisterService: CashRegisterService,
   ) {}
 
   // SUBSCRIPTION PLANS
@@ -949,10 +951,23 @@ export class SubscriptionsService {
     );
     const amount = this.asaasService.reaisToCentavos(charge.value || 0);
 
+    // Assinatura não tem agendamento → data contábil = dia do pagamento.
+    const businessDate = markPaid ? resolveBusinessDate(null, now) : null;
+
     if (existing) {
       const update: any = { asaasStatus: charge.status, updatedAt: now };
-      if (markPaid && !existing.paidAt) update.paidAt = now;
+      if (markPaid && !existing.paidAt) {
+        update.paidAt = now;
+        update.businessDate = businessDate;
+      }
       await this.supabase.from('payments').update(update).eq('id', existing.id);
+      // Vincula ao caixa do dia contábil (recalcula se já fechado) ao confirmar.
+      if (markPaid && !existing.paidAt && businessDate) {
+        await this.cashRegisterService.linkPaymentToBusinessDateRegister(
+          existing.id,
+          businessDate,
+        );
+      }
       return existing.id;
     }
 
@@ -968,11 +983,15 @@ export class SubscriptionsService {
       asaasPaymentId: charge.id,
       asaasStatus: charge.status,
       paidAt: markPaid ? now : null,
+      businessDate,
       invoiceUrl: charge.invoiceUrl || null,
       bankSlipUrl: charge.bankSlipUrl || null,
       createdAt: now,
       updatedAt: now,
     });
+    if (markPaid && businessDate) {
+      await this.cashRegisterService.linkPaymentToBusinessDateRegister(id, businessDate);
+    }
     return id;
   }
 
@@ -1789,6 +1808,29 @@ export class SubscriptionsService {
         return { success: false, action: 'NONE', message: `Falha ao criar pagamento: ${insertError.message}` };
       }
     }
+
+    // Data contábil + vínculo ao caixa (espelha o webhook handlePaymentConfirmed):
+    // dia do atendimento quando há agendamento; senão dia da confirmação. Gravado
+    // de forma idempotente (cobre tanto o payment novo quanto o pré-existente sem
+    // businessDate). Se o caixa do dia já estiver fechado, é recalculado.
+    let reconScheduledAt: string | null = null;
+    if (appointmentId) {
+      const { data: appt } = await this.supabase
+        .from('appointments')
+        .select('scheduledAt')
+        .eq('id', appointmentId)
+        .maybeSingle();
+      reconScheduledAt = (appt as any)?.scheduledAt ?? null;
+    }
+    const reconBusinessDate = resolveBusinessDate(reconScheduledAt, confirmedAt);
+    await this.supabase
+      .from('payments')
+      .update({ businessDate: reconBusinessDate, updatedAt: now })
+      .eq('id', paymentId);
+    await this.cashRegisterService.linkPaymentToBusinessDateRegister(
+      paymentId,
+      reconBusinessDate,
+    );
 
     if (subscriptionId) {
       const { data: sub } = await this.supabase

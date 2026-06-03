@@ -37,16 +37,28 @@ async function calculateTotalsForDate(dateStr: string) {
   const startOfDay = `${dateStr}T00:00:00`;
   const endOfDay = `${dateStr}T23:59:59`;
 
-  const { data: payments, error } = await sb
+  // Contabiliza pelo DIA CONTÁBIL (businessDate), com fallback paidAt p/ legados —
+  // mesma regra do runtime (cash-register.service.calculateDailyTotals). Sem isso,
+  // rodar este script sobrescreveria os totais corretos pelo paidAt e reintroduziria
+  // o bug do "atendimento de um dia pago em outro".
+  const { data: byBusiness, error: bErr } = await sb
     .from('payments')
-    .select('id, amount, method, asaasStatus, paidAt')
+    .select('id, amount, method, asaasStatus, paidAt, businessDate')
+    .gte('businessDate', startOfDay)
+    .lte('businessDate', endOfDay);
+  const { data: byPaidLegacy, error: pErr } = await sb
+    .from('payments')
+    .select('id, amount, method, asaasStatus, paidAt, businessDate')
+    .is('businessDate', null)
     .gte('paidAt', startOfDay)
     .lte('paidAt', endOfDay);
 
+  const error = bErr || pErr;
   if (error) throw new Error(`Erro ao buscar payments para ${dateStr}: ${error.message}`);
+  const payments = [...(byBusiness || []), ...(byPaidLegacy || [])];
 
   const totals = { cash: 0, pix: 0, card: 0, total: 0, count: 0, ignored: 0 };
-  for (const p of payments || []) {
+  for (const p of payments) {
     if (p.asaasStatus && ['REFUNDED', 'DELETED', 'CANCELED'].includes(p.asaasStatus)) {
       totals.ignored++;
       continue;
@@ -131,14 +143,16 @@ async function backfillCashRegisterIds() {
 
   const { data: orphanPayments } = await sb
     .from('payments')
-    .select('id, paidAt, amount, method, cashRegisterId')
+    .select('id, paidAt, businessDate, amount, method, cashRegisterId')
     .is('cashRegisterId', null)
     .not('paidAt', 'is', null)
     .order('paidAt', { ascending: true });
 
   let linked = 0, skipped = 0;
   for (const p of orphanPayments || []) {
-    const dayStr = p.paidAt.substring(0, 10);
+    // Vincula pelo DIA CONTÁBIL (businessDate), com fallback paidAt — igual ao
+    // runtime (linkPaymentToBusinessDateRegister).
+    const dayStr = (p.businessDate ?? p.paidAt).substring(0, 10);
     const registerId = dateToRegister[dayStr];
     if (!registerId) {
       skipped++;

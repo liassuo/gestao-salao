@@ -28,6 +28,13 @@ export class CashRegisterService {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   }
 
+  /** Dia seguinte (YYYY-MM-DD) a partir de uma string YYYY-MM-DD, com rollover de mês/ano. */
+  private nextDayStr(dayStr: string): string {
+    const [y, m, d] = dayStr.split('-').map(Number);
+    const dt = new Date(y, m - 1, d + 1);
+    return this.getLocalDateStr(dt);
+  }
+
   /** Retorna datetime local no formato YYYY-MM-DDTHH:mm:ss (sem Z, evita problemas de fuso) */
   private getLocalDateTimeStr(date: Date = new Date()): string {
     return `${this.getLocalDateStr(date)}T${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
@@ -326,7 +333,10 @@ export class CashRegisterService {
       dateStr = this.getLocalDateStr(dateInput);
     }
     const startOfDay = `${dateStr}T00:00:00`;
-    const endOfDay = `${dateStr}T23:59:59`;
+    // Limite superior EXCLUSIVO no início do dia seguinte. Usar .lt(nextDay) em vez
+    // de .lte('...T23:59:59') evita perder um pagamento gravado com milissegundos
+    // (ex.: '...T23:59:59.123' > '...T23:59:59' lexicograficamente sairia da janela).
+    const nextDayStart = `${this.nextDayStr(dateStr)}T00:00:00`;
 
     // O caixa contabiliza pelo DIA CONTÁBIL (businessDate): dia do atendimento
     // quando há agendamento; senão dia do pagamento. Como o Postgres/Supabase não
@@ -340,14 +350,14 @@ export class CashRegisterService {
       .from('payments')
       .select('amount, method, asaasStatus, subscriptionId')
       .gte('businessDate', startOfDay)
-      .lte('businessDate', endOfDay);
+      .lt('businessDate', nextDayStart);
 
     const { data: byPaidLegacy, error: pErr } = await this.supabase
       .from('payments')
       .select('amount, method, asaasStatus, subscriptionId')
       .is('businessDate', null)
       .gte('paidAt', startOfDay)
-      .lte('paidAt', endOfDay);
+      .lt('paidAt', nextDayStart);
 
     const paymentsError = bErr || pErr;
     // Falha ruidosamente: caixa zerado por erro silencioso de query é bug crítico.
@@ -445,12 +455,19 @@ export class CashRegisterService {
    * Asaas via webhook, pagamento avulso) chamarem o mesmo ponto.
    */
   async linkPaymentToBusinessDateRegister(paymentId: string, businessDate: string) {
-    const dayStr = businessDate.substring(0, 10);
+    const dayStr = businessDate.substring(0, 10); // YYYY-MM-DD
+    // cash_registers.date é tipo `date` no banco (serializa "YYYY-MM-DD"), mas o
+    // app grava/compara como "YYYY-MM-DDT00:00:00". A janela [dayStr, nextDay)
+    // casa AMBOS os formatos: ">= '2026-05-07'" pega tanto "2026-05-07" quanto
+    // "2026-05-07T00:00:00", e "< '2026-05-08'" exclui o dia seguinte. (Comparar
+    // por "T00:00:00".."T23:59:59" falharia: a data pura de 10 chars ordena ANTES
+    // de "...T00:00:00" lexicograficamente.)
+    const nextDay = this.nextDayStr(dayStr);
     const { data: register } = await this.supabase
       .from('cash_registers')
       .select('id, isOpen')
-      .gte('date', `${dayStr}T00:00:00`)
-      .lte('date', `${dayStr}T23:59:59`)
+      .gte('date', dayStr)
+      .lt('date', nextDay)
       .maybeSingle();
 
     if (!register) return;

@@ -18,6 +18,7 @@
  */
 import { Test, TestingModule } from '@nestjs/testing';
 import { ForbiddenException } from '@nestjs/common';
+import { CashRegisterService } from '../cash-register/cash-register.service';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../supabase/supabase.service';
 import { AsaasService } from './asaas.service';
@@ -42,6 +43,7 @@ function createStatefulSupabase(initial: Tables = {}) {
         if (op === 'in') return val.includes(r[col]);
         if (op === 'gte') return r[col] >= val;
         if (op === 'lte') return r[col] <= val;
+        if (op === 'lt') return r[col] < val;
         if (op === 'not-is') return r[col] !== val;
         if (op === 'gt') return r[col] > val;
         if (op === 'ilike') {
@@ -112,6 +114,10 @@ function createStatefulSupabase(initial: Tables = {}) {
       },
       gt: (col: string, v: any) => {
         filters.push(['gt', col, v]);
+        return chain;
+      },
+      lt: (col: string, v: any) => {
+        filters.push(['lt', col, v]);
         return chain;
       },
       order: () => chain,
@@ -210,6 +216,13 @@ async function buildController(initial: Tables) {
           cancelCharge: jest.fn(),
         },
       },
+      // CashRegisterService real ligado ao mesmo Supabase stateful, para que o
+      // vínculo de pagamento ao caixa (linkPaymentToBusinessDateRegister) seja
+      // exercitado de verdade nos testes que checam cashRegisterId.
+      {
+        provide: CashRegisterService,
+        useValue: new CashRegisterService(sb as any),
+      },
     ],
   }).compile();
 
@@ -224,8 +237,10 @@ describe('AsaasWebhookController (e2e)', () => {
   describe('PAYMENT_RECEIVED em pagamento de agendamento', () => {
     it('marca isPaid, atualiza order.paymentId e vincula cashRegisterId', async () => {
       const { controller, state } = await buildController({
+        // scheduledAt casa com a date do caixa: a venda contabiliza no caixa do
+        // DIA DO ATENDIMENTO (regra businessDate), nao no dia da confirmacao.
         appointments: [
-          { id: 'appt-1', isPaid: false, status: 'PENDING_PAYMENT' },
+          { id: 'appt-1', isPaid: false, status: 'PENDING_PAYMENT', scheduledAt: '2026-05-07T15:00:00' },
         ],
         orders: [
           { id: 'order-1', appointmentId: 'appt-1', status: 'PENDING', paymentId: null },
@@ -256,6 +271,7 @@ describe('AsaasWebhookController (e2e)', () => {
       expect(result).toEqual({ received: true });
       expect(state.payments[0].asaasStatus).toBe('RECEIVED');
       expect(state.payments[0].paidAt).not.toBeNull();
+      expect(state.payments[0].businessDate).toBe('2026-05-07T00:00:00');
       expect(state.payments[0].cashRegisterId).toBe('caixa-1');
       expect(state.appointments[0].isPaid).toBe(true);
       expect(state.appointments[0].status).toBe('SCHEDULED');
@@ -266,7 +282,7 @@ describe('AsaasWebhookController (e2e)', () => {
     it('idempotente: 2 webhooks PAYMENT_RECEIVED não duplicam efeitos', async () => {
       const { controller, state } = await buildController({
         appointments: [
-          { id: 'appt-1', isPaid: false, status: 'PENDING_PAYMENT' },
+          { id: 'appt-1', isPaid: false, status: 'PENDING_PAYMENT', scheduledAt: '2026-05-07T15:00:00' },
         ],
         orders: [
           { id: 'order-1', appointmentId: 'appt-1', status: 'PENDING', paymentId: null },
@@ -555,6 +571,10 @@ describe('AsaasWebhookController (e2e)', () => {
           {
             provide: AsaasService,
             useValue: { configured: false, cancelCharge: jest.fn() },
+          },
+          {
+            provide: CashRegisterService,
+            useValue: new CashRegisterService(sb as any),
           },
         ],
       }).compile();

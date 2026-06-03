@@ -216,10 +216,12 @@ function makeSupabaseMock(opts: {
 }
 
 function makeService(supabase: any) {
-  // OrdersService usa AsaasService, StockService, ProfessionalDebtsService — só
-  // pra create/addItem/removeItem/cancel não precisamos chamar nada deles.
+  // OrdersService usa AsaasService, StockService, ProfessionalDebtsService,
+  // CashRegisterService — pra create/addItem/removeItem/cancel não precisamos
+  // chamar nada deles. O CashRegisterService mock só precisa do método usado em pay().
   const noop = {} as any;
-  const svc = new OrdersService(supabase, noop, noop, noop);
+  const cashRegister = { linkPaymentToBusinessDateRegister: async () => {} } as any;
+  const svc = new OrdersService(supabase, noop, noop, noop, cashRegister);
   // Silencia logs durante os testes
   (svc as any).logger = { log: () => {}, error: () => {}, warn: () => {} };
   return svc;

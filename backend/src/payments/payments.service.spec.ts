@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
 import { SupabaseService } from '../supabase/supabase.service';
+import { CashRegisterService } from '../cash-register/cash-register.service';
 import { CreatePaymentDto, UpdatePaymentDto } from './dto';
 
 const mockChain = () => {
@@ -13,6 +14,7 @@ const mockChain = () => {
   chain.eq = jest.fn().mockReturnValue(chain);
   chain.gte = jest.fn().mockReturnValue(chain);
   chain.lte = jest.fn().mockReturnValue(chain);
+  chain.is = jest.fn().mockReturnValue(chain);
   chain.order = jest.fn().mockReturnValue(chain);
   chain.single = jest.fn().mockResolvedValue({ data: null, error: null });
   chain.maybeSingle = jest.fn().mockResolvedValue({ data: null, error: null });
@@ -43,6 +45,10 @@ describe('PaymentsService', () => {
       providers: [
         PaymentsService,
         { provide: SupabaseService, useValue: mockSupabase },
+        {
+          provide: CashRegisterService,
+          useValue: { linkPaymentToBusinessDateRegister: jest.fn() },
+        },
       ],
     }).compile();
 
@@ -478,11 +484,12 @@ describe('PaymentsService', () => {
       ];
 
       chains['payments'] = mockChain();
-      // calculateTotalsByMethod ends with .lte(), no .order()
-      chains['payments'].lte.mockResolvedValue({
-        data: payments,
-        error: null,
-      });
+      // calculateTotalsByMethod agora faz 2 queries (businessDate + legado paidAt),
+      // ambas terminando em .lte(). A 1a (por businessDate) traz os pagamentos;
+      // a 2a (legado, businessDate null) traz vazio — senão somaria em dobro.
+      chains['payments'].lte
+        .mockResolvedValueOnce({ data: payments, error: null })
+        .mockResolvedValueOnce({ data: [], error: null });
 
       const start = '2026-01-01T00:00:00';
       const end = '2026-01-31T23:59:59';

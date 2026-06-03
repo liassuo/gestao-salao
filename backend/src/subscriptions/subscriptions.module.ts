@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { SubscriptionsService } from './subscriptions.service';
 import { SubscriptionsController } from './subscriptions.controller';
 import { AsaasModule } from '../asaas/asaas.module';
+import { CashRegisterModule } from '../cash-register/cash-register.module';
 
 /**
  * Subscriptions module
@@ -9,7 +10,7 @@ import { AsaasModule } from '../asaas/asaas.module';
  * Handles plan catalog, client subscription management, and cut tracking
  */
 @Module({
-  imports: [AsaasModule],
+  imports: [AsaasModule, CashRegisterModule],
   controllers: [SubscriptionsController],
   providers: [SubscriptionsService],
   exports: [SubscriptionsService],
