@@ -187,7 +187,7 @@ function AppointmentBlock({ appointment, onAppointmentClick, onDragStart, isDrag
   const isDraggable = appointment.status === 'SCHEDULED';
   return (
     <div
-      className={`absolute left-1 right-1 z-10 ${isDraggable ? 'cursor-grab touch-none select-none active:cursor-grabbing' : 'cursor-pointer'} overflow-hidden rounded-lg border ${hasDebts ? 'border-[#9333EA] border-2' : `border ${colors.border}`} ${colors.bg} px-2 py-1 transition-all duration-150 hover:z-20 hover:shadow-lg ${isDragging ? '!opacity-30' : ''} ${conflictReason ? 'ring-2 ring-[#A63030] ring-offset-1 ring-offset-[var(--card-bg)]' : hasDebts ? 'ring-2 ring-[#9333EA] ring-offset-1 ring-offset-[var(--card-bg)]' : ''}`}
+      className={`absolute left-1 right-1 z-10 ${isDraggable ? 'cursor-grab touch-none select-none active:cursor-grabbing' : 'cursor-pointer'} overflow-hidden rounded-lg px-2 py-1 transition-all duration-150 hover:z-20 hover:shadow-lg ${hasDebts ? 'border-2 border-[#9333EA] bg-[#9333EA]/25' : `border ${colors.border} ${colors.bg}`} ${isDragging ? '!opacity-30' : ''} ${conflictReason ? 'ring-2 ring-[#A63030] ring-offset-1 ring-offset-[var(--card-bg)]' : hasDebts ? 'ring-2 ring-[#9333EA] ring-offset-1 ring-offset-[var(--card-bg)]' : ''}`}
       style={{ top: `${top}px`, height: `${Math.max(height - 1, slotHeight - 1)}px`, touchAction: isDraggable ? 'none' : undefined }}
       title={`${appointment.client?.name || appointment.clientName || 'Cliente'} - ${serviceNames} (${time} - ${endTime})${isFromClient ? ' · App' : ' · Painel'}${isSubscription ? ' · Assinatura' : ''}${appointment.status === 'PENDING_PAYMENT' ? ' · Aguardando pagamento' : ''}${hasDebts ? ' · ⚠ Cliente está devendo' : ''}${conflictReason ? ` · ⚠ ${conflictReason}` : ''}`}
       onPointerDown={(e) => {
@@ -205,9 +205,10 @@ function AppointmentBlock({ appointment, onAppointmentClick, onDragStart, isDrag
           {conflictReason && (
             <AlertCircle className="h-3 w-3 shrink-0 text-[#A63030]" />
           )}
-          <span className="truncate">{appointment.client?.name || appointment.clientName || 'Cliente'}</span>
+          <span className={`truncate ${hasDebts ? 'text-[#9333EA] dark:text-[#D8B4FE]' : ''}`}>{appointment.client?.name || appointment.clientName || 'Cliente'}</span>
           {hasDebts && (
-            <span className="ml-auto shrink-0 rounded bg-[#9333EA] px-1 text-[9px] font-bold uppercase leading-tight text-white" title="Cliente está devendo">
+            <span className="ml-auto flex shrink-0 items-center gap-0.5 rounded bg-[#9333EA] px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none text-white shadow-sm" title="Cliente está devendo">
+              <AlertCircle className="h-2.5 w-2.5 shrink-0" />
               Devendo
             </span>
           )}

@@ -33,6 +33,7 @@ const mockChain = () => {
   chain.eq = jest.fn().mockReturnValue(chain);
   chain.neq = jest.fn().mockReturnValue(chain);
   chain.in = jest.fn().mockReturnValue(chain);
+  chain.gt = jest.fn().mockReturnValue(chain);
   chain.gte = jest.fn().mockReturnValue(chain);
   chain.lte = jest.fn().mockReturnValue(chain);
   chain.is = jest.fn().mockReturnValue(chain);
@@ -712,6 +713,62 @@ describe('AppointmentsService', () => {
 
       const result = await service.getCalendarData('2026-04-01');
       expect(result).toEqual([]);
+    });
+
+    it('marks clientHasDebts when client has an unpaid attended walk-in (no registered debt)', async () => {
+      chains['professionals'] = mockChain();
+      chains['professionals'].order.mockResolvedValue({
+        data: [{ id: 'prof-1', name: 'Alice', phone: '123', workingHours: {} }],
+        error: null,
+      });
+
+      // Agendamento do dia exibido, do cliente client-1
+      chains['appointments'] = mockChain();
+      chains['appointments'].neq.mockResolvedValue({
+        data: [{ id: 'appt-1', clientId: 'client-1', professionalId: 'prof-1', scheduledAt: '2026-04-01T10:00:00Z' }],
+        error: null,
+      });
+      // 2ª query (detecção de avulso não pago) termina em .gt('totalPrice', 0)
+      chains['appointments'].gt.mockResolvedValue({
+        data: [{ clientId: 'client-1' }],
+        error: null,
+      });
+
+      // Sem dívida registrada manualmente: clients/hasDebts retorna vazio
+      chains['clients'] = mockChain();
+      chains['clients'].eq.mockResolvedValue({ data: [], error: null });
+
+      chains['time_blocks'] = mockChain();
+      chains['time_blocks'].lte.mockResolvedValue({ data: [], error: null });
+
+      const result = await service.getCalendarData('2026-04-01');
+
+      expect(result[0].appointments[0].clientHasDebts).toBe(true);
+    });
+
+    it('does not mark clientHasDebts when client has no debts and no unpaid walk-in', async () => {
+      chains['professionals'] = mockChain();
+      chains['professionals'].order.mockResolvedValue({
+        data: [{ id: 'prof-1', name: 'Alice', phone: '123', workingHours: {} }],
+        error: null,
+      });
+
+      chains['appointments'] = mockChain();
+      chains['appointments'].neq.mockResolvedValue({
+        data: [{ id: 'appt-1', clientId: 'client-1', professionalId: 'prof-1', scheduledAt: '2026-04-01T10:00:00Z' }],
+        error: null,
+      });
+      chains['appointments'].gt.mockResolvedValue({ data: [], error: null });
+
+      chains['clients'] = mockChain();
+      chains['clients'].eq.mockResolvedValue({ data: [], error: null });
+
+      chains['time_blocks'] = mockChain();
+      chains['time_blocks'].lte.mockResolvedValue({ data: [], error: null });
+
+      const result = await service.getCalendarData('2026-04-01');
+
+      expect(result[0].appointments[0].clientHasDebts).toBe(false);
     });
   });
 });

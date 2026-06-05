@@ -1523,19 +1523,39 @@ export class AppointmentsService {
       throw apptError;
     }
 
-    // 2.1 Marcar quais agendamentos são de clientes que estão devendo (hasDebts),
-    // para o calendário sinalizar visualmente (borda lilás + etiqueta "Devendo").
+    // 2.1 Marcar quais agendamentos são de clientes que estão devendo, para o
+    // calendário sinalizar visualmente (borda lilás + etiqueta "Devendo").
+    // Um cliente é considerado devedor se:
+    //   (a) tem dívida registrada na tela de Dívidas (clients.hasDebts = true); OU
+    //   (b) tem atendimento avulso passado sem pagamento — status ATTENDED,
+    //       isPaid = false, que não consumiu corte de assinatura e tem valor > 0.
+    // O caso (b) cobre o cenário em que o atendimento foi feito mas não cobrado,
+    // sem depender de alguém registrar a dívida manualmente.
     const clientIds = Array.from(
       new Set((appointments || []).map((a: any) => a.clientId).filter(Boolean)),
     );
-    let debtorIds = new Set<string>();
+    const debtorIds = new Set<string>();
     if (clientIds.length > 0) {
-      const { data: debtors } = await this.supabase
+      // (a) Dívida registrada manualmente
+      const { data: registeredDebtors } = await this.supabase
         .from('clients')
         .select('id')
         .in('id', clientIds)
         .eq('hasDebts', true);
-      debtorIds = new Set((debtors || []).map((c: any) => c.id));
+      for (const c of registeredDebtors || []) debtorIds.add(c.id);
+
+      // (b) Atendimento avulso passado não pago
+      const { data: unpaidAppts } = await this.supabase
+        .from('appointments')
+        .select('clientId')
+        .in('clientId', clientIds)
+        .eq('status', 'ATTENDED')
+        .eq('isPaid', false)
+        .eq('usedSubscriptionCut', false)
+        .gt('totalPrice', 0);
+      for (const a of unpaidAppts || []) {
+        if (a.clientId) debtorIds.add(a.clientId);
+      }
     }
     for (const a of appointments || []) {
       (a as any).clientHasDebts = a.clientId ? debtorIds.has(a.clientId) : false;
