@@ -151,3 +151,20 @@ export function reaisToCents(reais: number): number {
 export function centsToReais(cents: number): number {
   return cents / 100;
 }
+
+/**
+ * Data local (fuso do navegador, ex.: GMT-3) no formato "YYYY-MM-DD".
+ * Usa getFullYear/getMonth/getDate — NUNCA toISOString(), que converte pra UTC
+ * e, após 21h em GMT-3, rola pro dia seguinte (quebra o filtro de período).
+ */
+export function todayIso(date: Date = new Date()): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Primeiro dia do mês corrente (fuso local) no formato "YYYY-MM-DD".
+ * Para filtro padrão "mês atual": do dia 1 até hoje (use com todayIso()).
+ */
+export function firstDayOfMonthIso(date: Date = new Date()): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`;
+}

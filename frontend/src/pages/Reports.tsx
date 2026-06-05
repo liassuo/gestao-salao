@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { reportsService } from '../services/reports';
 import type { SalesReport, ProfessionalReport, ServicesReport, ClientsReport, DebtsReport, CashRegisterReport } from '../services/reports';
-import { formatCurrency, formatDate, formatPhone } from '../utils/format';
+import { formatCurrency, formatDate, formatPhone, firstDayOfMonthIso, todayIso } from '../utils/format';
 import { Spinner } from '../components/ui';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -29,12 +29,9 @@ const reportOptions = [
 
 export function Reports() {
   const [selectedReport, setSelectedReport] = useState<ReportType>('sales');
-  const [startDate, setStartDate] = useState(() => {
-    const date = new Date();
-    date.setDate(1);
-    return date.toISOString().split('T')[0];
-  });
-  const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+  // Filtro padrão: mês atual (dia 1 → hoje), em data LOCAL (GMT-3 safe).
+  const [startDate, setStartDate] = useState(() => firstDayOfMonthIso());
+  const [endDate, setEndDate] = useState(() => todayIso());
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<any>(null);
 

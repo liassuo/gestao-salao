@@ -12,7 +12,7 @@ import { CommissionFilters } from '@/components/financial/CommissionFilters';
 import { CommissionsTable } from '@/components/financial/CommissionsTable';
 import { SkeletonTable, ConfirmModal, useToast } from '@/components/ui';
 import { PinGate } from '@/components/auth';
-import { formatCurrency } from '@/utils/format';
+import { formatCurrency, firstDayOfMonthIso, todayIso } from '@/utils/format';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { Commission, CommissionFilters as CommissionFiltersType } from '@/types';
@@ -155,7 +155,13 @@ function exportCommissionsPDF(commissions: Commission[], filters: CommissionFilt
 }
 
 function CommissionsContent() {
-  const [filters, setFilters] = useState<CommissionFiltersType>({});
+  // Filtro padrão: mês atual (dia 1 → hoje), em data LOCAL (GMT-3 safe).
+  // Antes iniciava vazio e somava TODAS as comissões pendentes de todos os
+  // meses (ex.: Maio + Junho) — parecia "dobrado". Agora abre só no mês corrente.
+  const [filters, setFilters] = useState<CommissionFiltersType>(() => ({
+    startDate: firstDayOfMonthIso(),
+    endDate: todayIso(),
+  }));
   const [payingCommission, setPayingCommission] = useState<Commission | null>(null);
   const [deletingCommission, setDeletingCommission] = useState<Commission | null>(null);
 
