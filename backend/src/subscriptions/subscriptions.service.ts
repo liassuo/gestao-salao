@@ -1601,6 +1601,80 @@ export class SubscriptionsService {
   }
 
   /**
+   * Lista assinaturas ACTIVE que nunca tiveram pagamento confirmado.
+   *
+   * Caça o legado do bug "nascia ACTIVE sem pagamento" (Asaas off, até fbfe8ed):
+   * assinaturas ativas de graça que parecem "renovadas sem cobrança". PostgREST não
+   * faz NOT EXISTS, então buscamos as ACTIVE e o conjunto de subscriptionId já pagos
+   * e filtramos em memória.
+   */
+  async findActiveWithoutPayment(): Promise<
+    Array<{
+      id: string;
+      clientId: string;
+      clientName: string | null;
+      planName: string | null;
+      price: number | null;
+      startDate: string | null;
+      endDate: string | null;
+    }>
+  > {
+    const { data: actives } = await this.supabase
+      .from('client_subscriptions')
+      .select('id, clientId, startDate, endDate, client:clients(name), plan:subscription_plans!planId(name, price)')
+      .eq('status', 'ACTIVE');
+
+    if (!actives || actives.length === 0) return [];
+
+    const { data: paidRows } = await this.supabase
+      .from('payments')
+      .select('subscriptionId')
+      .not('paidAt', 'is', null)
+      .not('subscriptionId', 'is', null);
+
+    const paidSubIds = new Set((paidRows || []).map((p: any) => p.subscriptionId));
+
+    return (actives as any[])
+      .filter((s) => !paidSubIds.has(s.id))
+      .map((s) => ({
+        id: s.id,
+        clientId: s.clientId,
+        clientName: s.client?.name ?? null,
+        planName: s.plan?.name ?? null,
+        price: s.plan?.price ?? null,
+        startDate: s.startDate ?? null,
+        endDate: s.endDate ?? null,
+      }));
+  }
+
+  /**
+   * Suspende todas as assinaturas ACTIVE sem pagamento confirmado (legado).
+   * Vira SUSPENDED → cliente vê "Reativar assinatura" e precisa pagar p/ continuar.
+   * Idempotente: rodar de novo com a lista vazia não faz nada.
+   */
+  async suspendActiveWithoutPayment(): Promise<{
+    suspended: number;
+    items: Awaited<ReturnType<SubscriptionsService['findActiveWithoutPayment']>>;
+  }> {
+    const items = await this.findActiveWithoutPayment();
+    if (items.length === 0) return { suspended: 0, items: [] };
+
+    const ids = items.map((i) => i.id);
+    const { error } = await this.supabase
+      .from('client_subscriptions')
+      .update({ status: 'SUSPENDED', updatedAt: nowLocalIsoString() })
+      .in('id', ids);
+
+    if (error) {
+      this.logger.error(`[suspend-unpaid] falha ao suspender ${ids.length} assinatura(s): ${error.message}`);
+      throw new BadRequestException(`Falha ao suspender assinaturas: ${error.message}`);
+    }
+
+    this.logger.warn(`[suspend-unpaid] ${ids.length} assinatura(s) ACTIVE sem pagamento suspensa(s).`);
+    return { suspended: ids.length, items };
+  }
+
+  /**
    * Cron de reconciliação: a cada 10 minutos varre todas as assinaturas
    * em PENDING_PAYMENT e tenta sincronizar com o Asaas.
    *
