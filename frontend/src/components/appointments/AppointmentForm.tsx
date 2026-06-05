@@ -103,6 +103,12 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
   const watchedDate = watch('date');
   const watchedTime = watch('time');
 
+  // Cliente selecionado está devendo? (mesma flag hasDebts do calendário/backend)
+  const selectedClientHasDebts = useMemo(
+    () => (watchedClientId ? !!clients.find((c) => c.id === watchedClientId)?.hasDebts : false),
+    [clients, watchedClientId],
+  );
+
   const { data: clientSub } = useClientSubscription(watchedClientId || undefined);
   // Visão da assinatura ATIVA com saldo de cortes. Null quando o cliente não
   // tem subscription com status='ACTIVE' (PENDING_PAYMENT/SUSPENDED/CANCELED
@@ -297,6 +303,15 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
         )}
         {errors.clientId && !clientSearch.trim() && (
           <p className="mt-1 text-sm text-[#A63030]">Selecione um cliente ou digite o nome</p>
+        )}
+        {selectedClientHasDebts && (
+          <div className="mt-2 flex items-start gap-2 rounded-xl border border-[#9333EA]/40 bg-[#9333EA]/10 p-3">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#9333EA]" />
+            <p className="text-sm text-[#9333EA]">
+              <span className="font-semibold">Este cliente está devendo.</span>{' '}
+              Pelo app ele ficaria bloqueado de agendar. Você pode marcar pelo painel mesmo assim — o agendamento aparecerá em <span className="font-semibold">lilás</span> no calendário.
+            </p>
+          </div>
         )}
       </div>
 

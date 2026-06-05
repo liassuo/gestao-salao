@@ -20,6 +20,7 @@ export interface CalendarAppointment {
   usedSubscriptionCut?: boolean;
   client: { id: string; name: string; phone: string } | null;
   clientName?: string;
+  clientHasDebts?: boolean;
   services: { service: { name: string } }[];
 }
 

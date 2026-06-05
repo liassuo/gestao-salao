@@ -178,6 +178,7 @@ function AppointmentBlock({ appointment, onAppointmentClick, onDragStart, isDrag
         ? 'PAID'
         : 'CASH_PENDING';
   const colors = statusColors[colorKey] || statusColors.SCHEDULED;
+  const hasDebts = !!appointment.clientHasDebts;
   const serviceNames = (appointment.services || []).map((s) => s.service?.name || 'Serviço').join(', ');
   const endMinutes = timeToMinutes(time) + appointment.totalDuration;
   const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
@@ -186,9 +187,9 @@ function AppointmentBlock({ appointment, onAppointmentClick, onDragStart, isDrag
   const isDraggable = appointment.status === 'SCHEDULED';
   return (
     <div
-      className={`absolute left-1 right-1 z-10 ${isDraggable ? 'cursor-grab touch-none select-none active:cursor-grabbing' : 'cursor-pointer'} overflow-hidden rounded-lg border ${colors.border} ${colors.bg} px-2 py-1 transition-all duration-150 hover:z-20 hover:shadow-lg ${isDragging ? '!opacity-30' : ''} ${conflictReason ? 'ring-2 ring-[#A63030] ring-offset-1 ring-offset-[var(--card-bg)]' : ''}`}
+      className={`absolute left-1 right-1 z-10 ${isDraggable ? 'cursor-grab touch-none select-none active:cursor-grabbing' : 'cursor-pointer'} overflow-hidden rounded-lg border ${hasDebts ? 'border-[#9333EA] border-2' : `border ${colors.border}`} ${colors.bg} px-2 py-1 transition-all duration-150 hover:z-20 hover:shadow-lg ${isDragging ? '!opacity-30' : ''} ${conflictReason ? 'ring-2 ring-[#A63030] ring-offset-1 ring-offset-[var(--card-bg)]' : hasDebts ? 'ring-2 ring-[#9333EA] ring-offset-1 ring-offset-[var(--card-bg)]' : ''}`}
       style={{ top: `${top}px`, height: `${Math.max(height - 1, slotHeight - 1)}px`, touchAction: isDraggable ? 'none' : undefined }}
-      title={`${appointment.client?.name || appointment.clientName || 'Cliente'} - ${serviceNames} (${time} - ${endTime})${isFromClient ? ' · App' : ' · Painel'}${isSubscription ? ' · Assinatura' : ''}${appointment.status === 'PENDING_PAYMENT' ? ' · Aguardando pagamento' : ''}${conflictReason ? ` · ⚠ ${conflictReason}` : ''}`}
+      title={`${appointment.client?.name || appointment.clientName || 'Cliente'} - ${serviceNames} (${time} - ${endTime})${isFromClient ? ' · App' : ' · Painel'}${isSubscription ? ' · Assinatura' : ''}${appointment.status === 'PENDING_PAYMENT' ? ' · Aguardando pagamento' : ''}${hasDebts ? ' · ⚠ Cliente está devendo' : ''}${conflictReason ? ` · ⚠ ${conflictReason}` : ''}`}
       onPointerDown={(e) => {
         if (e.button === 0 && appointment.status === 'SCHEDULED') {
           onDragStart?.(e, appointment);
@@ -205,6 +206,11 @@ function AppointmentBlock({ appointment, onAppointmentClick, onDragStart, isDrag
             <AlertCircle className="h-3 w-3 shrink-0 text-[#A63030]" />
           )}
           <span className="truncate">{appointment.client?.name || appointment.clientName || 'Cliente'}</span>
+          {hasDebts && (
+            <span className="ml-auto shrink-0 rounded bg-[#9333EA] px-1 text-[9px] font-bold uppercase leading-tight text-white" title="Cliente está devendo">
+              Devendo
+            </span>
+          )}
         </div>
         {height >= 40 && (
           <div className="flex items-center gap-1 overflow-hidden">
@@ -1015,6 +1021,10 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
             <div className="flex items-center gap-1.5">
               <div className="h-3 w-3 rounded border border-amber-600 bg-[#F5C77A] dark:bg-[#7a5217]" />
               <span className="text-xs text-[var(--text-muted)]">Faltou</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="h-3 w-3 rounded border-2 border-[#9333EA]" />
+              <span className="text-xs text-[var(--text-muted)]">Devendo</span>
             </div>
             <div className="flex items-center gap-1.5">
               <div
