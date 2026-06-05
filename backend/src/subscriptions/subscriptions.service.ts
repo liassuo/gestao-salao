@@ -14,6 +14,9 @@ import { CashRegisterService } from '../cash-register/cash-register.service';
 import {
   AsaasBillingType,
   AsaasSubscriptionCycle,
+  AsaasCharge,
+  AsaasCreditCard,
+  AsaasCreditCardHolderInfo,
   asaasBillingToLocalPaymentMethod,
   parseAsaasBillingType,
 } from '../asaas/asaas.types';
@@ -1227,6 +1230,87 @@ export class SubscriptionsService {
     return null;
   }
 
+  /**
+   * Cria uma ASSINATURA RECORRENTE no Asaas (cobra todo mês sozinho) e grava o
+   * asaasSubscriptionId na assinatura local. Devolve a 1ª cobrança gerada pela
+   * assinatura, para o caller registrar o payment local e o PIX/checkout.
+   *
+   * Substitui o createCharge avulso: antes cada renovação exigia uma nova cobrança;
+   * agora o Asaas gera a fatura de cada ciclo (mensal) e o webhook a confirma. Cada
+   * cobrança herda externalReference = id da assinatura local, então o webhook
+   * (handlePaymentConfirmed) ativa/renova sozinho — cartão cobra automático, PIX gera
+   * a fatura mensal p/ o cliente pagar.
+   */
+  private async createRecurringSubscriptionAndFirstCharge(params: {
+    clientSubscriptionId: string;
+    customer: string;
+    billingType: AsaasBillingType;
+    valueReais: number;
+    description: string;
+    creditCard?: AsaasCreditCard;
+    creditCardHolderInfo?: AsaasCreditCardHolderInfo;
+    remoteIp?: string;
+  }): Promise<AsaasCharge> {
+    // Evita assinaturas Asaas órfãs: se este registro local já apontava p/ uma
+    // assinatura recorrente (re-assinatura / reativação reaproveitam a mesma linha),
+    // cancela a antiga antes de criar a nova p/ não ficar cobrando em duplicidade.
+    const { data: prev } = await this.supabase
+      .from('client_subscriptions')
+      .select('asaasSubscriptionId')
+      .eq('id', params.clientSubscriptionId)
+      .maybeSingle();
+    const prevAsaasSubId = (prev as any)?.asaasSubscriptionId;
+    if (prevAsaasSubId) {
+      await this.asaasService
+        .cancelSubscription(prevAsaasSubId)
+        .then(() => this.logger.log(`Assinatura Asaas antiga ${prevAsaasSubId} cancelada antes de recriar.`))
+        .catch((e) => this.logger.warn(`Falha ao cancelar assinatura Asaas antiga ${prevAsaasSubId}: ${e}`));
+    }
+
+    const today = nowLocalIsoString().split('T')[0];
+    const asaasSub = await this.asaasService.createSubscription({
+      customer: params.customer,
+      billingType: params.billingType,
+      value: params.valueReais,
+      nextDueDate: today,
+      cycle: AsaasSubscriptionCycle.MONTHLY,
+      description: params.description,
+      externalReference: params.clientSubscriptionId,
+      creditCard: params.creditCard,
+      creditCardHolderInfo: params.creditCardHolderInfo,
+      remoteIp: params.remoteIp,
+    });
+
+    await this.supabase
+      .from('client_subscriptions')
+      .update({ asaasSubscriptionId: asaasSub.id, updatedAt: nowLocalIsoString() })
+      .eq('id', params.clientSubscriptionId);
+
+    // A 1ª cobrança do ciclo nasce junto com a assinatura, mas pode levar 1-2s
+    // para o Asaas materializá-la. Tenta algumas vezes antes de desistir.
+    let firstCharge: AsaasCharge | undefined;
+    for (let attempt = 0; attempt < 3 && !firstCharge; attempt++) {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, 1500));
+      const charges = await this.asaasService
+        .getSubscriptionPayments(asaasSub.id)
+        .catch(() => [] as AsaasCharge[]);
+      firstCharge = charges?.[0];
+    }
+    if (!firstCharge) {
+      // Sem 1ª cobrança → o caller vai abortar (marca a assinatura local CANCELED).
+      // Cancela a assinatura Asaas recém-criada p/ ela NÃO continuar cobrando o
+      // cliente num registro abandonado (senão um webhook futuro reativaria a
+      // assinatura cancelada via asaasSubscriptionId).
+      await this.asaasService
+        .cancelSubscription(asaasSub.id)
+        .catch((e) => this.logger.warn(`Falha ao cancelar assinatura Asaas órfã ${asaasSub.id}: ${e}`));
+      throw new Error(
+        `Assinatura Asaas ${asaasSub.id} criada, mas nenhuma cobrança foi gerada (cancelada).`,
+      );
+    }
+    return firstCharge;
+  }
+
   async subscribeByClientId(clientId: string, planId: string, body: SubscribeMeDto) {
     const billingTypeRaw = body.billingType;
     const parsed = parseAsaasBillingType(billingTypeRaw);
@@ -1249,30 +1333,34 @@ export class SubscriptionsService {
       try {
         const asaasCustomerId = await this.ensureAsaasCustomer(clientId);
 
-        const today = nowLocalIsoString().split('T')[0];
-        const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:5173');
-        const charge = await this.asaasService.createCharge({
+        // Assinatura RECORRENTE (cobra todo mês) em vez de cobrança avulsa.
+        const charge = await this.createRecurringSubscriptionAndFirstCharge({
+          clientSubscriptionId: freshSub.id,
           customer: asaasCustomerId,
           billingType: effectiveBilling,
-          value: this.asaasService.centavosToReais(freshSub.plan?.price ?? 0),
-          dueDate: today,
+          valueReais: this.asaasService.centavosToReais(freshSub.plan?.price ?? 0),
           description: `Plano ${freshSub.plan?.name ?? 'Assinatura'}`,
-          externalReference: freshSub.id,
           creditCard: body.creditCard,
           creditCardHolderInfo: body.creditCardHolderInfo,
           remoteIp: body.remoteIp,
-          callback: {
-            successUrl: `${frontendUrl}/planos`,
-            autoRedirect: true,
-          },
         });
 
         invoiceUrl = charge.invoiceUrl || null;
         const now = nowLocalIsoString();
         const localMethod = asaasBillingToLocalPaymentMethod(effectiveBilling);
 
+        // Idempotência: cartão confirma na hora e o webhook pode já ter criado o
+        // payment desta cobrança (via externalReference) durante o retry do helper.
+        // Sem este guard, inseriríamos um 2º registro com o mesmo asaasPaymentId
+        // (o índice não é único) → caixa contaria em dobro.
+        const { data: existingPay } = await this.supabase
+          .from('payments')
+          .select('id')
+          .eq('asaasPaymentId', charge.id)
+          .maybeSingle();
+
         // Inserir registro de pagamento (antes do QR Code para garantir persistência)
-        await this.supabase.from('payments').insert({
+        if (!existingPay) await this.supabase.from('payments').insert({
           id: randomUUID(),
           clientId,
           subscriptionId: freshSub.id,
@@ -1399,29 +1487,31 @@ export class SubscriptionsService {
       try {
         const asaasCustomerId = await this.ensureAsaasCustomer(clientId);
 
-        const today = now.toISOString().split('T')[0];
-        const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:5173');
-        const charge = await this.asaasService.createCharge({
+        // Reativação cria a assinatura RECORRENTE no Asaas (cobra todo mês).
+        const charge = await this.createRecurringSubscriptionAndFirstCharge({
+          clientSubscriptionId: subscription.id,
           customer: asaasCustomerId,
           billingType,
-          value: this.asaasService.centavosToReais(subscription.plan?.price ?? 0),
-          dueDate: today,
+          valueReais: this.asaasService.centavosToReais(subscription.plan?.price ?? 0),
           description: `Reativação: Plano ${subscription.plan?.name}`,
-          externalReference: subscription.id,
           creditCard: body.creditCard,
           creditCardHolderInfo: body.creditCardHolderInfo,
           remoteIp: body.remoteIp,
-          callback: {
-            successUrl: `${frontendUrl}/planos`,
-            autoRedirect: true,
-          },
         });
 
         invoiceUrl = charge.invoiceUrl || null;
         const localMethod = asaasBillingToLocalPaymentMethod(billingType);
 
+        // Idempotência: cartão confirma na hora e o webhook pode já ter criado o
+        // payment desta cobrança durante o retry do helper (índice não é único).
+        const { data: existingPay } = await this.supabase
+          .from('payments')
+          .select('id')
+          .eq('asaasPaymentId', charge.id)
+          .maybeSingle();
+
         // Inserir registro de pagamento (antes do QR Code para garantir persistência)
-        await this.supabase.from('payments').insert({
+        if (!existingPay) await this.supabase.from('payments').insert({
           id: randomUUID(),
           clientId,
           subscriptionId: subscription.id,
