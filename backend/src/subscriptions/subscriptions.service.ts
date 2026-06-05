@@ -337,8 +337,14 @@ export class SubscriptionsService {
     const endDate = new Date(startDate);
     endDate.setMonth(endDate.getMonth() + 1);
 
-    // Se Asaas está configurado, aguarda confirmação de pagamento antes de ativar
-    const initialStatus = this.asaasService.configured ? 'PENDING_PAYMENT' : 'ACTIVE';
+    // Assinatura NUNCA nasce ATIVA sem pagamento confirmado — sempre PENDING_PAYMENT.
+    // Antes, quando o Asaas não estava configurado, nascia 'ACTIVE' direto (de graça):
+    // o cliente clicava "assinar" no app e ficava com plano ativo sem nunca pagar
+    // (caso reportado: Kleudson). Agora:
+    //  - Asaas configurado: gera cobrança PIX/cartão → cliente paga → webhook ativa.
+    //  - Asaas não configurado / pagamento em dinheiro: admin confirma via
+    //    confirmPaymentManually, que então ativa. Em nenhum caso ativa sem pagamento.
+    const initialStatus = 'PENDING_PAYMENT';
     const subNow = nowLocalIsoString();
 
     // Tenta encontrar uma assinatura cancelada para reutilizar o registro (devido à restrição UNIQUE no clientId)
