@@ -138,7 +138,7 @@ const statusColors: Record<string, { bg: string; border: string; text: string; s
   // e tons mais escuros saturados no tema escuro.
   SUBSCRIPTION:    { bg: 'bg-[#F4D785] dark:bg-[#7a5a1c]',   border: 'border-[#C8923A]',          text: 'text-[#3a2a0a] dark:text-[#F4D785]',     sub: 'text-[#5a4112] dark:text-[#E8C77F]' },
   CASH_PENDING:    { bg: 'bg-[#A8E6B5] dark:bg-[#1d5a31]',   border: 'border-green-600',          text: 'text-[#0a3a14] dark:text-green-100',     sub: 'text-[#1f5a2e] dark:text-green-200' },
-  PAID:            { bg: 'bg-[#7DD89B] dark:bg-[#0f5a2a]',   border: 'border-emerald-600',        text: 'text-[#053b1e] dark:text-emerald-50',    sub: 'text-[#0d4a25] dark:text-emerald-200' },
+  PAID:            { bg: 'bg-[#1F8A4D] dark:bg-[#063d1c]',   border: 'border-emerald-800',        text: 'text-white dark:text-emerald-50',        sub: 'text-emerald-50 dark:text-emerald-200' },
   PENDING_PAYMENT: { bg: 'bg-[#A8C8F5] dark:bg-[#1e3a72]',   border: 'border-blue-600',           text: 'text-[#0a2a5a] dark:text-blue-100',      sub: 'text-[#1c3d6e] dark:text-blue-200' },
   ATTENDED:        { bg: 'bg-[#D4D4D8] dark:bg-[#3f3f46]',   border: 'border-gray-500',           text: 'text-[#1a1a1a] dark:text-gray-100',      sub: 'text-[#404040] dark:text-gray-300' },
   NO_SHOW:         { bg: 'bg-[#F5C77A] dark:bg-[#7a5217]',   border: 'border-amber-600',          text: 'text-[#3a2410] dark:text-amber-100',     sub: 'text-[#5c3a1a] dark:text-amber-200' },
@@ -178,7 +178,6 @@ function AppointmentBlock({ appointment, onAppointmentClick, onDragStart, isDrag
         ? 'PAID'
         : 'CASH_PENDING';
   const colors = statusColors[colorKey] || statusColors.SCHEDULED;
-  const hasDebts = !!appointment.clientHasDebts;
   const serviceNames = (appointment.services || []).map((s) => s.service?.name || 'Serviço').join(', ');
   const endMinutes = timeToMinutes(time) + appointment.totalDuration;
   const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
@@ -187,9 +186,9 @@ function AppointmentBlock({ appointment, onAppointmentClick, onDragStart, isDrag
   const isDraggable = appointment.status === 'SCHEDULED';
   return (
     <div
-      className={`absolute left-1 right-1 z-10 ${isDraggable ? 'cursor-grab touch-none select-none active:cursor-grabbing' : 'cursor-pointer'} overflow-hidden rounded-lg px-2 py-1 transition-all duration-150 hover:z-20 hover:shadow-lg ${hasDebts ? 'border-2 border-[#9333EA] bg-[#9333EA]/25' : `border ${colors.border} ${colors.bg}`} ${isDragging ? '!opacity-30' : ''} ${conflictReason ? 'ring-2 ring-[#A63030] ring-offset-1 ring-offset-[var(--card-bg)]' : hasDebts ? 'ring-2 ring-[#9333EA] ring-offset-1 ring-offset-[var(--card-bg)]' : ''}`}
+      className={`absolute left-1 right-1 z-10 ${isDraggable ? 'cursor-grab touch-none select-none active:cursor-grabbing' : 'cursor-pointer'} overflow-hidden rounded-lg px-2 py-1 transition-all duration-150 hover:z-20 hover:shadow-lg border ${colors.border} ${colors.bg} ${isDragging ? '!opacity-30' : ''} ${conflictReason ? 'ring-2 ring-[#A63030] ring-offset-1 ring-offset-[var(--card-bg)]' : ''}`}
       style={{ top: `${top}px`, height: `${Math.max(height - 1, slotHeight - 1)}px`, touchAction: isDraggable ? 'none' : undefined }}
-      title={`${appointment.client?.name || appointment.clientName || 'Cliente'} - ${serviceNames} (${time} - ${endTime})${isFromClient ? ' · App' : ' · Painel'}${isSubscription ? ' · Assinatura' : ''}${appointment.status === 'PENDING_PAYMENT' ? ' · Aguardando pagamento' : ''}${hasDebts ? ' · ⚠ Cliente está devendo' : ''}${conflictReason ? ` · ⚠ ${conflictReason}` : ''}`}
+      title={`${appointment.client?.name || appointment.clientName || 'Cliente'} - ${serviceNames} (${time} - ${endTime})${isFromClient ? ' · App' : ' · Painel'}${isSubscription ? ' · Assinatura' : ''}${appointment.status === 'PENDING_PAYMENT' ? ' · Aguardando pagamento' : ''}${conflictReason ? ` · ⚠ ${conflictReason}` : ''}`}
       onPointerDown={(e) => {
         if (e.button === 0 && appointment.status === 'SCHEDULED') {
           onDragStart?.(e, appointment);
@@ -205,13 +204,7 @@ function AppointmentBlock({ appointment, onAppointmentClick, onDragStart, isDrag
           {conflictReason && (
             <AlertCircle className="h-3 w-3 shrink-0 text-[#A63030]" />
           )}
-          <span className={`truncate ${hasDebts ? 'text-[#9333EA] dark:text-[#D8B4FE]' : ''}`}>{appointment.client?.name || appointment.clientName || 'Cliente'}</span>
-          {hasDebts && (
-            <span className="ml-auto flex shrink-0 items-center gap-0.5 rounded bg-[#9333EA] px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none text-white shadow-sm" title="Cliente está devendo">
-              <AlertCircle className="h-2.5 w-2.5 shrink-0" />
-              Devendo
-            </span>
-          )}
+          <span className="truncate">{appointment.client?.name || appointment.clientName || 'Cliente'}</span>
         </div>
         {height >= 40 && (
           <div className="flex items-center gap-1 overflow-hidden">
@@ -1012,7 +1005,7 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
               <span className="text-xs text-[var(--text-muted)]">Pagamento pendente</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="h-3 w-3 rounded border border-emerald-600 bg-[#7DD89B] dark:bg-[#0f5a2a]" />
+              <div className="h-3 w-3 rounded border border-emerald-800 bg-[#1F8A4D] dark:bg-[#063d1c]" />
               <span className="text-xs text-[var(--text-muted)]">Pago</span>
             </div>
             <div className="flex items-center gap-1.5">
@@ -1022,10 +1015,6 @@ export function CalendarView({ onNewAppointment }: CalendarViewProps = {}) {
             <div className="flex items-center gap-1.5">
               <div className="h-3 w-3 rounded border border-amber-600 bg-[#F5C77A] dark:bg-[#7a5217]" />
               <span className="text-xs text-[var(--text-muted)]">Faltou</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="h-3 w-3 rounded border-2 border-[#9333EA]" />
-              <span className="text-xs text-[var(--text-muted)]">Devendo</span>
             </div>
             <div className="flex items-center gap-1.5">
               <div

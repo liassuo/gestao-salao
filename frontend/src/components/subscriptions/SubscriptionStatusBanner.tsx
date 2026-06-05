@@ -55,7 +55,7 @@ export function SubscriptionStatusBanner({
   const handleConfirm = async () => {
     if (!subscriptionId) return;
     try {
-      await confirmSubscription.mutateAsync(subscriptionId);
+      await confirmSubscription.mutateAsync({ id: subscriptionId, method: 'CASH' });
       toast.success('Assinatura ativada', 'Pagamento confirmado manualmente');
     } catch (err: any) {
       toast.error(

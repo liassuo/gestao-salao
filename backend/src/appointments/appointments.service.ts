@@ -135,6 +135,15 @@ export class AppointmentsService {
     const totalPrice = itemUnitPrices.reduce((sum, p) => sum + p, 0);
     const cutsToDebit = consumedFlags.filter(Boolean).length;
 
+    // O agendamento só conta como "assinatura" (cor/etiqueta de plano) se ALGUM
+    // serviço escolhido for REALMENTE coberto pelo plano do cliente. Antes, marcar
+    // "usar crédito" (dto.useSubscriptionCut) pintava de plano mesmo quando o serviço
+    // não era coberto — ex.: cliente com plano de BARBA agendou CORTE; o corte foi
+    // cobrado, mas o card aparecia como assinatura. Agora baseamos no serviço coberto.
+    const anyServiceCoveredByPlan = services.some((s) =>
+      isPlanIncludedService(activeSub, s.id),
+    );
+
     // 2. Validar profissional ativo, expediente, bloqueios e conflitos de agendamento
     await this.validateScheduleConflicts(
       dto.professionalId,
@@ -351,12 +360,12 @@ export class AppointmentsService {
         status: initialStatus,
         notes: dto.notes,
         source: dto.source || 'ADMIN',
-        // Marca o agendamento como "assinatura" tanto no fluxo legado
-        // (dto.useSubscriptionCut=true vindo do app) quanto no fluxo natural,
-        // quando ao menos um serviço incluído no plano consumiu um crédito.
-        // Sem isso, a UI (CalendarView/Detail) não pinta a cor de assinatura
-        // mesmo o cliente tendo plano ativo e serviço coberto.
-        usedSubscriptionCut: !!dto.useSubscriptionCut || consumedFlags.some(Boolean),
+        // Marca como "assinatura" apenas quando ALGUM serviço escolhido é coberto
+        // pelo plano (anyServiceCoveredByPlan) ou de fato consumiu crédito. NÃO usa
+        // mais o dto.useSubscriptionCut cru: marcar "usar crédito" não deve pintar de
+        // plano um agendamento cujo serviço o plano não cobre (ex.: plano de barba +
+        // corte avulso — o corte é cobrado e o card deve ficar "Agendado").
+        usedSubscriptionCut: anyServiceCoveredByPlan || consumedFlags.some(Boolean),
         createdAt: now,
         updatedAt: now,
       })
@@ -1521,44 +1530,6 @@ export class AppointmentsService {
     if (apptError) {
       this.logger.error(`Calendar appointments query error: ${JSON.stringify(apptError)}`);
       throw apptError;
-    }
-
-    // 2.1 Marcar quais agendamentos são de clientes que estão devendo, para o
-    // calendário sinalizar visualmente (borda lilás + etiqueta "Devendo").
-    // Um cliente é considerado devedor se:
-    //   (a) tem dívida registrada na tela de Dívidas (clients.hasDebts = true); OU
-    //   (b) tem atendimento avulso passado sem pagamento — status ATTENDED,
-    //       isPaid = false, que não consumiu corte de assinatura e tem valor > 0.
-    // O caso (b) cobre o cenário em que o atendimento foi feito mas não cobrado,
-    // sem depender de alguém registrar a dívida manualmente.
-    const clientIds = Array.from(
-      new Set((appointments || []).map((a: any) => a.clientId).filter(Boolean)),
-    );
-    const debtorIds = new Set<string>();
-    if (clientIds.length > 0) {
-      // (a) Dívida registrada manualmente
-      const { data: registeredDebtors } = await this.supabase
-        .from('clients')
-        .select('id')
-        .in('id', clientIds)
-        .eq('hasDebts', true);
-      for (const c of registeredDebtors || []) debtorIds.add(c.id);
-
-      // (b) Atendimento avulso passado não pago
-      const { data: unpaidAppts } = await this.supabase
-        .from('appointments')
-        .select('clientId')
-        .in('clientId', clientIds)
-        .eq('status', 'ATTENDED')
-        .eq('isPaid', false)
-        .eq('usedSubscriptionCut', false)
-        .gt('totalPrice', 0);
-      for (const a of unpaidAppts || []) {
-        if (a.clientId) debtorIds.add(a.clientId);
-      }
-    }
-    for (const a of appointments || []) {
-      (a as any).clientHasDebts = a.clientId ? debtorIds.has(a.clientId) : false;
     }
 
     // 3. Buscar bloqueios de horário do dia
