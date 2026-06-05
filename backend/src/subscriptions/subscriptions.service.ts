@@ -14,6 +14,9 @@ import { CashRegisterService } from '../cash-register/cash-register.service';
 import {
   AsaasBillingType,
   AsaasSubscriptionCycle,
+  AsaasCharge,
+  AsaasCreditCard,
+  AsaasCreditCardHolderInfo,
   asaasBillingToLocalPaymentMethod,
   parseAsaasBillingType,
 } from '../asaas/asaas.types';
@@ -294,6 +297,30 @@ export class SubscriptionsService {
   }
 
   // CLIENT SUBSCRIPTIONS
+
+  /**
+   * payments.registeredBy é NOT NULL e FK → users.id. Os fluxos de assinatura
+   * (cliente no app, confirmação manual, reconciliação, regeneração de PIX) não têm
+   * um admin no contexto. Antes passavam o clientId (id da tabela `clients`, NÃO
+   * `users`) → violava a FK e o insert do pagamento falhava em silêncio: a
+   * assinatura ativava mas NENHUM payment era gravado/vinculado (por isso o histórico
+   * tem assinaturas sem pagamento e pagamentos sem subscriptionId). Usa o primeiro
+   * ADMIN como "registrante sistema", mesmo padrão do webhook e do cash-register.
+   */
+  private async resolveSystemRegisteredBy(): Promise<string> {
+    const { data: admin } = await this.supabase
+      .from('users')
+      .select('id')
+      .eq('role', 'ADMIN')
+      .limit(1)
+      .maybeSingle();
+    if (!(admin as any)?.id) {
+      throw new BadRequestException(
+        'Nenhum usuário ADMIN encontrado para registrar o pagamento (registeredBy).',
+      );
+    }
+    return (admin as any).id;
+  }
 
   async subscribeClient(dto: SubscribeClientDto) {
     // Verificar se cliente existe
@@ -838,7 +865,7 @@ export class SubscriptionsService {
         subscriptionId: subscription.id,
         amount,
         method: localMethod,
-        registeredBy: subscription.clientId,
+        registeredBy: await this.resolveSystemRegisteredBy(),
         notes: `Confirmação manual de pagamento (assinatura ${subscription.plan?.name ?? ''})`.trim(),
         paidAt: nowLocal,
         businessDate,
@@ -1017,7 +1044,7 @@ export class SubscriptionsService {
       subscriptionId: subscription.id,
       amount,
       method: localMethod,
-      registeredBy: subscription.clientId,
+      registeredBy: await this.resolveSystemRegisteredBy(),
       notes: `Reconciliação Asaas (cobrança ${charge.id})`,
       asaasPaymentId: charge.id,
       asaasStatus: charge.status,
@@ -1072,7 +1099,7 @@ export class SubscriptionsService {
       subscriptionId: subscription.id,
       amount: planPrice,
       method: asaasBillingToLocalPaymentMethod(AsaasBillingType.PIX),
-      registeredBy: clientId,
+      registeredBy: await this.resolveSystemRegisteredBy(),
       notes: `PIX regenerado plano ${planName} #${charge.id}`,
       asaasPaymentId: charge.id,
       asaasStatus: charge.status,
@@ -1203,6 +1230,87 @@ export class SubscriptionsService {
     return null;
   }
 
+  /**
+   * Cria uma ASSINATURA RECORRENTE no Asaas (cobra todo mês sozinho) e grava o
+   * asaasSubscriptionId na assinatura local. Devolve a 1ª cobrança gerada pela
+   * assinatura, para o caller registrar o payment local e o PIX/checkout.
+   *
+   * Substitui o createCharge avulso: antes cada renovação exigia uma nova cobrança;
+   * agora o Asaas gera a fatura de cada ciclo (mensal) e o webhook a confirma. Cada
+   * cobrança herda externalReference = id da assinatura local, então o webhook
+   * (handlePaymentConfirmed) ativa/renova sozinho — cartão cobra automático, PIX gera
+   * a fatura mensal p/ o cliente pagar.
+   */
+  private async createRecurringSubscriptionAndFirstCharge(params: {
+    clientSubscriptionId: string;
+    customer: string;
+    billingType: AsaasBillingType;
+    valueReais: number;
+    description: string;
+    creditCard?: AsaasCreditCard;
+    creditCardHolderInfo?: AsaasCreditCardHolderInfo;
+    remoteIp?: string;
+  }): Promise<AsaasCharge> {
+    // Evita assinaturas Asaas órfãs: se este registro local já apontava p/ uma
+    // assinatura recorrente (re-assinatura / reativação reaproveitam a mesma linha),
+    // cancela a antiga antes de criar a nova p/ não ficar cobrando em duplicidade.
+    const { data: prev } = await this.supabase
+      .from('client_subscriptions')
+      .select('asaasSubscriptionId')
+      .eq('id', params.clientSubscriptionId)
+      .maybeSingle();
+    const prevAsaasSubId = (prev as any)?.asaasSubscriptionId;
+    if (prevAsaasSubId) {
+      await this.asaasService
+        .cancelSubscription(prevAsaasSubId)
+        .then(() => this.logger.log(`Assinatura Asaas antiga ${prevAsaasSubId} cancelada antes de recriar.`))
+        .catch((e) => this.logger.warn(`Falha ao cancelar assinatura Asaas antiga ${prevAsaasSubId}: ${e}`));
+    }
+
+    const today = nowLocalIsoString().split('T')[0];
+    const asaasSub = await this.asaasService.createSubscription({
+      customer: params.customer,
+      billingType: params.billingType,
+      value: params.valueReais,
+      nextDueDate: today,
+      cycle: AsaasSubscriptionCycle.MONTHLY,
+      description: params.description,
+      externalReference: params.clientSubscriptionId,
+      creditCard: params.creditCard,
+      creditCardHolderInfo: params.creditCardHolderInfo,
+      remoteIp: params.remoteIp,
+    });
+
+    await this.supabase
+      .from('client_subscriptions')
+      .update({ asaasSubscriptionId: asaasSub.id, updatedAt: nowLocalIsoString() })
+      .eq('id', params.clientSubscriptionId);
+
+    // A 1ª cobrança do ciclo nasce junto com a assinatura, mas pode levar 1-2s
+    // para o Asaas materializá-la. Tenta algumas vezes antes de desistir.
+    let firstCharge: AsaasCharge | undefined;
+    for (let attempt = 0; attempt < 3 && !firstCharge; attempt++) {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, 1500));
+      const charges = await this.asaasService
+        .getSubscriptionPayments(asaasSub.id)
+        .catch(() => [] as AsaasCharge[]);
+      firstCharge = charges?.[0];
+    }
+    if (!firstCharge) {
+      // Sem 1ª cobrança → o caller vai abortar (marca a assinatura local CANCELED).
+      // Cancela a assinatura Asaas recém-criada p/ ela NÃO continuar cobrando o
+      // cliente num registro abandonado (senão um webhook futuro reativaria a
+      // assinatura cancelada via asaasSubscriptionId).
+      await this.asaasService
+        .cancelSubscription(asaasSub.id)
+        .catch((e) => this.logger.warn(`Falha ao cancelar assinatura Asaas órfã ${asaasSub.id}: ${e}`));
+      throw new Error(
+        `Assinatura Asaas ${asaasSub.id} criada, mas nenhuma cobrança foi gerada (cancelada).`,
+      );
+    }
+    return firstCharge;
+  }
+
   async subscribeByClientId(clientId: string, planId: string, body: SubscribeMeDto) {
     const billingTypeRaw = body.billingType;
     const parsed = parseAsaasBillingType(billingTypeRaw);
@@ -1225,36 +1333,40 @@ export class SubscriptionsService {
       try {
         const asaasCustomerId = await this.ensureAsaasCustomer(clientId);
 
-        const today = nowLocalIsoString().split('T')[0];
-        const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:5173');
-        const charge = await this.asaasService.createCharge({
+        // Assinatura RECORRENTE (cobra todo mês) em vez de cobrança avulsa.
+        const charge = await this.createRecurringSubscriptionAndFirstCharge({
+          clientSubscriptionId: freshSub.id,
           customer: asaasCustomerId,
           billingType: effectiveBilling,
-          value: this.asaasService.centavosToReais(freshSub.plan?.price ?? 0),
-          dueDate: today,
+          valueReais: this.asaasService.centavosToReais(freshSub.plan?.price ?? 0),
           description: `Plano ${freshSub.plan?.name ?? 'Assinatura'}`,
-          externalReference: freshSub.id,
           creditCard: body.creditCard,
           creditCardHolderInfo: body.creditCardHolderInfo,
           remoteIp: body.remoteIp,
-          callback: {
-            successUrl: `${frontendUrl}/planos`,
-            autoRedirect: true,
-          },
         });
 
         invoiceUrl = charge.invoiceUrl || null;
         const now = nowLocalIsoString();
         const localMethod = asaasBillingToLocalPaymentMethod(effectiveBilling);
 
+        // Idempotência: cartão confirma na hora e o webhook pode já ter criado o
+        // payment desta cobrança (via externalReference) durante o retry do helper.
+        // Sem este guard, inseriríamos um 2º registro com o mesmo asaasPaymentId
+        // (o índice não é único) → caixa contaria em dobro.
+        const { data: existingPay } = await this.supabase
+          .from('payments')
+          .select('id')
+          .eq('asaasPaymentId', charge.id)
+          .maybeSingle();
+
         // Inserir registro de pagamento (antes do QR Code para garantir persistência)
-        await this.supabase.from('payments').insert({
+        if (!existingPay) await this.supabase.from('payments').insert({
           id: randomUUID(),
           clientId,
           subscriptionId: freshSub.id,
           amount: freshSub.plan?.price ?? 0,
           method: localMethod,
-          registeredBy: clientId,
+          registeredBy: await this.resolveSystemRegisteredBy(),
           notes: `Cobrança inicial plano ${freshSub.plan?.name ?? 'Assinatura'} #${charge.id}`,
           asaasPaymentId: charge.id,
           asaasStatus: charge.status,
@@ -1375,35 +1487,37 @@ export class SubscriptionsService {
       try {
         const asaasCustomerId = await this.ensureAsaasCustomer(clientId);
 
-        const today = now.toISOString().split('T')[0];
-        const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:5173');
-        const charge = await this.asaasService.createCharge({
+        // Reativação cria a assinatura RECORRENTE no Asaas (cobra todo mês).
+        const charge = await this.createRecurringSubscriptionAndFirstCharge({
+          clientSubscriptionId: subscription.id,
           customer: asaasCustomerId,
           billingType,
-          value: this.asaasService.centavosToReais(subscription.plan?.price ?? 0),
-          dueDate: today,
+          valueReais: this.asaasService.centavosToReais(subscription.plan?.price ?? 0),
           description: `Reativação: Plano ${subscription.plan?.name}`,
-          externalReference: subscription.id,
           creditCard: body.creditCard,
           creditCardHolderInfo: body.creditCardHolderInfo,
           remoteIp: body.remoteIp,
-          callback: {
-            successUrl: `${frontendUrl}/planos`,
-            autoRedirect: true,
-          },
         });
 
         invoiceUrl = charge.invoiceUrl || null;
         const localMethod = asaasBillingToLocalPaymentMethod(billingType);
 
+        // Idempotência: cartão confirma na hora e o webhook pode já ter criado o
+        // payment desta cobrança durante o retry do helper (índice não é único).
+        const { data: existingPay } = await this.supabase
+          .from('payments')
+          .select('id')
+          .eq('asaasPaymentId', charge.id)
+          .maybeSingle();
+
         // Inserir registro de pagamento (antes do QR Code para garantir persistência)
-        await this.supabase.from('payments').insert({
+        if (!existingPay) await this.supabase.from('payments').insert({
           id: randomUUID(),
           clientId,
           subscriptionId: subscription.id,
           amount: subscription.plan?.price ?? 0,
           method: localMethod,
-          registeredBy: clientId,
+          registeredBy: await this.resolveSystemRegisteredBy(),
           notes: `Reativação assinatura Asaas #${charge.id}`,
           asaasPaymentId: charge.id,
           asaasStatus: charge.status,
@@ -1574,6 +1688,80 @@ export class SubscriptionsService {
       return;
     }
     this.logger.log(`[suspend-expired-cron] ${ids.length} assinatura(s) suspensa(s) ao vencer`);
+  }
+
+  /**
+   * Lista assinaturas ACTIVE que nunca tiveram pagamento confirmado.
+   *
+   * Caça o legado do bug "nascia ACTIVE sem pagamento" (Asaas off, até fbfe8ed):
+   * assinaturas ativas de graça que parecem "renovadas sem cobrança". PostgREST não
+   * faz NOT EXISTS, então buscamos as ACTIVE e o conjunto de subscriptionId já pagos
+   * e filtramos em memória.
+   */
+  async findActiveWithoutPayment(): Promise<
+    Array<{
+      id: string;
+      clientId: string;
+      clientName: string | null;
+      planName: string | null;
+      price: number | null;
+      startDate: string | null;
+      endDate: string | null;
+    }>
+  > {
+    const { data: actives } = await this.supabase
+      .from('client_subscriptions')
+      .select('id, clientId, startDate, endDate, client:clients(name), plan:subscription_plans!planId(name, price)')
+      .eq('status', 'ACTIVE');
+
+    if (!actives || actives.length === 0) return [];
+
+    const { data: paidRows } = await this.supabase
+      .from('payments')
+      .select('subscriptionId')
+      .not('paidAt', 'is', null)
+      .not('subscriptionId', 'is', null);
+
+    const paidSubIds = new Set((paidRows || []).map((p: any) => p.subscriptionId));
+
+    return (actives as any[])
+      .filter((s) => !paidSubIds.has(s.id))
+      .map((s) => ({
+        id: s.id,
+        clientId: s.clientId,
+        clientName: s.client?.name ?? null,
+        planName: s.plan?.name ?? null,
+        price: s.plan?.price ?? null,
+        startDate: s.startDate ?? null,
+        endDate: s.endDate ?? null,
+      }));
+  }
+
+  /**
+   * Suspende todas as assinaturas ACTIVE sem pagamento confirmado (legado).
+   * Vira SUSPENDED → cliente vê "Reativar assinatura" e precisa pagar p/ continuar.
+   * Idempotente: rodar de novo com a lista vazia não faz nada.
+   */
+  async suspendActiveWithoutPayment(): Promise<{
+    suspended: number;
+    items: Awaited<ReturnType<SubscriptionsService['findActiveWithoutPayment']>>;
+  }> {
+    const items = await this.findActiveWithoutPayment();
+    if (items.length === 0) return { suspended: 0, items: [] };
+
+    const ids = items.map((i) => i.id);
+    const { error } = await this.supabase
+      .from('client_subscriptions')
+      .update({ status: 'SUSPENDED', updatedAt: nowLocalIsoString() })
+      .in('id', ids);
+
+    if (error) {
+      this.logger.error(`[suspend-unpaid] falha ao suspender ${ids.length} assinatura(s): ${error.message}`);
+      throw new BadRequestException(`Falha ao suspender assinaturas: ${error.message}`);
+    }
+
+    this.logger.warn(`[suspend-unpaid] ${ids.length} assinatura(s) ACTIVE sem pagamento suspensa(s).`);
+    return { suspended: ids.length, items };
   }
 
   /**

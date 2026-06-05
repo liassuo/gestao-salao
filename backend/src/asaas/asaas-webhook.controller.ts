@@ -119,13 +119,26 @@ export class AsaasWebhookController {
     // por race condition / falha de DB".
     if (!localPayment) {
       const externalRef: string | undefined = paymentData.externalReference;
+      const asaasSubId: string | undefined = paymentData.subscription;
+      // Assinatura recorrente: a cobrança de cada ciclo chega sem payment local.
+      // Resolve a assinatura por externalReference (= id local) OU pelo id da
+      // assinatura Asaas (campo payment.subscription) — não depende de só um deles.
+      let linkedSub: { id: string; clientId: string } | null = null;
       if (externalRef) {
-        const { data: linkedSub } = await this.supabase
+        ({ data: linkedSub } = await this.supabase
           .from('client_subscriptions')
           .select('id, clientId')
           .eq('id', externalRef)
-          .maybeSingle();
-
+          .maybeSingle());
+      }
+      if (!linkedSub && asaasSubId) {
+        ({ data: linkedSub } = await this.supabase
+          .from('client_subscriptions')
+          .select('id, clientId')
+          .eq('asaasSubscriptionId', asaasSubId)
+          .maybeSingle());
+      }
+      if (externalRef || asaasSubId) {
         if (linkedSub) {
           const billingType = paymentData.billingType || 'PIX';
           const localMethod = billingType === 'CREDIT_CARD' ? 'CARD' : 'PIX';
@@ -480,16 +493,84 @@ export class AsaasWebhookController {
       .update({ asaasStatus: AsaasChargeStatus.OVERDUE })
       .eq('asaasPaymentId', asaasPaymentId);
 
+    const now = nowLocalIsoString();
+
     // Buscar pagamento local com dados do cliente
-    const { data: localPayment } = await this.supabase
+    let { data: localPayment } = await this.supabase
       .from('payments')
       .select('id, clientId, amount, subscriptionId')
       .eq('asaasPaymentId', asaasPaymentId)
       .single();
 
-    if (!localPayment) return;
+    if (!localPayment) {
+      // Renovação recorrente: a cobrança do novo ciclo ainda não tem payment local.
+      // Recria a partir do externalReference (= id da assinatura), igual ao caminho de
+      // confirmação, p/ poder suspender e lançar a dívida. Sem isso, só o cron de
+      // vencimento suspenderia e nenhuma dívida seria criada.
+      const externalRef: string | undefined = paymentData.externalReference;
+      const asaasSubId: string | undefined = paymentData.subscription;
+      let linkedSub: { id: string; clientId: string } | null = null;
+      if (externalRef) {
+        ({ data: linkedSub } = await this.supabase
+          .from('client_subscriptions')
+          .select('id, clientId')
+          .eq('id', externalRef)
+          .maybeSingle());
+      }
+      if (!linkedSub && asaasSubId) {
+        ({ data: linkedSub } = await this.supabase
+          .from('client_subscriptions')
+          .select('id, clientId')
+          .eq('asaasSubscriptionId', asaasSubId)
+          .maybeSingle());
+      }
+      if (!linkedSub) return;
 
-    const now = nowLocalIsoString();
+      const { data: systemAdmin } = await this.supabase
+        .from('users')
+        .select('id')
+        .eq('role', 'ADMIN')
+        .limit(1)
+        .maybeSingle();
+      if (!systemAdmin) {
+        this.logger.error(
+          `Webhook overdue: nenhum admin para registeredBy de ${asaasPaymentId}.`,
+        );
+        return;
+      }
+
+      const billingType = paymentData.billingType || 'PIX';
+      const localMethod = billingType === 'CREDIT_CARD' ? 'CARD' : 'PIX';
+      const amountCentavos = Math.round(Number(paymentData.value || 0) * 100);
+      const newId = require('crypto').randomUUID();
+      const { error: insErr } = await this.supabase.from('payments').insert({
+        id: newId,
+        clientId: (linkedSub as any).clientId,
+        subscriptionId: (linkedSub as any).id,
+        amount: amountCentavos,
+        method: localMethod,
+        registeredBy: (systemAdmin as any).id,
+        notes: `Cobrança recorrente vencida (cobrança ${asaasPaymentId})`,
+        asaasPaymentId,
+        asaasStatus: AsaasChargeStatus.OVERDUE,
+        paidAt: null,
+        businessDate: resolveBusinessDate(null, now),
+        createdAt: now,
+        updatedAt: now,
+      });
+      if (insErr) {
+        this.logger.error(
+          `Webhook overdue: falha ao recriar payment para ${asaasPaymentId}: ${insErr.message}`,
+        );
+        return;
+      }
+      localPayment = {
+        id: newId,
+        clientId: (linkedSub as any).clientId,
+        amount: amountCentavos,
+        subscriptionId: (linkedSub as any).id,
+      } as any;
+    }
 
     // Suspender assinatura vinculada
     if (localPayment.subscriptionId) {

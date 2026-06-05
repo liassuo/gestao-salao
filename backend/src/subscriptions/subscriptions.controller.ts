@@ -263,6 +263,31 @@ export class SubscriptionsController {
   }
 
   /**
+   * GET /subscriptions/admin/active-without-payment
+   * Lista assinaturas ACTIVE que nunca tiveram pagamento confirmado — o legado do
+   * bug "nascia ACTIVE sem pagar" (assinaturas ativas de graça). Só lista, não altera.
+   */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @Get('admin/active-without-payment')
+  async listActiveWithoutPayment() {
+    const items = await this.subscriptionsService.findActiveWithoutPayment();
+    return { total: items.length, items };
+  }
+
+  /**
+   * POST /subscriptions/admin/suspend-unpaid
+   * Suspende todas as assinaturas ACTIVE sem pagamento confirmado. Elas passam a
+   * exibir "Reativar assinatura" no app e o cliente precisa pagar p/ continuar.
+   */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @Post('admin/suspend-unpaid')
+  async suspendUnpaid() {
+    return this.subscriptionsService.suspendActiveWithoutPayment();
+  }
+
+  /**
    * POST /subscriptions/:id/use-cut
    * Registers a cut usage from subscription
    */
