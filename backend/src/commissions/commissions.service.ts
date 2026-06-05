@@ -364,17 +364,16 @@ export class CommissionsService {
   }
 
   /**
-   * Faturamento de referência das assinaturas no período.
+   * Faturamento das assinaturas no período = SOMENTE pagamentos reais de
+   * assinatura (payments com subscriptionId e paidAt no período).
    *
-   * Estratégia híbrida:
-   * 1. Soma os pagamentos com subscriptionId não-nulo no período
-   *    (caminho ideal — reflete o que realmente entrou no caixa).
-   * 2. Se não houver nenhum pagamento vinculado (caso de assinaturas
-   *    quitadas manualmente sem vincular subscriptionId), faz fallback
-   *    para soma de plan.price das assinaturas ativas que se sobrepõem
-   *    ao período — é o valor mensal de referência.
-   *
-   * O usuário pode sempre sobrescrever o resultado no campo editável.
+   * Envolve dinheiro (vira o "pote" dividido entre barbeiros), então NÃO usamos
+   * estimativa: nada de fallback por plan.price das assinaturas ativas. O fallback
+   * antigo dependia do status ATUAL da assinatura (ACTIVE/SUSPENDED), que os crons
+   * mudam ao longo do tempo (ACTIVE→SUSPENDED→CANCELED) — isso fazia o pote encolher
+   * sozinho entre gerações. Agora o valor é determinístico: reflete o que de fato
+   * entrou. Se não houver pagamento registrado, o pote é 0 e o admin pode informar
+   * manualmente pelo campo de override (subscriptionRevenueOverride).
    */
   private async computeSubscriptionRevenue(
     startStr: string,
@@ -387,23 +386,8 @@ export class CommissionsService {
       .gte('paidAt', startStr)
       .lte('paidAt', endStr);
 
-    const fromPayments = (paidPayments || []).reduce(
+    return (paidPayments || []).reduce(
       (sum: number, p: any) => sum + (p.amount || 0),
-      0,
-    );
-
-    if (fromPayments > 0) return fromPayments;
-
-    // Fallback: soma plan.price das assinaturas com sobreposição ao período
-    const { data: activeSubscriptions } = await this.supabase
-      .from('client_subscriptions')
-      .select('plan:subscription_plans!planId(price)')
-      .in('status', ['ACTIVE', 'SUSPENDED'])
-      .lte('startDate', endStr)
-      .gte('endDate', startStr);
-
-    return (activeSubscriptions || []).reduce(
-      (sum: number, sub: any) => sum + (sub.plan?.price || 0),
       0,
     );
   }
