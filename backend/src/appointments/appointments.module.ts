@@ -5,9 +5,10 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { InAppNotificationsModule } from '../in-app-notifications/in-app-notifications.module';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 import { AsaasModule } from '../asaas/asaas.module';
+import { CashRegisterModule } from '../cash-register/cash-register.module';
 
 @Module({
-  imports: [NotificationsModule, InAppNotificationsModule, SubscriptionsModule, AsaasModule],
+  imports: [NotificationsModule, InAppNotificationsModule, SubscriptionsModule, AsaasModule, CashRegisterModule],
   controllers: [AppointmentsController],
   providers: [AppointmentsService],
   exports: [AppointmentsService],

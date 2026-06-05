@@ -202,6 +202,78 @@ export class AsaasWebhookController {
             notes: `Reconciliação webhook (cobrança ${asaasPaymentId})`,
           };
           justCreatedByFallback = true;
+        } else {
+          // Não é assinatura: tentar casar o externalReference com um AGENDAMENTO.
+          // Cobre "cliente pagou PIX do agendamento, mas o payments local nunca foi
+          // inserido (race/falha de DB)" — antes só assinatura tinha esse resgate.
+          const { data: linkedAppt } = await this.supabase
+            .from('appointments')
+            .select('id, clientId, scheduledAt')
+            .eq('id', externalRef)
+            .maybeSingle();
+
+          if (linkedAppt) {
+            const billingType = paymentData.billingType || 'PIX';
+            const localMethod = billingType === 'CREDIT_CARD' ? 'CARD' : 'PIX';
+            const amountCentavos = Math.round(Number(paymentData.value || 0) * 100);
+            const now = nowLocalIsoString();
+            const confirmedAt =
+              paymentData.confirmedDate ||
+              paymentData.clientPaymentDate ||
+              paymentData.paymentDate ||
+              now;
+            const businessDate = resolveBusinessDate((linkedAppt as any).scheduledAt, confirmedAt);
+            const newId = require('crypto').randomUUID();
+
+            const { data: systemAdmin } = await this.supabase
+              .from('users')
+              .select('id')
+              .eq('role', 'ADMIN')
+              .limit(1)
+              .maybeSingle();
+            if (!systemAdmin) {
+              this.logger.error(
+                `Webhook fallback (agendamento): nenhum admin para registeredBy de ${asaasPaymentId}. Cron de reconciliação vai cobrir.`,
+              );
+              return;
+            }
+
+            const { error: insErr } = await this.supabase.from('payments').insert({
+              id: newId,
+              clientId: (linkedAppt as any).clientId,
+              appointmentId: (linkedAppt as any).id,
+              amount: amountCentavos,
+              method: localMethod,
+              registeredBy: systemAdmin.id,
+              notes: `Reconciliação webhook (cobrança ${asaasPaymentId})`,
+              asaasPaymentId,
+              asaasStatus: status,
+              paidAt: confirmedAt,
+              businessDate,
+              createdAt: now,
+              updatedAt: now,
+            });
+            if (insErr) {
+              this.logger.error(
+                `Webhook fallback (agendamento): falha ao recriar payments para ${asaasPaymentId}: ${insErr.message}`,
+              );
+              return;
+            }
+            this.logger.warn(
+              `Webhook fallback: payments recriado para ${asaasPaymentId} (agendamento ${(linkedAppt as any).id})`,
+            );
+            localPayment = {
+              id: newId,
+              appointmentId: (linkedAppt as any).id,
+              clientId: (linkedAppt as any).clientId,
+              amount: amountCentavos,
+              subscriptionId: null,
+              asaasStatus: status,
+              paidAt: confirmedAt,
+              notes: `Reconciliação webhook (cobrança ${asaasPaymentId})`,
+            };
+            justCreatedByFallback = true;
+          }
         }
       }
     }

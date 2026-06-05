@@ -8,7 +8,8 @@ import {
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
-import { nowLocalIsoString, localDateString } from '../common/datetime.util';
+import { nowLocalIsoString, localDateString, resolveBusinessDate } from '../common/datetime.util';
+import { CashRegisterService } from '../cash-register/cash-register.service';
 import {
   CreateAppointmentDto,
   CreateTimeBlockDto,
@@ -39,6 +40,7 @@ export class AppointmentsService {
   constructor(
     private readonly supabase: SupabaseService,
     private readonly asaasService: AsaasService,
+    private readonly cashRegisterService: CashRegisterService,
   ) {}
 
   /** Select padrão com joins para client, professional e services */
@@ -1521,6 +1523,24 @@ export class AppointmentsService {
       throw apptError;
     }
 
+    // 2.1 Marcar quais agendamentos são de clientes que estão devendo (hasDebts),
+    // para o calendário sinalizar visualmente (borda lilás + etiqueta "Devendo").
+    const clientIds = Array.from(
+      new Set((appointments || []).map((a: any) => a.clientId).filter(Boolean)),
+    );
+    let debtorIds = new Set<string>();
+    if (clientIds.length > 0) {
+      const { data: debtors } = await this.supabase
+        .from('clients')
+        .select('id')
+        .in('id', clientIds)
+        .eq('hasDebts', true);
+      debtorIds = new Set((debtors || []).map((c: any) => c.id));
+    }
+    for (const a of appointments || []) {
+      (a as any).clientHasDebts = a.clientId ? debtorIds.has(a.clientId) : false;
+    }
+
     // 3. Buscar bloqueios de horário do dia
     const { data: timeBlocks, error: tbError } = await this.supabase
       .from('time_blocks')
@@ -1856,8 +1876,10 @@ export class AppointmentsService {
 
   /**
    * Cron: cancelar agendamentos PENDING_PAYMENT com mais de 10 minutos.
-   * Roda a cada 2 minutos para garantir que horários sejam liberados
-   * mesmo se o cliente fechar o navegador.
+   * BLINDAGEM: antes de cancelar, confere no Asaas se a cobrança já foi paga.
+   * Se foi, dá baixa (promove o agendamento) em vez de cancelar — assim um PIX
+   * pago cujo webhook atrasou/falhou NUNCA mais é cancelado por engano (era a
+   * causa de "cliente pagou no PIX e não deu baixa").
    */
   @Cron(CronExpression.EVERY_10_MINUTES)
   async expirePendingPayments() {
@@ -1873,24 +1895,42 @@ export class AppointmentsService {
 
     const now = nowLocalIsoString();
     for (const appt of stale) {
+      // Pagamento Asaas vinculado (se houver)
+      const { data: payment } = await this.supabase
+        .from('payments')
+        .select('id, asaasPaymentId, paidAt')
+        .eq('appointmentId', appt.id)
+        .is('paidAt', null)
+        .maybeSingle();
+
+      // Se há cobrança Asaas, conferir o status REAL antes de cancelar.
+      if (this.asaasService.configured && payment?.asaasPaymentId) {
+        try {
+          const charge = await this.asaasService.getCharge(payment.asaasPaymentId);
+          if (['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(charge.status)) {
+            // Pago! Dá baixa em vez de cancelar.
+            await this.settleAppointmentFromAsaasCharge(appt.id, payment.id, charge.status);
+            this.logger.warn(
+              `Agendamento ${appt.id} estava PENDING_PAYMENT mas a cobrança ${payment.asaasPaymentId} já está ${charge.status} no Asaas — baixa aplicada (webhook atrasou/falhou).`,
+            );
+            continue; // não cancela
+          }
+        } catch (e) {
+          // Falha ao consultar Asaas: por segurança NÃO cancela agora (tenta no próximo ciclo).
+          this.logger.warn(`Falha ao consultar cobrança ${payment.asaasPaymentId} no Asaas; adiando cancelamento do agendamento ${appt.id}: ${e}`);
+          continue;
+        }
+      }
+
       await this.supabase
         .from('appointments')
         .update({ status: 'CANCELED', updatedAt: now })
         .eq('id', appt.id)
         .eq('status', 'PENDING_PAYMENT');
 
-      // Cancelar cobrança no Asaas se existir
-      if (this.asaasService.configured) {
-        const { data: payment } = await this.supabase
-          .from('payments')
-          .select('asaasPaymentId')
-          .eq('appointmentId', appt.id)
-          .is('paidAt', null)
-          .single();
-
-        if (payment?.asaasPaymentId) {
-          try { await this.asaasService.cancelCharge(payment.asaasPaymentId); } catch {}
-        }
+      // Cancelar cobrança no Asaas (só chega aqui se não estava paga)
+      if (this.asaasService.configured && payment?.asaasPaymentId) {
+        try { await this.asaasService.cancelCharge(payment.asaasPaymentId); } catch {}
       }
 
       // Devolver créditos consumidos pela comanda vinculada (cancelamento auto)
@@ -1905,5 +1945,93 @@ export class AppointmentsService {
 
       this.logger.log(`Agendamento ${appt.id} cancelado automaticamente (PENDING_PAYMENT expirado)`);
     }
+  }
+
+  /**
+   * Cron de RECONCILIAÇÃO de agendamentos: rede de segurança caso o webhook do
+   * Asaas atrase ou falhe. Varre agendamentos PENDING_PAYMENT recentes e, se a
+   * cobrança já estiver paga no Asaas, dá baixa. Espelha o que já existe para
+   * assinaturas. Sem isso, a baixa dependia 100% do webhook (ponto único de falha).
+   */
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async reconcilePendingAppointmentsCron() {
+    if (!this.asaasService.configured) return;
+
+    // Só os recentes (últimas 24h) — pendentes antigos já foram tratados/cancelados.
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { data: pendings } = await this.supabase
+      .from('appointments')
+      .select('id')
+      .eq('status', 'PENDING_PAYMENT')
+      .gte('createdAt', since)
+      .limit(100);
+
+    if (!pendings?.length) return;
+
+    for (const appt of pendings) {
+      const { data: payment } = await this.supabase
+        .from('payments')
+        .select('id, asaasPaymentId, paidAt')
+        .eq('appointmentId', appt.id)
+        .is('paidAt', null)
+        .maybeSingle();
+      if (!payment?.asaasPaymentId) continue;
+
+      try {
+        const charge = await this.asaasService.getCharge(payment.asaasPaymentId);
+        if (['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(charge.status)) {
+          await this.settleAppointmentFromAsaasCharge(appt.id, payment.id, charge.status);
+          this.logger.log(`[reconcile-appt-cron] baixa aplicada no agendamento ${appt.id} (cobrança ${charge.status})`);
+        }
+      } catch {
+        // ignora; tenta no próximo ciclo
+      }
+    }
+  }
+
+  /**
+   * Aplica a baixa de um pagamento Asaas confirmado a um agendamento: marca o
+   * payment como pago, promove o agendamento (isPaid + SCHEDULED), paga a comanda
+   * vinculada e vincula ao caixa. Idempotente. Usado pelo cron de expiração
+   * (quando detecta pago antes de cancelar) e pelo cron de reconciliação.
+   */
+  private async settleAppointmentFromAsaasCharge(
+    appointmentId: string,
+    paymentId: string,
+    asaasStatus: string,
+  ): Promise<void> {
+    const now = nowLocalIsoString();
+
+    // Data contábil = dia do atendimento (scheduledAt), senão o pagamento.
+    const { data: appt } = await this.supabase
+      .from('appointments')
+      .select('scheduledAt, status')
+      .eq('id', appointmentId)
+      .maybeSingle();
+    if (!appt) return;
+    const businessDate = resolveBusinessDate((appt as any).scheduledAt, now);
+
+    // Idempotência: só preenche paidAt se ainda nulo.
+    await this.supabase
+      .from('payments')
+      .update({ paidAt: now, asaasStatus, businessDate, updatedAt: now })
+      .eq('id', paymentId)
+      .is('paidAt', null);
+
+    await this.cashRegisterService.linkPaymentToBusinessDateRegister(paymentId, businessDate);
+
+    // Promove o agendamento (não rebaixa se já ATTENDED).
+    await this.supabase
+      .from('appointments')
+      .update({ isPaid: true, status: 'SCHEDULED', updatedAt: now })
+      .eq('id', appointmentId)
+      .in('status', ['PENDING_PAYMENT', 'CANCELED']);
+
+    // Paga a comanda vinculada pendente.
+    await this.supabase
+      .from('orders')
+      .update({ status: 'PAID', paymentId, updatedAt: now })
+      .eq('appointmentId', appointmentId)
+      .eq('status', 'PENDING');
   }
 }

@@ -8,6 +8,7 @@ import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { AppointmentsService } from './appointments.service';
 import { SupabaseService } from '../supabase/supabase.service';
 import { AsaasService } from '../asaas/asaas.service';
+import { CashRegisterService } from '../cash-register/cash-register.service';
 import { CreateAppointmentDto } from './dto';
 
 const mockAsaasService = {
@@ -62,6 +63,10 @@ describe('AppointmentsService', () => {
         AppointmentsService,
         { provide: SupabaseService, useValue: mockSupabase },
         { provide: AsaasService, useValue: mockAsaasService },
+        {
+          provide: CashRegisterService,
+          useValue: { linkPaymentToBusinessDateRegister: jest.fn() },
+        },
       ],
     }).compile();
 
