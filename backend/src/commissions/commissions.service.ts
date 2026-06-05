@@ -67,6 +67,11 @@ export class CommissionsService {
         .filter((c: any) => c.status === 'PENDING')
         .map((c: any) => c.id);
       if (pendingIds.length > 0) {
+        // ANTES de apagar, estornar as deduções de débito que essas comissões
+        // fizeram — senão regerar o mesmo período dá valores diferentes a cada
+        // clique (a comissão some, mas o débito deduzido fica DEDUCTED e a base
+        // muda). Com o estorno, a geração volta a ser idempotente.
+        await this.professionalDebtsService.reverseDeductionsForCommissions(pendingIds);
         await this.supabase.from('commissions').delete().in('id', pendingIds);
       }
     }

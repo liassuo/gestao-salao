@@ -342,6 +342,81 @@ export class ProfessionalDebtsService {
     return totalDeducted;
   }
 
+  /**
+   * Estorna as deduções de débito feitas por um conjunto de comissões — usado
+   * ANTES de apagar/regerar comissões PENDING, para a geração ser idempotente.
+   *
+   * Sem isso, regerar comissão do mesmo período dava valores diferentes a cada
+   * clique (caindo): a comissão antiga era apagada mas os débitos que ela tinha
+   * deduzido permaneciam DEDUCTED, então a base mudava a cada geração.
+   *
+   * Trata os dois formatos que applyDeductionToCommission cria:
+   *  (a) Quitação TOTAL: o próprio débito vira DEDUCTED com deductedFromCommissionId
+   *      → volta a PENDING com saldo integral.
+   *  (b) Cobertura PARCIAL: o débito-pai fica PENDING com saldo reduzido e há um
+   *      registro-ledger DEDUCTED separado (orderId null, deductedFromCommissionId)
+   *      → devolve o valor do ledger ao débito-pai e apaga o ledger.
+   */
+  async reverseDeductionsForCommissions(commissionIds: string[]): Promise<void> {
+    if (!commissionIds || commissionIds.length === 0) return;
+
+    const { data: deductions } = await this.supabase
+      .from('professional_debts')
+      .select('id, professionalId, amount, amountPaid, description, orderId')
+      .eq('status', 'DEDUCTED')
+      .in('deductedFromCommissionId', commissionIds);
+
+    if (!deductions || deductions.length === 0) return;
+    const now = nowLocalIsoString();
+
+    for (const d of deductions as any[]) {
+      const isPartialLedger =
+        typeof d.description === 'string' &&
+        d.description.startsWith('Dedução parcial do débito ');
+
+      if (isPartialLedger) {
+        // (b) Devolve o valor coberto ao débito-pai (identificado pelos 8 chars
+        // do id no texto) e remove o registro-ledger.
+        const match = /Dedução parcial do débito ([0-9a-f]{8})/.exec(d.description);
+        const parentPrefix = match?.[1];
+        if (parentPrefix) {
+          const { data: parents } = await this.supabase
+            .from('professional_debts')
+            .select('id, amountPaid, remainingBalance, status')
+            .eq('professionalId', d.professionalId)
+            .like('id', `${parentPrefix}%`);
+          const parent = (parents || [])[0] as any;
+          if (parent) {
+            await this.supabase
+              .from('professional_debts')
+              .update({
+                amountPaid: Math.max(0, (parent.amountPaid || 0) - d.amount),
+                remainingBalance: (parent.remainingBalance || 0) + d.amount,
+                status: 'PENDING',
+                settledAt: null,
+                updatedAt: now,
+              })
+              .eq('id', parent.id);
+          }
+        }
+        await this.supabase.from('professional_debts').delete().eq('id', d.id);
+      } else {
+        // (a) Débito quitado integralmente por esta comissão → volta a PENDING.
+        await this.supabase
+          .from('professional_debts')
+          .update({
+            amountPaid: Math.max(0, (d.amountPaid || 0) - d.amount),
+            remainingBalance: d.amount,
+            status: 'PENDING',
+            deductedFromCommissionId: null,
+            settledAt: null,
+            updatedAt: now,
+          })
+          .eq('id', d.id);
+      }
+    }
+  }
+
   async remove(id: string): Promise<void> {
     const debt = await this.findOne(id);
 
