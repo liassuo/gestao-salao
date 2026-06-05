@@ -1,4 +1,5 @@
 import { AlertTriangle, Loader2, X } from 'lucide-react';
+import type { ReactNode } from 'react';
 
 export type ConfirmModalVariant = 'danger' | 'warning' | 'info';
 
@@ -12,6 +13,8 @@ interface ConfirmModalProps {
   cancelLabel?: string;
   variant?: ConfirmModalVariant;
   isLoading?: boolean;
+  /** Conteúdo extra opcional (ex.: seletor de método de pagamento) entre a mensagem e o rodapé. */
+  children?: ReactNode;
 }
 
 const variantStyles = {
@@ -42,6 +45,7 @@ export function ConfirmModal({
   cancelLabel = 'Cancelar',
   variant = 'danger',
   isLoading = false,
+  children,
 }: ConfirmModalProps) {
   if (!isOpen) return null;
 
@@ -88,6 +92,7 @@ export function ConfirmModal({
             </div>
             <p className="text-sm text-[var(--text-secondary)]">{message}</p>
           </div>
+          {children && <div className="mt-4">{children}</div>}
         </div>
 
         {/* Footer */}

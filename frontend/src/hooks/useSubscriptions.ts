@@ -155,7 +155,8 @@ export function useConfirmSubscriptionPayment() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => subscriptionsService.confirmPayment(id),
+    mutationFn: ({ id, method }: { id: string; method?: 'CASH' | 'PIX' | 'CARD' }) =>
+      subscriptionsService.confirmPayment(id, method),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [SUBSCRIPTIONS_KEY] });
       queryClient.invalidateQueries({ queryKey: [SUBSCRIPTION_PLANS_KEY] });

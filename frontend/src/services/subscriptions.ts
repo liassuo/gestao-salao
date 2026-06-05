@@ -127,8 +127,14 @@ export const subscriptionsService = {
     return response.data;
   },
 
-  async confirmPayment(id: string): Promise<ClientSubscription> {
-    const response = await api.post<ClientSubscription>(`/subscriptions/${id}/confirm-payment`);
+  async confirmPayment(
+    id: string,
+    method: 'CASH' | 'PIX' | 'CARD' = 'CASH',
+  ): Promise<ClientSubscription> {
+    const response = await api.post<ClientSubscription>(
+      `/subscriptions/${id}/confirm-payment`,
+      { method },
+    );
     return response.data;
   },
 

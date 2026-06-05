@@ -67,6 +67,7 @@ export function Subscriptions() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ACTIVE');
   const [searchQuery, setSearchQuery] = useState('');
   const [confirmingPayment, setConfirmingPayment] = useState<ClientSubscription | null>(null);
+  const [confirmMethod, setConfirmMethod] = useState<'CASH' | 'PIX' | 'CARD'>('CASH');
   const [deletingSubscription, setDeletingSubscription] = useState<ClientSubscription | null>(null);
   const [reactivatingSubscription, setReactivatingSubscription] = useState<ClientSubscription | null>(null);
 
@@ -268,9 +269,10 @@ export function Subscriptions() {
   const handleConfirmPayment = async () => {
     if (!confirmingPayment) return;
     try {
-      await confirmPayment.mutateAsync(confirmingPayment.id);
+      await confirmPayment.mutateAsync({ id: confirmingPayment.id, method: confirmMethod });
       const name = confirmingPayment.client?.name || 'cliente';
       setConfirmingPayment(null);
+      setConfirmMethod('CASH');
       toast.success('Pagamento confirmado', `Assinatura de ${name} ativada.`);
     } catch (err) {
       toast.error('Erro', getApiErrorMessage(err));
@@ -610,18 +612,48 @@ export function Subscriptions() {
       {/* Confirmar pagamento manual */}
       <ConfirmModal
         isOpen={!!confirmingPayment}
-        onClose={() => setConfirmingPayment(null)}
+        onClose={() => {
+          setConfirmingPayment(null);
+          setConfirmMethod('CASH');
+        }}
         onConfirm={handleConfirmPayment}
         title="Confirmar pagamento manual"
         message={
           confirmingPayment
-            ? `Marcar a assinatura de ${confirmingPayment.client?.name || 'cliente'} como ATIVA sem confirmação do gateway? Use apenas se o cliente já tiver pago em dinheiro ou transferência. Esta ação zera os cortes do mês e renova a validade.`
+            ? `Marcar a assinatura de ${confirmingPayment.client?.name || 'cliente'} como ATIVA. Use quando o cliente já tiver pago no balcão. O pagamento é registrado no caixa e a ação zera os cortes do mês e renova a validade.`
             : ''
         }
         confirmLabel="Confirmar pagamento"
         variant="info"
         isLoading={confirmPayment.isPending}
-      />
+      >
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">
+            Como foi pago?
+          </label>
+          <div className="grid grid-cols-3 gap-2">
+            {([
+              { value: 'CASH', label: 'Dinheiro' },
+              { value: 'PIX', label: 'PIX' },
+              { value: 'CARD', label: 'Cartão' },
+            ] as const).map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                disabled={confirmPayment.isPending}
+                onClick={() => setConfirmMethod(opt.value)}
+                className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                  confirmMethod === opt.value
+                    ? 'border-[#8B6914] bg-[#C8923A]/20 text-[var(--text-primary)]'
+                    : 'border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </ConfirmModal>
 
       {/* Reativar assinatura encerrada */}
       <ConfirmModal

@@ -790,7 +790,7 @@ export class SubscriptionsService {
    * Marca como ACTIVE, zera cortes e renova endDate se já vencido.
    * Útil para casos de pagamento offline (dinheiro, transferência).
    */
-  async confirmPaymentManually(subscriptionId: string) {
+  async confirmPaymentManually(subscriptionId: string, method?: string) {
     const subscription = await this.findSubscription(subscriptionId);
 
     if (subscription.status !== 'PENDING_PAYMENT') {
@@ -799,6 +799,7 @@ export class SubscriptionsService {
 
     const now = new Date();
     const nowIso = now.toISOString();
+    const nowLocal = nowLocalIsoString();
 
     // 1ª ativação (sempre vem de PENDING_PAYMENT): o ciclo começa AGORA, então o
     // vencimento é agora + 1 mês. NÃO reaproveitar o endDate da criação — ele já
@@ -821,7 +822,41 @@ export class SubscriptionsService {
 
     if (error) throw error;
 
-    this.logger.log(`Assinatura ${subscription.id} confirmada manualmente (admin) — status ACTIVE até ${newEndDate.toISOString()}`);
+    // Registrar COMO foi paga a mensalidade, para o caixa contabilizar. Antes,
+    // a confirmação manual só virava o status e nada entrava no caixa — o
+    // relatório ficava furado (assinatura ACTIVE sem pagamento registrado).
+    // Default CASH (dinheiro), que é o caso típico de confirmação no balcão.
+    const localMethod = method || 'CASH';
+    const amount = subscription.plan?.price ?? 0;
+    if (amount > 0) {
+      // Assinatura não tem agendamento → data contábil = dia do pagamento.
+      const businessDate = resolveBusinessDate(null, nowLocal);
+      const paymentId = randomUUID();
+      const { error: payError } = await this.supabase.from('payments').insert({
+        id: paymentId,
+        clientId: subscription.clientId,
+        subscriptionId: subscription.id,
+        amount,
+        method: localMethod,
+        registeredBy: subscription.clientId,
+        notes: `Confirmação manual de pagamento (assinatura ${subscription.plan?.name ?? ''})`.trim(),
+        paidAt: nowLocal,
+        businessDate,
+        createdAt: nowLocal,
+        updatedAt: nowLocal,
+      });
+      if (payError) {
+        // Não desfaz a ativação — apenas loga. A assinatura ativou; o pagamento
+        // pode ser relançado manualmente se necessário.
+        this.logger.error(`Falha ao registrar pagamento da confirmação manual (assinatura ${subscription.id}): ${JSON.stringify(payError)}`);
+      } else {
+        await this.cashRegisterService
+          .linkPaymentToBusinessDateRegister(paymentId, businessDate)
+          .catch((e) => this.logger.warn(`Falha ao vincular pagamento ${paymentId} ao caixa: ${e}`));
+      }
+    }
+
+    this.logger.log(`Assinatura ${subscription.id} confirmada manualmente (admin, ${localMethod}) — status ACTIVE até ${newEndDate.toISOString()}`);
     return updated;
   }
 

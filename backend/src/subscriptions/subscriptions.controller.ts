@@ -26,6 +26,7 @@ import {
   SubscribeClientDto,
   SubscribeMeDto,
   ReactivateMeDto,
+  ConfirmPaymentDto,
 } from './dto';
 
 interface RequestWithUser extends Request {
@@ -332,8 +333,11 @@ export class SubscriptionsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Post(':id/confirm-payment')
-  async confirmPayment(@Param('id', ParseUUIDPipe) id: string) {
-    return this.subscriptionsService.confirmPaymentManually(id);
+  async confirmPayment(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body?: ConfirmPaymentDto,
+  ) {
+    return this.subscriptionsService.confirmPaymentManually(id, body?.method);
   }
 
   /**
