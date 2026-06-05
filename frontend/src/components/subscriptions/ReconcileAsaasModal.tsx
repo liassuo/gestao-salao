@@ -27,6 +27,28 @@ const kindLabels: Record<ReconcileIssue['kind'], string> = {
   unknown: '—',
 };
 
+// Traduz o status técnico do Asaas para algo legível pelo dono do salão.
+const asaasStatusLabels: Record<string, string> = {
+  PENDING: 'Aguardando pagamento',
+  RECEIVED: 'Pago',
+  CONFIRMED: 'Pago (confirmado)',
+  RECEIVED_IN_CASH: 'Pago em dinheiro',
+  OVERDUE: 'Vencido',
+  REFUNDED: 'Estornado',
+  REFUND_REQUESTED: 'Estorno solicitado',
+  REFUND_IN_PROGRESS: 'Estorno em andamento',
+  CHARGEBACK_REQUESTED: 'Contestação solicitada',
+  CHARGEBACK_DISPUTE: 'Em disputa',
+  AWAITING_CHARGEBACK_REVERSAL: 'Aguardando reversão de contestação',
+  DUNNING_REQUESTED: 'Cobrança em negativação',
+  DUNNING_RECEIVED: 'Pago após negativação',
+  AWAITING_RISK_ANALYSIS: 'Em análise',
+};
+
+function formatAsaasStatus(status: string): string {
+  return asaasStatusLabels[status] || status;
+}
+
 function formatCurrency(cents: number): string {
   return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
@@ -165,7 +187,7 @@ export function ReconcileAsaasModal({ isOpen, onClose }: { isOpen: boolean; onCl
                       <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-[var(--text-muted)]">
                         <span>Valor: <span className="text-[var(--text-secondary)]">{formatCurrency(issue.amount)}</span></span>
                         <span>Confirmado: <span className="text-[var(--text-secondary)]">{formatDate(issue.confirmedAt)}</span></span>
-                        <span>Status Asaas: <span className="text-[var(--text-secondary)]">{issue.asaasStatus}</span></span>
+                        <span>Status Asaas: <span className="text-[var(--text-secondary)]">{formatAsaasStatus(issue.asaasStatus)}</span></span>
                       </div>
                       <p className="mt-2 text-xs italic text-[#C8923A]">→ {issue.suggestedAction}</p>
                     </div>
@@ -175,7 +197,7 @@ export function ReconcileAsaasModal({ isOpen, onClose }: { isOpen: boolean; onCl
                       className="flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
                     >
                       {isResolving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                      Resolver
+                      Confirmar pagamento
                     </button>
                   </div>
                 </div>
@@ -186,7 +208,7 @@ export function ReconcileAsaasModal({ isOpen, onClose }: { isOpen: boolean; onCl
 
         <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-primary)] p-3 text-xs text-[var(--text-muted)]">
           <AlertTriangle className="mr-1 inline h-3 w-3 text-amber-400" />
-          O botão "Resolver" registra o pagamento no caixa, ativa a assinatura ou restaura o agendamento — conforme o caso. É idempotente: pode clicar duas vezes sem duplicar.
+          O botão "Confirmar pagamento" registra o pagamento no caixa, ativa a assinatura ou restaura o agendamento — conforme o caso. Pode clicar sem medo: não duplica valor mesmo que clique duas vezes.
         </div>
 
         <div className="flex justify-end border-t border-[var(--border-color)] pt-3">
