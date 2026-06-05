@@ -360,12 +360,18 @@ export class AppointmentsService {
         status: initialStatus,
         notes: dto.notes,
         source: dto.source || 'ADMIN',
-        // Marca como "assinatura" apenas quando ALGUM serviço escolhido é coberto
-        // pelo plano (anyServiceCoveredByPlan) ou de fato consumiu crédito. NÃO usa
-        // mais o dto.useSubscriptionCut cru: marcar "usar crédito" não deve pintar de
-        // plano um agendamento cujo serviço o plano não cobre (ex.: plano de barba +
-        // corte avulso — o corte é cobrado e o card deve ficar "Agendado").
-        usedSubscriptionCut: anyServiceCoveredByPlan || consumedFlags.some(Boolean),
+        // Marca "assinatura" SOMENTE quando um corte de assinatura é de fato usado.
+        // A flag alimenta a COMISSÃO (commissions.service: avulso vs. pote de fichas)
+        // e a devolução de corte no NO-SHOW (markAsNoShow) — não é só a cor do card.
+        //   - Fluxo natural: algum serviço coberto consumiu crédito (consumedFlags).
+        //     Serviço coberto mas SEM saldo de cortes é cobrado normalmente, então
+        //     NÃO marca — senão a comissão cairia no pote de fichas em vez do preço
+        //     cobrado e o no-show devolveria um corte que nunca foi consumido.
+        //   - Fluxo legado (useSubscriptionCut): o controller debita 1 corte, mas só
+        //     há corte a aplicar se ALGUM serviço escolhido é coberto pelo plano
+        //     (ex.: plano de barba + corte avulso não marca).
+        usedSubscriptionCut:
+          consumedFlags.some(Boolean) || (useCut && anyServiceCoveredByPlan),
         createdAt: now,
         updatedAt: now,
       })

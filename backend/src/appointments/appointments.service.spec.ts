@@ -250,6 +250,48 @@ describe('AppointmentsService', () => {
       expect((mockSupabase as any).rpc).not.toHaveBeenCalled();
     });
 
+    /**
+     * Regressão (BUG: anyServiceCoveredByPlan marcava flag mesmo sem consumir corte):
+     * serviço coberto pelo plano mas com os cortes do mês ESGOTADOS (remainingCuts=0,
+     * fluxo natural sem useSubscriptionCut) é COBRADO normalmente. Nesse caso
+     * usedSubscriptionCut deve ser FALSE — senão a comissão iria pro pote de fichas
+     * (commissions.service) em vez do preço cobrado, e o no-show (markAsNoShow)
+     * devolveria um corte que nunca foi consumido.
+     */
+    it('serviço coberto SEM saldo de cortes é cobrado e NÃO marca usedSubscriptionCut', async () => {
+      setupCreateSuccess();
+      // Plano cobre svc-1 (override 100%), desconto global 20%, mas o cliente já
+      // gastou todos os cortes do mês (2 de 2) → remainingCuts = 0.
+      chains['client_subscriptions'].maybeSingle.mockResolvedValue({
+        data: {
+          id: 'sub-1',
+          cutsUsedThisMonth: 2,
+          plan: {
+            id: 'plan-1',
+            cutsPerMonth: 2,
+            discountPercent: 20,
+            services: [{ serviceId: 'svc-1', discountPercent: 100 }],
+          },
+        },
+        error: null,
+      });
+      (mockSupabase as any).rpc = jest.fn();
+
+      const result = await service.create(dto);
+
+      expect(result).toMatchObject({ id: 'mock-uuid-123' });
+
+      const insertCall = chains['appointments'].insert.mock.calls[0][0];
+      // svc-1 coberto mas sem saldo → cobra com max(promo 10%, global 20%) = 20%:
+      //   10000 * 80/100 = 8000. svc-2 (extra): 5000 * 80/100 = 4000. Total 12000 (>0).
+      expect(insertCall.totalPrice).toBe(12000);
+      // Nenhum corte consumido → flag deve ser false (serviço foi cobrado).
+      expect(insertCall.usedSubscriptionCut).toBe(false);
+
+      // Sem consumo de crédito, não há débito automático de corte.
+      expect((mockSupabase as any).rpc).not.toHaveBeenCalled();
+    });
+
     // Assinante so pode agendar ate o dia em que a assinatura vence (inclusive).
     // A assinatura precisa estar VIGENTE hoje (endDate > agora, senao o helper
     // getActiveClientSubscription ja a trata como vencida e retorna null); o que
