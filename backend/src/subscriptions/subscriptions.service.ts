@@ -1501,6 +1501,41 @@ export class SubscriptionsService {
   }
 
   /**
+   * Sweep das assinaturas ACTIVE NÃO-canceladas que já venceram (endDate passou):
+   * suspende-as. Antes, a suspensão de vencidos só ocorria "preguiçosamente" quando
+   * o cliente abria o app (findClientSubscription). Sem este cron, uma assinatura
+   * vencida ficava gravada como ACTIVE e a tela do cliente mostrava "Plano ativo"
+   * SEM opção de renovar/gerar PIX — o cliente precisava pedir ao dono. Suspendendo
+   * proativamente, o app já exibe o botão "Reativar assinatura" (que gera PIX).
+   * As canceladas vencidas são tratadas por expireCanceledSubscriptionsCron (→ CANCELED).
+   */
+  @Cron(CronExpression.EVERY_10_MINUTES)
+  async suspendExpiredActiveSubscriptionsCron() {
+    const nowIso = new Date().toISOString();
+    const { data: expired } = await this.supabase
+      .from('client_subscriptions')
+      .select('id')
+      .eq('status', 'ACTIVE')
+      .is('canceledAt', null) // canceladas vencidas viram CANCELED no outro cron
+      .lt('endDate', nowIso)
+      .limit(200);
+
+    if (!expired || expired.length === 0) return;
+
+    const ids = expired.map((s: any) => s.id);
+    const { error } = await this.supabase
+      .from('client_subscriptions')
+      .update({ status: 'SUSPENDED', updatedAt: nowLocalIsoString() })
+      .in('id', ids);
+
+    if (error) {
+      this.logger.warn(`[suspend-expired-cron] falha ao suspender ${ids.length} assinatura(s): ${error.message}`);
+      return;
+    }
+    this.logger.log(`[suspend-expired-cron] ${ids.length} assinatura(s) suspensa(s) ao vencer`);
+  }
+
+  /**
    * Cron de reconciliação: a cada 10 minutos varre todas as assinaturas
    * em PENDING_PAYMENT e tenta sincronizar com o Asaas.
    *
