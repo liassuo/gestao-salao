@@ -295,6 +295,30 @@ export class SubscriptionsService {
 
   // CLIENT SUBSCRIPTIONS
 
+  /**
+   * payments.registeredBy é NOT NULL e FK → users.id. Os fluxos de assinatura
+   * (cliente no app, confirmação manual, reconciliação, regeneração de PIX) não têm
+   * um admin no contexto. Antes passavam o clientId (id da tabela `clients`, NÃO
+   * `users`) → violava a FK e o insert do pagamento falhava em silêncio: a
+   * assinatura ativava mas NENHUM payment era gravado/vinculado (por isso o histórico
+   * tem assinaturas sem pagamento e pagamentos sem subscriptionId). Usa o primeiro
+   * ADMIN como "registrante sistema", mesmo padrão do webhook e do cash-register.
+   */
+  private async resolveSystemRegisteredBy(): Promise<string> {
+    const { data: admin } = await this.supabase
+      .from('users')
+      .select('id')
+      .eq('role', 'ADMIN')
+      .limit(1)
+      .maybeSingle();
+    if (!(admin as any)?.id) {
+      throw new BadRequestException(
+        'Nenhum usuário ADMIN encontrado para registrar o pagamento (registeredBy).',
+      );
+    }
+    return (admin as any).id;
+  }
+
   async subscribeClient(dto: SubscribeClientDto) {
     // Verificar se cliente existe
     const { data: client } = await this.supabase
@@ -838,7 +862,7 @@ export class SubscriptionsService {
         subscriptionId: subscription.id,
         amount,
         method: localMethod,
-        registeredBy: subscription.clientId,
+        registeredBy: await this.resolveSystemRegisteredBy(),
         notes: `Confirmação manual de pagamento (assinatura ${subscription.plan?.name ?? ''})`.trim(),
         paidAt: nowLocal,
         businessDate,
@@ -1017,7 +1041,7 @@ export class SubscriptionsService {
       subscriptionId: subscription.id,
       amount,
       method: localMethod,
-      registeredBy: subscription.clientId,
+      registeredBy: await this.resolveSystemRegisteredBy(),
       notes: `Reconciliação Asaas (cobrança ${charge.id})`,
       asaasPaymentId: charge.id,
       asaasStatus: charge.status,
@@ -1072,7 +1096,7 @@ export class SubscriptionsService {
       subscriptionId: subscription.id,
       amount: planPrice,
       method: asaasBillingToLocalPaymentMethod(AsaasBillingType.PIX),
-      registeredBy: clientId,
+      registeredBy: await this.resolveSystemRegisteredBy(),
       notes: `PIX regenerado plano ${planName} #${charge.id}`,
       asaasPaymentId: charge.id,
       asaasStatus: charge.status,
@@ -1254,7 +1278,7 @@ export class SubscriptionsService {
           subscriptionId: freshSub.id,
           amount: freshSub.plan?.price ?? 0,
           method: localMethod,
-          registeredBy: clientId,
+          registeredBy: await this.resolveSystemRegisteredBy(),
           notes: `Cobrança inicial plano ${freshSub.plan?.name ?? 'Assinatura'} #${charge.id}`,
           asaasPaymentId: charge.id,
           asaasStatus: charge.status,
@@ -1403,7 +1427,7 @@ export class SubscriptionsService {
           subscriptionId: subscription.id,
           amount: subscription.plan?.price ?? 0,
           method: localMethod,
-          registeredBy: clientId,
+          registeredBy: await this.resolveSystemRegisteredBy(),
           notes: `Reativação assinatura Asaas #${charge.id}`,
           asaasPaymentId: charge.id,
           asaasStatus: charge.status,
