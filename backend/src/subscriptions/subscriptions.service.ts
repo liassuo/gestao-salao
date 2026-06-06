@@ -364,14 +364,16 @@ export class SubscriptionsService {
     const endDate = new Date(startDate);
     endDate.setMonth(endDate.getMonth() + 1);
 
-    // Assinatura NUNCA nasce ATIVA sem pagamento confirmado — sempre PENDING_PAYMENT.
-    // Antes, quando o Asaas não estava configurado, nascia 'ACTIVE' direto (de graça):
-    // o cliente clicava "assinar" no app e ficava com plano ativo sem nunca pagar
-    // (caso reportado: Kleudson). Agora:
-    //  - Asaas configurado: gera cobrança PIX/cartão → cliente paga → webhook ativa.
-    //  - Asaas não configurado / pagamento em dinheiro: admin confirma via
-    //    confirmPaymentManually, que então ativa. Em nenhum caso ativa sem pagamento.
-    const initialStatus = 'PENDING_PAYMENT';
+    // Pagamento no balcão (admin já recebeu dinheiro/PIX/cartão na mão): ativa na
+    // hora, sem cobrança Asaas. É o fluxo "renovei hoje → caiu no caixa de hoje".
+    // Sem paymentMethod: fluxo online, nasce PENDING_PAYMENT (gera cobrança).
+    //
+    // Assinatura NUNCA nasce ATIVA sem pagamento — só vira ACTIVE aqui porque o
+    // dinheiro está sendo lançado no caixa logo abaixo. Antes, quando o Asaas não
+    // estava configurado, nascia 'ACTIVE' de graça (caso Kleudson): isso continua
+    // proibido — sem paymentMethod, fica PENDING_PAYMENT.
+    const paidAtBalcao = !!dto.paymentMethod;
+    const initialStatus = paidAtBalcao ? 'ACTIVE' : 'PENDING_PAYMENT';
     const subNow = nowLocalIsoString();
 
     // Tenta encontrar uma assinatura cancelada para reutilizar o registro (devido à restrição UNIQUE no clientId)
@@ -381,6 +383,9 @@ export class SubscriptionsService {
       .eq('clientId', dto.clientId)
       .limit(1)
       .single();
+
+    // Quando ativa no balcão, o ciclo de cortes começa agora (lastResetDate).
+    const lastResetDate = paidAtBalcao ? subNow : undefined;
 
     let query;
     if (existingSub) {
@@ -393,6 +398,7 @@ export class SubscriptionsService {
           endDate: endDate.toISOString(),
           cutsUsedThisMonth: 0,
           status: initialStatus,
+          ...(lastResetDate ? { lastResetDate } : {}),
           // Reativacao: limpa canceledAt para nao parecer "cancelado pendente"
           canceledAt: null,
           updatedAt: subNow,
@@ -409,6 +415,7 @@ export class SubscriptionsService {
           endDate: endDate.toISOString(),
           cutsUsedThisMonth: 0,
           status: initialStatus,
+          ...(lastResetDate ? { lastResetDate } : {}),
           createdAt: subNow,
           updatedAt: subNow,
         });
@@ -446,6 +453,23 @@ export class SubscriptionsService {
         .eq('id', insertedSub.id)
         .single();
       resolved = minimal ? { ...minimal, plan } : null;
+    }
+
+    // Pagamento no balcão: lança no caixa do dia agora. A assinatura já nasceu
+    // ACTIVE acima; aqui o dinheiro entra no faturamento de hoje (idêntico ao que
+    // confirmPaymentManually faz). Sem isso, ativaríamos uma assinatura "de graça".
+    if (paidAtBalcao) {
+      await this.recordBalcaoSubscriptionPayment(
+        {
+          id: insertedSub.id,
+          clientId: dto.clientId,
+          amount: plan.price ?? 0,
+          planName: plan.name ?? '',
+        },
+        dto.paymentMethod as string,
+        subNow,
+        'Assinatura paga no balcão',
+      );
     }
 
     return resolved;
@@ -853,38 +877,68 @@ export class SubscriptionsService {
     // a confirmação manual só virava o status e nada entrava no caixa — o
     // relatório ficava furado (assinatura ACTIVE sem pagamento registrado).
     // Default CASH (dinheiro), que é o caso típico de confirmação no balcão.
-    const localMethod = method || 'CASH';
-    const amount = subscription.plan?.price ?? 0;
-    if (amount > 0) {
-      // Assinatura não tem agendamento → data contábil = dia do pagamento.
-      const businessDate = resolveBusinessDate(null, nowLocal);
-      const paymentId = randomUUID();
-      const { error: payError } = await this.supabase.from('payments').insert({
-        id: paymentId,
+    await this.recordBalcaoSubscriptionPayment(
+      {
+        id: subscription.id,
         clientId: subscription.clientId,
-        subscriptionId: subscription.id,
-        amount,
-        method: localMethod,
-        registeredBy: await this.resolveSystemRegisteredBy(),
-        notes: `Confirmação manual de pagamento (assinatura ${subscription.plan?.name ?? ''})`.trim(),
-        paidAt: nowLocal,
-        businessDate,
-        createdAt: nowLocal,
-        updatedAt: nowLocal,
-      });
-      if (payError) {
-        // Não desfaz a ativação — apenas loga. A assinatura ativou; o pagamento
-        // pode ser relançado manualmente se necessário.
-        this.logger.error(`Falha ao registrar pagamento da confirmação manual (assinatura ${subscription.id}): ${JSON.stringify(payError)}`);
-      } else {
-        await this.cashRegisterService
-          .linkPaymentToBusinessDateRegister(paymentId, businessDate)
-          .catch((e) => this.logger.warn(`Falha ao vincular pagamento ${paymentId} ao caixa: ${e}`));
-      }
-    }
+        amount: subscription.plan?.price ?? 0,
+        planName: subscription.plan?.name ?? '',
+      },
+      method || 'CASH',
+      nowLocal,
+      'Confirmação manual de pagamento',
+    );
 
-    this.logger.log(`Assinatura ${subscription.id} confirmada manualmente (admin, ${localMethod}) — status ACTIVE até ${newEndDate.toISOString()}`);
+    this.logger.log(`Assinatura ${subscription.id} confirmada manualmente (admin, ${method || 'CASH'}) — status ACTIVE até ${newEndDate.toISOString()}`);
     return updated;
+  }
+
+  /**
+   * Lança no CAIXA DO DIA o pagamento de uma mensalidade recebida no balcão
+   * (dinheiro/PIX/cartão na maquininha) — sem passar pelo Asaas. Usado tanto na
+   * confirmação manual de uma assinatura PENDING_PAYMENT quanto na assinatura/
+   * renovação direta no balcão (subscribeClient com paymentMethod). É o que faz
+   * "renovei hoje → caiu no caixa de hoje" voltar a funcionar.
+   *
+   * - businessDate = dia do pagamento (assinatura não tem agendamento).
+   * - Vincula ao caixa do dia (recalcula se já fechado), mesmo padrão do webhook.
+   * - Nunca lança exceção: se o insert falhar, só loga — a ativação da assinatura
+   *   (feita pelo caller) é preservada e o pagamento pode ser relançado depois.
+   */
+  private async recordBalcaoSubscriptionPayment(
+    sub: { id: string; clientId: string; amount: number; planName: string },
+    method: string,
+    nowLocal: string,
+    notePrefix: string,
+  ): Promise<void> {
+    const amount = sub.amount ?? 0;
+    if (amount <= 0) return;
+
+    // Assinatura não tem agendamento → data contábil = dia do pagamento.
+    const businessDate = resolveBusinessDate(null, nowLocal);
+    const paymentId = randomUUID();
+    const { error: payError } = await this.supabase.from('payments').insert({
+      id: paymentId,
+      clientId: sub.clientId,
+      subscriptionId: sub.id,
+      amount,
+      method,
+      registeredBy: await this.resolveSystemRegisteredBy(),
+      notes: `${notePrefix} (assinatura ${sub.planName})`.trim(),
+      paidAt: nowLocal,
+      businessDate,
+      createdAt: nowLocal,
+      updatedAt: nowLocal,
+    });
+    if (payError) {
+      // Não desfaz a ativação — apenas loga. A assinatura ativou; o pagamento
+      // pode ser relançado manualmente se necessário.
+      this.logger.error(`Falha ao registrar pagamento de balcão (assinatura ${sub.id}): ${JSON.stringify(payError)}`);
+      return;
+    }
+    await this.cashRegisterService
+      .linkPaymentToBusinessDateRegister(paymentId, businessDate)
+      .catch((e) => this.logger.warn(`Falha ao vincular pagamento ${paymentId} ao caixa: ${e}`));
   }
 
   /**
