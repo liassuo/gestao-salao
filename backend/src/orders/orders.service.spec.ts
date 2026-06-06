@@ -161,6 +161,13 @@ function makeSupabaseMock(opts: {
       };
       return { data: row, error: null };
     }
+    if (ctx._table === 'payments') {
+      // Gate de pagamento do ciclo (isCurrentCyclePaid): se há assinatura semeada,
+      // devolve 1 pagamento confirmado HOJE para tratá-la como PAGA (comportamento
+      // que os testes assumiam antes do gate). Sem assinatura, lista vazia.
+      if (!sub) return { data: [], error: null };
+      return { data: [{ paidAt: new Date().toISOString() }], error: null };
+    }
     if (ctx._table === 'promotions') {
       // sem promoções ativas para simplificar — testes de promoção rodam em outro spec
       return { data: [], error: null };

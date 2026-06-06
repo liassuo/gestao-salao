@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
+import { isRevenuePayment } from '../common/business-date.helper';
 import { OpenCashRegisterDto, CloseCashRegisterDto } from './dto';
 
 /** Discrepância (em centavos) que dispara aviso WARN ao fechar caixa. */
@@ -371,8 +372,8 @@ export class CashRegisterService {
     const totals = { cash: 0, pix: 0, card: 0, boleto: 0, total: 0, subscriptions: 0 };
 
     for (const payment of payments) {
-      // Ignorar pagamentos Asaas que foram estornados ou deletados
-      if (payment.asaasStatus && ['REFUNDED', 'DELETED', 'CANCELED'].includes(payment.asaasStatus)) {
+      // Ignorar pagamentos Asaas que saíram da receita (estorno/cancelamento/chargeback).
+      if (!isRevenuePayment(payment)) {
         continue;
       }
 
@@ -440,11 +441,7 @@ export class CashRegisterService {
     }
 
     const payments = [...(byBusiness || []), ...(byPaidLegacy || [])].filter(
-      (p) =>
-        !(
-          p.asaasStatus &&
-          ['REFUNDED', 'DELETED', 'CANCELED'].includes(p.asaasStatus)
-        ),
+      isRevenuePayment,
     );
 
     // Enriquecimento: cliente, profissional (via order) e itens da comanda.

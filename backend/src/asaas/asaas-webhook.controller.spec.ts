@@ -526,6 +526,112 @@ describe('AsaasWebhookController (e2e)', () => {
       expect(state.payments[0].asaasStatus).toBe(AsaasChargeStatus.REFUNDED);
       expect(state.appointments[0].isPaid).toBe(false);
     });
+
+    it('caixa JÁ FECHADO: estorno recalcula totalRevenue e tira a receita fantasma', async () => {
+      // Bug relatado pelo dono: "só retornei o PIX pro cliente e entrou como
+      // faturamento no caixa de hoje". O caixa fechado guarda os totais na coluna;
+      // sem recalcular, o valor estornado fica preso. O estorno deve recalcular o
+      // caixa do dia contábil e zerar a receita daquele pagamento.
+      const { controller, state } = await buildController({
+        payments: [
+          {
+            id: 'pay-local-1',
+            asaasPaymentId: 'asaas_pay_001',
+            appointmentId: null,
+            subscriptionId: 'sub-1',
+            asaasStatus: 'RECEIVED',
+            method: 'PIX',
+            amount: 7000,
+            paidAt: '2026-05-07T10:00:00.000',
+            businessDate: '2026-05-07T00:00:00',
+            cashRegisterId: 'caixa-1',
+          },
+        ],
+        client_subscriptions: [{ id: 'sub-1', status: 'ACTIVE' }],
+        cash_registers: [
+          {
+            id: 'caixa-1',
+            isOpen: false, // FECHADO: totais persistidos
+            date: '2026-05-07',
+            openingBalance: 0,
+            closingBalance: 0,
+            totalPix: 7000,
+            totalRevenue: 7000,
+          },
+        ],
+      });
+
+      await controller.handleWebhook(
+        paymentEvent(
+          AsaasWebhookEvent.PAYMENT_REFUNDED,
+          basePaymentData({ status: 'REFUNDED', value: 70.0 }),
+        ),
+        'test-token',
+      );
+
+      expect(state.payments[0].asaasStatus).toBe(AsaasChargeStatus.REFUNDED);
+      // O caixa fechado foi recalculado: o pagamento estornado saiu da receita.
+      expect(state.cash_registers[0].totalRevenue).toBe(0);
+      expect(state.cash_registers[0].totalPix).toBe(0);
+    });
+
+    it('estorno de assinatura: suspende o plano (não fica ACTIVE de graça)', async () => {
+      const { controller, state } = await buildController({
+        payments: [
+          {
+            id: 'pay-local-1',
+            asaasPaymentId: 'asaas_pay_001',
+            appointmentId: null,
+            subscriptionId: 'sub-1',
+            asaasStatus: 'RECEIVED',
+            amount: 7000,
+            paidAt: '2026-05-07T10:00:00.000',
+            businessDate: '2026-05-07T00:00:00',
+          },
+        ],
+        client_subscriptions: [{ id: 'sub-1', status: 'ACTIVE' }],
+      });
+
+      await controller.handleWebhook(
+        paymentEvent(
+          AsaasWebhookEvent.PAYMENT_REFUNDED,
+          basePaymentData({ status: 'REFUNDED' }),
+        ),
+        'test-token',
+      );
+
+      expect(state.client_subscriptions[0].status).toBe('SUSPENDED');
+    });
+
+    it('estorno de agendamento: comanda volta a PENDING e desvincula o pagamento', async () => {
+      const { controller, state } = await buildController({
+        appointments: [{ id: 'appt-1', isPaid: true, status: 'SCHEDULED' }],
+        orders: [
+          { id: 'order-1', appointmentId: 'appt-1', status: 'PAID', paymentId: 'pay-local-1' },
+        ],
+        payments: [
+          {
+            id: 'pay-local-1',
+            asaasPaymentId: 'asaas_pay_001',
+            appointmentId: 'appt-1',
+            asaasStatus: 'RECEIVED',
+            paidAt: '2026-05-07T10:00:00.000',
+          },
+        ],
+      });
+
+      await controller.handleWebhook(
+        paymentEvent(
+          AsaasWebhookEvent.PAYMENT_REFUNDED,
+          basePaymentData({ status: 'REFUNDED' }),
+        ),
+        'test-token',
+      );
+
+      expect(state.appointments[0].isPaid).toBe(false);
+      expect(state.orders[0].status).toBe('PENDING');
+      expect(state.orders[0].paymentId).toBeNull();
+    });
   });
 
   describe('PAYMENT_DELETED', () => {

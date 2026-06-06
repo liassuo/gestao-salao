@@ -41,6 +41,15 @@ const mockChain = () => {
   chain.order = jest.fn().mockReturnValue(chain);
   chain.single = jest.fn();
   chain.maybeSingle = jest.fn().mockResolvedValue({ data: null, error: null });
+  // Gate de pagamento do ciclo (isCurrentCyclePaid): a query de `payments` termina
+  // em .not('paidAt','is',null). Por padrão devolve 1 pagamento confirmado HOJE,
+  // para que toda assinatura ACTIVE mockada continue sendo considerada PAGA (o
+  // comportamento que os testes legados assumiam antes do gate existir). Testes
+  // que querem validar o bloqueio sobrescrevem este `.not` com data:[].
+  chain.not = jest.fn().mockResolvedValue({
+    data: [{ paidAt: new Date().toISOString() }],
+    error: null,
+  });
   return chain;
 };
 
@@ -352,6 +361,48 @@ describe('AppointmentsService', () => {
         scheduledAt: localDayInDays(5) as any,
       });
       expect(result).toMatchObject({ id: 'mock-uuid-123' });
+    });
+
+    /**
+     * Regressão do bug reportado (vídeo 06/06): assinatura ACTIVE e vigente, mas
+     * SEM nenhum pagamento do ciclo (legado "nascia ACTIVE de graça" ou renovação
+     * não cobrada). O gate de pagamento (isCurrentCyclePaid) trata como não-assinante:
+     * o serviço coberto NÃO é zerado e o agendamento NÃO marca usedSubscriptionCut.
+     * Vale para admin também (sem source:'CLIENT') — sem bypass.
+     */
+    it('assinatura ACTIVE sem pagamento do ciclo NÃO zera corte (gate de pagamento)', async () => {
+      setupCreateSuccess();
+      chains['client_subscriptions'].maybeSingle.mockResolvedValue({
+        data: {
+          id: 'sub-1',
+          startDate: isoInDays(-5),
+          createdAt: isoInDays(-5),
+          endDate: isoInDays(30),
+          cutsUsedThisMonth: 0,
+          plan: {
+            id: 'plan-1',
+            cutsPerMonth: 4,
+            discountPercent: 0,
+            services: [{ serviceId: 'svc-1', discountPercent: 100 }],
+          },
+        },
+        error: null,
+      });
+      // Sem pagamento confirmado para esta assinatura → gate barra.
+      chains['payments'] = mockChain();
+      chains['payments'].not.mockResolvedValue({ data: [], error: null });
+      (mockSupabase as any).rpc = jest.fn();
+
+      const result = await service.create(dto);
+
+      expect(result).toMatchObject({ id: 'mock-uuid-123' });
+      const insertCall = chains['appointments'].insert.mock.calls[0][0];
+      // svc-1 cobreria 100% se o plano valesse; sem pagamento, cobra cheio.
+      // svc-1: 10000 * (1 - max(promo 10%, 0)) = 9000; svc-2: 5000 (sem promo) = 5000.
+      expect(insertCall.totalPrice).toBe(14000);
+      expect(insertCall.usedSubscriptionCut).toBe(false);
+      // Não debita corte de uma assinatura não paga.
+      expect((mockSupabase as any).rpc).not.toHaveBeenCalled();
     });
 
     it('should throw NotFoundException when professional not found', async () => {

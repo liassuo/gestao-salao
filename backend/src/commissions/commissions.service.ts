@@ -6,6 +6,7 @@ import {
 import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
 import { ProfessionalDebtsService } from '../professional-debts/professional-debts.service';
+import { isRevenuePayment } from '../common/business-date.helper';
 import { GenerateCommissionDto, QueryCommissionDto } from './dto';
 
 /**
@@ -381,15 +382,16 @@ export class CommissionsService {
   ): Promise<number> {
     const { data: paidPayments } = await this.supabase
       .from('payments')
-      .select('amount')
+      .select('amount, asaasStatus')
       .not('subscriptionId', 'is', null)
       .gte('paidAt', startStr)
       .lte('paidAt', endStr);
 
-    return (paidPayments || []).reduce(
-      (sum: number, p: any) => sum + (p.amount || 0),
-      0,
-    );
+    // Exclui assinatura estornada/cancelada: dinheiro devolvido não pode inflar o
+    // pote dividido entre os barbeiros.
+    return (paidPayments || [])
+      .filter(isRevenuePayment)
+      .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
   }
 
   async findAll(query: QueryCommissionDto) {
