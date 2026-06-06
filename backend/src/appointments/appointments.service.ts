@@ -278,6 +278,20 @@ export class AppointmentsService {
       throw new BadRequestException('Informe o cliente ou o nome do cliente avulso');
     }
 
+    // 3.9 Pagamento ONLINE (PIX/cartão) de agendamento avulso foi DESATIVADO: o PIX
+    // online ficou restrito à assinatura. Agendamento avulso é sempre pago no local.
+    // Defesa server-side: ignora qualquer billingType online vindo do app (mesmo de
+    // versão antiga em cache ou chamada direta à API) tratando como pagamento no local.
+    if (
+      dto.source === 'CLIENT' &&
+      (dto.billingType === 'PIX' || dto.billingType === 'CREDIT_CARD')
+    ) {
+      this.logger.warn(
+        `billingType online (${dto.billingType}) recebido em agendamento avulso do cliente — ignorado (pagamento no local). PIX online é apenas para assinatura.`,
+      );
+      dto.billingType = undefined;
+    }
+
     // 4. Verificar se já existe PIX pendente ativo (< 10 min) para este cliente
     const requiresOnlinePayment =
       dto.source === 'CLIENT' &&
@@ -305,6 +319,33 @@ export class AppointmentsService {
         if (activePix?.length) {
           // Se o valor mudou (serviços diferentes), cancelar o antigo e deixar criar novo
           if (activePix[0].amount !== totalPrice) {
+            // BLINDAGEM: nunca cancelar um PIX que já foi pago. Mesma regra dos crons —
+            // o pagamento local pode ainda não ter dado baixa (webhook/cron a caminho),
+            // mas a cobrança já estar RECEIVED/CONFIRMED no Asaas. Se cancelássemos aqui,
+            // o cliente teria pago e o agendamento sumiria.
+            if (this.asaasService.configured && activePix[0].asaasPaymentId) {
+              let charge: any = null;
+              try {
+                charge = await this.asaasService.getCharge(activePix[0].asaasPaymentId);
+              } catch (e) {
+                // Não dá pra validar agora → por segurança NÃO cancelar.
+                throw new BadRequestException(
+                  'Não foi possível validar seu pagamento pendente agora. Aguarde alguns instantes e tente novamente.',
+                );
+              }
+              if (['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(charge?.status)) {
+                // PIX já pago: dá baixa no agendamento existente e NÃO cria outro.
+                await this.settleAppointmentFromAsaasCharge(
+                  pendingAppts[0].id,
+                  activePix[0].id,
+                  charge.status,
+                );
+                throw new BadRequestException(
+                  'Seu pagamento PIX anterior foi confirmado e o agendamento foi efetivado. Verifique sua agenda antes de marcar outro.',
+                );
+              }
+            }
+
             this.logger.log(
               `Valor mudou (${activePix[0].amount} -> ${totalPrice}). Cancelando agendamento pendente ${pendingAppts[0].id}`,
             );
@@ -312,11 +353,14 @@ export class AppointmentsService {
             if (activePix[0].asaasPaymentId) {
               try { await this.asaasService.cancelCharge(activePix[0].asaasPaymentId); } catch {}
             }
-            // Cancelar agendamento antigo
+            // Cancelar agendamento antigo (só se ainda PENDING_PAYMENT e não pago —
+            // o webhook pode ter promovido entre a leitura e aqui).
             await this.supabase
               .from('appointments')
               .update({ status: 'CANCELED', canceledAt: nowLocalIsoString() })
-              .eq('id', pendingAppts[0].id);
+              .eq('id', pendingAppts[0].id)
+              .eq('status', 'PENDING_PAYMENT')
+              .eq('isPaid', false);
           } else {
             // Mesmo valor: retornar o agendamento existente com QR code
             const { data: existingAppt } = await this.supabase
@@ -1884,7 +1928,7 @@ export class AppointmentsService {
 
     const { data: stale } = await this.supabase
       .from('appointments')
-      .select('id')
+      .select('id, isPaid')
       .eq('status', 'PENDING_PAYMENT')
       .lt('createdAt', tenMinutesAgo);
 
@@ -1892,15 +1936,56 @@ export class AppointmentsService {
 
     const now = nowLocalIsoString();
     for (const appt of stale) {
-      // Pagamento Asaas vinculado (se houver)
+      // BLINDAGEM 1: se o webhook já marcou o agendamento como pago mas a promoção
+      // de status ficou para trás (race/falha parcial), NUNCA cancelar — dar baixa.
+      if ((appt as any).isPaid) {
+        const { data: paidPayment } = await this.supabase
+          .from('payments')
+          .select('id, asaasStatus')
+          .eq('appointmentId', appt.id)
+          .not('paidAt', 'is', null)
+          .order('createdAt', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (paidPayment) {
+          await this.settleAppointmentFromAsaasCharge(
+            appt.id,
+            paidPayment.id,
+            (paidPayment as any).asaasStatus ?? 'RECEIVED',
+          );
+          this.logger.warn(
+            `Agendamento ${appt.id} estava PENDING_PAYMENT mas já tinha isPaid=true — baixa aplicada em vez de cancelar (promoção de status havia falhado).`,
+          );
+        }
+        continue;
+      }
+
+      // Pagamento vinculado (QUALQUER linha — não filtrar por paidAt, senão o
+      // registro "some" da busca justamente quando o webhook acabou de marcar pago,
+      // e a blindagem getCharge abaixo seria pulada → agendamento PAGO cancelado).
       const { data: payment } = await this.supabase
         .from('payments')
-        .select('id, asaasPaymentId, paidAt')
+        .select('id, asaasPaymentId, paidAt, asaasStatus')
         .eq('appointmentId', appt.id)
-        .is('paidAt', null)
+        .order('createdAt', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
-      // Se há cobrança Asaas, conferir o status REAL antes de cancelar.
+      // BLINDAGEM 2: pagamento já confirmado localmente (webhook gravou paidAt) →
+      // dar baixa, nunca cancelar.
+      if (payment?.paidAt) {
+        await this.settleAppointmentFromAsaasCharge(
+          appt.id,
+          payment.id,
+          (payment as any).asaasStatus ?? 'RECEIVED',
+        );
+        this.logger.warn(
+          `Agendamento ${appt.id} estava PENDING_PAYMENT mas o pagamento já tinha paidAt — baixa aplicada em vez de cancelar (webhook não promoveu o status).`,
+        );
+        continue;
+      }
+
+      // BLINDAGEM 3: há cobrança Asaas em aberto — conferir o status REAL antes de cancelar.
       if (this.asaasService.configured && payment?.asaasPaymentId) {
         try {
           const charge = await this.asaasService.getCharge(payment.asaasPaymentId);
@@ -1917,13 +2002,26 @@ export class AppointmentsService {
           this.logger.warn(`Falha ao consultar cobrança ${payment.asaasPaymentId} no Asaas; adiando cancelamento do agendamento ${appt.id}: ${e}`);
           continue;
         }
+      } else if (!this.asaasService.configured && payment?.asaasPaymentId) {
+        // Há cobrança online mas não dá pra verificar (Asaas off/config perdida).
+        // NÃO cancelar no escuro um PIX que pode estar pago — adiar.
+        this.logger.warn(
+          `Asaas não configurado e há cobrança ${payment.asaasPaymentId} pendente no agendamento ${appt.id}; adiando cancelamento para não cancelar pagamento não verificável.`,
+        );
+        continue;
       }
 
-      await this.supabase
+      const { data: canceledRows } = await this.supabase
         .from('appointments')
         .update({ status: 'CANCELED', updatedAt: now })
         .eq('id', appt.id)
-        .eq('status', 'PENDING_PAYMENT');
+        .eq('status', 'PENDING_PAYMENT')
+        .eq('isPaid', false) // nunca cancela se o webhook marcou pago entre a leitura e aqui
+        .select('id');
+
+      // Se o guard de isPaid barrou o cancelamento (webhook marcou pago na janela),
+      // não toca em cobrança/comanda — o próximo ciclo dá a baixa.
+      if (!canceledRows?.length) continue;
 
       // Cancelar cobrança no Asaas (só chega aqui se não estava paga)
       if (this.asaasService.configured && payment?.asaasPaymentId) {
@@ -1966,13 +2064,29 @@ export class AppointmentsService {
     if (!pendings?.length) return;
 
     for (const appt of pendings) {
+      // Buscar QUALQUER payment do agendamento (sem filtrar por paidAt — senão um
+      // pagamento já confirmado pelo webhook fica invisível e nunca é promovido).
       const { data: payment } = await this.supabase
         .from('payments')
-        .select('id, asaasPaymentId, paidAt')
+        .select('id, asaasPaymentId, paidAt, asaasStatus')
         .eq('appointmentId', appt.id)
-        .is('paidAt', null)
+        .order('createdAt', { ascending: false })
+        .limit(1)
         .maybeSingle();
-      if (!payment?.asaasPaymentId) continue;
+      if (!payment) continue;
+
+      // Já pago localmente mas ainda PENDING_PAYMENT (promoção falhou) → promover.
+      if (payment.paidAt) {
+        await this.settleAppointmentFromAsaasCharge(
+          appt.id,
+          payment.id,
+          (payment as any).asaasStatus ?? 'RECEIVED',
+        );
+        this.logger.log(`[reconcile-appt-cron] baixa aplicada no agendamento ${appt.id} (paidAt local já preenchido)`);
+        continue;
+      }
+
+      if (!payment.asaasPaymentId) continue;
 
       try {
         const charge = await this.asaasService.getCharge(payment.asaasPaymentId);
@@ -2002,7 +2116,7 @@ export class AppointmentsService {
     // Data contábil = dia do atendimento (scheduledAt), senão o pagamento.
     const { data: appt } = await this.supabase
       .from('appointments')
-      .select('scheduledAt, status')
+      .select('scheduledAt, status, canceledAt')
       .eq('id', appointmentId)
       .maybeSingle();
     if (!appt) return;
@@ -2017,18 +2131,26 @@ export class AppointmentsService {
 
     await this.cashRegisterService.linkPaymentToBusinessDateRegister(paymentId, businessDate);
 
-    // Promove o agendamento (não rebaixa se já ATTENDED).
+    // Promove o agendamento (não rebaixa se já ATTENDED). Restaura CANCELED apenas
+    // quando foi cancelamento AUTOMÁTICO do cron (canceledAt NULL); um cancelamento
+    // deliberado (cliente/no-show, que seta canceledAt) NÃO é ressuscitado.
+    const canRestoreCancel =
+      (appt as any).status === 'CANCELED' && !(appt as any).canceledAt;
+    const promoteStatuses = canRestoreCancel
+      ? ['PENDING_PAYMENT', 'CANCELED']
+      : ['PENDING_PAYMENT'];
     await this.supabase
       .from('appointments')
       .update({ isPaid: true, status: 'SCHEDULED', updatedAt: now })
       .eq('id', appointmentId)
-      .in('status', ['PENDING_PAYMENT', 'CANCELED']);
+      .in('status', promoteStatuses);
 
-    // Paga a comanda vinculada pendente.
+    // Paga a comanda vinculada pendente (reabre se cancelada junto pela race).
+    const orderStatuses = canRestoreCancel ? ['PENDING', 'CANCELED'] : ['PENDING'];
     await this.supabase
       .from('orders')
       .update({ status: 'PAID', paymentId, updatedAt: now })
       .eq('appointmentId', appointmentId)
-      .eq('status', 'PENDING');
+      .in('status', orderStatuses);
   }
 }

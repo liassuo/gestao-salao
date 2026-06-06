@@ -369,18 +369,20 @@ export class AsaasWebhookController {
 
       const canRestoreCancel =
         (apptState as any)?.status === 'CANCELED' && !(apptState as any)?.canceledAt;
-      const promoteStatuses = canRestoreCancel
-        ? ['PENDING_PAYMENT', 'CANCELED']
-        : ['PENDING_PAYMENT'];
 
+      // Marcar pago é sempre seguro e incondicional (não depende do status atual).
       await this.supabase
         .from('appointments')
         .update({ isPaid: true, updatedAt: nowLocalIsoString() })
-        .eq('id', localPayment.appointmentId)
-        .in('status', promoteStatuses);
+        .eq('id', localPayment.appointmentId);
 
-      // Promover → SCHEDULED. Restaura o agendamento se o cron o cancelou na corrida
-      // (canceledAt NULL); preserva cancelamentos deliberados.
+      // Promover → SCHEDULED. Sempre cobre PENDING_PAYMENT; cobre CANCELED apenas
+      // quando foi cancelamento AUTOMÁTICO do cron na corrida (canceledAt NULL),
+      // restaurando o agendamento. Cancelamentos deliberados (canceledAt setado)
+      // NÃO são ressuscitados.
+      const promoteStatuses = canRestoreCancel
+        ? ['PENDING_PAYMENT', 'CANCELED']
+        : ['PENDING_PAYMENT'];
       await this.supabase
         .from('appointments')
         .update({ status: 'SCHEDULED', updatedAt: nowLocalIsoString() })

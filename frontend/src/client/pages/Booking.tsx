@@ -153,8 +153,10 @@ export function ClientBooking() {
   const [isPayingDebt, setIsPayingDebt] = useState(false);
   const [debtPixCopied, setDebtPixCopied] = useState(false);
   const [debtPollingActive, setDebtPollingActive] = useState(false);
-  const [appointmentBillingType, setAppointmentBillingType] =
-    useState<AppointmentBillingType>('CASH');
+  // Agendamento avulso é sempre pago no local. O PIX/cartão online ficou restrito
+  // à assinatura (taxas do gateway não compensam num corte avulso, e evita a race
+  // de "pagou e o horário caiu"). Mantido como constante para o fluxo de confirmação.
+  const appointmentBillingType: AppointmentBillingType = 'CASH';
   const [notes, setNotes] = useState('');
   const [subscribePlanModal, setSubscribePlanModal] = useState<string | null>(null);
   const [leaveAfterPixClose, setLeaveAfterPixClose] = useState(false);
@@ -1071,48 +1073,14 @@ export function ClientBooking() {
         {totalPrice > 0 && !(useSubscriptionCut && mySubscription) && (
           <div className="mb-4">
             <p className="text-sm font-medium text-[var(--text-primary)] mb-2">Forma de pagamento</p>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => setAppointmentBillingType('PIX')}
-                className={`rounded-xl border py-3 px-2 text-sm font-semibold transition-colors ${
-                  appointmentBillingType === 'PIX'
-                    ? 'border-[#C8923A] bg-[#C8923A]/15 text-[#C8923A]'
-                    : 'border-[var(--card-border)] bg-[var(--card-bg)] text-[var(--text-secondary)]'
-                }`}
-              >
-                PIX
-              </button>
-              <button
-                type="button"
-                onClick={() => setAppointmentBillingType('CREDIT_CARD')}
-                className={`rounded-xl border py-3 px-2 text-sm font-semibold transition-colors ${
-                  appointmentBillingType === 'CREDIT_CARD'
-                    ? 'border-[#C8923A] bg-[#C8923A]/15 text-[#C8923A]'
-                    : 'border-[var(--card-border)] bg-[var(--card-bg)] text-[var(--text-secondary)]'
-                }`}
-              >
-                Cartão
-              </button>
-              <button
-                type="button"
-                onClick={() => setAppointmentBillingType('CASH')}
-                className={`rounded-xl border py-3 px-2 text-sm font-semibold transition-colors ${
-                  appointmentBillingType === 'CASH'
-                    ? 'border-[#C8923A] bg-[#C8923A]/15 text-[#C8923A]'
-                    : 'border-[var(--card-border)] bg-[var(--card-bg)] text-[var(--text-secondary)]'
-                }`}
-              >
-                No local
-              </button>
+            {/* Pagamento avulso é feito no local (dinheiro, cartão ou PIX na maquininha).
+                O PIX online ficou restrito à assinatura. */}
+            <div className="rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] py-3 px-3">
+              <p className="text-sm font-semibold text-[var(--text-primary)]">Pagamento no local</p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">
+                Pague na hora do serviço — dinheiro, cartão ou PIX na maquininha.
+              </p>
             </div>
-            <p className="text-xs text-[var(--text-muted)] mt-2">
-              {appointmentBillingType === 'PIX'
-                ? 'Geramos um QR Code PIX. Seu horário é confirmado assim que o pagamento cair.'
-                : appointmentBillingType === 'CREDIT_CARD'
-                ? 'Abriremos o link seguro do Asaas para pagar com cartão.'
-                : 'Pague na hora do serviço (dinheiro, cartão ou PIX na maquininha).'}
-            </p>
           </div>
         )}
 
