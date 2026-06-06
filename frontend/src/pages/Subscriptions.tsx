@@ -70,6 +70,7 @@ export function Subscriptions() {
   const [confirmMethod, setConfirmMethod] = useState<'CASH' | 'PIX' | 'CARD'>('CASH');
   const [deletingSubscription, setDeletingSubscription] = useState<ClientSubscription | null>(null);
   const [reactivatingSubscription, setReactivatingSubscription] = useState<ClientSubscription | null>(null);
+  const [reactivateMethod, setReactivateMethod] = useState<'CASH' | 'PIX' | 'CARD'>('CASH');
 
   // Pix Payment state
   const [pixModalData, setPixModalData] = useState<{ pixData: any; amount: number; description?: string; subscriptionId?: string } | null>(null);
@@ -186,19 +187,10 @@ export function Subscriptions() {
   const handleSubscribe = async (payload: SubscribeClientPayload) => {
     setSubscribeError(null);
     try {
-      const response = await subscribeClient.mutateAsync(payload) as any;
+      await subscribeClient.mutateAsync(payload);
       handleCloseSubscribeModal();
-      toast.success('Assinatura criada', 'O cliente foi assinado no plano com sucesso.');
-
-      // Se houver dados de pagamento (PIX), abre o modal
-      if (response?.pixData) {
-        setPixModalData({
-          pixData: response.pixData,
-          amount: response.subscription?.plan?.price || 0,
-          description: `Assinatura: ${response.subscription?.plan?.name}`,
-          subscriptionId: response.subscription?.id,
-        });
-      }
+      // Pagamento recebido no balcão → assinatura já ativa e valor no caixa de hoje.
+      toast.success('Assinatura criada', 'Assinatura ativada e pagamento registrado no caixa de hoje.');
     } catch (err) {
       setSubscribeError(getApiErrorMessage(err));
     }
@@ -294,21 +286,16 @@ export function Subscriptions() {
     if (!reactivatingSubscription) return;
     const sub = reactivatingSubscription;
     try {
-      const response = await subscribeClient.mutateAsync({
+      // Reativação no balcão: pagamento recebido agora → ativa e cai no caixa de
+      // hoje em uma ação só (mesmo fluxo da nova assinatura). Sem gerar PIX.
+      await subscribeClient.mutateAsync({
         clientId: sub.client.id,
         planId: sub.plan.id,
-      }) as any;
+        paymentMethod: reactivateMethod,
+      });
       setReactivatingSubscription(null);
-      toast.success('Assinatura reativada', 'Uma nova cobrança foi gerada.');
-
-      if (response?.pixData) {
-        setPixModalData({
-          pixData: response.pixData,
-          amount: response.subscription?.plan?.price || sub.plan.price || 0,
-          description: `Assinatura: ${response.subscription?.plan?.name || sub.plan.name}`,
-          subscriptionId: response.subscription?.id,
-        });
-      }
+      setReactivateMethod('CASH');
+      toast.success('Assinatura reativada', 'O pagamento foi registrado no caixa de hoje.');
     } catch (err) {
       toast.error('Erro', getApiErrorMessage(err));
     }
@@ -658,18 +645,48 @@ export function Subscriptions() {
       {/* Reativar assinatura encerrada */}
       <ConfirmModal
         isOpen={!!reactivatingSubscription}
-        onClose={() => setReactivatingSubscription(null)}
+        onClose={() => {
+          setReactivatingSubscription(null);
+          setReactivateMethod('CASH');
+        }}
         onConfirm={handleReactivate}
         title="Reativar assinatura"
         message={
           reactivatingSubscription
-            ? `Criar uma nova assinatura para ${reactivatingSubscription.client?.name || 'cliente'} no plano ${reactivatingSubscription.plan?.name || ''} (${(reactivatingSubscription.plan?.price ? (reactivatingSubscription.plan.price / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '')})? Será gerado um novo PIX.`
+            ? `Reativar a assinatura de ${reactivatingSubscription.client?.name || 'cliente'} no plano ${reactivatingSubscription.plan?.name || ''} (${(reactivatingSubscription.plan?.price ? (reactivatingSubscription.plan.price / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '')}). Use quando o cliente já pagou no balcão — a assinatura é ativada e o valor entra no caixa de hoje.`
             : ''
         }
         confirmLabel="Reativar"
         variant="info"
         isLoading={subscribeClient.isPending}
-      />
+      >
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">
+            Como foi pago?
+          </label>
+          <div className="grid grid-cols-3 gap-2">
+            {([
+              { value: 'CASH', label: 'Dinheiro' },
+              { value: 'PIX', label: 'PIX' },
+              { value: 'CARD', label: 'Cartão' },
+            ] as const).map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                disabled={subscribeClient.isPending}
+                onClick={() => setReactivateMethod(opt.value)}
+                className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                  reactivateMethod === opt.value
+                    ? 'border-[#8B6914] bg-[#C8923A]/20 text-[var(--text-primary)]'
+                    : 'border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </ConfirmModal>
 
       {/* Excluir do histórico */}
       <ConfirmModal

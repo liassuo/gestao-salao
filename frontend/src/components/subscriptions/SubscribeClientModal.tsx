@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { AlertCircle, Loader2, X, Search, CreditCard, QrCode } from 'lucide-react';
+import { AlertCircle, Loader2, X, Search, CreditCard, QrCode, Banknote } from 'lucide-react';
 import { formatPhone } from '@/utils/format';
-import { AsaasBillingType } from '@/types';
 import type { Client, SubscriptionPlan, SubscribeClientPayload } from '@/types';
+
+type BalcaoMethod = 'CASH' | 'PIX' | 'CARD';
 
 interface SubscribeClientModalProps {
   isOpen: boolean;
@@ -32,7 +33,10 @@ export function SubscribeClientModal({
 }: SubscribeClientModalProps) {
   const [selectedClientId, setSelectedClientId] = useState('');
   const [selectedPlanId, setSelectedPlanId] = useState('');
-  const [billingType, setBillingType] = useState<AsaasBillingType>(AsaasBillingType.PIX);
+  // Pagamento recebido no balcão no ato (dinheiro/PIX/cartão na maquininha).
+  // Ativa a assinatura na hora e lança no caixa de hoje. Default Dinheiro,
+  // que é como o salão renova no balcão no dia a dia.
+  const [paymentMethod, setPaymentMethod] = useState<BalcaoMethod>('CASH');
   const [clientSearch, setClientSearch] = useState('');
 
   if (!isOpen) return null;
@@ -54,13 +58,13 @@ export function SubscribeClientModal({
     await onSubmit({
       clientId: selectedClientId,
       planId: selectedPlanId,
-      billingType,
+      paymentMethod,
     });
 
     // Reset form
     setSelectedClientId('');
     setSelectedPlanId('');
-    setBillingType(AsaasBillingType.PIX);
+    setPaymentMethod('CASH');
     setClientSearch('');
   };
 
@@ -143,36 +147,35 @@ export function SubscribeClientModal({
             </select>
           </div>
 
-          {/* Forma de Pagamento */}
+          {/* Forma de Pagamento (recebido no balcão) */}
           <div className="mb-6">
-            <label className="mb-3 block text-sm font-medium text-[var(--text-secondary)]">
+            <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">
               Forma de Pagamento *
             </label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setBillingType(AsaasBillingType.PIX)}
-                className={`flex items-center justify-center gap-3 rounded-xl border p-4 transition-all ${
-                  billingType === AsaasBillingType.PIX
-                    ? 'border-[#C8923A] bg-[#C8923A]/10 text-[#C8923A]'
-                    : 'border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-                }`}
-              >
-                <QrCode className="h-5 w-5" />
-                <span className="font-medium text-sm">PIX</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setBillingType(AsaasBillingType.CREDIT_CARD)}
-                className={`flex items-center justify-center gap-3 rounded-xl border p-4 transition-all ${
-                  billingType === AsaasBillingType.CREDIT_CARD
-                    ? 'border-[#C8923A] bg-[#C8923A]/10 text-[#C8923A]'
-                    : 'border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-                }`}
-              >
-                <CreditCard className="h-5 w-5" />
-                <span className="font-medium text-sm">Cartão</span>
-              </button>
+            <p className="mb-3 text-xs text-[var(--text-muted)]">
+              Pagamento recebido agora no balcão. A assinatura é ativada na hora e o
+              valor entra no caixa de hoje.
+            </p>
+            <div className="grid grid-cols-3 gap-3">
+              {([
+                { value: 'CASH', label: 'Dinheiro', icon: Banknote },
+                { value: 'PIX', label: 'PIX', icon: QrCode },
+                { value: 'CARD', label: 'Cartão', icon: CreditCard },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setPaymentMethod(opt.value)}
+                  className={`flex flex-col items-center justify-center gap-2 rounded-xl border p-4 transition-all ${
+                    paymentMethod === opt.value
+                      ? 'border-[#C8923A] bg-[#C8923A]/10 text-[#C8923A]'
+                      : 'border-[var(--border-color)] bg-[var(--hover-bg)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                  }`}
+                >
+                  <opt.icon className="h-5 w-5" />
+                  <span className="font-medium text-sm">{opt.label}</span>
+                </button>
+              ))}
             </div>
           </div>
 
@@ -194,7 +197,7 @@ export function SubscribeClientModal({
                     </span>
                   </p>
                 )}
-                <p><span className="font-medium">Pagamento:</span> {billingType === AsaasBillingType.PIX ? 'PIX' : 'Cartão de Crédito'}</p>
+                <p><span className="font-medium">Pagamento:</span> {paymentMethod === 'CASH' ? 'Dinheiro' : paymentMethod === 'PIX' ? 'PIX' : 'Cartão'} (no balcão)</p>
               </div>
             </div>
           )}

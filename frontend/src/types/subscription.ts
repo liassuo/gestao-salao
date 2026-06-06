@@ -85,6 +85,12 @@ export interface SubscribeClientPayload {
   clientId: string;
   planId: string;
   billingType?: AsaasBillingType;
+  /**
+   * Pagamento recebido NO BALCÃO no ato (admin já está com o dinheiro). Quando
+   * presente, a assinatura é ativada na hora e o valor cai no caixa de hoje —
+   * sem gerar cobrança Asaas/PIX. Ausente = fluxo online (gera cobrança).
+   */
+  paymentMethod?: 'CASH' | 'PIX' | 'CARD';
 }
 
 export interface RemainingCuts {
