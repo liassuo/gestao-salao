@@ -159,8 +159,13 @@ describe('pricing.helper', () => {
       chain.select = jest.fn().mockReturnValue(chain);
       chain.eq = jest.fn().mockReturnValue(chain);
       chain.maybeSingle = jest.fn().mockResolvedValue({ data: returnData });
+      // Gate de pagamento: por padrão, 1 pagamento confirmado hoje (passa o gate).
+      const payChain: any = {};
+      payChain.select = jest.fn().mockReturnValue(payChain);
+      payChain.eq = jest.fn().mockReturnValue(payChain);
+      payChain.not = jest.fn().mockResolvedValue({ data: [{ paidAt: new Date().toISOString() }] });
       return {
-        from: jest.fn().mockReturnValue(chain),
+        from: jest.fn((table: string) => (table === 'payments' ? payChain : chain)),
         _chain: chain,
       } as unknown as SupabaseService & { _chain: any };
     };
@@ -245,8 +250,13 @@ describe('pricing.helper', () => {
       chain.select = jest.fn().mockReturnValue(chain);
       chain.eq = jest.fn().mockReturnValue(chain);
       chain.maybeSingle = jest.fn().mockResolvedValue({ data: returnData });
+      // Gate de pagamento: por padrão, 1 pagamento confirmado hoje (passa o gate).
+      const payChain: any = {};
+      payChain.select = jest.fn().mockReturnValue(payChain);
+      payChain.eq = jest.fn().mockReturnValue(payChain);
+      payChain.not = jest.fn().mockResolvedValue({ data: [{ paidAt: new Date().toISOString() }] });
       return {
-        from: jest.fn().mockReturnValue(chain),
+        from: jest.fn((table: string) => (table === 'payments' ? payChain : chain)),
       } as unknown as SupabaseService;
     };
 
@@ -357,13 +367,30 @@ describe('pricing.helper', () => {
 
   // ─── getActiveClientSubscription (carrega plano + saldo de cortes) ────────
   describe('getActiveClientSubscription', () => {
-    const makeSupabase = (returnData: any) => {
-      const chain: any = {};
-      chain.select = jest.fn().mockReturnValue(chain);
-      chain.eq = jest.fn().mockReturnValue(chain);
-      chain.maybeSingle = jest.fn().mockResolvedValue({ data: returnData });
+    // Mock que atende DUAS queries:
+    //   1. client_subscriptions ... .maybeSingle()  → returnData
+    //   2. payments ... .not('paidAt','is',null)     → paymentsData (gate de pagamento)
+    // Por padrão devolve 1 pagamento confirmado HOJE, para os testes legados
+    // (que validam mapeamento/endDate) continuarem passando o gate.
+    const makeSupabase = (
+      returnData: any,
+      paymentsData: any[] = [{ paidAt: new Date().toISOString() }],
+    ) => {
+      const subChain: any = {};
+      subChain.select = jest.fn().mockReturnValue(subChain);
+      subChain.eq = jest.fn().mockReturnValue(subChain);
+      subChain.maybeSingle = jest.fn().mockResolvedValue({ data: returnData });
+
+      // Chain de payments: select().eq().not() resolve como thenable (await direto).
+      const payChain: any = {};
+      payChain.select = jest.fn().mockReturnValue(payChain);
+      payChain.eq = jest.fn().mockReturnValue(payChain);
+      payChain.not = jest.fn().mockResolvedValue({ data: paymentsData });
+
       return {
-        from: jest.fn().mockReturnValue(chain),
+        from: jest.fn((table: string) =>
+          table === 'payments' ? payChain : subChain,
+        ),
       } as unknown as SupabaseService;
     };
 
@@ -403,6 +430,8 @@ describe('pricing.helper', () => {
 
     const planRow = (endDate: string | null) => ({
       id: 'sub-123',
+      startDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+      createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
       endDate,
       cutsUsedThisMonth: 0,
       plan: { id: 'plan-1', cutsPerMonth: 4, discountPercent: 10, services: [] },
@@ -418,6 +447,32 @@ describe('pricing.helper', () => {
     it('mantém assinatura quando endDate ainda está no futuro', async () => {
       const amanha = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
       const supabase = makeSupabase(planRow(amanha));
+      const sub = await getActiveClientSubscription(supabase, 'c1');
+      expect(sub).not.toBeNull();
+      expect(sub!.subscriptionId).toBe('sub-123');
+    });
+
+    // ─── Gate de pagamento do ciclo vigente (bug: assinante marcava sem pagar) ──
+
+    it('retorna null quando ACTIVE/vigente mas SEM nenhum pagamento confirmado', async () => {
+      const amanha = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      // paymentsData vazio = assinatura nunca paga (legado "nascia ACTIVE de graça")
+      const supabase = makeSupabase(planRow(amanha), []);
+      expect(await getActiveClientSubscription(supabase, 'c1')).toBeNull();
+    });
+
+    it('retorna null quando o único pagamento é de um ciclo ANTERIOR ao vigente', async () => {
+      // Ciclo começou há 5 dias (planRow); pagamento foi há 40 dias (ciclo passado).
+      const amanha = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      const pagtoAntigo = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString();
+      const supabase = makeSupabase(planRow(amanha), [{ paidAt: pagtoAntigo }]);
+      expect(await getActiveClientSubscription(supabase, 'c1')).toBeNull();
+    });
+
+    it('mantém assinatura quando há pagamento confirmado dentro do ciclo vigente', async () => {
+      const amanha = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      const pagtoNoCiclo = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString();
+      const supabase = makeSupabase(planRow(amanha), [{ paidAt: pagtoNoCiclo }]);
       const sub = await getActiveClientSubscription(supabase, 'c1');
       expect(sub).not.toBeNull();
       expect(sub!.subscriptionId).toBe('sub-123');

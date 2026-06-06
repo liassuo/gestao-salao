@@ -86,10 +86,49 @@ export async function getActiveClientPlan(
 }
 
 /**
+ * Verifica se o CICLO VIGENTE de uma assinatura está pago: existe pelo menos um
+ * payment confirmado (paidAt != null) cuja data de pagamento caia dentro do ciclo
+ * atual. O piso do ciclo é o mais recente entre startDate e createdAt, com 1 dia de
+ * tolerância para fuso (mesma lógica de `syncWithAsaas`). Pagamentos de ciclos
+ * anteriores (a mesma linha client_subscriptions é reaproveitada em re-assinaturas)
+ * NÃO contam — senão um pagamento antigo manteria o plano "pago" para sempre.
+ *
+ * Confirmação manual (admin) grava payment com paidAt → também satisfaz o gate.
+ */
+async function isCurrentCyclePaid(
+  supabase: SupabaseService,
+  row: { id: string; startDate?: string | null; createdAt?: string | null },
+): Promise<boolean> {
+  const startMs = row.startDate ? new Date(row.startDate).getTime() : 0;
+  const createdMs = row.createdAt ? new Date(row.createdAt).getTime() : 0;
+  const cycleStartMs = Math.max(startMs, createdMs);
+  const ONE_DAY = 24 * 60 * 60 * 1000;
+  const cycleFloorMs = cycleStartMs > 0 ? cycleStartMs - ONE_DAY : 0;
+
+  const { data: payments } = await supabase
+    .from('payments')
+    .select('paidAt')
+    .eq('subscriptionId', row.id)
+    .not('paidAt', 'is', null);
+
+  for (const p of (payments || []) as { paidAt: string | null }[]) {
+    if (!p.paidAt) continue;
+    const paidMs = new Date(p.paidAt).getTime();
+    if (Number.isNaN(paidMs)) continue;
+    if (paidMs >= cycleFloorMs) return true;
+  }
+  return false;
+}
+
+/**
  * Carrega a assinatura ACTIVE do cliente (uma única — `client_subscriptions` não
  * deveria ter mais de uma linha ACTIVE por cliente). Retorna o plano + saldo mensal
  * de cortes. Use no lugar de `getActiveClientPlan` quando precisar saber quantos
  * cortes ainda restam (ex: comanda decidindo se zera o serviço ou aplica fallback).
+ *
+ * IMPORTANTE: só retorna não-null se o ciclo vigente estiver PAGO (ver
+ * `isCurrentCyclePaid`). Assinatura ACTIVE sem pagamento do ciclo é tratada como
+ * não-assinante para fins de crédito/desconto — sem bypass para admin.
  */
 export async function getActiveClientSubscription(
   supabase: SupabaseService,
@@ -98,7 +137,7 @@ export async function getActiveClientSubscription(
   if (!clientId) return null;
   const { data } = await supabase
     .from('client_subscriptions')
-    .select('id, endDate, cutsUsedThisMonth, plan:subscription_plans!planId(id, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
+    .select('id, startDate, endDate, createdAt, cutsUsedThisMonth, plan:subscription_plans!planId(id, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
     .eq('clientId', clientId)
     .eq('status', 'ACTIVE')
     .maybeSingle();
@@ -110,6 +149,18 @@ export async function getActiveClientSubscription(
   // Evita aplicar beneficios de plano vencido (desconto e trava de 1 agend./dia).
   // Comparacao por instante (UTC), igual ao resto do fluxo de assinatura.
   if (row.endDate && new Date(row.endDate).getTime() <= Date.now()) return null;
+
+  // GATE DE PAGAMENTO: a assinatura so concede beneficios (credito de corte e
+  // desconto) se o CICLO VIGENTE estiver pago. Antes, qualquer linha status=ACTIVE
+  // liberava cortes — mesmo que NUNCA tivesse sido paga (legado do bug "nascia
+  // ACTIVE de graca") ou que a renovacao do mes nao tivesse caido. Caso reportado:
+  // assinante com vencimento "hoje", sem pagamento, marcava e consumia corte de
+  // graca; o admin remarcava pelo balcao e o agendamento saia "pelo plano".
+  // Regra (espelha syncWithAsaas): considera pago se existe payment confirmado
+  // (paidAt != null) cuja data caia DENTRO do ciclo atual — do inicio do ciclo
+  // (max entre startDate e createdAt) menos 1 dia de tolerancia (fuso) ate o
+  // endDate. Pagamento de um ciclo ja encerrado nao reativa o ciclo novo.
+  if (!(await isCurrentCyclePaid(supabase, row))) return null;
   const servicePercents = new Map<string, number>();
   for (const s of (plan.services || []) as { serviceId: string; discountPercent: number }[]) {
     if (typeof s.discountPercent === 'number' && s.discountPercent >= 0) {
