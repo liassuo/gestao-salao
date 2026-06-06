@@ -172,10 +172,12 @@ test.describe('Client Booking Flow', () => {
     await page.getByRole('button', { name: '09:00' }).click();
     await page.getByRole('button', { name: /continuar/i }).click();
 
-    // Step 3: confirm — selecionar pagamento "No local" (CASH) pra evitar modal de CPF
+    // Step 3: confirm. O agendamento avulso é sempre "Pagamento no local" (CASH) —
+    // não há mais botão de escolha de forma de pagamento nem modal de CPF (o PIX
+    // online ficou restrito à assinatura). Basta confirmar.
     await expect(page.getByRole('button', { name: /confirmar agendamento/i })).toBeVisible({ timeout: 5000 });
-    await page.getByRole('button', { name: 'No local' }).click();
 
+    // Registrar o handler do alert ANTES do clique que o dispara.
     page.on('dialog', async (dialog) => {
       expect(dialog.message()).toMatch(/Agendamento realizado/i);
       await dialog.accept();

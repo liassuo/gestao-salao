@@ -33,6 +33,16 @@ test.describe('Admin Login', () => {
   });
 
   test('should show error message on wrong credentials', async ({ page }) => {
+    // Mockar o 401 — sem isso a chamada vaza pro proxy do Vite e dá ECONNREFUSED
+    // no CI (onde não há backend), fazendo o app exibir erro de rede em vez de
+    // "Credenciais inválidas". Mesmo padrão do client-login.spec.ts.
+    await page.route('**/auth/login', async (route) => {
+      await route.fulfill({
+        status: 401,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Unauthorized' }),
+      });
+    });
     await page.fill('#email', 'wrong@test.com');
     await page.fill('#password', 'wrongpassword');
     await page.getByRole('button', { name: 'Entrar' }).click();
