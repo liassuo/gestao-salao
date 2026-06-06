@@ -685,34 +685,101 @@ export class AsaasWebhookController {
   }
 
   /**
-   * Pagamento estornado
+   * Pagamento estornado / estorno em andamento.
+   *
+   * Estornar é dinheiro SAINDO: o pagamento tem que deixar de contar como receita
+   * em TODA tela (caixa, dashboard, relatórios, pote de comissão). As leituras já
+   * ignoram asaasStatus de estorno (isRevenuePayment), então o passo central aqui
+   * é (1) marcar o status e (2) RECALCULAR o caixa do dia contábil — senão um caixa
+   * já FECHADO mantém o valor estornado preso na coluna totalRevenue (a "receita
+   * fantasma" que o dono viu: 'só retornei o PIX e entrou no caixa de hoje').
+   * Também reverte o lado do agendamento (isPaid + comanda) e da assinatura.
    */
   private async handlePaymentRefunded(paymentData: any) {
     const asaasPaymentId = paymentData.id;
 
     this.logger.log(`Pagamento estornado: ${asaasPaymentId}`);
 
-    // Buscar pagamento local
+    // Buscar pagamento local (inclui businessDate/paidAt p/ saber qual caixa recalcular
+    // e subscriptionId p/ suspender a assinatura estornada).
     const { data: localPayment } = await this.supabase
       .from('payments')
-      .select('id, appointmentId')
+      .select('id, appointmentId, subscriptionId, businessDate, paidAt')
       .eq('asaasPaymentId', asaasPaymentId)
-      .single();
+      .maybeSingle();
 
-    if (!localPayment) return;
+    if (!localPayment) {
+      this.logger.warn(
+        `Estorno sem pagamento local: ${asaasPaymentId} (externalReference=${paymentData.externalReference || 'n/a'})`,
+      );
+      return;
+    }
 
-    // Atualizar status
+    // 1) Marcar o status real do estorno (REFUNDED ou REFUND_IN_PROGRESS). Ambos já
+    //    saem da receita via isRevenuePayment — assim que o dono dispara o estorno o
+    //    valor some, sem esperar o REFUNDED final.
+    const refundedStatus =
+      paymentData.status === 'REFUND_IN_PROGRESS'
+        ? AsaasChargeStatus.REFUND_IN_PROGRESS
+        : AsaasChargeStatus.REFUNDED;
     await this.supabase
       .from('payments')
-      .update({ asaasStatus: AsaasChargeStatus.REFUNDED })
+      .update({ asaasStatus: refundedStatus, updatedAt: nowLocalIsoString() })
       .eq('id', localPayment.id);
 
-    // Se vinculado a agendamento, reverter isPaid
+    // 2) Recalcular o caixa do DIA CONTÁBIL do pagamento. Para caixa aberto os totais
+    //    já são recalculados em tempo real; o problema é o caixa FECHADO, cujos totais
+    //    ficam persistidos na coluna. linkPaymentToBusinessDateRegister recalcula
+    //    quando o caixa está fechado — exatamente o que tira a receita fantasma de lá.
+    const accountingDate: string | null =
+      (localPayment as any).businessDate || (localPayment as any).paidAt || null;
+    if (accountingDate) {
+      try {
+        await this.cashRegisterService.linkPaymentToBusinessDateRegister(
+          localPayment.id,
+          String(accountingDate),
+        );
+      } catch (e) {
+        this.logger.error(
+          `Estorno ${asaasPaymentId}: falha ao recalcular caixa do dia ${accountingDate}: ${e}`,
+        );
+      }
+    }
+
+    // 3) Agendamento: reverter pago e a comanda (não é mais receita).
     if (localPayment.appointmentId) {
       await this.supabase
         .from('appointments')
-        .update({ isPaid: false })
+        .update({ isPaid: false, updatedAt: nowLocalIsoString() })
         .eq('id', localPayment.appointmentId);
+
+      // Comanda volta a PENDENTE e desvincula o pagamento estornado.
+      await this.supabase
+        .from('orders')
+        .update({ status: 'PENDING', paymentId: null, updatedAt: nowLocalIsoString() })
+        .eq('appointmentId', localPayment.appointmentId)
+        .eq('paymentId', localPayment.id);
+    }
+
+    // 4) Assinatura: o cliente estornou a mensalidade → suspender o plano. Sem isso a
+    //    assinatura seguia ACTIVE após o estorno (cliente devolveu o dinheiro e
+    //    continuava usando o plano). Só suspende se ainda estiver ACTIVE/PENDING.
+    if (localPayment.subscriptionId) {
+      const { data: sub } = await this.supabase
+        .from('client_subscriptions')
+        .select('status')
+        .eq('id', localPayment.subscriptionId)
+        .maybeSingle();
+
+      if (sub && ['ACTIVE', 'PENDING_PAYMENT'].includes((sub as any).status)) {
+        await this.supabase
+          .from('client_subscriptions')
+          .update({ status: 'SUSPENDED', updatedAt: nowLocalIsoString() })
+          .eq('id', localPayment.subscriptionId);
+        this.logger.log(
+          `Assinatura ${localPayment.subscriptionId} suspensa por estorno do pagamento ${asaasPaymentId}`,
+        );
+      }
     }
   }
 
