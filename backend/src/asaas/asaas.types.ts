@@ -135,6 +135,15 @@ export interface AsaasCharge {
   status: AsaasChargeStatus;
   description?: string;
   externalReference?: string;
+  // Datas do pagamento efetivo (o Asaas só preenche quando a cobrança é paga):
+  //  - paymentDate: dia em que o pagamento foi recebido (YYYY-MM-DD)
+  //  - confirmedDate: dia da confirmação (cartão/PIX)
+  //  - clientPaymentDate: dia informado pelo cliente
+  // Usadas para contabilizar a venda no DIA REAL do pagamento, não no dia em que
+  // a reconciliação rodou.
+  paymentDate?: string | null;
+  confirmedDate?: string | null;
+  clientPaymentDate?: string | null;
   invoiceUrl?: string;
   bankSlipUrl?: string;
   invoiceNumber?: string;

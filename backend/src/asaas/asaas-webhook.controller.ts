@@ -298,24 +298,37 @@ export class AsaasWebhookController {
       return;
     }
 
-    // Idempotência: se ja estava confirmado/recebido (NAO recem-criado pelo fallback),
-    // nao processar novamente. Sem o flag justCreatedByFallback, o fix anterior que
-    // preenche paidAt no INSERT do fallback faria esta checagem disparar e a
-    // assinatura nunca ativaria.
-    if (
+    // Idempotência: se o pagamento JÁ estava confirmado localmente, não repetir os
+    // efeitos FINANCEIROS (re-gravar paidAt/businessDate, vincular caixa, ativar
+    // assinatura, criar dívida). MAS a promoção do agendamento (isPaid + status)
+    // SEMPRE roda — ela é idempotente e é justamente o que cura um agendamento que
+    // ficou preso em PENDING_PAYMENT (ou foi cancelado por engano pelo cron) quando
+    // um 1º webhook gravou paidAt mas a promoção de status falhou. Antes isto era um
+    // `return` seco e a promoção nunca acontecia → o cron acabava cancelando o
+    // agendamento pago.
+    const alreadyProcessed =
       !justCreatedByFallback &&
-      localPayment.paidAt &&
-      (localPayment.asaasStatus === 'RECEIVED' || localPayment.asaasStatus === 'CONFIRMED')
-    ) {
-      this.logger.log(`Webhook duplicado ignorado: ${asaasPaymentId} já processado (${localPayment.asaasStatus})`);
-      return;
+      !!localPayment.paidAt &&
+      (localPayment.asaasStatus === 'RECEIVED' || localPayment.asaasStatus === 'CONFIRMED');
+
+    if (alreadyProcessed) {
+      this.logger.log(
+        `Webhook ${asaasPaymentId} já processado (${localPayment.asaasStatus}) — pulando efeitos financeiros, mas garantindo a promoção do agendamento.`,
+      );
     }
 
     // Atualizar status do pagamento. Data contábil (businessDate): dia do
-    // atendimento quando há agendamento; senão o dia da confirmação (agora).
-    // Confirmação é o momento em que o pagamento de fato entra — por isso é aqui
-    // que o businessDate é definido (no insert Asaas a cobrança ainda é pendente).
+    // atendimento quando há agendamento; senão o dia REAL do pagamento informado
+    // pelo Asaas (confirmedDate/clientPaymentDate/paymentDate) — não o "agora".
+    // Usar o agora jogava a venda no caixa do dia em que o webhook chegou, que
+    // pode ser depois do pagamento (webhook atrasado/reprocessado) e, para
+    // assinatura (sem agendamento), inflava o faturamento do dia errado.
     const confirmNow = nowLocalIsoString();
+    const asaasPaidAt: string =
+      paymentData.confirmedDate ||
+      paymentData.clientPaymentDate ||
+      paymentData.paymentDate ||
+      confirmNow;
     let confirmScheduledAt: string | null = null;
     if (localPayment.appointmentId) {
       const { data: appt } = await this.supabase
@@ -325,37 +338,68 @@ export class AsaasWebhookController {
         .maybeSingle();
       confirmScheduledAt = (appt as any)?.scheduledAt ?? null;
     }
-    const confirmBusinessDate = resolveBusinessDate(confirmScheduledAt, confirmNow);
+    // Sem agendamento → fallback é a data real do pagamento (asaasPaidAt), não o agora.
+    const confirmBusinessDate = resolveBusinessDate(confirmScheduledAt, asaasPaidAt);
 
-    await this.supabase
-      .from('payments')
-      .update({
-        asaasStatus: status,
-        paidAt: confirmNow,
-        businessDate: confirmBusinessDate,
-      })
-      .eq('id', localPayment.id);
+    // Efeito financeiro (não repetir se já processado): grava paidAt/businessDate.
+    if (!alreadyProcessed) {
+      await this.supabase
+        .from('payments')
+        .update({
+          asaasStatus: status,
+          paidAt: asaasPaidAt,
+          businessDate: confirmBusinessDate,
+        })
+        .eq('id', localPayment.id);
+    }
 
-    // Se vinculado a agendamento, marcar como pago e confirmar se estava pendente
+    // Se vinculado a agendamento, marcar como pago e confirmar/RESTAURAR o status.
+    // SEMPRE roda (mesmo se alreadyProcessed) — é idempotente e cura o agendamento
+    // que ficou PENDING_PAYMENT ou foi cancelado por engano pelo cron na janela de race.
     if (localPayment.appointmentId) {
+      // Estado atual: precisamos distinguir cancelamento AUTOMÁTICO do cron (race —
+      // canceledAt fica NULL) de cancelamento DELIBERADO (cliente/no-show/valor-mudou —
+      // setam canceledAt). Só restauramos o primeiro; um cancelamento intencional NÃO
+      // deve ser ressuscitado por um pagamento que chegou atrasado.
+      const { data: apptState } = await this.supabase
+        .from('appointments')
+        .select('status, canceledAt')
+        .eq('id', localPayment.appointmentId)
+        .maybeSingle();
+
+      const canRestoreCancel =
+        (apptState as any)?.status === 'CANCELED' && !(apptState as any)?.canceledAt;
+      const promoteStatuses = canRestoreCancel
+        ? ['PENDING_PAYMENT', 'CANCELED']
+        : ['PENDING_PAYMENT'];
+
       await this.supabase
         .from('appointments')
         .update({ isPaid: true, updatedAt: nowLocalIsoString() })
-        .eq('id', localPayment.appointmentId);
+        .eq('id', localPayment.appointmentId)
+        .in('status', promoteStatuses);
 
-      // Promover PENDING_PAYMENT → SCHEDULED após pagamento confirmado
+      // Promover → SCHEDULED. Restaura o agendamento se o cron o cancelou na corrida
+      // (canceledAt NULL); preserva cancelamentos deliberados.
       await this.supabase
         .from('appointments')
         .update({ status: 'SCHEDULED', updatedAt: nowLocalIsoString() })
         .eq('id', localPayment.appointmentId)
-        .eq('status', 'PENDING_PAYMENT');
+        .in('status', promoteStatuses);
 
-      // Pagar comanda vinculada ao agendamento
+      // Pagar comanda vinculada (reabre se foi cancelada pelo mesmo cron na corrida).
+      const orderStatuses = canRestoreCancel ? ['PENDING', 'CANCELED'] : ['PENDING'];
       await this.supabase
         .from('orders')
         .update({ status: 'PAID', paymentId: localPayment.id, updatedAt: nowLocalIsoString() })
         .eq('appointmentId', localPayment.appointmentId)
-        .eq('status', 'PENDING');
+        .in('status', orderStatuses);
+    }
+
+    // A partir daqui, efeitos colaterais financeiros que NÃO devem repetir.
+    if (alreadyProcessed) {
+      this.logger.log(`Webhook ${asaasPaymentId}: promoção do agendamento garantida; efeitos financeiros pulados (idempotência).`);
+      return;
     }
 
     // Se NÃO vinculado a agendamento, verificar se é pagamento de comanda vinculada a agendamento

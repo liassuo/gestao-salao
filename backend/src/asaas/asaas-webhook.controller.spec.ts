@@ -279,6 +279,45 @@ describe('AsaasWebhookController (e2e)', () => {
       expect(state.orders[0].paymentId).toBe('pay-local-1');
     });
 
+    it('assinatura (sem agendamento): businessDate = dia REAL do pagamento (confirmedDate), não hoje', async () => {
+      // Regressão: webhook atrasado/reprocessado de assinatura jogava a venda no
+      // caixa do dia em que o webhook chegou (now), inflando o faturamento do dia
+      // errado. Deve usar a data real informada pelo Asaas (confirmedDate).
+      const { controller, state } = await buildController({
+        payments: [
+          {
+            id: 'pay-sub-1',
+            asaasPaymentId: 'asaas_pay_sub',
+            asaasStatus: 'PENDING',
+            appointmentId: null, // assinatura: sem agendamento
+            subscriptionId: 'sub-1',
+            clientId: 'client-1',
+            amount: 7000,
+            paidAt: null,
+            businessDate: null,
+            cashRegisterId: null,
+          },
+        ],
+        cash_registers: [{ id: 'caixa-antigo', isOpen: false, date: '2026-05-20' }],
+      });
+
+      await controller.handleWebhook(
+        paymentEvent(
+          AsaasWebhookEvent.PAYMENT_RECEIVED,
+          basePaymentData({
+            id: 'asaas_pay_sub',
+            value: 70.0,
+            confirmedDate: '2026-05-20',
+          }),
+        ),
+        'test-token',
+      );
+
+      // Contabiliza no DIA REAL do pagamento (2026-05-20), não no dia do webhook.
+      expect(state.payments[0].businessDate).toBe('2026-05-20T00:00:00');
+      expect(String(state.payments[0].paidAt).substring(0, 10)).toBe('2026-05-20');
+    });
+
     it('idempotente: 2 webhooks PAYMENT_RECEIVED não duplicam efeitos', async () => {
       const { controller, state } = await buildController({
         appointments: [

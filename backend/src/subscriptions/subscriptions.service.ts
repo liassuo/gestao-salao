@@ -907,12 +907,36 @@ export class SubscriptionsService {
     const charges = await this.collectAsaasChargesForSubscription(subscription);
     if (charges.length === 0) return subscription;
 
-    const paid = charges.find((c: any) =>
-      c.status === 'RECEIVED' || c.status === 'CONFIRMED' || c.status === 'RECEIVED_IN_CASH',
+    // Só considera PAGA uma cobrança que: (a) está RECEIVED/CONFIRMED/RECEIVED_IN_CASH
+    // E (b) foi paga A PARTIR do início do ciclo atual da assinatura. Cobranças pagas
+    // ANTES do ciclo atual são de um período já encerrado (re-assinatura reaproveita a
+    // mesma linha client_subscriptions) — reconhecê-las aqui reativava a assinatura e
+    // jogava receita de meses atrás no caixa do dia da reconciliação (receita-fantasma).
+    const PAID_STATUSES = ['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'];
+    // Início do ciclo: o mais recente entre startDate e createdAt; tolerância de 1 dia
+    // para cobrir pagamento feito pouco antes da virada (timezone/fuso).
+    const cycleStartMs = Math.max(
+      subscription.startDate ? new Date(subscription.startDate).getTime() : 0,
+      subscription.createdAt ? new Date(subscription.createdAt).getTime() : 0,
     );
+    const cycleFloorMs = cycleStartMs > 0 ? cycleStartMs - 24 * 60 * 60 * 1000 : 0;
+    const chargePaidMs = (c: any): number | null => {
+      const raw = c?.paymentDate || c?.confirmedDate || c?.clientPaymentDate || null;
+      if (!raw) return null;
+      const t = new Date(`${String(raw).substring(0, 10)}T12:00:00`).getTime();
+      return Number.isNaN(t) ? null : t;
+    };
+
+    const paid = charges.find((c: any) => {
+      if (!PAID_STATUSES.includes(c.status)) return false;
+      const pidMs = chargePaidMs(c);
+      if (pidMs === null) return false; // pago sem data → não confiável, ignora
+      return pidMs >= cycleFloorMs; // só pagamentos do ciclo atual em diante
+    });
 
     if (!paid) {
-      // Sem cobrança paga; reflete o último status conhecido no payments local (best-effort)
+      // Nenhuma cobrança paga RELEVANTE ao ciclo atual. Reflete o status da cobrança
+      // mais recente no payments local sem marcar como pago (best-effort).
       await this.upsertLocalPaymentFromCharge(subscription, charges[0]).catch(() => {});
       return subscription;
     }
@@ -1000,8 +1024,34 @@ export class SubscriptionsService {
   }
 
   /**
+   * Extrai a DATA REAL do pagamento de uma cobrança Asaas, no formato canônico
+   * local "YYYY-MM-DDT00:00:00". O Asaas informa paymentDate/confirmedDate/
+   * clientPaymentDate (YYYY-MM-DD) só quando a cobrança foi efetivamente paga.
+   * Retorna null quando nenhuma dessas datas existe (cobrança não paga de fato).
+   *
+   * Por que isto importa: a reconciliação pode rodar DIAS depois do pagamento
+   * (ou pegar uma cobrança de um ciclo antigo). Usar `now` como data contábil
+   * jogava a venda no caixa do dia da reconciliação — inflando o faturamento de
+   * "hoje" com pagamentos que aconteceram (ou não) em outro dia. A data contábil
+   * tem que ser o dia REAL do pagamento.
+   */
+  private resolveChargePaidDate(charge: any): string | null {
+    const raw =
+      charge?.paymentDate ||
+      charge?.confirmedDate ||
+      charge?.clientPaymentDate ||
+      null;
+    if (!raw) return null;
+    // raw vem como "YYYY-MM-DD" (ou ISO). resolveBusinessDate normaliza p/ o
+    // formato canônico de 19 chars usado nas janelas do caixa.
+    return resolveBusinessDate(null, `${String(raw).substring(0, 10)}T00:00:00`);
+  }
+
+  /**
    * Insere ou atualiza o registro local de payment a partir de uma cobrança Asaas.
-   * Se markPaid=true, marca paidAt=now.
+   * Se markPaid=true, marca como pago usando a DATA REAL do pagamento informada
+   * pelo Asaas (não a data da reconciliação). Se o Asaas não informar a data
+   * (cobrança não paga de fato), NÃO marca como pago — evita receita-fantasma.
    */
   private async upsertLocalPaymentFromCharge(subscription: any, charge: any, markPaid = false) {
     const now = nowLocalIsoString();
@@ -1017,18 +1067,23 @@ export class SubscriptionsService {
     );
     const amount = this.asaasService.reaisToCentavos(charge.value || 0);
 
-    // Assinatura não tem agendamento → data contábil = dia do pagamento.
-    const businessDate = markPaid ? resolveBusinessDate(null, now) : null;
+    // Data contábil = dia REAL do pagamento (informado pelo Asaas), não `now`.
+    // Se markPaid mas o Asaas não traz data de pagamento, a cobrança não está
+    // realmente paga: não contabiliza (paidAt/businessDate ficam null).
+    const paidDate = markPaid ? this.resolveChargePaidDate(charge) : null;
+    const effectivelyPaid = markPaid && !!paidDate;
+    const businessDate = paidDate; // null quando não pago de fato
+    const paidAtValue = paidDate; // mesma data real (canônica) para paidAt
 
     if (existing) {
       const update: any = { asaasStatus: charge.status, updatedAt: now };
-      if (markPaid && !existing.paidAt) {
-        update.paidAt = now;
+      if (effectivelyPaid && !existing.paidAt) {
+        update.paidAt = paidAtValue;
         update.businessDate = businessDate;
       }
       await this.supabase.from('payments').update(update).eq('id', existing.id);
       // Vincula ao caixa do dia contábil (recalcula se já fechado) ao confirmar.
-      if (markPaid && !existing.paidAt && businessDate) {
+      if (effectivelyPaid && !existing.paidAt && businessDate) {
         await this.cashRegisterService.linkPaymentToBusinessDateRegister(
           existing.id,
           businessDate,
@@ -1048,14 +1103,14 @@ export class SubscriptionsService {
       notes: `Reconciliação Asaas (cobrança ${charge.id})`,
       asaasPaymentId: charge.id,
       asaasStatus: charge.status,
-      paidAt: markPaid ? now : null,
+      paidAt: effectivelyPaid ? paidAtValue : null,
       businessDate,
       invoiceUrl: charge.invoiceUrl || null,
       bankSlipUrl: charge.bankSlipUrl || null,
       createdAt: now,
       updatedAt: now,
     });
-    if (markPaid && businessDate) {
+    if (effectivelyPaid && businessDate) {
       await this.cashRegisterService.linkPaymentToBusinessDateRegister(id, businessDate);
     }
     return id;
