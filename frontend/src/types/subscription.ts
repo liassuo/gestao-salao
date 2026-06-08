@@ -39,6 +39,14 @@ export interface ClientSubscription {
   asaasSubscriptionId?: string | null;
   /** Setado quando cliente cancelou mas ainda esta dentro do periodo pago. */
   canceledAt?: string | null;
+  /** Forma de cobrança da última cobrança da assinatura (pro admin saber PIX/cartão). */
+  latestPayment?: {
+    method?: 'CASH' | 'PIX' | 'CARD' | null;
+    asaasStatus?: string | null;
+    paidAt?: string | null;
+  } | null;
+  /** Cliente com dívida de assinatura em aberto (ou última cobrança vencida). */
+  inadimplente?: boolean;
   createdAt: string;
   client: {
     id: string;

@@ -531,7 +531,61 @@ export class SubscriptionsService {
     const { data: subscriptions, error } = await queryBuilder;
 
     if (error) throw error;
-    return subscriptions || [];
+    return this.attachAdminPaymentInfo((subscriptions || []) as any[]);
+  }
+
+  /**
+   * Para a tela do admin: anexa a cada assinatura a forma de cobrança da última
+   * cobrança (latestPayment.method = PIX/cartão/dinheiro) e um flag `inadimplente`
+   * (cliente com dívida de assinatura em aberto OU última cobrança OVERDUE). Assim o
+   * admin vê de relance quem deve e por qual meio cobrar — sem depender só do status
+   * SUSPENDED, que é sobrecarregado (vencido/estorno/legado/overdue).
+   */
+  private async attachAdminPaymentInfo(subs: any[]): Promise<any[]> {
+    if (!subs || subs.length === 0) return subs || [];
+    const subIds = subs.map((s) => s.id).filter(Boolean);
+    const clientIds = Array.from(new Set(subs.map((s) => s.clientId).filter(Boolean)));
+
+    // Última cobrança por assinatura (método/status). order/limit no mock são no-op,
+    // então escolhemos a mais recente por createdAt em memória.
+    const latestBySub = new Map<string, any>();
+    if (subIds.length > 0) {
+      const { data: pays } = await this.supabase
+        .from('payments')
+        .select('subscriptionId, method, asaasStatus, paidAt, createdAt')
+        .in('subscriptionId', subIds);
+      for (const p of (pays || []) as any[]) {
+        if (!p.subscriptionId) continue;
+        const cur = latestBySub.get(p.subscriptionId);
+        if (!cur || String(p.createdAt ?? '') >= String(cur.createdAt ?? '')) {
+          latestBySub.set(p.subscriptionId, p);
+        }
+      }
+    }
+
+    // Clientes com dívida de assinatura em aberto ('Cobrança não paga%').
+    const delinquentClients = new Set<string>();
+    if (clientIds.length > 0) {
+      const { data: debts } = await this.supabase
+        .from('debts')
+        .select('clientId')
+        .in('clientId', clientIds)
+        .eq('isSettled', false)
+        .ilike('description', 'Cobrança não paga%');
+      for (const d of (debts || []) as any[]) {
+        if (d.clientId) delinquentClients.add(d.clientId);
+      }
+    }
+
+    return subs.map((s) => {
+      const lp = latestBySub.get(s.id) || null;
+      const latestPayment = lp
+        ? { method: lp.method ?? null, asaasStatus: lp.asaasStatus ?? null, paidAt: lp.paidAt ?? null }
+        : null;
+      const inadimplente =
+        delinquentClients.has(s.clientId) || lp?.asaasStatus === 'OVERDUE';
+      return { ...s, latestPayment, inadimplente };
+    });
   }
 
 
@@ -605,6 +659,17 @@ export class SubscriptionsService {
           .select('*, client:clients(id, name, phone), plan:subscription_plans!planId(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
           .single();
         this.logger.log(`Assinatura ${subscription.id} suspensa automaticamente (endDate ${subscription.endDate} vencido)`);
+        // Mesma régua do cron: vencer sem pagamento → registra inadimplência. Cobre o
+        // caso em que o CLIENTE abre o app e suspende na leitura antes do cron rodar
+        // (o cron filtra status ACTIVE, então não pegaria mais essa assinatura).
+        await this.recordSubscriptionDelinquency({
+          id: subscription.id,
+          clientId: subscription.clientId,
+          endDate: subscription.endDate ?? null,
+          plan: subscription.plan ?? null,
+        }).catch((e) =>
+          this.logger.warn(`[auto-suspend] falha ao registrar inadimplência de ${subscription.id}: ${e}`),
+        );
         return suspended ?? subscription;
       }
     }
@@ -1778,7 +1843,7 @@ export class SubscriptionsService {
     const nowIso = new Date().toISOString();
     const { data: expired } = await this.supabase
       .from('client_subscriptions')
-      .select('id')
+      .select('id, clientId, endDate, plan:subscription_plans!planId(name, price)')
       .eq('status', 'ACTIVE')
       .is('canceledAt', null) // canceladas vencidas viram CANCELED no outro cron
       .lt('endDate', nowIso)
@@ -1786,17 +1851,106 @@ export class SubscriptionsService {
 
     if (!expired || expired.length === 0) return;
 
-    const ids = expired.map((s: any) => s.id);
-    const { error } = await this.supabase
-      .from('client_subscriptions')
-      .update({ status: 'SUSPENDED', updatedAt: nowLocalIsoString() })
-      .in('id', ids);
+    const now = nowLocalIsoString();
+    let suspended = 0;
+    for (const sub of expired as any[]) {
+      const { error } = await this.supabase
+        .from('client_subscriptions')
+        .update({ status: 'SUSPENDED', updatedAt: now })
+        .eq('id', sub.id);
+      if (error) {
+        this.logger.warn(`[suspend-expired-cron] falha ao suspender ${sub.id}: ${error.message}`);
+        continue;
+      }
+      suspended += 1;
+      // Inadimplência confiável SEM depender do webhook OVERDUE do Asaas (que pode não
+      // estar configurado/disparando): ao vencer sem pagamento, registra a dívida e marca
+      // o cliente como inadimplente. Self-healing: quando o pagamento confirmar,
+      // settleOverdueDebtForPayment quita pela mesma régua 'Cobrança não paga%'.
+      await this.recordSubscriptionDelinquency(sub).catch((e) =>
+        this.logger.warn(`[suspend-expired-cron] falha ao registrar inadimplência de ${sub.id}: ${e}`),
+      );
+    }
 
-    if (error) {
-      this.logger.warn(`[suspend-expired-cron] falha ao suspender ${ids.length} assinatura(s): ${error.message}`);
+    if (suspended > 0) {
+      this.logger.log(`[suspend-expired-cron] ${suspended} assinatura(s) suspensa(s) ao vencer`);
+    }
+  }
+
+  /**
+   * Registra a inadimplência de uma assinatura vencida sem pagamento: cria a dívida
+   * e marca clients.hasDebts. Idempotente POR CLIENTE — não empilha com a dívida do
+   * webhook OVERDUE (ambas usam o rótulo 'Cobrança não paga'), evitando valor em dobro.
+   * A forma de cobrança esperada (PIX/cartão/dinheiro) vai na descrição, pro admin
+   * resolver mais fácil. A tag [sub:<id>:cycle:<endDate>] identifica o ciclo.
+   */
+  private async recordSubscriptionDelinquency(sub: {
+    id: string;
+    clientId: string;
+    endDate: string | null;
+    plan?: { name?: string; price?: number } | null;
+  }): Promise<void> {
+    if (!sub.clientId) return;
+
+    // Dedup: cliente já tem cobrança de assinatura em aberto (criada aqui ou pelo
+    // webhook OVERDUE) → não cria outra.
+    const { data: openDebts } = await this.supabase
+      .from('debts')
+      .select('id')
+      .eq('clientId', sub.clientId)
+      .eq('isSettled', false)
+      .ilike('description', 'Cobrança não paga%')
+      .limit(1);
+    if (openDebts && openDebts.length > 0) return;
+
+    const amount = sub.plan?.price ?? 0;
+    if (amount <= 0) return;
+
+    const planName = sub.plan?.name ?? 'Assinatura';
+    const method = await this.resolveExpectedChargeMethod(sub.id);
+    const cycleKey = String(sub.endDate ?? '').substring(0, 10);
+    const now = nowLocalIsoString();
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 7);
+
+    const { error: debtError } = await this.supabase.from('debts').insert({
+      id: randomUUID(),
+      clientId: sub.clientId,
+      amount,
+      amountPaid: 0,
+      remainingBalance: amount,
+      description: `Cobrança não paga — ${planName} (${method}) [sub:${sub.id}:cycle:${cycleKey}]`,
+      dueDate: dueDate.toISOString(),
+      isSettled: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    if (debtError) {
+      this.logger.error(
+        `[suspend-expired-cron] falha ao criar dívida da assinatura ${sub.id}: ${JSON.stringify(debtError)}`,
+      );
       return;
     }
-    this.logger.log(`[suspend-expired-cron] ${ids.length} assinatura(s) suspensa(s) ao vencer`);
+
+    await this.supabase.from('clients').update({ hasDebts: true }).eq('id', sub.clientId);
+    this.logger.warn(
+      `[suspend-expired-cron] assinatura ${sub.id} inadimplente — dívida ${amount} (${method}) criada para cliente ${sub.clientId}`,
+    );
+  }
+
+  /** Forma de cobrança esperada (PIX/Cartão/Dinheiro) a partir do último pagamento da assinatura. */
+  private async resolveExpectedChargeMethod(subscriptionId: string): Promise<string> {
+    const { data: pays } = await this.supabase
+      .from('payments')
+      .select('method, createdAt')
+      .eq('subscriptionId', subscriptionId)
+      .order('createdAt', { ascending: false })
+      .limit(1);
+    const m = (pays && (pays[0] as any)?.method) || 'PIX';
+    if (m === 'CARD') return 'Cartão';
+    if (m === 'CASH') return 'Dinheiro';
+    return 'PIX';
   }
 
   /**

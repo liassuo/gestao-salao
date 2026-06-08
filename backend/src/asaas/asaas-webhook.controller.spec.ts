@@ -194,7 +194,7 @@ function basePaymentData(overrides: Partial<any> = {}) {
 // ============================================================
 // Setup
 // ============================================================
-async function buildController(initial: Tables) {
+async function buildController(initial: Tables, asaasOverrides: Record<string, any> = {}) {
   const sb = createStatefulSupabase(initial);
   const moduleRef: TestingModule = await Test.createTestingModule({
     controllers: [AsaasWebhookController],
@@ -214,6 +214,7 @@ async function buildController(initial: Tables) {
         useValue: {
           configured: true,
           cancelCharge: jest.fn(),
+          ...asaasOverrides,
         },
       },
       // CashRegisterService real ligado ao mesmo Supabase stateful, para que o
@@ -497,6 +498,73 @@ describe('AsaasWebhookController (e2e)', () => {
       expect(state.debts[0].remainingBalance).toBe(0);
       expect(state.clients[0].hasDebts).toBe(false);
       expect(state.client_subscriptions[0].status).toBe('ACTIVE');
+    });
+  });
+
+  describe('handlePaymentConfirmed — renova só com cobrança liquidada (Asaas como fonte da verdade)', () => {
+    it('NÃO ativa a assinatura quando a cobrança real (getCharge) ainda está PENDING, mesmo recebendo PAYMENT_CONFIRMED', async () => {
+      const { controller, state } = await buildController(
+        {
+          client_subscriptions: [
+            { id: 'sub-1', clientId: 'client-1', status: 'SUSPENDED', endDate: '2026-06-01T00:00:00.000', plan: { name: 'Mensal' } },
+          ],
+          payments: [
+            {
+              id: 'pay-local-1',
+              asaasPaymentId: 'asaas_pay_001',
+              clientId: 'client-1',
+              subscriptionId: 'sub-1',
+              amount: 5000,
+              asaasStatus: 'PENDING',
+              paidAt: null,
+            },
+          ],
+          clients: [{ id: 'client-1', hasDebts: false }],
+          cash_registers: [],
+        },
+        { getCharge: async () => ({ id: 'asaas_pay_001', status: 'PENDING', value: 50 }) },
+      );
+
+      await controller.handleWebhook(
+        paymentEvent(AsaasWebhookEvent.PAYMENT_CONFIRMED, basePaymentData({ status: 'CONFIRMED' })),
+        'test-token',
+      );
+
+      // Cobrança não liquidada de verdade → assinatura NÃO renova/ativa e nada entra no caixa.
+      expect(state.client_subscriptions[0].status).toBe('SUSPENDED');
+      expect(state.payments[0].paidAt).toBeFalsy();
+    });
+
+    it('ativa a assinatura quando getCharge confirma a liquidação (CONFIRMED)', async () => {
+      const { controller, state } = await buildController(
+        {
+          client_subscriptions: [
+            { id: 'sub-1', clientId: 'client-1', status: 'SUSPENDED', endDate: '2026-06-01T00:00:00.000', plan: { name: 'Mensal' } },
+          ],
+          payments: [
+            {
+              id: 'pay-local-1',
+              asaasPaymentId: 'asaas_pay_001',
+              clientId: 'client-1',
+              subscriptionId: 'sub-1',
+              amount: 5000,
+              asaasStatus: 'PENDING',
+              paidAt: null,
+            },
+          ],
+          clients: [{ id: 'client-1', hasDebts: false }],
+          cash_registers: [],
+        },
+        { getCharge: async () => ({ id: 'asaas_pay_001', status: 'CONFIRMED', value: 50 }) },
+      );
+
+      await controller.handleWebhook(
+        paymentEvent(AsaasWebhookEvent.PAYMENT_CONFIRMED, basePaymentData({ status: 'CONFIRMED' })),
+        'test-token',
+      );
+
+      expect(state.client_subscriptions[0].status).toBe('ACTIVE');
+      expect(state.payments[0].paidAt).toBeTruthy();
     });
   });
 

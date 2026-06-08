@@ -231,3 +231,152 @@ describe('SubscriptionsService — assinatura paga no balcão', () => {
     expect(state.payments).toHaveLength(0);
   });
 });
+
+describe('SubscriptionsService — inadimplência confiável ao vencer (independe do webhook OVERDUE)', () => {
+  it('cron: assinatura ACTIVE vencida sem pagamento vira SUSPENDED + cria dívida + marca hasDebts', async () => {
+    const tables = baseTables();
+    tables.client_subscriptions = [
+      {
+        id: 'sub-1',
+        clientId: 'client-1',
+        planId: 'plan-1',
+        status: 'ACTIVE',
+        canceledAt: null,
+        endDate: '2020-01-01T00:00:00.000',
+        plan: { name: 'Mensal', price: 8000 },
+      },
+    ];
+    tables.payments = [
+      { id: 'pay-1', subscriptionId: 'sub-1', clientId: 'client-1', method: 'PIX', asaasStatus: 'CONFIRMED', paidAt: '2019-12-01T00:00:00', createdAt: '2019-12-01T00:00:00' },
+    ];
+    tables.clients = [{ id: 'client-1', name: 'João', hasDebts: false }];
+    tables.debts = [];
+    const { service, state } = await buildService(tables);
+
+    await service.suspendExpiredActiveSubscriptionsCron();
+
+    expect(state.client_subscriptions[0].status).toBe('SUSPENDED');
+    expect(state.debts).toHaveLength(1);
+    expect(state.debts[0].clientId).toBe('client-1');
+    expect(state.debts[0].amount).toBe(8000);
+    expect(state.debts[0].isSettled).toBe(false);
+    expect(state.debts[0].description).toContain('Cobrança não paga');
+    expect(state.debts[0].description).toContain('[sub:sub-1');
+    expect(state.clients[0].hasDebts).toBe(true);
+  });
+
+  it('cron: não duplica dívida quando o cliente já tem cobrança de assinatura em aberto (dedup com webhook OVERDUE)', async () => {
+    const tables = baseTables();
+    tables.client_subscriptions = [
+      {
+        id: 'sub-1',
+        clientId: 'client-1',
+        planId: 'plan-1',
+        status: 'ACTIVE',
+        canceledAt: null,
+        endDate: '2020-01-01T00:00:00.000',
+        plan: { name: 'Mensal', price: 8000 },
+      },
+    ];
+    tables.clients = [{ id: 'client-1', name: 'João', hasDebts: true }];
+    tables.debts = [
+      { id: 'd0', clientId: 'client-1', description: 'Cobrança não paga — Mensal [asaas:x]', amount: 8000, isSettled: false },
+    ];
+    const { service, state } = await buildService(tables);
+
+    await service.suspendExpiredActiveSubscriptionsCron();
+
+    expect(state.client_subscriptions[0].status).toBe('SUSPENDED');
+    expect(state.debts).toHaveLength(1); // não cria 2ª dívida
+  });
+
+  it('leitura (findClientSubscription): assinatura ACTIVE vencida vira SUSPENDED + cria dívida na hora', async () => {
+    const tables = baseTables();
+    tables.client_subscriptions = [
+      {
+        id: 'sub-1',
+        clientId: 'client-1',
+        planId: 'plan-1',
+        status: 'ACTIVE',
+        canceledAt: null,
+        startDate: '2019-12-01T00:00:00',
+        endDate: '2020-01-01T00:00:00.000',
+        cutsUsedThisMonth: 0,
+        createdAt: '2019-12-01T00:00:00',
+        plan: { id: 'plan-1', name: 'Mensal', price: 8000, cutsPerMonth: 4 },
+      },
+    ];
+    tables.payments = [];
+    tables.clients = [{ id: 'client-1', name: 'João', hasDebts: false }];
+    tables.debts = [];
+    const { service, state } = await buildService(tables);
+
+    const sub = await service.findClientSubscription('client-1');
+
+    expect(sub.status).toBe('SUSPENDED');
+    expect(state.debts).toHaveLength(1);
+    expect(state.debts[0].description).toContain('Cobrança não paga');
+    expect(state.clients[0].hasDebts).toBe(true);
+  });
+
+  it('cron: assinatura cancelada (canceledAt setado) vencida NÃO gera dívida (é tratada como cancelamento)', async () => {
+    const tables = baseTables();
+    tables.client_subscriptions = [
+      {
+        id: 'sub-1',
+        clientId: 'client-1',
+        planId: 'plan-1',
+        status: 'ACTIVE',
+        canceledAt: '2019-12-15T00:00:00',
+        endDate: '2020-01-01T00:00:00.000',
+        plan: { name: 'Mensal', price: 8000 },
+      },
+    ];
+    tables.clients = [{ id: 'client-1', name: 'João', hasDebts: false }];
+    tables.debts = [];
+    const { service, state } = await buildService(tables);
+
+    await service.suspendExpiredActiveSubscriptionsCron();
+
+    // canceladas vencidas são do outro cron (→ CANCELED) — este não as toca nem cria dívida.
+    expect(state.debts).toHaveLength(0);
+  });
+});
+
+describe('SubscriptionsService — findAllSubscriptions expõe método e inadimplência pro admin', () => {
+  it('anexa latestPayment.method e inadimplente=true quando há dívida de assinatura aberta', async () => {
+    const tables = baseTables();
+    tables.client_subscriptions = [
+      { id: 'sub-1', clientId: 'client-1', planId: 'plan-1', status: 'SUSPENDED', createdAt: '2026-06-01T00:00:00', endDate: '2026-06-01T00:00:00' },
+    ];
+    tables.payments = [
+      { id: 'pay-1', subscriptionId: 'sub-1', clientId: 'client-1', method: 'CARD', asaasStatus: 'OVERDUE', createdAt: '2026-06-01T00:00:00' },
+    ];
+    tables.debts = [
+      { id: 'd1', clientId: 'client-1', description: 'Cobrança não paga — Mensal', isSettled: false, amount: 8000 },
+    ];
+    const { service } = await buildService(tables);
+
+    const list = await service.findAllSubscriptions();
+
+    expect(list).toHaveLength(1);
+    expect((list[0] as any).latestPayment?.method).toBe('CARD');
+    expect((list[0] as any).inadimplente).toBe(true);
+  });
+
+  it('inadimplente=false e expõe o método quando a assinatura está em dia', async () => {
+    const tables = baseTables();
+    tables.client_subscriptions = [
+      { id: 'sub-1', clientId: 'client-1', planId: 'plan-1', status: 'ACTIVE', createdAt: '2026-06-01T00:00:00', endDate: '2026-12-01T00:00:00' },
+    ];
+    tables.payments = [
+      { id: 'pay-1', subscriptionId: 'sub-1', clientId: 'client-1', method: 'PIX', asaasStatus: 'CONFIRMED', paidAt: '2026-06-01T00:00:00', createdAt: '2026-06-01T00:00:00' },
+    ];
+    tables.debts = [];
+    const { service } = await buildService(tables);
+
+    const list = await service.findAllSubscriptions();
+    expect((list[0] as any).latestPayment?.method).toBe('PIX');
+    expect((list[0] as any).inadimplente).toBe(false);
+  });
+});
