@@ -25,6 +25,9 @@ import { SkipThrottle } from '@nestjs/throttler';
 export class AsaasWebhookController {
   private readonly logger = new Logger(AsaasWebhookController.name);
 
+  /** Status do Asaas que significam dinheiro de fato liquidado/garantido. */
+  private static readonly SETTLED_STATUSES = ['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'];
+
   constructor(
     private readonly configService: ConfigService,
     private readonly supabase: SupabaseService,
@@ -46,6 +49,13 @@ export class AsaasWebhookController {
         this.logger.warn('Webhook recebido com token inválido');
         throw new ForbiddenException('Token inválido');
       }
+    } else {
+      // Sem token configurado, qualquer requisição é aceita — um POST forjado pode
+      // disparar confirmação/renovação. Aceitamos por compatibilidade, mas logamos
+      // alto para o operador configurar ASAAS_WEBHOOK_TOKEN no Asaas e no ambiente.
+      this.logger.warn(
+        'ASAAS_WEBHOOK_TOKEN não configurado — webhook aceitando requisições SEM autenticação. Configure o token para evitar eventos forjados.',
+      );
     }
 
     const event = body.event as AsaasWebhookEvent;
@@ -88,6 +98,33 @@ export class AsaasWebhookController {
     }
 
     return { received: true };
+  }
+
+  /**
+   * Fonte da verdade do pagamento é o Asaas, NÃO o corpo do webhook. Quando o cliente
+   * Asaas está disponível, recarrega a cobrança (getCharge) e exige status liquidado —
+   * mesma régua de syncWithAsaas/applyAsaasReconciliation. Sem isso, o webhook ativava/
+   * renovava a assinatura confiando só no tipo do evento, então um evento forjado,
+   * reentregue ou mal-classificado renovava "sem pagamento". Se o getCharge falhar
+   * (rede) ou não existir, cai no status do próprio evento (melhor esforço).
+   */
+  private async isChargeSettled(
+    asaasPaymentId: string,
+    eventStatus?: string,
+  ): Promise<boolean> {
+    const SETTLED = AsaasWebhookController.SETTLED_STATUSES;
+    const svc = this.asaasService as any;
+    if (this.asaasService.configured && typeof svc.getCharge === 'function') {
+      try {
+        const charge = await svc.getCharge(asaasPaymentId);
+        if (charge?.status) return SETTLED.includes(charge.status);
+      } catch (e) {
+        this.logger.warn(
+          `isChargeSettled: getCharge(${asaasPaymentId}) falhou, usando status do evento (${eventStatus}): ${e}`,
+        );
+      }
+    }
+    return !!eventStatus && SETTLED.includes(eventStatus);
   }
 
   /**
@@ -315,6 +352,20 @@ export class AsaasWebhookController {
       this.logger.log(
         `Webhook ${asaasPaymentId} já processado (${localPayment.asaasStatus}) — pulando efeitos financeiros, mas garantindo a promoção do agendamento.`,
       );
+    }
+
+    // ASSINATURA: só aplica efeito financeiro (paidAt, caixa, renovação) se a cobrança
+    // estiver REALMENTE liquidada no Asaas. Antes o webhook renovava confiando só no tipo
+    // do evento → evento forjado/reentregue/mal-classificado renovava "sem pagamento".
+    // Agendamentos seguem o fluxo próprio (reconciliação/baixa) e não passam por aqui.
+    if (localPayment.subscriptionId && !alreadyProcessed) {
+      const settled = await this.isChargeSettled(asaasPaymentId, status);
+      if (!settled) {
+        this.logger.warn(
+          `Webhook ${asaasPaymentId}: assinatura ${localPayment.subscriptionId} NÃO renovada/contabilizada — cobrança não liquidada (status efetivo não é RECEIVED/CONFIRMED/RECEIVED_IN_CASH).`,
+        );
+        return;
+      }
     }
 
     // Atualizar status do pagamento. Data contábil (businessDate): dia do
@@ -641,17 +692,22 @@ export class AsaasWebhookController {
       const dueDate = new Date();
       dueDate.setDate(dueDate.getDate() + 7);
 
-      // Idempotência: se já existe dívida para este mesmo asaasPaymentId, não duplica.
+      // Idempotência/dedup: se o cliente JÁ tem uma cobrança de assinatura em aberto
+      // — seja deste mesmo asaasPaymentId, seja a criada pelo cron de vencimento
+      // (recordSubscriptionDelinquency) — não cria outra. Ambas usam o rótulo
+      // 'Cobrança não paga', então a régua por prefixo cobre os dois caminhos e
+      // evita inadimplência/valor em dobro. limit(1) p/ tolerar legado com >1.
       const debtTag = `[asaas:${asaasPaymentId}]`;
-      const { data: existingDebt } = await this.supabase
+      const { data: existingDebts } = await this.supabase
         .from('debts')
         .select('id')
         .eq('clientId', localPayment.clientId)
-        .ilike('description', `%${debtTag}%`)
-        .maybeSingle();
+        .eq('isSettled', false)
+        .ilike('description', 'Cobrança não paga%')
+        .limit(1);
 
-      if (existingDebt) {
-        this.logger.log(`Dívida já existente para cobrança ${asaasPaymentId}, ignorando duplicação.`);
+      if (existingDebts && existingDebts.length > 0) {
+        this.logger.log(`Dívida de assinatura em aberto já existe para cliente ${localPayment.clientId} (cobrança ${asaasPaymentId}), ignorando duplicação.`);
         return;
       }
 

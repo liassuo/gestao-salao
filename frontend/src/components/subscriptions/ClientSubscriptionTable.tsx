@@ -1,4 +1,4 @@
-import { Users, Scissors, MoreVertical, XCircle, Phone, RefreshCw, QrCode, CheckCircle2, Trash2, RotateCw } from 'lucide-react';
+import { Users, Scissors, MoreVertical, XCircle, Phone, RefreshCw, QrCode, CheckCircle2, Trash2, RotateCw, CreditCard, AlertTriangle } from 'lucide-react';
 import { useState, useRef } from 'react';
 import { EmptyState } from '@/components/ui';
 import { formatPhone } from '@/utils/format';
@@ -27,6 +27,13 @@ function formatCurrency(cents: number): string {
 
 function formatDate(dateString: string): string {
   return new Date(dateString).toLocaleDateString('pt-BR');
+}
+
+function paymentMethodLabel(method?: string | null): string | null {
+  if (method === 'PIX') return 'PIX';
+  if (method === 'CARD') return 'Cartão';
+  if (method === 'CASH') return 'Dinheiro';
+  return null;
 }
 
 export function ClientSubscriptionTable({
@@ -119,6 +126,12 @@ export function ClientSubscriptionTable({
                       <p className="text-sm text-[var(--text-muted)]">
                         {formatCurrency(plan?.price ?? 0)}/mês
                       </p>
+                      {paymentMethodLabel(subscription.latestPayment?.method) && (
+                        <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-[var(--hover-bg)] px-2 py-0.5 text-xs font-medium text-[var(--text-secondary)]">
+                          <CreditCard className="h-3 w-3" />
+                          {paymentMethodLabel(subscription.latestPayment?.method)}
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="whitespace-nowrap px-4 py-4">
@@ -152,17 +165,25 @@ export function ClientSubscriptionTable({
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-4 py-4">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                        subscription.canceledAt && subscription.status === 'ACTIVE'
-                          ? 'bg-amber-500/15 text-amber-400'
-                          : subscriptionStatusColors[subscription.status]
-                      }`}
-                    >
-                      {subscription.canceledAt && subscription.status === 'ACTIVE'
-                        ? `Cancela em ${subscription.endDate ? formatDate(subscription.endDate) : '—'}`
-                        : subscriptionStatusLabels[subscription.status]}
-                    </span>
+                    <div className="flex flex-col items-start gap-1">
+                      <span
+                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                          subscription.canceledAt && subscription.status === 'ACTIVE'
+                            ? 'bg-amber-500/15 text-amber-400'
+                            : subscriptionStatusColors[subscription.status]
+                        }`}
+                      >
+                        {subscription.canceledAt && subscription.status === 'ACTIVE'
+                          ? `Cancela em ${subscription.endDate ? formatDate(subscription.endDate) : '—'}`
+                          : subscriptionStatusLabels[subscription.status]}
+                      </span>
+                      {subscription.inadimplente && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-red-500/15 px-2.5 py-0.5 text-xs font-semibold text-red-500">
+                          <AlertTriangle className="h-3 w-3" />
+                          Inadimplente
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="whitespace-nowrap px-4 py-4 text-center">
                     <div className="relative inline-block">
