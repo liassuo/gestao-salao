@@ -36,6 +36,20 @@ function paymentMethodLabel(method?: string | null): string | null {
   return null;
 }
 
+// Capitaliza a bandeira ("MASTERCARD" -> "Mastercard") para exibição amigável.
+function formatCardBrand(brand?: string | null): string {
+  if (!brand) return 'Cartão';
+  return brand.charAt(0).toUpperCase() + brand.slice(1).toLowerCase();
+}
+
+// Rótulo do cartão usado no pagamento: "Mastercard •••• 5431". Só quando há os 4
+// dígitos (pagamento por cartão). Nunca expõe o número completo — só os 4 últimos.
+function cardLabel(latestPayment?: ClientSubscription['latestPayment']): string | null {
+  const last4 = latestPayment?.cardLast4;
+  if (!last4) return null;
+  return `${formatCardBrand(latestPayment?.cardBrand)} •••• ${last4}`;
+}
+
 export function ClientSubscriptionTable({
   subscriptions,
   onCancel,
@@ -126,10 +140,14 @@ export function ClientSubscriptionTable({
                       <p className="text-sm text-[var(--text-muted)]">
                         {formatCurrency(plan?.price ?? 0)}/mês
                       </p>
-                      {paymentMethodLabel(subscription.latestPayment?.method) && (
+                      {(cardLabel(subscription.latestPayment) ||
+                        paymentMethodLabel(subscription.latestPayment?.method)) && (
                         <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-[var(--hover-bg)] px-2 py-0.5 text-xs font-medium text-[var(--text-secondary)]">
                           <CreditCard className="h-3 w-3" />
-                          {paymentMethodLabel(subscription.latestPayment?.method)}
+                          {/* Mostra "Mastercard •••• 5431" quando pago no cartão;
+                              senão o método (PIX/Dinheiro). */}
+                          {cardLabel(subscription.latestPayment) ||
+                            paymentMethodLabel(subscription.latestPayment?.method)}
                         </span>
                       )}
                     </div>

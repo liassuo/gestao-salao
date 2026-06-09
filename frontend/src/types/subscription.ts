@@ -44,6 +44,10 @@ export interface ClientSubscription {
     method?: 'CASH' | 'PIX' | 'CARD' | null;
     asaasStatus?: string | null;
     paidAt?: string | null;
+    /** 4 últimos dígitos do cartão (só quando pago no cartão). Nunca o número completo. */
+    cardLast4?: string | null;
+    /** Bandeira do cartão (ex: MASTERCARD, VISA). */
+    cardBrand?: string | null;
   } | null;
   /** Cliente com dívida de assinatura em aberto (ou última cobrança vencida). */
   inadimplente?: boolean;

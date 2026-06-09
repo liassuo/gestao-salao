@@ -553,7 +553,7 @@ export class SubscriptionsService {
     if (subIds.length > 0) {
       const { data: pays } = await this.supabase
         .from('payments')
-        .select('subscriptionId, method, asaasStatus, paidAt, createdAt')
+        .select('subscriptionId, method, asaasStatus, paidAt, createdAt, cardLast4, cardBrand')
         .in('subscriptionId', subIds);
       for (const p of (pays || []) as any[]) {
         if (!p.subscriptionId) continue;
@@ -581,7 +581,13 @@ export class SubscriptionsService {
     return subs.map((s) => {
       const lp = latestBySub.get(s.id) || null;
       const latestPayment = lp
-        ? { method: lp.method ?? null, asaasStatus: lp.asaasStatus ?? null, paidAt: lp.paidAt ?? null }
+        ? {
+            method: lp.method ?? null,
+            asaasStatus: lp.asaasStatus ?? null,
+            paidAt: lp.paidAt ?? null,
+            cardLast4: lp.cardLast4 ?? null,
+            cardBrand: lp.cardBrand ?? null,
+          }
         : null;
       const inadimplente =
         delinquentClients.has(s.clientId) || lp?.asaasStatus === 'OVERDUE';
@@ -1218,8 +1224,15 @@ export class SubscriptionsService {
     const businessDate = paidDate; // null quando não pago de fato
     const paidAtValue = paidDate; // mesma data real (canônica) para paidAt
 
+    // 4 últimos dígitos + bandeira do cartão (só vem em cobrança paga com cartão).
+    // O Asaas nunca devolve o número completo — só os 4 últimos. Seguro de guardar.
+    const cardLast4 = charge.creditCard?.creditCardNumber || null;
+    const cardBrand = charge.creditCard?.creditCardBrand || null;
+
     if (existing) {
       const update: any = { asaasStatus: charge.status, updatedAt: now };
+      if (cardLast4) update.cardLast4 = cardLast4;
+      if (cardBrand) update.cardBrand = cardBrand;
       if (effectivelyPaid && !existing.paidAt) {
         update.paidAt = paidAtValue;
         update.businessDate = businessDate;
@@ -1248,6 +1261,8 @@ export class SubscriptionsService {
       asaasStatus: charge.status,
       paidAt: effectivelyPaid ? paidAtValue : null,
       businessDate,
+      cardLast4,
+      cardBrand,
       invoiceUrl: charge.invoiceUrl || null,
       bankSlipUrl: charge.bankSlipUrl || null,
       createdAt: now,
