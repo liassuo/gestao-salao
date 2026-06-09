@@ -82,6 +82,13 @@ interface MySubscription {
   id: string;
   status: string;
   cutsUsedThisMonth: number;
+  /**
+   * Espelha o gate de pagamento do backend (isCurrentCyclePaid): true se o ciclo
+   * vigente está pago. Sem isso, o app mostrava "Pelo plano"/crédito mesmo com o
+   * ciclo não pago, enquanto o backend cobrava cheio. undefined = backend antigo →
+   * não bloquear (degrada para o comportamento legado).
+   */
+  currentCyclePaid?: boolean;
   plan: {
     id: string;
     name: string;
@@ -566,13 +573,20 @@ export function ClientBooking() {
     }
   }, [currentStep, selectedServices, selectedProfessional, selectedDate, selectedTime]);
 
+  // A assinatura só concede benefício (crédito/desconto) se está ACTIVE E o ciclo
+  // vigente está pago — mesmo gate do backend (isCurrentCyclePaid). Sem isso, o app
+  // mostrava "Pelo plano"/grátis com o ciclo não pago e o backend cobrava cheio.
+  // Compat: só bloqueia quando o backend afirma === false (undefined = legado).
+  const subscriptionGivesBenefit =
+    !!mySubscription &&
+    mySubscription.status === 'ACTIVE' &&
+    mySubscription.currentCyclePaid !== false;
+
   // Desconto do plano só se aplica quando o cliente NÃO vai usar crédito do plano
   // (se usar crédito, o serviço é gratuito naquele agendamento).
   // Cada serviço pode ter um desconto específico no plano (sobrescreve o geral).
   const activePlan =
-    mySubscription && mySubscription.status === 'ACTIVE' && !useSubscriptionCut
-      ? mySubscription.plan
-      : null;
+    subscriptionGivesBenefit && !useSubscriptionCut ? mySubscription!.plan : null;
   const planDiscountFor = (serviceId: string): number =>
     activePlan ? getPlanDiscountForService(activePlan, serviceId) : 0;
   const totalPrice = selectedServices.reduce((sum, s) => {
@@ -593,10 +607,10 @@ export function ClientBooking() {
       return <EmptyState icon="scissors" title="Nenhum serviço disponível" subtitle="Tente novamente mais tarde" />;
     }
 
-    const remainingCuts = mySubscription
-      ? mySubscription.plan.cutsPerMonth === 99
+    const remainingCuts = subscriptionGivesBenefit
+      ? mySubscription!.plan.cutsPerMonth === 99
         ? 99
-        : Math.max(mySubscription.plan.cutsPerMonth - mySubscription.cutsUsedThisMonth, 0)
+        : Math.max(mySubscription!.plan.cutsPerMonth - mySubscription!.cutsUsedThisMonth, 0)
       : 0;
 
     return (
@@ -1084,11 +1098,22 @@ export function ClientBooking() {
           </div>
         )}
 
-        {/* Opção de usar crédito do plano */}
-        {mySubscription && (() => {
-          const remaining = mySubscription.plan.cutsPerMonth === 99
+        {/* Assinatura ACTIVE mas com o ciclo do mês não pago: não pode usar crédito
+            nem desconto do plano (o backend cobra cheio). Avisa em vez do botão. */}
+        {mySubscription &&
+          mySubscription.status === 'ACTIVE' &&
+          mySubscription.currentCyclePaid === false && (
+            <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Sua assinatura está sem o pagamento deste mês. Regularize para usar o
+              crédito do plano — por enquanto o serviço é cobrado integralmente.
+            </div>
+          )}
+
+        {/* Opção de usar crédito do plano (só quando a assinatura concede benefício) */}
+        {subscriptionGivesBenefit && (() => {
+          const remaining = mySubscription!.plan.cutsPerMonth === 99
             ? 99
-            : Math.max(mySubscription.plan.cutsPerMonth - mySubscription.cutsUsedThisMonth, 0);
+            : Math.max(mySubscription!.plan.cutsPerMonth - mySubscription!.cutsUsedThisMonth, 0);
           return (
             <button
               onClick={() => remaining > 0 && setUseSubscriptionCut((v) => !v)}
@@ -1114,10 +1139,10 @@ export function ClientBooking() {
                   Usar crédito do plano
                 </p>
                 <p className="text-xs text-[var(--text-muted)]">
-                  {mySubscription.plan.name} ·{' '}
+                  {mySubscription!.plan.name} ·{' '}
                   {remaining === 0
                     ? 'Sem créditos disponíveis'
-                    : mySubscription.plan.cutsPerMonth === 99
+                    : mySubscription!.plan.cutsPerMonth === 99
                     ? 'Ilimitado'
                     : `${remaining} crédito${remaining > 1 ? 's' : ''} restante${remaining > 1 ? 's' : ''}`}
                 </p>

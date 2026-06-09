@@ -51,6 +51,12 @@ export function getActiveSubscriptionView(
   subscription: ClientSubscription | null | undefined,
 ): ActiveSubscriptionView | null {
   if (!subscription || subscription.status !== 'ACTIVE' || !subscription.plan) return null;
+  // Gate de pagamento do ciclo (espelha o backend getActiveClientSubscription):
+  // ACTIVE mas ciclo NÃO pago não concede crédito/desconto — antes o modal mostrava
+  // o corte coberto enquanto a comanda cobrava cheio. Compatibilidade: só bloqueia
+  // quando o backend afirma === false; undefined (backend antigo) degrada para o
+  // comportamento legado (decide só por status).
+  if (subscription.currentCyclePaid === false) return null;
   const plan = subscription.plan as PlanLike;
   const cutsPerMonth = typeof plan.cutsPerMonth === 'number' ? plan.cutsPerMonth : 0;
   const cutsUsedThisMonth =

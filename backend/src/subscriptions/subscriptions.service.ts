@@ -9,6 +9,7 @@ import { randomUUID } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../supabase/supabase.service';
 import { nowLocalIsoString, resolveBusinessDate } from '../common/datetime.util';
+import { isCurrentCyclePaid } from '../common/pricing.helper';
 import { AsaasService } from '../asaas/asaas.service';
 import { CashRegisterService } from '../cash-register/cash-register.service';
 import {
@@ -690,6 +691,17 @@ export class SubscriptionsService {
       }
     }
 
+    // Espelha o gate do backend de preço (getActiveClientSubscription →
+    // isCurrentCyclePaid): o frontend (admin e app do cliente) precisa saber se o
+    // CICLO VIGENTE está pago para não mostrar "coberto pelo plano" enquanto a
+    // comanda/agendamento cobra cheio. Mesma fonte da verdade (isCurrentCyclePaid
+    // varre TODOS os payments) — o front recebe só 1 payment e não reproduz o gate.
+    // Só calcula para ACTIVE: status não-ACTIVE já é tratado como sem benefício no
+    // front, e os returns antecipados (suspend/cancel acima) não passam por aqui.
+    if (subscription && subscription.status === 'ACTIVE') {
+      subscription.currentCyclePaid = await isCurrentCyclePaid(this.supabase, subscription);
+    }
+
     return subscription;
   }
 
@@ -777,6 +789,18 @@ export class SubscriptionsService {
         .update({ status: 'SUSPENDED', updatedAt: now })
         .eq('id', subscription.id);
       throw new BadRequestException('Assinatura vencida. Realize o pagamento para renovar os créditos.');
+    }
+
+    // Gate de pagamento do ciclo (mesma fonte da verdade do preço,
+    // getActiveClientSubscription → isCurrentCyclePaid): sem pagamento confirmado do
+    // ciclo vigente, o crédito de corte NÃO pode ser consumido. Sem este gate, um
+    // assinante ACTIVE-não-pago debitava 1 corte do saldo enquanto o serviço era
+    // cobrado cheio (getActiveClientSubscription retorna null) — pagava cheio E
+    // perdia o corte. Bloqueia o débito indevido na raiz.
+    if (!(await isCurrentCyclePaid(this.supabase, subscription))) {
+      throw new BadRequestException(
+        'Assinatura sem pagamento do ciclo vigente. Realize o pagamento para usar o crédito do plano.',
+      );
     }
 
     const cutsPerMonth = subscription.plan?.cutsPerMonth ?? 0;

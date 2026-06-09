@@ -47,6 +47,12 @@ export interface ClientSubscription {
   } | null;
   /** Cliente com dívida de assinatura em aberto (ou última cobrança vencida). */
   inadimplente?: boolean;
+  /**
+   * Espelha o gate de pagamento do backend (isCurrentCyclePaid): true se o ciclo
+   * vigente tem pagamento confirmado. Backend só anexa para status ACTIVE.
+   * undefined = backend antigo (deploy parcial) → tratar como "não bloquear".
+   */
+  currentCyclePaid?: boolean;
   createdAt: string;
   client: {
     id: string;
