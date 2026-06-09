@@ -6,7 +6,6 @@ export * from './Clients';
 export * from './Commissions';
 export * from './ConciliacaoAsaas';
 export * from './Dashboard';
-export * from './Debts';
 export * from './Login';
 export * from './Orders';
 export * from './Payments';

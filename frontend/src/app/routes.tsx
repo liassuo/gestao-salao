@@ -11,7 +11,6 @@ import {
   Commissions,
   ConciliacaoAsaas,
   Dashboard,
-  Debts,
   Login,
   Orders,
   Payments,
@@ -123,10 +122,6 @@ export const router = createBrowserRouter([
       {
         path: 'pagamentos',
         element: withRoleProtection('/pagamentos', <Payments />),
-      },
-      {
-        path: 'dividas',
-        element: withRoleProtection('/dividas', <Debts />),
       },
       {
         path: 'caixa',

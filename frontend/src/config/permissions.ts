@@ -6,7 +6,6 @@ import {
   UserCog,
   Scissors,
   CreditCard,
-  Receipt,
   Wallet,
   BarChart3,
   Settings,
@@ -72,12 +71,6 @@ export const menuItems: MenuItem[] = [
     icon: CreditCard,
     label: 'Pagamentos',
     path: '/pagamentos',
-    roles: ['ADMIN'],
-  },
-  {
-    icon: Receipt,
-    label: 'Dívidas',
-    path: '/dividas',
     roles: ['ADMIN'],
   },
   {
