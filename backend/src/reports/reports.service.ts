@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { SupabaseService } from '../supabase/supabase.service';
 import { fetchPaymentsByBusinessDate } from '../common/business-date.helper';
 import { CommissionsService } from '../commissions/commissions.service';
+import { CashRegisterService } from '../cash-register/cash-register.service';
 
 export interface ReportFilters {
   startDate: string; // "YYYY-MM-DDT00:00:00"
@@ -14,6 +15,7 @@ export class ReportsService {
   constructor(
     private readonly supabase: SupabaseService,
     private readonly commissionsService: CommissionsService,
+    private readonly cashRegisterService: CashRegisterService,
   ) {}
 
   async getSalesReport(filters: ReportFilters) {
@@ -337,7 +339,25 @@ export class ReportsService {
       .lte('date', endDate)
       .order('date', { ascending: false });
 
-    const summary = (registers || []).reduce(
+    // Caixa AINDA ABERTO tem totalCash/Pix/Card/Revenue nulos (só preenchidos no
+    // fechamento). Recalcula em tempo real para o relatório não subnotificar o dia
+    // corrente — senão "Total Faturado" do mês fica abaixo do real (Dashboard/Vendas,
+    // que contam payments, já mostram a receita do dia aberto).
+    const enrichedRegisters = await Promise.all(
+      (registers || []).map(async (r) => {
+        if (!r.isOpen) return r;
+        const totals = await this.cashRegisterService.calculateDailyTotals(r.date);
+        return {
+          ...r,
+          totalCash: totals.cash,
+          totalPix: totals.pix,
+          totalCard: totals.card,
+          totalRevenue: totals.total,
+        };
+      }),
+    );
+
+    const summary = enrichedRegisters.reduce(
       (acc, r) => ({
         totalCash: acc.totalCash + (r.totalCash || 0),
         totalPix: acc.totalPix + (r.totalPix || 0),
@@ -351,10 +371,10 @@ export class ReportsService {
     return {
       summary: {
         ...summary,
-        daysCount: (registers || []).length,
-        averageDaily: (registers || []).length > 0 ? Math.round(summary.totalRevenue / (registers || []).length) : 0,
+        daysCount: enrichedRegisters.length,
+        averageDaily: enrichedRegisters.length > 0 ? Math.round(summary.totalRevenue / enrichedRegisters.length) : 0,
       },
-      registers: registers || [],
+      registers: enrichedRegisters,
     };
   }
 }

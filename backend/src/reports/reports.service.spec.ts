@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ReportsService } from './reports.service';
 import { SupabaseService } from '../supabase/supabase.service';
 import { CommissionsService } from '../commissions/commissions.service';
+import { CashRegisterService } from '../cash-register/cash-register.service';
 
 // Thenable mock chain: `await chain` (queries that don't end in .single/.order)
 // resolve to chain.__result; .single/.maybeSingle resolve to it too.
@@ -36,6 +37,7 @@ const mockSupabase = {
 describe('ReportsService', () => {
   let service: ReportsService;
   let commissions: { computeCommissionBreakdownForPeriod: jest.Mock };
+  let cashRegister: { calculateDailyTotals: jest.Mock };
 
   const period = {
     startDate: '2026-06-01T00:00:00',
@@ -50,12 +52,14 @@ describe('ReportsService', () => {
       return chains[table];
     });
     commissions = { computeCommissionBreakdownForPeriod: jest.fn().mockResolvedValue([]) };
+    cashRegister = { calculateDailyTotals: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ReportsService,
         { provide: SupabaseService, useValue: mockSupabase },
         { provide: CommissionsService, useValue: commissions },
+        { provide: CashRegisterService, useValue: cashRegister },
       ],
     }).compile();
 
@@ -247,6 +251,50 @@ describe('ReportsService', () => {
       seed('orders', { data: null, error: { message: 'URL too long' } });
 
       await expect(service.getServicesReport(period)).rejects.toBeDefined();
+    });
+  });
+
+  describe('getCashRegisterReport (M2)', () => {
+    it('recomputes OPEN registers in real time instead of counting their null totals as 0', async () => {
+      seed('cash_registers', {
+        data: [
+          {
+            id: 'r-closed',
+            date: '2026-06-01',
+            isOpen: false,
+            totalCash: 5000,
+            totalPix: 0,
+            totalCard: 0,
+            totalRevenue: 5000,
+            discrepancy: 0,
+          },
+          {
+            id: 'r-open',
+            date: '2026-06-09',
+            isOpen: true,
+            totalCash: null,
+            totalPix: null,
+            totalCard: null,
+            totalRevenue: null,
+            discrepancy: null,
+          },
+        ],
+        error: null,
+      });
+      cashRegister.calculateDailyTotals.mockResolvedValue({
+        cash: 3000,
+        pix: 0,
+        card: 0,
+        total: 3000,
+      });
+
+      const report = await service.getCashRegisterReport(period);
+
+      // 5000 (closed, persisted) + 3000 (open, recomputed) — not 5000+0.
+      expect(report.summary.totalRevenue).toBe(8000);
+      expect(cashRegister.calculateDailyTotals).toHaveBeenCalledWith('2026-06-09');
+      const open = report.registers.find((r: any) => r.id === 'r-open');
+      expect(open.totalRevenue).toBe(3000);
     });
   });
 });
