@@ -77,119 +77,32 @@ export class CommissionsService {
       }
     }
 
-    // 1) Serviços avulsos (appointments sem assinatura)
-    const { data: regularAppointments } = await this.supabase
-      .from('appointments')
-      .select('professionalId, totalPrice')
-      .eq('status', 'ATTENDED')
-      .neq('usedSubscriptionCut', true)
-      .gte('scheduledAt', startStr)
-      .lte('scheduledAt', endStr);
+    // Cálculo das comissões do período (avulso×taxa + pote de assinatura + produtos×taxa).
+    // Fonte ÚNICA da verdade — a mesma usada pelo Relatório por Profissional, para os
+    // números baterem entre as duas telas.
+    const breakdown = await this.computeCommissionBreakdownForPeriod(
+      startStr,
+      endStr,
+      dto.subscriptionRevenueOverride,
+    );
 
-    // 2) Serviços por assinatura (sistema de pote com fichas)
-    const { data: subscriptionAppointments } = await this.supabase
-      .from('appointments')
-      .select('professionalId, clientId, services:appointment_services(service:services(fichas, duration))')
-      .eq('status', 'ATTENDED')
-      .eq('usedSubscriptionCut', true)
-      .gte('scheduledAt', startStr)
-      .lte('scheduledAt', endStr);
-
-    // 3) Produtos (comandas pagas com itens do tipo PRODUCT)
-    const { data: paidOrders } = await this.supabase
-      .from('orders')
-      .select('professionalId, items:order_items(unitPrice, quantity, itemType)')
-      .eq('status', 'PAID')
-      .gte('createdAt', startStr)
-      .lte('createdAt', endStr);
-
-    const hasData =
-      (regularAppointments && regularAppointments.length > 0) ||
-      (subscriptionAppointments && subscriptionAppointments.length > 0) ||
-      (paidOrders && paidOrders.length > 0);
-
-    if (!hasData) {
-      throw new BadRequestException('Nenhum atendimento ou venda encontrado no período informado');
-    }
-
-    // Agrupar por profissional: { services, subscription, products }
-    const grouped = new Map<string, { services: number; subscription: number; products: number }>();
-
-    const getEntry = (profId: string) => {
-      if (!grouped.has(profId)) {
-        grouped.set(profId, { services: 0, subscription: 0, products: 0 });
-      }
-      return grouped.get(profId)!;
-    };
-
-    for (const appt of regularAppointments || []) {
-      getEntry(appt.professionalId).services += appt.totalPrice;
-    }
-
-    // Sistema de pote com fichas para assinaturas:
-    // 1. Somar todas as fichas geradas por cada profissional
-    // 2. Somar o valor total das assinaturas ativas no período (o "pote")
-    // 3. Distribuir o pote proporcionalmente pelas fichas de cada profissional
-
-    // Calcular fichas por profissional (fichas do serviço, ou duration como fallback)
-    const fichasByProfessional = new Map<string, number>();
-    let totalFichas = 0;
-
-    for (const appt of subscriptionAppointments || []) {
-      const apptFichas = ((appt as any).services || []).reduce(
-        (sum: number, as_: any) => sum + (as_.service?.fichas || as_.service?.duration || 0),
-        0,
+    if (breakdown.length === 0) {
+      throw new BadRequestException(
+        'Nenhum atendimento ou venda encontrado no período informado',
       );
-      const existing = fichasByProfessional.get(appt.professionalId) || 0;
-      fichasByProfessional.set(appt.professionalId, existing + apptFichas);
-      totalFichas += apptFichas;
-    }
-
-    // Calcular o pote: valor total das assinaturas que se sobrepõem ao período
-    if (totalFichas > 0) {
-      const totalSubscriptionValue =
-        dto.subscriptionRevenueOverride !== undefined
-          ? dto.subscriptionRevenueOverride
-          : await this.computeSubscriptionRevenue(startStr, endStr);
-
-      // 50% da receita fica com a barbearia, 50% vira pote dos barbeiros
-      const barberPool = Math.round((totalSubscriptionValue * SUBSCRIPTION_BARBER_POOL_PERCENT) / 100);
-
-      // Distribuir o pote proporcionalmente pelas fichas — valor já final do barbeiro
-      for (const [profId, profFichas] of fichasByProfessional) {
-        const subscriptionShare = Math.round((profFichas / totalFichas) * barberPool);
-        getEntry(profId).subscription += subscriptionShare;
-      }
-    }
-
-    for (const order of paidOrders || []) {
-      if (!order.professionalId) continue;
-      const productTotal = ((order as any).items || [])
-        .filter((item: any) => item.itemType === 'PRODUCT')
-        .reduce((sum: number, item: any) => sum + item.unitPrice * (item.quantity || 1), 0);
-      if (productTotal > 0) {
-        getEntry(order.professionalId).products += productTotal;
-      }
     }
 
     const createdCommissions = [];
 
-    for (const [professionalId, totals] of grouped) {
-      const { data: professional } = await this.supabase
-        .from('professionals')
-        .select('id, commissionRate, branchId')
-        .eq('id', professionalId)
-        .single();
-
-      if (!professional) continue;
-
-      // commissionRate aplica em cortes avulsos e produtos. Assinatura é pote fixo
-      // (50% da receita dividido por fichas), independente do rate do barbeiro.
-      const rate = professional.commissionRate || 0;
-      const amountServices = Math.round((totals.services * rate) / 100);
-      const amountSubscription = totals.subscription;
-      const amountProducts = Math.round((totals.products * rate) / 100);
-      const amount = amountServices + amountSubscription + amountProducts;
+    for (const entry of breakdown) {
+      const {
+        professionalId,
+        branchId,
+        amountServices,
+        amountSubscription,
+        amountProducts,
+        amount,
+      } = entry;
 
       if (amount <= 0) continue;
 
@@ -208,7 +121,7 @@ export class CommissionsService {
           periodEnd: endStr,
           status: 'PENDING',
           professionalId: professionalId,
-          branchId: professional.branchId,
+          branchId: branchId,
           createdAt: comNow,
           updatedAt: comNow,
         })
@@ -248,6 +161,156 @@ export class CommissionsService {
     }
 
     return createdCommissions;
+  }
+
+  /**
+   * Núcleo de cálculo das comissões de um período, SEM persistência nem dedução de
+   * débitos. Fonte ÚNICA da verdade compartilhada por:
+   *   - generate() — gera/persiste as comissões PENDING;
+   *   - ReportsService.getProfessionalReport() — exibe a MESMA comissão no relatório
+   *     por profissional, para os números baterem com a tela Comissões.
+   *
+   * Regra (em centavos): avulso × commissionRate + pote de assinatura (50% da receita
+   * de assinatura dividido por fichas, independente do rate) + produtos × commissionRate.
+   * Retorna um item por profissional com atendimento/venda no período (inclui amount 0).
+   */
+  async computeCommissionBreakdownForPeriod(
+    startStr: string,
+    endStr: string,
+    subscriptionRevenueOverride?: number,
+  ): Promise<
+    Array<{
+      professionalId: string;
+      branchId: string | null;
+      commissionRate: number;
+      amountServices: number;
+      amountSubscription: number;
+      amountProducts: number;
+      amount: number;
+    }>
+  > {
+    // 1) Serviços avulsos (appointments sem assinatura)
+    const { data: regularAppointments } = await this.supabase
+      .from('appointments')
+      .select('professionalId, totalPrice')
+      .eq('status', 'ATTENDED')
+      .neq('usedSubscriptionCut', true)
+      .gte('scheduledAt', startStr)
+      .lte('scheduledAt', endStr);
+
+    // 2) Serviços por assinatura (sistema de pote com fichas)
+    const { data: subscriptionAppointments } = await this.supabase
+      .from('appointments')
+      .select('professionalId, clientId, services:appointment_services(service:services(fichas, duration))')
+      .eq('status', 'ATTENDED')
+      .eq('usedSubscriptionCut', true)
+      .gte('scheduledAt', startStr)
+      .lte('scheduledAt', endStr);
+
+    // 3) Produtos (comandas pagas com itens do tipo PRODUCT)
+    const { data: paidOrders } = await this.supabase
+      .from('orders')
+      .select('professionalId, items:order_items(unitPrice, quantity, itemType)')
+      .eq('status', 'PAID')
+      .gte('createdAt', startStr)
+      .lte('createdAt', endStr);
+
+    // Agrupar por profissional: { services, subscription, products }
+    const grouped = new Map<
+      string,
+      { services: number; subscription: number; products: number }
+    >();
+
+    const getEntry = (profId: string) => {
+      if (!grouped.has(profId)) {
+        grouped.set(profId, { services: 0, subscription: 0, products: 0 });
+      }
+      return grouped.get(profId)!;
+    };
+
+    for (const appt of regularAppointments || []) {
+      getEntry(appt.professionalId).services += appt.totalPrice;
+    }
+
+    // Sistema de pote com fichas para assinaturas: soma as fichas por profissional e
+    // distribui o pote (50% da receita de assinatura) proporcionalmente.
+    const fichasByProfessional = new Map<string, number>();
+    let totalFichas = 0;
+
+    for (const appt of subscriptionAppointments || []) {
+      const apptFichas = ((appt as any).services || []).reduce(
+        (sum: number, as_: any) => sum + (as_.service?.fichas || as_.service?.duration || 0),
+        0,
+      );
+      const existing = fichasByProfessional.get(appt.professionalId) || 0;
+      fichasByProfessional.set(appt.professionalId, existing + apptFichas);
+      totalFichas += apptFichas;
+    }
+
+    if (totalFichas > 0) {
+      const totalSubscriptionValue =
+        subscriptionRevenueOverride !== undefined
+          ? subscriptionRevenueOverride
+          : await this.computeSubscriptionRevenue(startStr, endStr);
+
+      // 50% da receita fica com a barbearia, 50% vira pote dos barbeiros
+      const barberPool = Math.round((totalSubscriptionValue * SUBSCRIPTION_BARBER_POOL_PERCENT) / 100);
+
+      for (const [profId, profFichas] of fichasByProfessional) {
+        const subscriptionShare = Math.round((profFichas / totalFichas) * barberPool);
+        getEntry(profId).subscription += subscriptionShare;
+      }
+    }
+
+    for (const order of paidOrders || []) {
+      if (!order.professionalId) continue;
+      const productTotal = ((order as any).items || [])
+        .filter((item: any) => item.itemType === 'PRODUCT')
+        .reduce((sum: number, item: any) => sum + item.unitPrice * (item.quantity || 1), 0);
+      if (productTotal > 0) {
+        getEntry(order.professionalId).products += productTotal;
+      }
+    }
+
+    const breakdown: Array<{
+      professionalId: string;
+      branchId: string | null;
+      commissionRate: number;
+      amountServices: number;
+      amountSubscription: number;
+      amountProducts: number;
+      amount: number;
+    }> = [];
+
+    for (const [professionalId, totals] of grouped) {
+      const { data: professional } = await this.supabase
+        .from('professionals')
+        .select('id, commissionRate, branchId')
+        .eq('id', professionalId)
+        .single();
+
+      if (!professional) continue;
+
+      // commissionRate aplica em cortes avulsos e produtos. Assinatura é pote fixo
+      // (50% da receita dividido por fichas), independente do rate do barbeiro.
+      const rate = professional.commissionRate || 0;
+      const amountServices = Math.round((totals.services * rate) / 100);
+      const amountSubscription = totals.subscription;
+      const amountProducts = Math.round((totals.products * rate) / 100);
+      const amount = amountServices + amountSubscription + amountProducts;
+
+      breakdown.push({
+        professionalId,
+        branchId: professional.branchId ?? null,
+        commissionRate: rate,
+        amountServices,
+        amountSubscription,
+        amountProducts,
+        amount,
+      });
+    }
+
+    return breakdown;
   }
 
   async getPoteReport(

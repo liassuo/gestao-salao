@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { SupabaseService } from '../supabase/supabase.service';
 import { fetchPaymentsByBusinessDate } from '../common/business-date.helper';
+import { CommissionsService } from '../commissions/commissions.service';
 
 export interface ReportFilters {
   startDate: string; // "YYYY-MM-DDT00:00:00"
@@ -10,7 +11,10 @@ export interface ReportFilters {
 
 @Injectable()
 export class ReportsService {
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(
+    private readonly supabase: SupabaseService,
+    private readonly commissionsService: CommissionsService,
+  ) {}
 
   async getSalesReport(filters: ReportFilters) {
     const { startDate, endDate } = filters;
@@ -77,6 +81,20 @@ export class ReportsService {
 
     const { data: professionals } = await query;
 
+    // Comissão usa a MESMA regra da tela Comissões (avulso×taxa + pote de assinatura
+    // 50%/fichas + produtos×taxa), para os números baterem entre as duas telas. Antes
+    // este relatório fazia receita×taxa, ignorando pote e produtos — divergia. O pote é
+    // GLOBAL (depende das fichas de todos os profissionais), então calculamos uma única
+    // vez e indexamos por profissional.
+    const commissionBreakdown =
+      await this.commissionsService.computeCommissionBreakdownForPeriod(
+        startDate,
+        endDate,
+      );
+    const commissionByProfessional = new Map(
+      commissionBreakdown.map((b) => [b.professionalId, b.amount]),
+    );
+
     const result = [];
     for (const professional of professionals || []) {
       const { data: appointments, count } = await this.supabase
@@ -89,7 +107,7 @@ export class ReportsService {
       const attended = (appointments || []).filter((a) => a.status === 'ATTENDED');
       const totalRevenue = attended.reduce((sum, a) => sum + a.totalPrice, 0);
       const commissionRate = professional.commissionRate || 0;
-      const commission = Math.round(totalRevenue * (commissionRate / 100));
+      const commission = commissionByProfessional.get(professional.id) || 0;
 
       result.push({
         id: professional.id,
@@ -117,84 +135,119 @@ export class ReportsService {
   async getServicesReport(filters: ReportFilters) {
     const { startDate, endDate } = filters;
 
-    // 1. Buscar todos os serviços ativos
-    const { data: services } = await this.supabase
+    // 1. Catálogo de serviços ATIVOS — base do relatório (aparecem mesmo com 0 atendimentos).
+    const { data: services, error: servicesError } = await this.supabase
       .from('services')
       .select('id, name, price, duration')
       .eq('isActive', true);
+    if (servicesError) throw servicesError;
 
-    if (!services || services.length === 0) return [];
+    type ServiceRow = {
+      name: string;
+      price: number;
+      duration: number;
+      count: number;
+      revenue: number;
+      hadPromotion: boolean;
+    };
+    const serviceMap = new Map<string, ServiceRow>();
+    for (const s of services || []) {
+      serviceMap.set(s.id, {
+        name: s.name,
+        price: s.price,
+        duration: s.duration,
+        count: 0,
+        revenue: 0,
+        hadPromotion: false,
+      });
+    }
 
-    // 2. Buscar agendamentos ATTENDED no período com seus serviços
-    const { data: appointments } = await this.supabase
+    // 2. Agendamentos ATTENDED no período (a "data do serviço" é o scheduledAt).
+    const { data: appointments, error: appointmentsError } = await this.supabase
       .from('appointments')
-      .select('id, totalPrice, scheduledAt, services:appointment_services(serviceId)')
+      .select('id')
       .eq('status', 'ATTENDED')
       .gte('scheduledAt', startDate)
       .lte('scheduledAt', endDate);
+    if (appointmentsError) throw appointmentsError;
 
-    // 3. Buscar promoções que estiveram ativas no período
-    const { data: promotions } = await this.supabase
-      .from('promotions')
-      .select('discountPercent, startDate, endDate, promotion_services(serviceId)')
-      .eq('isActive', true);
+    const appointmentIds = (appointments || []).map((a) => a.id);
 
-    // Helper: verificar se um serviço tinha promoção na data do agendamento
-    const getDiscountForServiceAtDate = (serviceId: string, date: string): number | null => {
-      if (!promotions) return null;
-      for (const promo of promotions) {
-        if (promo.startDate && date < promo.startDate) continue;
-        if (promo.endDate && date > promo.endDate) continue;
-        const match = (promo.promotion_services as any[])?.find(
-          (ps) => ps.serviceId === serviceId,
-        );
-        if (match) return promo.discountPercent;
-      }
-      return null;
-    };
-
-    // 4. Contar e calcular receita por serviço
-    const serviceMap = new Map<string, { count: number; revenue: number; hadPromotion: boolean }>();
-    for (const s of services) {
-      serviceMap.set(s.id, { count: 0, revenue: 0, hadPromotion: false });
+    // 3. Itens de serviço das comandas desses atendimentos. A receita vem do unitPrice
+    //    REALMENTE cobrado (snapshot no atendimento): corte coberto pela assinatura =
+    //    R$0, descontos/promoções já aplicados, e imune a reajuste posterior do preço de
+    //    cadastro. Antes o relatório somava service.price ATUAL, inflando a receita (o
+    //    corte de assinatura contava pela tarifa cheia) e reescrevendo o histórico quando
+    //    o preço mudava — por isso "não batia" com Vendas/Caixa/Dashboard.
+    // Busca em LOTES para não estourar o limite de tamanho da URL do PostgREST com a
+    // lista de ids (.in serializa na query string). Comandas CANCELED são EXCLUÍDAS — o
+    // cancelamento só troca o status e mantém os order_items, que senão inflariam a
+    // receita. Comandas PENDING (atendidas, ainda não pagas) CONTAM: este é o relatório
+    // de "serviços realizados", não de caixa recebido (por isso pode divergir de Vendas).
+    const CHUNK = 300;
+    const orders: any[] = [];
+    for (let i = 0; i < appointmentIds.length; i += CHUNK) {
+      const batch = appointmentIds.slice(i, i + CHUNK);
+      const { data, error } = await this.supabase
+        .from('orders')
+        .select(
+          'appointmentId, status, items:order_items(serviceId, unitPrice, quantity, itemType, service:services(id, name, price, duration))',
+        )
+        .neq('status', 'CANCELED')
+        .in('appointmentId', batch);
+      if (error) throw error;
+      if (data) orders.push(...data);
     }
 
-    for (const appt of appointments || []) {
-      const apptServices = (appt.services as any[]) || [];
-      for (const as of apptServices) {
-        const sid = as.serviceId;
-        const entry = serviceMap.get(sid);
-        const service = services.find((s) => s.id === sid);
-        if (!entry || !service) continue;
+    for (const order of orders) {
+      for (const item of (order as any).items || []) {
+        if (item.itemType !== 'SERVICE' || !item.serviceId) continue;
 
-        entry.count += 1;
-        const discount = getDiscountForServiceAtDate(sid, appt.scheduledAt);
-        if (discount !== null) {
-          entry.revenue += Math.round(service.price * (100 - discount) / 100);
-          entry.hadPromotion = true;
-        } else {
-          entry.revenue += service.price;
+        let entry = serviceMap.get(item.serviceId);
+        if (!entry) {
+          // Serviço descontinuado (inativo) que teve atendimento no período: não pode
+          // sumir do relatório. Usa nome/preço/duração vindos do join do item.
+          const svc = item.service;
+          entry = {
+            name: svc?.name || 'Serviço removido',
+            price: svc?.price || 0,
+            duration: svc?.duration || 0,
+            count: 0,
+            revenue: 0,
+            hadPromotion: false,
+          };
+          serviceMap.set(item.serviceId, entry);
         }
+
+        // unitPrice é POR UNIDADE; um item de serviço pode ter quantity > 1 (extra
+        // lançado na comanda). Conta e fatura pela quantidade, como a tela Comissões.
+        const unitPrice = item.unitPrice || 0;
+        const qty = item.quantity || 1;
+        entry.count += qty;
+        entry.revenue += unitPrice * qty;
+        // Cobrado abaixo do preço de cadastro (sem ser zerado pela assinatura) =
+        // houve desconto/promoção no atendimento.
+        if (unitPrice > 0 && unitPrice < entry.price) entry.hadPromotion = true;
       }
     }
 
-    // 5. Calcular totais e percentuais
-    const totalRevenue = Array.from(serviceMap.values()).reduce((sum, s) => sum + s.revenue, 0);
+    // 4. Totais e percentuais.
+    const totalRevenue = Array.from(serviceMap.values()).reduce(
+      (sum, s) => sum + s.revenue,
+      0,
+    );
 
-    return services
-      .map((s) => {
-        const data = serviceMap.get(s.id) || { count: 0, revenue: 0, hadPromotion: false };
-        return {
-          id: s.id,
-          name: s.name,
-          price: s.price,
-          duration: s.duration,
-          count: data.count,
-          revenue: data.revenue,
-          percentage: totalRevenue > 0 ? Math.round((data.revenue / totalRevenue) * 100) : 0,
-          hadPromotion: data.hadPromotion,
-        };
-      })
+    return Array.from(serviceMap.entries())
+      .map(([id, data]) => ({
+        id,
+        name: data.name,
+        price: data.price,
+        duration: data.duration,
+        count: data.count,
+        revenue: data.revenue,
+        percentage: totalRevenue > 0 ? Math.round((data.revenue / totalRevenue) * 100) : 0,
+        hadPromotion: data.hadPromotion,
+      }))
       .sort((a, b) => b.count - a.count);
   }
 
