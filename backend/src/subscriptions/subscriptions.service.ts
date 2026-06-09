@@ -751,7 +751,7 @@ export class SubscriptionsService {
   async cancelSubscription(id: string, immediate: boolean = false) {
     const { data: subscription, error: findError } = await this.supabase
       .from('client_subscriptions')
-      .select('id, status, asaasSubscriptionId, endDate')
+      .select('id, status, asaasSubscriptionId, endDate, clientId')
       .eq('id', id)
       .single();
 
@@ -764,6 +764,9 @@ export class SubscriptionsService {
     }
 
     const updated = await this.applyCancellation(subscription, immediate);
+
+    // Anula a dívida-fantasma desta assinatura e limpa hasDebts se não sobrar outra.
+    await this.settleSubscriptionDebtsOnCancel((subscription as any).clientId);
 
     // Cancelar assinatura no Asaas (se vinculada) — para nao cobrar proximo ciclo
     if (this.asaasService.configured && subscription.asaasSubscriptionId) {
@@ -815,6 +818,66 @@ export class SubscriptionsService {
 
     if (error) throw error;
     return updated;
+  }
+
+  /**
+   * Anula as dívidas de assinatura EM ABERTO do cliente ao cancelar a assinatura,
+   * e recalcula clients.hasDebts. Sem isso, o cliente cancelado ficava "Cancelada +
+   * Inadimplente" fantasma (a dívida sobrevivia ao cancelamento).
+   *
+   * Recorte: 'Cobrança não paga%' (régua exclusiva do fluxo de inadimplência de
+   * assinatura). Como cada cliente tem no máximo UMA assinatura, isto cobre os dois
+   * tipos de dívida — a do cron (tag [sub:]) E a do webhook OVERDUE (tag [asaas:]) —
+   * sem risco de pegar dívida de outra assinatura (não existe).
+   *
+   * A dívida é ANULADA por cancelamento, NÃO paga: amountPaid=0, paidAt=null,
+   * sufixo [canceled] na descrição. Não toca em `payments` (dívida não é pagamento)
+   * → não gera receita nem mexe no caixa.
+   */
+  private async settleSubscriptionDebtsOnCancel(
+    clientId: string | null | undefined,
+  ): Promise<void> {
+    if (!clientId) return;
+
+    const { data: openDebts } = await this.supabase
+      .from('debts')
+      .select('id, description')
+      .eq('clientId', clientId)
+      .eq('isSettled', false)
+      .ilike('description', 'Cobrança não paga%');
+
+    if (openDebts && openDebts.length > 0) {
+      const now = nowLocalIsoString();
+      for (const debt of openDebts) {
+        await this.supabase
+          .from('debts')
+          .update({
+            amountPaid: 0,
+            remainingBalance: 0,
+            isSettled: true,
+            paidAt: null, // anulada por cancelamento, NÃO paga — sem receita
+            description: `${(debt as any).description ?? ''} [canceled]`,
+            updatedAt: now,
+          })
+          .eq('id', (debt as any).id);
+      }
+      this.logger.log(
+        `Cancelamento: ${openDebts.length} dívida(s) de assinatura anulada(s) para o cliente ${clientId}.`,
+      );
+    }
+
+    // Recalcula hasDebts pelas dívidas em aberto RESTANTES (ex: dívida avulsa de
+    // comanda continua valendo). Usa .length (não count) p/ ser idêntico no mock.
+    const { data: remaining } = await this.supabase
+      .from('debts')
+      .select('id')
+      .eq('clientId', clientId)
+      .eq('isSettled', false);
+
+    await this.supabase
+      .from('clients')
+      .update({ hasDebts: (remaining?.length ?? 0) > 0 })
+      .eq('id', clientId);
   }
 
   async useCut(subscriptionId: string) {
@@ -1673,6 +1736,10 @@ export class SubscriptionsService {
       status: subscription.status,
       endDate: (subscription as any).endDate ?? null,
     });
+
+    // Anula a dívida-fantasma desta assinatura (cliente cancela pré-pago: já pagou
+    // o ciclo, só não vai renovar — a dívida do ciclo não-usado não deve persistir).
+    await this.settleSubscriptionDebtsOnCancel(clientId);
 
     // Cancelar assinatura no Asaas (se vinculada) — para nao cobrar proximo ciclo
     if (this.asaasService.configured && subscription.asaasSubscriptionId) {

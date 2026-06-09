@@ -629,22 +629,32 @@ export class AsaasWebhookController {
       // vencimento suspenderia e nenhuma dívida seria criada.
       const externalRef: string | undefined = paymentData.externalReference;
       const asaasSubId: string | undefined = paymentData.subscription;
-      let linkedSub: { id: string; clientId: string } | null = null;
+      let linkedSub: { id: string; clientId: string; status: string } | null = null;
       if (externalRef) {
         ({ data: linkedSub } = await this.supabase
           .from('client_subscriptions')
-          .select('id, clientId')
+          .select('id, clientId, status')
           .eq('id', externalRef)
           .maybeSingle());
       }
       if (!linkedSub && asaasSubId) {
         ({ data: linkedSub } = await this.supabase
           .from('client_subscriptions')
-          .select('id, clientId')
+          .select('id, clientId, status')
           .eq('asaasSubscriptionId', asaasSubId)
           .maybeSingle());
       }
       if (!linkedSub) return;
+
+      // Assinatura CANCELED não deve receber dívida/inadimplência: o cliente já
+      // saiu. Sem este guard, um evento OVERDUE atrasado/enfileirado recriaria a
+      // dívida-fantasma que o cancelamento acabou de anular (settleSubscriptionDebtsOnCancel).
+      if ((linkedSub as any).status === 'CANCELED') {
+        this.logger.log(
+          `Webhook overdue ${asaasPaymentId}: assinatura ${(linkedSub as any).id} está CANCELED — ignorando (não recria dívida).`,
+        );
+        return;
+      }
 
       const { data: systemAdmin } = await this.supabase
         .from('users')

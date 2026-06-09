@@ -457,6 +457,74 @@ describe('SubscriptionsService — renovação via link Asaas (renewSubscription
 });
 
 /**
+ * Bug do teste do dono: cancelar uma assinatura com cobrança não paga deixava a
+ * dívida em aberto + hasDebts → cliente cancelado aparecia "Inadimplente" fantasma.
+ * Fix: cancelar anula as dívidas de assinatura em aberto (amountPaid=0, paidAt=null —
+ * anulada, não paga) e recalcula hasDebts.
+ */
+describe('SubscriptionsService — cancelamento anula a dívida-fantasma da assinatura', () => {
+  it('anula a dívida de assinatura e limpa hasDebts ao cancelar', async () => {
+    const tables = baseTables();
+    tables.client_subscriptions = [
+      { id: 'sub-1', clientId: 'client-1', planId: 'plan-1', status: 'SUSPENDED', canceledAt: null, endDate: '2020-01-01T00:00:00.000', asaasSubscriptionId: null, plan: { name: 'Mensal', price: 8000 } },
+    ];
+    tables.clients = [{ id: 'client-1', name: 'João', hasDebts: true }];
+    tables.debts = [
+      { id: 'd-sub1', clientId: 'client-1', amount: 8000, amountPaid: 0, remainingBalance: 8000, description: 'Cobrança não paga — Mensal (PIX) [sub:sub-1:cycle:2020-01-01]', isSettled: false },
+    ];
+    const { service, state } = await buildService(tables);
+
+    await service.cancelSubscription('sub-1', true);
+
+    const d = state.debts.find((x) => x.id === 'd-sub1')!;
+    expect(d.isSettled).toBe(true);
+    expect(d.amountPaid).toBe(0); // anulada, NÃO paga
+    expect(d.paidAt ?? null).toBeNull(); // sem fingir pagamento
+    expect(d.description).toContain('[canceled]');
+    expect(state.clients[0].hasDebts).toBe(false); // era a única dívida
+    expect(state.client_subscriptions[0].status).toBe('CANCELED');
+  });
+
+  it('anula também a dívida do webhook OVERDUE (tag [asaas:], sem [sub:])', async () => {
+    const tables = baseTables();
+    tables.client_subscriptions = [
+      { id: 'sub-1', clientId: 'client-1', planId: 'plan-1', status: 'SUSPENDED', canceledAt: null, endDate: '2020-01-01T00:00:00.000', asaasSubscriptionId: null, plan: { name: 'Mensal', price: 8000 } },
+    ];
+    tables.clients = [{ id: 'client-1', name: 'João', hasDebts: true }];
+    tables.debts = [
+      // dívida criada pelo webhook do Asaas — tag [asaas:], NÃO [sub:]
+      { id: 'd-asaas', clientId: 'client-1', amount: 8000, amountPaid: 0, remainingBalance: 8000, description: 'Cobrança não paga — Mensal [asaas:pay_abc123]', isSettled: false },
+    ];
+    const { service, state } = await buildService(tables);
+
+    await service.cancelSubscription('sub-1', true);
+
+    expect(state.debts[0].isSettled).toBe(true);
+    expect(state.clients[0].hasDebts).toBe(false);
+  });
+
+  it('mantém dívida AVULSA (não de assinatura) intacta ao cancelar', async () => {
+    const tables = baseTables();
+    tables.client_subscriptions = [
+      { id: 'sub-1', clientId: 'client-1', planId: 'plan-1', status: 'SUSPENDED', canceledAt: null, endDate: '2020-01-01T00:00:00.000', asaasSubscriptionId: null, plan: { name: 'Mensal', price: 8000 } },
+    ];
+    tables.clients = [{ id: 'client-1', name: 'João', hasDebts: true }];
+    tables.debts = [
+      { id: 'd-sub1', clientId: 'client-1', amount: 8000, amountPaid: 0, remainingBalance: 8000, description: 'Cobrança não paga — Mensal (PIX) [sub:sub-1:cycle:2020-01-01]', isSettled: false },
+      // dívida avulsa de comanda — NÃO começa com "Cobrança não paga" → deve ficar
+      { id: 'd-avulsa', clientId: 'client-1', amount: 5000, amountPaid: 0, remainingBalance: 5000, description: 'Comanda em aberto — atendimento avulso', isSettled: false },
+    ];
+    const { service, state } = await buildService(tables);
+
+    await service.cancelSubscription('sub-1', true);
+
+    expect(state.debts.find((x) => x.id === 'd-sub1')!.isSettled).toBe(true);
+    expect(state.debts.find((x) => x.id === 'd-avulsa')!.isSettled).toBe(false); // intacta
+    expect(state.clients[0].hasDebts).toBe(true); // ainda deve a avulsa
+  });
+});
+
+/**
  * Gate de pagamento do ciclo espelhado para o frontend e para o consumo de crédito.
  *
  * Bug: o modal/app mostrava o corte coberto pelo plano (olhando só status=ACTIVE)
