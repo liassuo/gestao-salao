@@ -352,6 +352,19 @@ export class SubscriptionsController {
   }
 
   /**
+   * POST /subscriptions/:id/renew-asaas
+   * Gera um LINK de pagamento Asaas (invoiceUrl) para o cliente renovar a
+   * assinatura encerrada/vencida (Admin manda pelo WhatsApp). Não ativa nem
+   * lança no caixa: só o webhook ativa quando o cliente paga.
+   */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @Post(':id/renew-asaas')
+  async renewViaAsaas(@Param('id', ParseUUIDPipe) id: string) {
+    return this.subscriptionsService.renewSubscriptionViaAsaas(id);
+  }
+
+  /**
    * POST /subscriptions/:id/confirm-payment
    * Confirma manualmente o pagamento de uma assinatura PENDING_PAYMENT (Admin)
    */

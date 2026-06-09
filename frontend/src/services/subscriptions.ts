@@ -127,6 +127,16 @@ export const subscriptionsService = {
     return response.data;
   },
 
+  // Gera o link de pagamento Asaas (invoiceUrl) para o cliente renovar.
+  async renewViaAsaas(id: string): Promise<{
+    invoiceUrl: string | null;
+    client: { name: string | null; phone: string | null };
+    planName: string | null;
+  }> {
+    const response = await api.post(`/subscriptions/${id}/renew-asaas`);
+    return response.data;
+  },
+
   async confirmPayment(
     id: string,
     method: 'CASH' | 'PIX' | 'CARD' = 'CASH',

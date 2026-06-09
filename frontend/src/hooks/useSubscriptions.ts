@@ -164,6 +164,17 @@ export function useConfirmSubscriptionPayment() {
   });
 }
 
+export function useRenewViaAsaas() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => subscriptionsService.renewViaAsaas(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [SUBSCRIPTIONS_KEY] });
+    },
+  });
+}
+
 export function useSyncSubscriptionWithAsaas() {
   const queryClient = useQueryClient();
 
