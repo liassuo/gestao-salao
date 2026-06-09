@@ -3,6 +3,7 @@ import { ReportsService } from './reports.service';
 import { SupabaseService } from '../supabase/supabase.service';
 import { CommissionsService } from '../commissions/commissions.service';
 import { CashRegisterService } from '../cash-register/cash-register.service';
+import { AsaasService } from '../asaas/asaas.service';
 
 // Thenable mock chain: `await chain` (queries that don't end in .single/.order)
 // resolve to chain.__result; .single/.maybeSingle resolve to it too.
@@ -10,7 +11,7 @@ const makeChain = () => {
   const chain: any = { __result: { data: null, error: null, count: 0 } };
   const methods = [
     'select', 'insert', 'update', 'delete', 'eq', 'neq', 'not', 'in',
-    'gte', 'lte', 'is', 'order',
+    'gte', 'lte', 'is', 'order', 'limit',
   ];
   for (const m of methods) chain[m] = jest.fn(() => chain);
   chain.single = jest.fn(() => Promise.resolve(chain.__result));
@@ -38,6 +39,7 @@ describe('ReportsService', () => {
   let service: ReportsService;
   let commissions: { computeCommissionBreakdownForPeriod: jest.Mock };
   let cashRegister: { calculateDailyTotals: jest.Mock };
+  let asaas: { configured: boolean; getCharge: jest.Mock };
 
   const period = {
     startDate: '2026-06-01T00:00:00',
@@ -53,6 +55,7 @@ describe('ReportsService', () => {
     });
     commissions = { computeCommissionBreakdownForPeriod: jest.fn().mockResolvedValue([]) };
     cashRegister = { calculateDailyTotals: jest.fn() };
+    asaas = { configured: true, getCharge: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -60,6 +63,7 @@ describe('ReportsService', () => {
         { provide: SupabaseService, useValue: mockSupabase },
         { provide: CommissionsService, useValue: commissions },
         { provide: CashRegisterService, useValue: cashRegister },
+        { provide: AsaasService, useValue: asaas },
       ],
     }).compile();
 
@@ -320,6 +324,115 @@ describe('ReportsService', () => {
       expect(cashRegister.calculateDailyTotals).toHaveBeenCalledWith('2026-06-09');
       const open = report.registers.find((r: any) => r.id === 'r-open');
       expect(open.totalRevenue).toBe(3000);
+    });
+  });
+
+  describe('getAsaasReconciliation', () => {
+    it('compara o bruto cobrado (payments.amount) com value/netValue do Asaas e marca taxa + divergência', async () => {
+      seed('payments', {
+        data: [
+          { id: 'p1', asaasPaymentId: 'ch_ok', amount: 5000, method: 'PIX', billingType: 'PIX', asaasStatus: 'RECEIVED', paidAt: '2026-06-10T10:00:00', clientId: 'c1' },
+          { id: 'p2', asaasPaymentId: 'ch_div', amount: 3000, method: 'CARD', billingType: 'CREDIT_CARD', asaasStatus: 'CONFIRMED', paidAt: '2026-06-11T10:00:00', clientId: 'c2' },
+          { id: 'p3', asaasPaymentId: 'ch_err', amount: 2000, method: 'PIX', billingType: 'PIX', asaasStatus: 'RECEIVED', paidAt: '2026-06-12T10:00:00', clientId: 'c3' },
+        ],
+        error: null,
+      });
+      asaas.getCharge.mockImplementation(async (id: string) => {
+        if (id === 'ch_ok') return { id, value: 50.0, netValue: 48.01, status: 'RECEIVED' }; // taxa R$1,99
+        if (id === 'ch_div') return { id, value: 25.0, netValue: 24.0, status: 'CONFIRMED' }; // app cobrou R$30, Asaas R$25
+        throw new Error('not found'); // ch_err
+      });
+
+      const report = await service.getAsaasReconciliation(period);
+
+      expect(report.configured).toBe(true);
+      expect(report.items).toHaveLength(3);
+
+      const ok = report.items.find((i: any) => i.asaasPaymentId === 'ch_ok');
+      expect(ok.appAmountCentavos).toBe(5000);
+      expect(ok.asaasValueCentavos).toBe(5000);
+      expect(ok.asaasNetCentavos).toBe(4801);
+      expect(ok.feeCentavos).toBe(199); // R$1,99 de taxa
+      expect(ok.divergent).toBe(false);
+      expect(ok.status).toBe('OK_COM_TAXA');
+
+      const div = report.items.find((i: any) => i.asaasPaymentId === 'ch_div');
+      expect(div.appAmountCentavos).toBe(3000);
+      expect(div.asaasValueCentavos).toBe(2500);
+      expect(div.divergent).toBe(true); // bruto do app != value do Asaas
+      expect(div.status).toBe('VALOR_DIVERGENTE');
+
+      const err = report.items.find((i: any) => i.asaasPaymentId === 'ch_err');
+      expect(err.error).toBe(true);
+      expect(err.asaasValueCentavos).toBeNull();
+      expect(err.status).toBe('ERRO_CONSULTA');
+
+      expect(report.summary.count).toBe(3);
+      expect(report.summary.divergentCount).toBe(1);
+      expect(report.summary.errorCount).toBe(1);
+      // taxa somada de TODas as cobranças consultadas: ch_ok (199) + ch_div (100) = 299
+      expect(report.summary.totalFeeCentavos).toBe(299);
+      expect(report.summary.totalAppAmountCentavos).toBe(10000); // 5000+3000+2000
+      expect(report.summary.totalAsaasNetCentavos).toBe(4801 + 2400); // só os consultados com sucesso
+    });
+
+    it('retorna configured=false sem chamar o Asaas quando o gateway não está configurado', async () => {
+      asaas.configured = false;
+      const report = await service.getAsaasReconciliation(period);
+      expect(report.configured).toBe(false);
+      expect(asaas.getCharge).not.toHaveBeenCalled();
+    });
+
+    it('marca cobrança ESTORNADA como ESTORNADO e NÃO soma sua taxa fantasma (M1)', async () => {
+      // Estorno: o Asaas mantém value (bruto) mas zera/reduz netValue. Sem tratar,
+      // value−net viraria uma "taxa" enorme e a linha apareceria como OK_COM_TAXA.
+      seed('payments', {
+        data: [
+          { id: 'p4', asaasPaymentId: 'ch_ref', amount: 5000, method: 'PIX', billingType: 'PIX', asaasStatus: 'REFUNDED', paidAt: '2026-06-13T10:00:00', clientId: 'c4' },
+        ],
+        error: null,
+      });
+      asaas.getCharge.mockResolvedValue({ id: 'ch_ref', value: 50.0, netValue: 0, status: 'REFUNDED' });
+
+      const report = await service.getAsaasReconciliation(period);
+      const row = report.items.find((i: any) => i.asaasPaymentId === 'ch_ref');
+
+      expect(row.status).toBe('ESTORNADO');
+      expect(report.summary.refundedCount).toBe(1);
+      expect(report.summary.totalFeeCentavos).toBe(0); // não conta a taxa fantasma de R$50
+    });
+
+    it('marca cobrança liquidada sem netValue ainda disponível como AGUARDANDO_LIQUIDO (L3)', async () => {
+      seed('payments', {
+        data: [
+          { id: 'p5', asaasPaymentId: 'ch_pend', amount: 4000, method: 'PIX', billingType: 'PIX', asaasStatus: 'CONFIRMED', paidAt: '2026-06-14T10:00:00', clientId: 'c5' },
+        ],
+        error: null,
+      });
+      asaas.getCharge.mockResolvedValue({ id: 'ch_pend', value: 40.0, status: 'CONFIRMED' }); // sem netValue
+
+      const report = await service.getAsaasReconciliation(period);
+      const row = report.items.find((i: any) => i.asaasPaymentId === 'ch_pend');
+
+      expect(row.status).toBe('AGUARDANDO_LIQUIDO');
+      expect(row.feeCentavos).toBeNull(); // não inventa taxa 0
+      expect(report.summary.totalFeeCentavos).toBe(0);
+    });
+
+    it('limita a quantidade de cobranças consultadas e sinaliza truncated (M2)', async () => {
+      seed('payments', {
+        data: [
+          { id: 'p6', asaasPaymentId: 'ch_a', amount: 1000, method: 'PIX', billingType: 'PIX', asaasStatus: 'RECEIVED', paidAt: '2026-06-15T10:00:00', clientId: 'c6' },
+        ],
+        error: null,
+      });
+      asaas.getCharge.mockResolvedValue({ id: 'ch_a', value: 10, netValue: 9.5, status: 'RECEIVED' });
+
+      const report = await service.getAsaasReconciliation(period);
+
+      // cap aplicado na query (evita centenas de getCharge num request só)
+      expect(chains['payments'].limit).toHaveBeenCalled();
+      expect(report.truncated).toBe(false);
     });
   });
 });

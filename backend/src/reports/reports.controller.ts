@@ -1,5 +1,9 @@
-import { Controller, Get, Query, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Query, BadRequestException, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '../common/enums';
 import { ReportsService, ReportFilters } from './reports.service';
 
 @ApiTags('Reports')
@@ -119,5 +123,21 @@ export class ReportsController {
   ) {
     const filters = this.parseFilters(startDate, endDate);
     return this.reportsService.getCashRegisterReport(filters);
+  }
+
+  /**
+   * GET /reports/asaas-reconciliation
+   * Concilia o bruto cobrado no app com value/netValue (líquido) do Asaas.
+   * Responde "chegou menos que deveria?" — separa TAXA do gateway de divergência real.
+   */
+  @Get('asaas-reconciliation')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async getAsaasReconciliation(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    const filters = this.parseFilters(startDate, endDate);
+    return this.reportsService.getAsaasReconciliation(filters);
   }
 }
