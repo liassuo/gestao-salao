@@ -57,6 +57,11 @@ export interface ClientSubscription {
    * undefined = backend antigo (deploy parcial) → tratar como "não bloquear".
    */
   currentCyclePaid?: boolean;
+  /**
+   * Status de pagamento consolidado vindo do backend (precedência OVERDUE>PENDING>PAID).
+   * undefined = backend antigo / não-ACTIVE → degrada para "não mostrar pendente".
+   */
+  paymentStatus?: 'PAID' | 'PENDING' | 'OVERDUE' | null;
   createdAt: string;
   client: {
     id: string;

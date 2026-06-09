@@ -379,6 +379,54 @@ describe('SubscriptionsService — findAllSubscriptions expõe método e inadimp
     expect((list[0] as any).latestPayment?.method).toBe('PIX');
     expect((list[0] as any).inadimplente).toBe(false);
   });
+
+  // Badge "Ciclo não pago": a LISTA do admin anexa currentCyclePaid/paymentStatus
+  // sem N+1 (derivado do batch de payments), espelhando isCurrentCyclePaid.
+  it('currentCyclePaid=true + paymentStatus=PAID quando ACTIVE tem pagamento no ciclo', async () => {
+    const recent = (d: number) => new Date(Date.now() + d * 86400000).toISOString();
+    const tables = baseTables();
+    tables.client_subscriptions = [
+      { id: 'sub-1', clientId: 'client-1', planId: 'plan-1', status: 'ACTIVE', startDate: recent(-1), createdAt: recent(-1), endDate: recent(29) },
+    ];
+    tables.payments = [
+      { id: 'pay-1', subscriptionId: 'sub-1', clientId: 'client-1', method: 'CARD', paidAt: recent(0), createdAt: recent(0) },
+    ];
+    tables.debts = [];
+    const { service } = await buildService(tables);
+    const list = await service.findAllSubscriptions();
+    expect((list[0] as any).currentCyclePaid).toBe(true);
+    expect((list[0] as any).paymentStatus).toBe('PAID');
+  });
+
+  it('currentCyclePaid=false + paymentStatus=PENDING quando ACTIVE sem pagamento no ciclo', async () => {
+    const recent = (d: number) => new Date(Date.now() + d * 86400000).toISOString();
+    const tables = baseTables();
+    tables.client_subscriptions = [
+      { id: 'sub-1', clientId: 'client-1', planId: 'plan-1', status: 'ACTIVE', startDate: recent(-1), createdAt: recent(-1), endDate: recent(29) },
+    ];
+    tables.payments = []; // nenhum pagamento no ciclo vigente
+    tables.debts = [];
+    const { service } = await buildService(tables);
+    const list = await service.findAllSubscriptions();
+    expect((list[0] as any).currentCyclePaid).toBe(false);
+    expect((list[0] as any).paymentStatus).toBe('PENDING');
+  });
+
+  it('ACTIVE vencida NÃO vira "em dia": currentCyclePaid=undefined (espelha o gate de preço)', async () => {
+    const tables = baseTables();
+    tables.client_subscriptions = [
+      // endDate no passado, mas status ainda ACTIVE (cron de expiração não rodou).
+      { id: 'sub-1', clientId: 'client-1', planId: 'plan-1', status: 'ACTIVE', startDate: '2026-01-01T00:00:00', createdAt: '2026-01-01T00:00:00', endDate: '2026-02-01T00:00:00' },
+    ];
+    tables.payments = [
+      { id: 'pay-1', subscriptionId: 'sub-1', clientId: 'client-1', method: 'PIX', paidAt: '2026-01-02T00:00:00', createdAt: '2026-01-02T00:00:00' },
+    ];
+    tables.debts = [];
+    const { service } = await buildService(tables);
+    const list = await service.findAllSubscriptions();
+    expect((list[0] as any).currentCyclePaid).toBeUndefined();
+    expect((list[0] as any).paymentStatus).toBeNull();
+  });
 });
 
 /**

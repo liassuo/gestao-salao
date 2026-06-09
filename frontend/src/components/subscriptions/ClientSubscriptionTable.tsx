@@ -195,12 +195,32 @@ export function ClientSubscriptionTable({
                           ? `Cancela em ${subscription.endDate ? formatDate(subscription.endDate) : '—'}`
                           : subscriptionStatusLabels[subscription.status]}
                       </span>
-                      {subscription.inadimplente && (
+                      {/* Estado de pagamento (precedência: Inadimplente > Ciclo não
+                          pago > Em dia). "Ciclo não pago" = ACTIVE cujo mês vigente
+                          ainda não foi pago (currentCyclePaid===false) — distinto do
+                          status "Aguardando Pagamento" (PENDING_PAYMENT). */}
+                      {subscription.inadimplente ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-red-500/15 px-2.5 py-0.5 text-xs font-semibold text-red-500">
                           <AlertTriangle className="h-3 w-3" />
                           Inadimplente
                         </span>
-                      )}
+                      ) : subscription.status === 'ACTIVE' &&
+                        subscription.currentCyclePaid === false ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-semibold text-amber-400">
+                          <AlertTriangle className="h-3 w-3" />
+                          Ciclo não pago
+                          {paymentMethodLabel(subscription.latestPayment?.method) && (
+                            <span className="font-normal opacity-80">
+                              · {paymentMethodLabel(subscription.latestPayment?.method)}
+                            </span>
+                          )}
+                        </span>
+                      ) : subscription.status === 'ACTIVE' ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-green-500/15 px-2.5 py-0.5 text-xs font-semibold text-green-500">
+                          <CheckCircle2 className="h-3 w-3" />
+                          Em dia
+                        </span>
+                      ) : null}
                     </div>
                   </td>
                   <td className="whitespace-nowrap px-4 py-4 text-center">
@@ -335,7 +355,7 @@ export function ClientSubscriptionTable({
                                     className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
                                   >
                                     <RotateCw className="h-4 w-4 text-[#C8923A]" />
-                                    Reativar (novo PIX)
+                                    Renovar assinatura
                                   </button>
                                 )}
                                 {onDelete && (
