@@ -59,29 +59,24 @@ describe('CommissionsService', () => {
   });
 
   describe('computeCommissionBreakdownForPeriod', () => {
+    // Helper: subscription order_items now come from a separate orders(.in) query.
+    const seedSubscriptionOrders = (rows: any[]) => {
+      chains['orders'].in.mockResolvedValue({ data: rows, error: null });
+    };
+
     it('combines avulso×rate, subscription pote (50%/fichas) and products×rate into one breakdown per professional', async () => {
-      // 1) avulso: prof-A, totalPrice 5000
       chains['appointments'] = mockChain();
       chains['appointments'].lte
-        // regular (avulso) query terminal
+        // 1) regular (avulso) query terminal
         .mockResolvedValueOnce({
           data: [{ professionalId: 'prof-A', totalPrice: 5000 }],
           error: null,
         })
-        // subscription (fichas) query terminal: 1 ficha for prof-A
-        .mockResolvedValueOnce({
-          data: [
-            {
-              professionalId: 'prof-A',
-              clientId: 'client-1',
-              services: [{ service: { fichas: 1, duration: 30 } }],
-            },
-          ],
-          error: null,
-        });
+        // 2) subscription appointment ids terminal
+        .mockResolvedValueOnce({ data: [{ id: 'appt-s' }], error: null });
 
-      // 3) products: prof-A, 1 product unitPrice 3000
       chains['orders'] = mockChain();
+      // 3) products (orders PAID) terminal .lte
       chains['orders'].lte.mockResolvedValue({
         data: [
           {
@@ -91,6 +86,15 @@ describe('CommissionsService', () => {
         ],
         error: null,
       });
+      // 4) subscription order_items terminal .in: 1 covered service = 1 ficha
+      seedSubscriptionOrders([
+        {
+          professionalId: 'prof-A',
+          items: [
+            { itemType: 'SERVICE', consumedSubscriptionCut: true, unitPrice: 0, quantity: 1, service: { fichas: 1, duration: 30 } },
+          ],
+        },
+      ]);
 
       // subscription revenue for the pote = 10000 (computeSubscriptionRevenue)
       chains['payments'] = mockChain();
@@ -99,7 +103,6 @@ describe('CommissionsService', () => {
         error: null,
       });
 
-      // professional record: rate 50%
       chains['professionals'] = mockChain();
       chains['professionals'].single.mockResolvedValue({
         data: { id: 'prof-A', commissionRate: 50, branchId: 'branch-1' },
@@ -120,22 +123,64 @@ describe('CommissionsService', () => {
       expect(a.amount).toBe(9000);
     });
 
+    it('counts a PAID EXTRA service inside a subscription appointment as avulso (×rate), not pote — only the covered item makes fichas (M4)', async () => {
+      chains['appointments'] = mockChain();
+      chains['appointments'].lte
+        .mockResolvedValueOnce({ data: [], error: null }) // no pure-avulso
+        .mockResolvedValueOnce({ data: [{ id: 'appt-mix' }], error: null });
+
+      chains['orders'] = mockChain();
+      chains['orders'].lte.mockResolvedValue({ data: [], error: null }); // no products
+      seedSubscriptionOrders([
+        {
+          professionalId: 'prof-A',
+          items: [
+            // coberto pelo plano (consumiu corte): vira ficha do pote, preço 0
+            { itemType: 'SERVICE', consumedSubscriptionCut: true, unitPrice: 0, quantity: 1, service: { fichas: 1, duration: 30 } },
+            // EXTRA pago no mesmo atendimento: deve render avulso × taxa, NÃO pote
+            { itemType: 'SERVICE', consumedSubscriptionCut: false, unitPrice: 5000, quantity: 1, service: { fichas: 1, duration: 20 } },
+          ],
+        },
+      ]);
+
+      chains['payments'] = mockChain();
+      chains['payments'].lte.mockResolvedValue({ data: [{ amount: 10000, asaasStatus: null }], error: null });
+
+      chains['professionals'] = mockChain();
+      chains['professionals'].single.mockResolvedValue({
+        data: { id: 'prof-A', commissionRate: 50, branchId: null },
+        error: null,
+      });
+
+      const result = await service.computeCommissionBreakdownForPeriod(
+        '2026-06-01T00:00:00',
+        '2026-06-30T23:59:59',
+      );
+
+      expect(result).toHaveLength(1);
+      const a = result[0];
+      // pote: SÓ 1 ficha (a do coberto; o extra não gera ficha) → 50% de 10000 = 5000
+      expect(a.amountSubscription).toBe(5000);
+      // extra pago 5000 → 50% = 2500 (antes ia pro pote e não rendia taxa)
+      expect(a.amountServices).toBe(2500);
+      expect(a.amount).toBe(7500);
+    });
+
     it('uses subscriptionRevenueOverride for the pote when provided', async () => {
       chains['appointments'] = mockChain();
       chains['appointments'].lte
         .mockResolvedValueOnce({ data: [], error: null })
-        .mockResolvedValueOnce({
-          data: [
-            {
-              professionalId: 'prof-A',
-              clientId: 'c1',
-              services: [{ service: { fichas: 2, duration: 30 } }],
-            },
-          ],
-          error: null,
-        });
+        .mockResolvedValueOnce({ data: [{ id: 'appt-s' }], error: null });
       chains['orders'] = mockChain();
       chains['orders'].lte.mockResolvedValue({ data: [], error: null });
+      seedSubscriptionOrders([
+        {
+          professionalId: 'prof-A',
+          items: [
+            { itemType: 'SERVICE', consumedSubscriptionCut: true, unitPrice: 0, quantity: 1, service: { fichas: 2, duration: 30 } },
+          ],
+        },
+      ]);
       chains['professionals'] = mockChain();
       chains['professionals'].single.mockResolvedValue({
         data: { id: 'prof-A', commissionRate: 40, branchId: null },

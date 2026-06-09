@@ -198,14 +198,19 @@ export class CommissionsService {
       .gte('scheduledAt', startStr)
       .lte('scheduledAt', endStr);
 
-    // 2) Serviços por assinatura (sistema de pote com fichas)
-    const { data: subscriptionAppointments } = await this.supabase
+    // 2) Atendimentos COM corte de assinatura. Separa o item COBERTO (consumiu corte →
+    //    fichas do pote) do item EXTRA pago no mesmo atendimento (→ avulso × taxa). Usa
+    //    order_items, que tem consumedSubscriptionCut e o preço cobrado; o
+    //    appointment_services não distingue coberto de extra e contava ficha do extra,
+    //    deixando o extra pago sem render comissão (M4).
+    const { data: subAppts } = await this.supabase
       .from('appointments')
-      .select('professionalId, clientId, services:appointment_services(service:services(fichas, duration))')
+      .select('id')
       .eq('status', 'ATTENDED')
       .eq('usedSubscriptionCut', true)
       .gte('scheduledAt', startStr)
       .lte('scheduledAt', endStr);
+    const subAppointmentIds = (subAppts || []).map((a) => a.id);
 
     // 3) Produtos (comandas pagas com itens do tipo PRODUCT)
     const { data: paidOrders } = await this.supabase
@@ -214,6 +219,20 @@ export class CommissionsService {
       .eq('status', 'PAID')
       .gte('createdAt', startStr)
       .lte('createdAt', endStr);
+
+    // order_items dos atendimentos de assinatura, em lotes (.in serializa na URL).
+    const SUB_CHUNK = 300;
+    const subOrders: any[] = [];
+    for (let i = 0; i < subAppointmentIds.length; i += SUB_CHUNK) {
+      const batch = subAppointmentIds.slice(i, i + SUB_CHUNK);
+      const { data } = await this.supabase
+        .from('orders')
+        .select(
+          'professionalId, items:order_items(unitPrice, quantity, itemType, consumedSubscriptionCut, service:services(fichas, duration))',
+        )
+        .in('appointmentId', batch);
+      if (data) subOrders.push(...data);
+    }
 
     // Agrupar por profissional: { services, subscription, products }
     const grouped = new Map<
@@ -232,19 +251,25 @@ export class CommissionsService {
       getEntry(appt.professionalId).services += appt.totalPrice;
     }
 
-    // Sistema de pote com fichas para assinaturas: soma as fichas por profissional e
-    // distribui o pote (50% da receita de assinatura) proporcionalmente.
+    // Pote de fichas (item COBERTO) + extras pagos (item NÃO coberto → avulso × taxa).
+    // Só o item que de fato consumiu corte gera ficha; o serviço extra cobrado no mesmo
+    // atendimento rende a comissão normal de avulso (preço × taxa).
     const fichasByProfessional = new Map<string, number>();
     let totalFichas = 0;
 
-    for (const appt of subscriptionAppointments || []) {
-      const apptFichas = ((appt as any).services || []).reduce(
-        (sum: number, as_: any) => sum + (as_.service?.fichas || as_.service?.duration || 0),
-        0,
-      );
-      const existing = fichasByProfessional.get(appt.professionalId) || 0;
-      fichasByProfessional.set(appt.professionalId, existing + apptFichas);
-      totalFichas += apptFichas;
+    for (const order of subOrders) {
+      const profId = (order as any).professionalId;
+      if (!profId) continue;
+      for (const item of (order as any).items || []) {
+        if (item.itemType !== 'SERVICE') continue;
+        if (item.consumedSubscriptionCut) {
+          const fichas = item.service?.fichas || item.service?.duration || 0;
+          fichasByProfessional.set(profId, (fichasByProfessional.get(profId) || 0) + fichas);
+          totalFichas += fichas;
+        } else if ((item.unitPrice || 0) > 0) {
+          getEntry(profId).services += (item.unitPrice || 0) * (item.quantity || 1);
+        }
+      }
     }
 
     if (totalFichas > 0) {
