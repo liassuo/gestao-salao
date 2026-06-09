@@ -189,31 +189,81 @@ export class CommissionsService {
       amount: number;
     }>
   > {
-    // 1) Serviços avulsos (appointments sem assinatura)
+    // 1) Serviços avulsos (appointments sem assinatura). A comissão de serviço sai dos
+    //    order_items SERVICE da comanda — NÃO de appointment.totalPrice. totalPrice mistura
+    //    serviço + produto (orders.addItem faz appointment.totalPrice = order.totalAmount,
+    //    somando QUALQUER item), então usá-lo aqui contava o produto 2× (uma no bucket de
+    //    serviços via totalPrice e outra no bucket de produtos abaixo).
     const { data: regularAppointments } = await this.supabase
       .from('appointments')
-      .select('professionalId, totalPrice')
+      .select(
+        'professionalId, totalPrice, orders(status, order_items(unitPrice, quantity, itemType, consumedSubscriptionCut))',
+      )
       .eq('status', 'ATTENDED')
       .neq('usedSubscriptionCut', true)
       .gte('scheduledAt', startStr)
       .lte('scheduledAt', endStr);
 
-    // 2) Serviços por assinatura (sistema de pote com fichas)
-    const { data: subscriptionAppointments } = await this.supabase
+    // 2) Atendimentos do período (pela data do serviço). Inclui ATTENDED e também os
+    //    PAGOS-mas-ainda-não-marcados-atendido (orders.pay marca isPaid sem virar
+    //    ATTENDED): senão o PRODUTO de uma comanda paga desses sumiria da comissão
+    //    (regressão do M3). usedSubscriptionCut + status separam os usos abaixo.
+    const { data: attended } = await this.supabase
       .from('appointments')
-      .select('professionalId, clientId, services:appointment_services(service:services(fichas, duration))')
-      .eq('status', 'ATTENDED')
-      .eq('usedSubscriptionCut', true)
+      .select('id, usedSubscriptionCut, status')
+      .or('status.eq.ATTENDED,isPaid.eq.true')
       .gte('scheduledAt', startStr)
       .lte('scheduledAt', endStr);
+    // PRODUTOS de comanda de agendamento: atribuídos a qualquer agendamento do período
+    // que esteja ATTENDED ou pago (a venda do produto aconteceu).
+    const attendedIds = (attended || []).map((a) => a.id);
+    // Fichas/extras de assinatura: SÓ atendimento concluído (serviço de fato prestado).
+    const subAppointmentIds = (attended || [])
+      .filter((a) => a.status === 'ATTENDED' && a.usedSubscriptionCut)
+      .map((a) => a.id);
 
-    // 3) Produtos (comandas pagas com itens do tipo PRODUCT)
-    const { data: paidOrders } = await this.supabase
+    const CHUNK = 300;
+
+    // 2.1) order_items dos atendimentos de assinatura. Separa o item COBERTO (consumiu
+    //      corte → fichas do pote) do item EXTRA pago no mesmo atendimento (→ avulso ×
+    //      taxa). Usa order_items, que tem consumedSubscriptionCut e o preço cobrado; o
+    //      appointment_services não distinguia coberto de extra, contava ficha do extra e
+    //      deixava o extra pago sem render comissão (M4). Em lotes (.in serializa na URL).
+    const subOrders: any[] = [];
+    for (let i = 0; i < subAppointmentIds.length; i += CHUNK) {
+      const batch = subAppointmentIds.slice(i, i + CHUNK);
+      const { data } = await this.supabase
+        .from('orders')
+        .select(
+          'professionalId, items:order_items(unitPrice, quantity, itemType, consumedSubscriptionCut, service:services(fichas, duration))',
+        )
+        .in('appointmentId', batch);
+      if (data) subOrders.push(...data);
+    }
+
+    // 3) Produtos: atribuídos pela data do TRABALHO, não da reserva (M3). Comanda de
+    //    BALCÃO (sem agendamento) conta pela data de venda (createdAt); comanda de
+    //    AGENDAMENTO conta pelo dia do atendimento (scheduledAt — via os ids de attended).
+    //    Antes tudo ia por orders.createdAt (a data da RESERVA): um produto vendido numa
+    //    comanda de agendamento futuro caía no período da reserva, não no do atendimento.
+    const paidOrders: any[] = [];
+    const { data: balcaoOrders } = await this.supabase
       .from('orders')
       .select('professionalId, items:order_items(unitPrice, quantity, itemType)')
       .eq('status', 'PAID')
+      .is('appointmentId', null)
       .gte('createdAt', startStr)
       .lte('createdAt', endStr);
+    if (balcaoOrders) paidOrders.push(...balcaoOrders);
+    for (let i = 0; i < attendedIds.length; i += CHUNK) {
+      const batch = attendedIds.slice(i, i + CHUNK);
+      const { data } = await this.supabase
+        .from('orders')
+        .select('professionalId, items:order_items(unitPrice, quantity, itemType)')
+        .eq('status', 'PAID')
+        .in('appointmentId', batch);
+      if (data) paidOrders.push(...data);
+    }
 
     // Agrupar por profissional: { services, subscription, products }
     const grouped = new Map<
@@ -229,22 +279,45 @@ export class CommissionsService {
     };
 
     for (const appt of regularAppointments || []) {
-      getEntry(appt.professionalId).services += appt.totalPrice;
+      const orders = (appt as any).orders || [];
+      let serviceTotal = 0;
+      if (orders.length === 0) {
+        // Agendamento legado (anterior à comanda automática, ~2026-04-01): não tem
+        // order/order_items. Mantém o comportamento antigo via totalPrice — esses
+        // atendimentos não têm produto na comanda, então não há dupla contagem.
+        serviceTotal = (appt as any).totalPrice || 0;
+      } else {
+        for (const ord of orders) {
+          if (ord.status === 'CANCELED') continue; // comanda cancelada não rende comissão
+          for (const it of ord.order_items || []) {
+            if (it.itemType !== 'SERVICE') continue; // produto entra no bucket de produtos
+            if (it.consumedSubscriptionCut) continue; // coberto pelo plano não é avulso (defensivo)
+            serviceTotal += (it.unitPrice || 0) * (it.quantity || 1);
+          }
+        }
+      }
+      getEntry((appt as any).professionalId).services += serviceTotal;
     }
 
-    // Sistema de pote com fichas para assinaturas: soma as fichas por profissional e
-    // distribui o pote (50% da receita de assinatura) proporcionalmente.
+    // Pote de fichas (item COBERTO) + extras pagos (item NÃO coberto → avulso × taxa).
+    // Só o item que de fato consumiu corte gera ficha; o serviço extra cobrado no mesmo
+    // atendimento rende a comissão normal de avulso (preço × taxa).
     const fichasByProfessional = new Map<string, number>();
     let totalFichas = 0;
 
-    for (const appt of subscriptionAppointments || []) {
-      const apptFichas = ((appt as any).services || []).reduce(
-        (sum: number, as_: any) => sum + (as_.service?.fichas || as_.service?.duration || 0),
-        0,
-      );
-      const existing = fichasByProfessional.get(appt.professionalId) || 0;
-      fichasByProfessional.set(appt.professionalId, existing + apptFichas);
-      totalFichas += apptFichas;
+    for (const order of subOrders) {
+      const profId = (order as any).professionalId;
+      if (!profId) continue;
+      for (const item of (order as any).items || []) {
+        if (item.itemType !== 'SERVICE') continue;
+        if (item.consumedSubscriptionCut) {
+          const fichas = item.service?.fichas || item.service?.duration || 0;
+          fichasByProfessional.set(profId, (fichasByProfessional.get(profId) || 0) + fichas);
+          totalFichas += fichas;
+        } else if ((item.unitPrice || 0) > 0) {
+          getEntry(profId).services += (item.unitPrice || 0) * (item.quantity || 1);
+        }
+      }
     }
 
     if (totalFichas > 0) {

@@ -95,36 +95,34 @@ export class AppointmentsService {
     const activeSub = await getActiveClientSubscription(this.supabase, dto.clientId);
     const useCut = !!dto.useSubscriptionCut;
 
-    // Saldo simulado de cortes; vai diminuindo conforme processamos os serviços.
-    let remainingCuts = useCut ? 0 : getRemainingCuts(activeSub);
+    // Saldo de cortes do mês; diminui conforme processamos os serviços cobertos.
+    // UNIFICADO: tanto o "usar corte" do app (useCut) quanto o fluxo natural (admin)
+    // consomem 1 corte POR serviço coberto, limitado ao saldo. Antes o useCut forçava
+    // saldo 0 e zerava TODOS os serviços cobertos sem consumir, enquanto o controller
+    // debitava 1 corte só — várias coberturas numa reserva saíam de graça (M5). Agora o
+    // débito é feito aqui (RPC), na quantidade certa, e o controller não debita mais.
+    let remainingCuts = getRemainingCuts(activeSub);
     const consumedFlags: boolean[] = [];
 
     const getUnitPrice = (svc: { id: string; price: number }): number => {
       const promoPercent = getPromoDiscountForService(activePromos, svc.id);
-      if (useCut) {
-        // Fluxo legado: cliente marcou "usar 1 corte" pelo app. O débito do corte
-        // é responsabilidade do controller (useCut()). Aqui zeramos APENAS os
-        // serviços efetivamente cobertos pelo plano (override 100%); extras seguem
-        // preço normal com desconto global do plano.
-        if (isPlanIncludedService(activeSub, svc.id)) {
-          consumedFlags.push(false);
-          return 0;
-        }
-        const planPercent = activeSub?.globalPercent ?? 0;
-        const percent = effectiveDiscountPercent(promoPercent, planPercent);
-        consumedFlags.push(false);
-        return applyDiscount(svc.price, percent);
-      }
-      // Serviço incluído no plano (override 100%) consome crédito enquanto houver saldo.
-      if (isPlanIncludedService(activeSub, svc.id) && remainingCuts > 0) {
+      const isIncluded = isPlanIncludedService(activeSub, svc.id);
+
+      // Serviço incluído no plano (override 100%) consome 1 corte enquanto houver saldo.
+      if (isIncluded && remainingCuts > 0) {
         remainingCuts -= 1;
         consumedFlags.push(true);
         return 0;
       }
-      // Sem saldo (ou serviço fora do plano): aplica desconto normal.
-      const planPercent = isPlanIncludedService(activeSub, svc.id)
+
+      // Sem saldo (incluído mas cortes esgotados) ou serviço extra: aplica desconto.
+      // Extra no fluxo do app (useCut) usa o desconto GLOBAL do plano; no fluxo natural,
+      // o desconto por serviço.
+      const planPercent = isIncluded
         ? activeSub?.globalPercent ?? 0
-        : getPlanDiscountForService(activeSub, svc.id);
+        : useCut
+          ? activeSub?.globalPercent ?? 0
+          : getPlanDiscountForService(activeSub, svc.id);
       const percent = effectiveDiscountPercent(promoPercent, planPercent);
       consumedFlags.push(false);
       return applyDiscount(svc.price, percent);
@@ -134,15 +132,6 @@ export class AppointmentsService {
     const itemUnitPrices = services.map((s) => getUnitPrice(s));
     const totalPrice = itemUnitPrices.reduce((sum, p) => sum + p, 0);
     const cutsToDebit = consumedFlags.filter(Boolean).length;
-
-    // O agendamento só conta como "assinatura" (cor/etiqueta de plano) se ALGUM
-    // serviço escolhido for REALMENTE coberto pelo plano do cliente. Antes, marcar
-    // "usar crédito" (dto.useSubscriptionCut) pintava de plano mesmo quando o serviço
-    // não era coberto — ex.: cliente com plano de BARBA agendou CORTE; o corte foi
-    // cobrado, mas o card aparecia como assinatura. Agora baseamos no serviço coberto.
-    const anyServiceCoveredByPlan = services.some((s) =>
-      isPlanIncludedService(activeSub, s.id),
-    );
 
     // 2. Validar profissional ativo, expediente, bloqueios e conflitos de agendamento
     await this.validateScheduleConflicts(
@@ -404,18 +393,13 @@ export class AppointmentsService {
         status: initialStatus,
         notes: dto.notes,
         source: dto.source || 'ADMIN',
-        // Marca "assinatura" SOMENTE quando um corte de assinatura é de fato usado.
-        // A flag alimenta a COMISSÃO (commissions.service: avulso vs. pote de fichas)
-        // e a devolução de corte no NO-SHOW (markAsNoShow) — não é só a cor do card.
-        //   - Fluxo natural: algum serviço coberto consumiu crédito (consumedFlags).
-        //     Serviço coberto mas SEM saldo de cortes é cobrado normalmente, então
-        //     NÃO marca — senão a comissão cairia no pote de fichas em vez do preço
-        //     cobrado e o no-show devolveria um corte que nunca foi consumido.
-        //   - Fluxo legado (useSubscriptionCut): o controller debita 1 corte, mas só
-        //     há corte a aplicar se ALGUM serviço escolhido é coberto pelo plano
-        //     (ex.: plano de barba + corte avulso não marca).
-        usedSubscriptionCut:
-          consumedFlags.some(Boolean) || (useCut && anyServiceCoveredByPlan),
+        // Marca "assinatura" SOMENTE quando um corte de assinatura é de fato consumido
+        // (consumedFlags). Vale para os dois fluxos (app e natural), agora unificados:
+        // serviço coberto mas SEM saldo é cobrado normalmente e NÃO marca — senão a
+        // comissão cairia no pote de fichas em vez do preço cobrado e o no-show
+        // devolveria um corte que nunca foi consumido. A flag alimenta a COMISSÃO
+        // (commissions.service: avulso vs. pote) e a devolução de corte no NO-SHOW.
+        usedSubscriptionCut: consumedFlags.some(Boolean),
         createdAt: now,
         updatedAt: now,
       })
@@ -470,11 +454,11 @@ export class AppointmentsService {
       await this.supabase.from('order_items').insert(item);
     }
 
-    // 5.2 Debitar créditos da assinatura quando o agendamento consumiu cortes
-    // automaticamente (cenário admin / app sem flag `useSubscriptionCut`).
-    // Quando `useCut=true`, o controller chama `subscriptionsService.useCut(...)`
-    // — não duplicar débito aqui.
-    if (!useCut && cutsToDebit > 0 && activeSub) {
+    // 5.2 Debitar os créditos da assinatura efetivamente consumidos (cutsToDebit = nº de
+    // serviços cobertos zerados). Fluxo unificado: vale tanto para o app ("usar corte")
+    // quanto para o admin — o controller NÃO debita mais 1 corte fixo (evita o débito a
+    // menos do app e a dupla contagem do admin).
+    if (cutsToDebit > 0 && activeSub) {
       const { error: rpcErr } = await this.supabase.rpc('debit_subscription_cuts', {
         sub_id: activeSub.subscriptionId,
         amount: cutsToDebit,
