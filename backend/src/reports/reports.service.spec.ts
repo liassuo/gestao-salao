@@ -69,7 +69,7 @@ describe('ReportsService', () => {
   describe('getProfessionalReport (H3)', () => {
     it('reports the SAME commission as the Comissões screen (from the shared breakdown), not totalPrice×rate', async () => {
       seed('professionals', {
-        data: [{ id: 'prof-A', name: 'Alex', commissionRate: 50 }],
+        data: [{ id: 'prof-A', name: 'Alex', commissionRate: 50, isActive: true }],
         error: null,
       });
       // Avulso revenue = 5000; totalPrice×rate would give 2500. The real commission
@@ -105,7 +105,7 @@ describe('ReportsService', () => {
 
     it('shows commission 0 for a professional with no entry in the breakdown', async () => {
       seed('professionals', {
-        data: [{ id: 'prof-B', name: 'Bia', commissionRate: 40 }],
+        data: [{ id: 'prof-B', name: 'Bia', commissionRate: 40, isActive: true }],
         error: null,
       });
       seed('appointments', {
@@ -118,6 +118,31 @@ describe('ReportsService', () => {
       const result = await service.getProfessionalReport(period);
 
       expect(result[0].financial.commission).toBe(0);
+    });
+
+    it('keeps an INACTIVE professional that had activity in the period (M2)', async () => {
+      seed('professionals', {
+        data: [
+          { id: 'prof-A', name: 'Alex', commissionRate: 50, isActive: true },
+          { id: 'prof-gone', name: 'Ex-Barbeiro', commissionRate: 50, isActive: false },
+          { id: 'prof-old', name: 'Inativo sem atividade', commissionRate: 50, isActive: false },
+        ],
+        error: null,
+      });
+      seed('appointments', { data: [], count: 0, error: null });
+      // prof-gone (inativo) teve atendimento no período → aparece no breakdown.
+      commissions.computeCommissionBreakdownForPeriod.mockResolvedValue([
+        { professionalId: 'prof-gone', branchId: null, commissionRate: 50, amountServices: 0, amountSubscription: 0, amountProducts: 0, amount: 4000 },
+      ]);
+
+      const result = await service.getProfessionalReport(period);
+      const ids = result.map((r: any) => r.id);
+
+      expect(ids).toContain('prof-A'); // ativo
+      expect(ids).toContain('prof-gone'); // inativo COM atividade
+      expect(ids).not.toContain('prof-old'); // inativo SEM atividade some
+      const gone = result.find((r: any) => r.id === 'prof-gone');
+      expect(gone.financial.commission).toBe(4000);
     });
   });
 
