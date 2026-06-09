@@ -73,7 +73,7 @@ describe('CommissionsService', () => {
           error: null,
         })
         // 2) subscription appointment ids terminal
-        .mockResolvedValueOnce({ data: [{ id: 'appt-s' }], error: null });
+        .mockResolvedValueOnce({ data: [{ id: 'appt-s', usedSubscriptionCut: true }], error: null });
 
       chains['orders'] = mockChain();
       // 3) products (orders PAID) terminal .lte
@@ -127,7 +127,7 @@ describe('CommissionsService', () => {
       chains['appointments'] = mockChain();
       chains['appointments'].lte
         .mockResolvedValueOnce({ data: [], error: null }) // no pure-avulso
-        .mockResolvedValueOnce({ data: [{ id: 'appt-mix' }], error: null });
+        .mockResolvedValueOnce({ data: [{ id: 'appt-mix', usedSubscriptionCut: true }], error: null });
 
       chains['orders'] = mockChain();
       chains['orders'].lte.mockResolvedValue({ data: [], error: null }); // no products
@@ -170,7 +170,7 @@ describe('CommissionsService', () => {
       chains['appointments'] = mockChain();
       chains['appointments'].lte
         .mockResolvedValueOnce({ data: [], error: null })
-        .mockResolvedValueOnce({ data: [{ id: 'appt-s' }], error: null });
+        .mockResolvedValueOnce({ data: [{ id: 'appt-s', usedSubscriptionCut: true }], error: null });
       chains['orders'] = mockChain();
       chains['orders'].lte.mockResolvedValue({ data: [], error: null });
       seedSubscriptionOrders([
@@ -197,6 +197,41 @@ describe('CommissionsService', () => {
       expect(result[0].amountSubscription).toBe(10000);
       // payments table never queried because override short-circuits computeSubscriptionRevenue
       expect(chains['payments']).toBeUndefined();
+    });
+
+    it('attributes an appointment-linked product via the attended-appointment ids (scheduledAt), not orders.createdAt (M3)', async () => {
+      chains['appointments'] = mockChain();
+      chains['appointments'].lte
+        .mockResolvedValueOnce({ data: [], error: null }) // no avulso services
+        .mockResolvedValueOnce({
+          data: [{ id: 'appt-prod', usedSubscriptionCut: false }],
+          error: null,
+        });
+
+      chains['orders'] = mockChain();
+      chains['orders'].lte.mockResolvedValue({ data: [], error: null }); // no balcão sale
+      // product is in an APPOINTMENT comanda → fetched via attended ids (.in), so it
+      // counts in the period of the ATTENDANCE, not the booking date.
+      chains['orders'].in.mockResolvedValue({
+        data: [
+          { professionalId: 'prof-A', items: [{ unitPrice: 2000, quantity: 1, itemType: 'PRODUCT' }] },
+        ],
+        error: null,
+      });
+
+      chains['professionals'] = mockChain();
+      chains['professionals'].single.mockResolvedValue({
+        data: { id: 'prof-A', commissionRate: 50, branchId: null },
+        error: null,
+      });
+
+      const result = await service.computeCommissionBreakdownForPeriod(
+        '2026-06-01T00:00:00',
+        '2026-06-30T23:59:59',
+      );
+
+      expect(result).toHaveLength(1);
+      expect(result[0].amountProducts).toBe(1000); // 2000 × 50%
     });
 
     it('returns an empty array when there is no attendance or sale in the period', async () => {

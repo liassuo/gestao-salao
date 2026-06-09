@@ -198,33 +198,30 @@ export class CommissionsService {
       .gte('scheduledAt', startStr)
       .lte('scheduledAt', endStr);
 
-    // 2) Atendimentos COM corte de assinatura. Separa o item COBERTO (consumiu corte →
-    //    fichas do pote) do item EXTRA pago no mesmo atendimento (→ avulso × taxa). Usa
-    //    order_items, que tem consumedSubscriptionCut e o preço cobrado; o
-    //    appointment_services não distingue coberto de extra e contava ficha do extra,
-    //    deixando o extra pago sem render comissão (M4).
-    const { data: subAppts } = await this.supabase
+    // 2) Atendimentos ATTENDED no período (pela data do serviço). usedSubscriptionCut
+    //    separa quem usou corte de assinatura. Os ids alimentam tanto os order_items de
+    //    assinatura quanto a atribuição de PRODUTOS de comanda pelo dia do atendimento.
+    const { data: attended } = await this.supabase
       .from('appointments')
-      .select('id')
+      .select('id, usedSubscriptionCut')
       .eq('status', 'ATTENDED')
-      .eq('usedSubscriptionCut', true)
       .gte('scheduledAt', startStr)
       .lte('scheduledAt', endStr);
-    const subAppointmentIds = (subAppts || []).map((a) => a.id);
+    const attendedIds = (attended || []).map((a) => a.id);
+    const subAppointmentIds = (attended || [])
+      .filter((a) => a.usedSubscriptionCut)
+      .map((a) => a.id);
 
-    // 3) Produtos (comandas pagas com itens do tipo PRODUCT)
-    const { data: paidOrders } = await this.supabase
-      .from('orders')
-      .select('professionalId, items:order_items(unitPrice, quantity, itemType)')
-      .eq('status', 'PAID')
-      .gte('createdAt', startStr)
-      .lte('createdAt', endStr);
+    const CHUNK = 300;
 
-    // order_items dos atendimentos de assinatura, em lotes (.in serializa na URL).
-    const SUB_CHUNK = 300;
+    // 2.1) order_items dos atendimentos de assinatura. Separa o item COBERTO (consumiu
+    //      corte → fichas do pote) do item EXTRA pago no mesmo atendimento (→ avulso ×
+    //      taxa). Usa order_items, que tem consumedSubscriptionCut e o preço cobrado; o
+    //      appointment_services não distinguia coberto de extra, contava ficha do extra e
+    //      deixava o extra pago sem render comissão (M4). Em lotes (.in serializa na URL).
     const subOrders: any[] = [];
-    for (let i = 0; i < subAppointmentIds.length; i += SUB_CHUNK) {
-      const batch = subAppointmentIds.slice(i, i + SUB_CHUNK);
+    for (let i = 0; i < subAppointmentIds.length; i += CHUNK) {
+      const batch = subAppointmentIds.slice(i, i + CHUNK);
       const { data } = await this.supabase
         .from('orders')
         .select(
@@ -232,6 +229,30 @@ export class CommissionsService {
         )
         .in('appointmentId', batch);
       if (data) subOrders.push(...data);
+    }
+
+    // 3) Produtos: atribuídos pela data do TRABALHO, não da reserva (M3). Comanda de
+    //    BALCÃO (sem agendamento) conta pela data de venda (createdAt); comanda de
+    //    AGENDAMENTO conta pelo dia do atendimento (scheduledAt — via os ids de attended).
+    //    Antes tudo ia por orders.createdAt (a data da RESERVA): um produto vendido numa
+    //    comanda de agendamento futuro caía no período da reserva, não no do atendimento.
+    const paidOrders: any[] = [];
+    const { data: balcaoOrders } = await this.supabase
+      .from('orders')
+      .select('professionalId, items:order_items(unitPrice, quantity, itemType)')
+      .eq('status', 'PAID')
+      .is('appointmentId', null)
+      .gte('createdAt', startStr)
+      .lte('createdAt', endStr);
+    if (balcaoOrders) paidOrders.push(...balcaoOrders);
+    for (let i = 0; i < attendedIds.length; i += CHUNK) {
+      const batch = attendedIds.slice(i, i + CHUNK);
+      const { data } = await this.supabase
+        .from('orders')
+        .select('professionalId, items:order_items(unitPrice, quantity, itemType)')
+        .eq('status', 'PAID')
+        .in('appointmentId', batch);
+      if (data) paidOrders.push(...data);
     }
 
     // Agrupar por profissional: { services, subscription, products }
