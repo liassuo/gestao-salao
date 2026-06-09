@@ -121,7 +121,7 @@ export class PaymentsService {
   async unlinkPayment(id: string): Promise<void> {
     const { data: payment, error } = await this.supabase
       .from('payments')
-      .select('id, appointmentId')
+      .select('id, appointmentId, businessDate, paidAt')
       .eq('id', id)
       .single();
 
@@ -139,6 +139,26 @@ export class PaymentsService {
 
     // Remover o pagamento
     await this.supabase.from('payments').delete().eq('id', id);
+
+    // Recalcular o caixa do DIA CONTÁBIL do pagamento excluído. O caixa ABERTO
+    // recompõe os totais em tempo real; o problema é o caixa FECHADO, cujos totais
+    // ficam persistidos na coluna — sem este recálculo a receita do pagamento
+    // excluído continua "fantasma" no caixa fechado (e infla Total Faturado e a
+    // discrepância). Mesma blindagem aplicada ao estorno Asaas. Captura o dia
+    // contábil ANTES de apagar; o link no pagamento já inexistente é no-op e o
+    // recálculo lê os pagamentos restantes.
+    const accountingDate =
+      (payment as any).businessDate || (payment as any).paidAt || null;
+    if (accountingDate) {
+      try {
+        await this.cashRegisterService.linkPaymentToBusinessDateRegister(
+          id,
+          String(accountingDate),
+        );
+      } catch {
+        // Falha no recálculo não deve reverter a exclusão já efetivada.
+      }
+    }
   }
 
   async findOne(id: string) {

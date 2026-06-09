@@ -32,6 +32,7 @@ const mockSupabase = {
 
 describe('PaymentsService', () => {
   let service: PaymentsService;
+  let cashRegister: { linkPaymentToBusinessDateRegister: jest.Mock };
 
   beforeEach(async () => {
     chains = {};
@@ -41,13 +42,15 @@ describe('PaymentsService', () => {
       return chains[table];
     });
 
+    cashRegister = { linkPaymentToBusinessDateRegister: jest.fn() };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PaymentsService,
         { provide: SupabaseService, useValue: mockSupabase },
         {
           provide: CashRegisterService,
-          useValue: { linkPaymentToBusinessDateRegister: jest.fn() },
+          useValue: cashRegister,
         },
       ],
     }).compile();
@@ -305,6 +308,58 @@ describe('PaymentsService', () => {
       await expect(service.unlinkPayment('pay-99')).rejects.toThrow(
         NotFoundException,
       );
+    });
+
+    it('recalculates the business-date cash register after deleting (kills phantom revenue in a closed register)', async () => {
+      chains['payments'] = mockChain();
+      chains['payments'].single.mockResolvedValue({
+        data: {
+          id: 'pay-1',
+          appointmentId: null,
+          businessDate: '2026-06-05T00:00:00',
+          paidAt: '2026-06-05T10:00:00',
+        },
+        error: null,
+      });
+
+      await service.unlinkPayment('pay-1');
+
+      expect(cashRegister.linkPaymentToBusinessDateRegister).toHaveBeenCalledWith(
+        'pay-1',
+        '2026-06-05T00:00:00',
+      );
+    });
+
+    it('falls back to paidAt for legacy payments without businessDate when recalculating the register', async () => {
+      chains['payments'] = mockChain();
+      chains['payments'].single.mockResolvedValue({
+        data: {
+          id: 'pay-2',
+          appointmentId: null,
+          businessDate: null,
+          paidAt: '2026-06-04T09:00:00',
+        },
+        error: null,
+      });
+
+      await service.unlinkPayment('pay-2');
+
+      expect(cashRegister.linkPaymentToBusinessDateRegister).toHaveBeenCalledWith(
+        'pay-2',
+        '2026-06-04T09:00:00',
+      );
+    });
+
+    it('does not attempt a register recalc when the payment has neither businessDate nor paidAt', async () => {
+      chains['payments'] = mockChain();
+      chains['payments'].single.mockResolvedValue({
+        data: { id: 'pay-3', appointmentId: null, businessDate: null, paidAt: null },
+        error: null,
+      });
+
+      await service.unlinkPayment('pay-3');
+
+      expect(cashRegister.linkPaymentToBusinessDateRegister).not.toHaveBeenCalled();
     });
   });
 

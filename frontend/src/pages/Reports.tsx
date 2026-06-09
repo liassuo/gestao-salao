@@ -203,8 +203,8 @@ export function Reports() {
             <div>
               <p className="text-sm text-[var(--text-muted)] mb-2">Financeiro</p>
               <div className="space-y-1 text-sm text-[var(--text-secondary)]">
-                <p>Receita: <strong className="text-[var(--text-primary)]">{formatCurrency(prof.financial.totalRevenue)}</strong></p>
-                <p>Comissão ({prof.commissionRate}%): <strong className="text-[var(--text-primary)]">{formatCurrency(prof.financial.commission)}</strong></p>
+                <p>Receita (avulso): <strong className="text-[var(--text-primary)]">{formatCurrency(prof.financial.totalRevenue)}</strong></p>
+                <p title="Mesmo cálculo da tela Comissões: avulso + pote de assinatura + produtos">Comissão total: <strong className="text-[var(--text-primary)]">{formatCurrency(prof.financial.commission)}</strong></p>
                 <p>Ticket médio: <strong className="text-[var(--text-primary)]">{formatCurrency(prof.financial.averageTicket)}</strong></p>
               </div>
             </div>
