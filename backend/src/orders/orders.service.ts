@@ -474,8 +474,10 @@ export class OrdersService {
     // Sincronizar agendamento vinculado (somente totalPrice — totalDuration NAO muda
     // ao adicionar serviço pela comanda: o admin pediu que o card no calendario
     // mantenha o tamanho original do agendamento mesmo que serviços extras sejam
-    // emendados. Fichas continuam sendo contadas via appointment_services e
-    // comissao continua via totalPrice).
+    // emendados). ATENÇÃO: a comissão de atendimento de ASSINATURA NÃO usa mais
+    // appointment.totalPrice — fichas e extras saem dos order_items
+    // (consumedSubscriptionCut) no CommissionsService. totalPrice só dirige comissão de
+    // atendimento AVULSO; não confie nele para somar comissão de assinatura aqui.
     if (order.appointmentId) {
       const updateData: any = { totalPrice: newTotal, updatedAt: nowLocalIsoString() };
 

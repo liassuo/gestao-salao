@@ -198,18 +198,22 @@ export class CommissionsService {
       .gte('scheduledAt', startStr)
       .lte('scheduledAt', endStr);
 
-    // 2) Atendimentos ATTENDED no período (pela data do serviço). usedSubscriptionCut
-    //    separa quem usou corte de assinatura. Os ids alimentam tanto os order_items de
-    //    assinatura quanto a atribuição de PRODUTOS de comanda pelo dia do atendimento.
+    // 2) Atendimentos do período (pela data do serviço). Inclui ATTENDED e também os
+    //    PAGOS-mas-ainda-não-marcados-atendido (orders.pay marca isPaid sem virar
+    //    ATTENDED): senão o PRODUTO de uma comanda paga desses sumiria da comissão
+    //    (regressão do M3). usedSubscriptionCut + status separam os usos abaixo.
     const { data: attended } = await this.supabase
       .from('appointments')
-      .select('id, usedSubscriptionCut')
-      .eq('status', 'ATTENDED')
+      .select('id, usedSubscriptionCut, status')
+      .or('status.eq.ATTENDED,isPaid.eq.true')
       .gte('scheduledAt', startStr)
       .lte('scheduledAt', endStr);
+    // PRODUTOS de comanda de agendamento: atribuídos a qualquer agendamento do período
+    // que esteja ATTENDED ou pago (a venda do produto aconteceu).
     const attendedIds = (attended || []).map((a) => a.id);
+    // Fichas/extras de assinatura: SÓ atendimento concluído (serviço de fato prestado).
     const subAppointmentIds = (attended || [])
-      .filter((a) => a.usedSubscriptionCut)
+      .filter((a) => a.status === 'ATTENDED' && a.usedSubscriptionCut)
       .map((a) => a.id);
 
     const CHUNK = 300;

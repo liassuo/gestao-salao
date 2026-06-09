@@ -11,6 +11,7 @@ const mockChain = () => {
   chain.delete = jest.fn().mockReturnValue(chain);
   chain.eq = jest.fn().mockReturnValue(chain);
   chain.neq = jest.fn().mockReturnValue(chain);
+  chain.or = jest.fn().mockReturnValue(chain);
   chain.not = jest.fn().mockReturnValue(chain);
   chain.in = jest.fn().mockReturnValue(chain);
   chain.gte = jest.fn().mockReturnValue(chain);
@@ -73,7 +74,7 @@ describe('CommissionsService', () => {
           error: null,
         })
         // 2) subscription appointment ids terminal
-        .mockResolvedValueOnce({ data: [{ id: 'appt-s', usedSubscriptionCut: true }], error: null });
+        .mockResolvedValueOnce({ data: [{ id: 'appt-s', usedSubscriptionCut: true, status: 'ATTENDED' }], error: null });
 
       chains['orders'] = mockChain();
       // 3) products (orders PAID) terminal .lte
@@ -127,7 +128,7 @@ describe('CommissionsService', () => {
       chains['appointments'] = mockChain();
       chains['appointments'].lte
         .mockResolvedValueOnce({ data: [], error: null }) // no pure-avulso
-        .mockResolvedValueOnce({ data: [{ id: 'appt-mix', usedSubscriptionCut: true }], error: null });
+        .mockResolvedValueOnce({ data: [{ id: 'appt-mix', usedSubscriptionCut: true, status: 'ATTENDED' }], error: null });
 
       chains['orders'] = mockChain();
       chains['orders'].lte.mockResolvedValue({ data: [], error: null }); // no products
@@ -170,7 +171,7 @@ describe('CommissionsService', () => {
       chains['appointments'] = mockChain();
       chains['appointments'].lte
         .mockResolvedValueOnce({ data: [], error: null })
-        .mockResolvedValueOnce({ data: [{ id: 'appt-s', usedSubscriptionCut: true }], error: null });
+        .mockResolvedValueOnce({ data: [{ id: 'appt-s', usedSubscriptionCut: true, status: 'ATTENDED' }], error: null });
       chains['orders'] = mockChain();
       chains['orders'].lte.mockResolvedValue({ data: [], error: null });
       seedSubscriptionOrders([
@@ -199,19 +200,21 @@ describe('CommissionsService', () => {
       expect(chains['payments']).toBeUndefined();
     });
 
-    it('attributes an appointment-linked product via the attended-appointment ids (scheduledAt), not orders.createdAt (M3)', async () => {
+    it('attributes an appointment-linked product by scheduledAt and counts it even when PAID-but-not-yet-ATTENDED (M3)', async () => {
       chains['appointments'] = mockChain();
       chains['appointments'].lte
         .mockResolvedValueOnce({ data: [], error: null }) // no avulso services
+        // appointment is PAID but still SCHEDULED (orders.pay sets isPaid without ATTENDED).
+        // The product attribution query (status ATTENDED OR isPaid) must still return it.
         .mockResolvedValueOnce({
-          data: [{ id: 'appt-prod', usedSubscriptionCut: false }],
+          data: [{ id: 'appt-prod', usedSubscriptionCut: false, status: 'SCHEDULED' }],
           error: null,
         });
 
       chains['orders'] = mockChain();
       chains['orders'].lte.mockResolvedValue({ data: [], error: null }); // no balcão sale
       // product is in an APPOINTMENT comanda → fetched via attended ids (.in), so it
-      // counts in the period of the ATTENDANCE, not the booking date.
+      // counts in the period of the ATTENDANCE/sale, not the booking date.
       chains['orders'].in.mockResolvedValue({
         data: [
           { professionalId: 'prof-A', items: [{ unitPrice: 2000, quantity: 1, itemType: 'PRODUCT' }] },
@@ -232,6 +235,8 @@ describe('CommissionsService', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].amountProducts).toBe(1000); // 2000 × 50%
+      // product attribution must include paid (not only ATTENDED) appointments
+      expect(chains['appointments'].or).toHaveBeenCalledWith('status.eq.ATTENDED,isPaid.eq.true');
     });
 
     it('returns an empty array when there is no attendance or sale in the period', async () => {
