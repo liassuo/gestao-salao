@@ -380,3 +380,84 @@ describe('SubscriptionsService — findAllSubscriptions expõe método e inadimp
     expect((list[0] as any).inadimplente).toBe(false);
   });
 });
+
+/**
+ * Gate de pagamento do ciclo espelhado para o frontend e para o consumo de crédito.
+ *
+ * Bug: o modal/app mostrava o corte coberto pelo plano (olhando só status=ACTIVE)
+ * enquanto a comanda cobrava cheio (getActiveClientSubscription exige ciclo pago).
+ * Correção: findClientSubscription anexa `currentCyclePaid` (mesma fonte da verdade,
+ * isCurrentCyclePaid) e useCut passa a barrar o débito de corte sem pagamento do
+ * ciclo (antes consumia 1 corte E cobrava cheio — corrupção de saldo).
+ */
+describe('SubscriptionsService — gate de pagamento do ciclo (currentCyclePaid + useCut)', () => {
+  // Ciclo vigente: começou ontem, vence daqui a ~1 mês — sempre "atual".
+  const recent = (offsetDays: number) =>
+    new Date(Date.now() + offsetDays * 86400000).toISOString();
+
+  function activeSubTables(withCyclePayment: boolean): Tables {
+    const tables = baseTables();
+    // Plano ilimitado (99): isola o teste no GATE de pagamento, sem depender do
+    // saldo de cortes (o join do plano no mock não traz cutsPerMonth pro useCut).
+    tables.subscription_plans = [
+      { id: 'plan-1', name: 'Ilimitado', price: 8000, cutsPerMonth: 99, discountPercent: 0, isActive: true },
+    ];
+    tables.client_subscriptions = [
+      {
+        id: 'sub-1',
+        clientId: 'client-1',
+        planId: 'plan-1',
+        status: 'ACTIVE',
+        startDate: recent(-1),
+        createdAt: recent(-1),
+        endDate: recent(29),
+        cutsUsedThisMonth: 1,
+        // Plano embutido na linha: o mock não resolve o join aninhado (faz
+        // passthrough da row), mesmo padrão do teste de findClientSubscription acima.
+        plan: { id: 'plan-1', name: 'Ilimitado', price: 8000, cutsPerMonth: 99 },
+      },
+    ];
+    tables.payments = withCyclePayment
+      ? [
+          {
+            id: 'pay-cycle',
+            subscriptionId: 'sub-1',
+            clientId: 'client-1',
+            method: 'CARD',
+            paidAt: recent(0),
+            createdAt: recent(0),
+          },
+        ]
+      : [];
+    tables.debts = [];
+    return tables;
+  }
+
+  it('findClientSubscription: currentCyclePaid=true quando há pagamento no ciclo', async () => {
+    const { service } = await buildService(activeSubTables(true));
+    const sub = await service.findClientSubscription('client-1');
+    expect(sub.status).toBe('ACTIVE');
+    expect((sub as any).currentCyclePaid).toBe(true);
+  });
+
+  it('findClientSubscription: currentCyclePaid=false quando o ciclo NÃO foi pago', async () => {
+    const { service } = await buildService(activeSubTables(false));
+    const sub = await service.findClientSubscription('client-1');
+    expect(sub.status).toBe('ACTIVE');
+    expect((sub as any).currentCyclePaid).toBe(false);
+  });
+
+  it('useCut: debita o corte quando o ciclo está pago', async () => {
+    const { service, state } = await buildService(activeSubTables(true));
+    const updated = await service.useCut('sub-1');
+    expect(updated.cutsUsedThisMonth).toBe(2); // 1 -> 2
+    expect(state.client_subscriptions[0].cutsUsedThisMonth).toBe(2);
+  });
+
+  it('useCut: BLOQUEIA e NÃO debita quando o ciclo não foi pago', async () => {
+    const { service, state } = await buildService(activeSubTables(false));
+    await expect(service.useCut('sub-1')).rejects.toThrow(/pagamento do ciclo/i);
+    // saldo intacto — não consumiu corte
+    expect(state.client_subscriptions[0].cutsUsedThisMonth).toBe(1);
+  });
+});

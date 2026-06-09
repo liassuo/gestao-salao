@@ -95,7 +95,7 @@ export async function getActiveClientPlan(
  *
  * Confirmação manual (admin) grava payment com paidAt → também satisfaz o gate.
  */
-async function isCurrentCyclePaid(
+export async function isCurrentCyclePaid(
   supabase: SupabaseService,
   row: { id: string; startDate?: string | null; createdAt?: string | null },
 ): Promise<boolean> {
