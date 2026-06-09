@@ -6,6 +6,7 @@ import type {
   ClientsReport,
   DebtsReport,
   CashRegisterReport,
+  AsaasReconciliation,
 } from '../types/reports';
 
 export type {
@@ -15,6 +16,7 @@ export type {
   ClientsReport,
   DebtsReport,
   CashRegisterReport,
+  AsaasReconciliation,
 };
 
 const buildParams = (startDate?: string, endDate?: string, professionalId?: string) => {
@@ -59,6 +61,12 @@ export const reportsService = {
   getCashRegisterReport: async (startDate?: string, endDate?: string): Promise<CashRegisterReport> => {
     const params = buildParams(startDate, endDate);
     const response = await api.get(`/reports/cash-register?${params}`);
+    return response.data;
+  },
+
+  getAsaasReconciliation: async (startDate?: string, endDate?: string): Promise<AsaasReconciliation> => {
+    const params = buildParams(startDate, endDate);
+    const response = await api.get(`/reports/asaas-reconciliation?${params}`);
     return response.data;
   },
 };

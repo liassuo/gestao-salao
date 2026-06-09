@@ -18,6 +18,7 @@ import {
   ArrowLeftRight,
   ClipboardList,
   Tag,
+  Scale,
 } from 'lucide-react';
 import type { Role } from '@/auth/roles';
 
@@ -101,6 +102,12 @@ export const menuItems: MenuItem[] = [
     icon: BarChart3,
     label: 'Relatórios',
     path: '/relatorios',
+    roles: ['ADMIN'],
+  },
+  {
+    icon: Scale,
+    label: 'Conciliação Asaas',
+    path: '/conciliacao-asaas',
     roles: ['ADMIN'],
   },
   // Estoque group
