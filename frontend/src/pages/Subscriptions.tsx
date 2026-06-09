@@ -32,23 +32,29 @@ import type {
   CreatePlanPayload,
   UpdatePlanPayload,
   SubscribeClientPayload,
-  SubscriptionStatus,
 } from '@/types';
 
 type Tab = 'plans' | 'subscriptions';
-type StatusFilter = 'ACTIVE' | 'PENDING_PAYMENT' | 'ENDED' | 'ALL';
+type StatusFilter = 'ACTIVE' | 'PENDING_CYCLE' | 'PENDING_PAYMENT' | 'ENDED' | 'ALL';
 
 const STATUS_FILTER_LABEL: Record<StatusFilter, string> = {
   ACTIVE: 'Ativas',
+  PENDING_CYCLE: 'Ciclo não pago',
   PENDING_PAYMENT: 'Aguardando',
   ENDED: 'Encerradas',
   ALL: 'Todas',
 };
 
-function matchesStatusFilter(status: SubscriptionStatus, filter: StatusFilter): boolean {
+// "Ciclo não pago": ACTIVE, não inadimplente, cujo ciclo vigente não foi pago
+// (currentCyclePaid===false). É um recorte derivado, não um status — por isso
+// recebe a assinatura inteira, não só o status.
+function matchesStatusFilter(sub: ClientSubscription, filter: StatusFilter): boolean {
   if (filter === 'ALL') return true;
-  if (filter === 'ENDED') return status === 'CANCELED' || status === 'EXPIRED' || status === 'SUSPENDED';
-  return status === filter;
+  if (filter === 'ENDED')
+    return sub.status === 'CANCELED' || sub.status === 'EXPIRED' || sub.status === 'SUSPENDED';
+  if (filter === 'PENDING_CYCLE')
+    return sub.status === 'ACTIVE' && !sub.inadimplente && sub.currentCyclePaid === false;
+  return sub.status === filter;
 }
 
 export function Subscriptions() {
@@ -98,7 +104,7 @@ export function Subscriptions() {
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const filteredSubscriptions = useMemo(() => {
     return allSubscriptions.filter((s) => {
-      if (!matchesStatusFilter(s.status, statusFilter)) return false;
+      if (!matchesStatusFilter(s, statusFilter)) return false;
       if (!normalizedQuery) return true;
       const name = (s.client?.name || '').toLowerCase();
       const phone = (s.client?.phone || '').toLowerCase();
@@ -107,10 +113,13 @@ export function Subscriptions() {
     });
   }, [allSubscriptions, statusFilter, normalizedQuery]);
   const statusCounts = useMemo(() => {
-    const counts: Record<StatusFilter, number> = { ACTIVE: 0, PENDING_PAYMENT: 0, ENDED: 0, ALL: allSubscriptions.length };
+    const counts: Record<StatusFilter, number> = { ACTIVE: 0, PENDING_CYCLE: 0, PENDING_PAYMENT: 0, ENDED: 0, ALL: allSubscriptions.length };
     for (const s of allSubscriptions) {
-      if (s.status === 'ACTIVE') counts.ACTIVE++;
-      else if (s.status === 'PENDING_PAYMENT') counts.PENDING_PAYMENT++;
+      if (s.status === 'ACTIVE') {
+        counts.ACTIVE++;
+        // Recorte aditivo: "Ciclo não pago" é um subconjunto das Ativas.
+        if (!s.inadimplente && s.currentCyclePaid === false) counts.PENDING_CYCLE++;
+      } else if (s.status === 'PENDING_PAYMENT') counts.PENDING_PAYMENT++;
       else if (s.status === 'CANCELED' || s.status === 'EXPIRED' || s.status === 'SUSPENDED') counts.ENDED++;
     }
     return counts;
@@ -439,7 +448,7 @@ export function Subscriptions() {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  {(['ACTIVE', 'PENDING_PAYMENT', 'ENDED', 'ALL'] as StatusFilter[]).map((filter) => {
+                  {(['ACTIVE', 'PENDING_CYCLE', 'PENDING_PAYMENT', 'ENDED', 'ALL'] as StatusFilter[]).map((filter) => {
                     const isActive = statusFilter === filter;
                     return (
                       <button

@@ -548,8 +548,11 @@ export class SubscriptionsService {
     const clientIds = Array.from(new Set(subs.map((s) => s.clientId).filter(Boolean)));
 
     // Última cobrança por assinatura (método/status). order/limit no mock são no-op,
-    // então escolhemos a mais recente por createdAt em memória.
+    // então escolhemos a mais recente por createdAt em memória. No mesmo batch
+    // acumulamos TODOS os paidAt por assinatura para derivar `currentCyclePaid` sem
+    // N+1 (mesma lógica de isCurrentCyclePaid, sem query por linha).
     const latestBySub = new Map<string, any>();
+    const paidAtsBySub = new Map<string, number[]>();
     if (subIds.length > 0) {
       const { data: pays } = await this.supabase
         .from('payments')
@@ -560,6 +563,14 @@ export class SubscriptionsService {
         const cur = latestBySub.get(p.subscriptionId);
         if (!cur || String(p.createdAt ?? '') >= String(cur.createdAt ?? '')) {
           latestBySub.set(p.subscriptionId, p);
+        }
+        if (p.paidAt) {
+          const ms = new Date(p.paidAt).getTime();
+          if (!Number.isNaN(ms)) {
+            const arr = paidAtsBySub.get(p.subscriptionId) ?? [];
+            arr.push(ms);
+            paidAtsBySub.set(p.subscriptionId, arr);
+          }
         }
       }
     }
@@ -578,6 +589,9 @@ export class SubscriptionsService {
       }
     }
 
+    const ONE_DAY = 24 * 60 * 60 * 1000;
+    const nowMs = Date.now();
+
     return subs.map((s) => {
       const lp = latestBySub.get(s.id) || null;
       const latestPayment = lp
@@ -591,7 +605,30 @@ export class SubscriptionsService {
         : null;
       const inadimplente =
         delinquentClients.has(s.clientId) || lp?.asaasStatus === 'OVERDUE';
-      return { ...s, latestPayment, inadimplente };
+
+      // currentCyclePaid: só faz sentido para ACTIVE NÃO vencida. Reproduz
+      // isCurrentCyclePaid a partir do batch — piso do ciclo = max(startDate,
+      // createdAt) - 1 dia. Vencida (endDate <= agora) → undefined: o cron de
+      // expiração ainda não suspendeu, mas não deve mostrar "em dia" (espelha o
+      // gate de preço que trata vencida como sem benefício).
+      let currentCyclePaid: boolean | undefined = undefined;
+      const expired = s.endDate && new Date(s.endDate).getTime() <= nowMs;
+      if (s.status === 'ACTIVE' && !expired) {
+        const startMs = s.startDate ? new Date(s.startDate).getTime() : 0;
+        const createdMs = s.createdAt ? new Date(s.createdAt).getTime() : 0;
+        const cycleStartMs = Math.max(startMs || 0, createdMs || 0);
+        const cycleFloorMs = cycleStartMs > 0 ? cycleStartMs - ONE_DAY : 0;
+        const paidAts = paidAtsBySub.get(s.id) ?? [];
+        currentCyclePaid = paidAts.some((ms) => ms >= cycleFloorMs);
+      }
+
+      // Status de pagamento consolidado (precedência: OVERDUE > PENDING > PAID).
+      let paymentStatus: 'PAID' | 'PENDING' | 'OVERDUE' | null = null;
+      if (inadimplente) paymentStatus = 'OVERDUE';
+      else if (s.status === 'ACTIVE' && currentCyclePaid !== undefined)
+        paymentStatus = currentCyclePaid ? 'PAID' : 'PENDING';
+
+      return { ...s, latestPayment, inadimplente, currentCyclePaid, paymentStatus };
     });
   }
 
