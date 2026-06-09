@@ -27,7 +27,14 @@ export class DashboardService {
     const todayEnd = `${todayStr}T23:59:59`;
 
     const now = new Date();
-    const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01T00:00:00`;
+    const monthStr = String(now.getMonth() + 1).padStart(2, '0');
+    const monthStart = `${now.getFullYear()}-${monthStr}-01T00:00:00`;
+    // Limite SUPERIOR do mês (último dia). Sem ele a janela ficava aberta até o
+    // infinito: um pré-pagamento de agendamento futuro grava businessDate no mês
+    // seguinte e vazava para a "Receita do mês" atual (e voltava a contar no mês que
+    // vem) — divergindo do Relatório de Vendas, que usa janela fechada.
+    const monthLastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const monthEnd = `${now.getFullYear()}-${monthStr}-${String(monthLastDay).padStart(2, '0')}T23:59:59`;
 
     // Paraleliza todas as queries independentes (era sequencial).
     // Receita do dia/mês passam a contar pelo DIA CONTÁBIL (businessDate, com
@@ -50,7 +57,7 @@ export class DashboardService {
         .lte('scheduledAt', todayEnd)
         .in('status', ['SCHEDULED', 'ATTENDED']),
       fetchPaymentsByBusinessDate(this.supabase, 'amount', todayStart, todayEnd),
-      fetchPaymentsByBusinessDate(this.supabase, 'amount', monthStart),
+      fetchPaymentsByBusinessDate(this.supabase, 'amount', monthStart, monthEnd),
       this.supabase
         .from('clients')
         .select('id', { count: 'exact', head: true }),
