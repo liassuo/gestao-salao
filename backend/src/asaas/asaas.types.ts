@@ -144,6 +144,14 @@ export interface AsaasCharge {
   paymentDate?: string | null;
   confirmedDate?: string | null;
   clientPaymentDate?: string | null;
+  // Quando a cobrança foi paga com cartão, o Asaas devolve APENAS os 4 últimos
+  // dígitos (creditCardNumber) e a bandeira — nunca o número completo. Usado para
+  // mostrar ao admin "qual cartão pagou?" na tela de Assinaturas.
+  creditCard?: {
+    creditCardNumber?: string | null; // só os 4 últimos dígitos (ex: "5431")
+    creditCardBrand?: string | null; // ex: "MASTERCARD", "VISA"
+    creditCardToken?: string | null;
+  } | null;
   invoiceUrl?: string;
   bankSlipUrl?: string;
   invoiceNumber?: string;
