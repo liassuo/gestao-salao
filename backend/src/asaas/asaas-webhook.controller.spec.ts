@@ -759,6 +759,111 @@ describe('AsaasWebhookController (e2e)', () => {
     });
   });
 
+  describe('Reconciliação fallback — não gravar receita sem liquidação (H-B)', () => {
+    it('fallback NÃO recria payment (receita fantasma) quando a cobrança real (getCharge) está PENDING', async () => {
+      // Cobrança recorrente chega sem payment local. O corpo diz CONFIRMED, mas a
+      // cobrança real no Asaas ainda está PENDING. Sem o gate, o fallback inseria um
+      // payment com asaasStatus do CORPO (RECEIVED/CONFIRMED) → contava como receita no
+      // dashboard/caixa MESMO sem a assinatura renovar (o gate de renovação roda só
+      // depois). Resultado: receita fantasma sem pagamento — a classe que o time fechou.
+      const { controller, state } = await buildController(
+        {
+          client_subscriptions: [
+            { id: 'sub-1', clientId: 'client-1', status: 'PENDING_PAYMENT', endDate: null },
+          ],
+          payments: [], // sumiu → cai no fallback
+          cash_registers: [{ id: 'caixa-1', isOpen: true, date: '2026-05-07' }],
+          users: [{ id: 'admin-1', role: 'ADMIN' }], // fallback exige admin p/ registeredBy
+        },
+        // Corpo diz CONFIRMED, mas a fonte da verdade (getCharge) está PENDING.
+        { getCharge: async () => ({ id: 'asaas_pay_888', status: 'PENDING', value: 79.9 }) },
+      );
+
+      await controller.handleWebhook(
+        paymentEvent(
+          AsaasWebhookEvent.PAYMENT_CONFIRMED,
+          basePaymentData({
+            id: 'asaas_pay_888',
+            status: 'CONFIRMED',
+            externalReference: 'sub-1',
+            value: 79.9,
+          }),
+        ),
+        'test-token',
+      );
+
+      // Cobrança não liquidada → nada de payment fantasma, nada de renovação.
+      expect(state.payments).toHaveLength(0);
+      expect(state.client_subscriptions[0].status).toBe('PENDING_PAYMENT');
+    });
+
+    it('fallback de AGENDAMENTO também NÃO recria payment quando a cobrança (getCharge) está PENDING', async () => {
+      // Mesma classe de receita fantasma, no ramo irmão (agendamento). Cobrança de
+      // agendamento chega sem payment local; corpo diz CONFIRMED mas getCharge está
+      // PENDING → não pode gravar payment (que conta no caixa/dashboard).
+      const { controller, state } = await buildController(
+        {
+          appointments: [
+            { id: 'appt-1', clientId: 'client-1', scheduledAt: '2026-05-07T15:00:00', isPaid: false, status: 'PENDING_PAYMENT' },
+          ],
+          payments: [], // sumiu → cai no fallback de agendamento
+          cash_registers: [{ id: 'caixa-1', isOpen: true, date: '2026-05-07' }],
+          users: [{ id: 'admin-1', role: 'ADMIN' }],
+        },
+        { getCharge: async () => ({ id: 'asaas_pay_appt', status: 'PENDING', value: 50 }) },
+      );
+
+      await controller.handleWebhook(
+        paymentEvent(
+          AsaasWebhookEvent.PAYMENT_CONFIRMED,
+          basePaymentData({
+            id: 'asaas_pay_appt',
+            status: 'CONFIRMED',
+            externalReference: 'appt-1',
+            value: 50,
+          }),
+        ),
+        'test-token',
+      );
+
+      expect(state.payments).toHaveLength(0);
+      expect(state.appointments[0].isPaid).toBe(false);
+    });
+
+    it('fallback recria payment normalmente quando a cobrança ESTÁ liquidada (getCharge CONFIRMED)', async () => {
+      // Caminho legítimo preservado: cliente pagou de verdade, payment local sumiu
+      // (race/falha de DB), getCharge confirma a liquidação → recria e renova.
+      const { controller, state } = await buildController(
+        {
+          client_subscriptions: [
+            { id: 'sub-1', clientId: 'client-1', status: 'PENDING_PAYMENT', endDate: null },
+          ],
+          payments: [],
+          cash_registers: [{ id: 'caixa-1', isOpen: true, date: '2026-05-07' }],
+          users: [{ id: 'admin-1', role: 'ADMIN' }],
+        },
+        { getCharge: async () => ({ id: 'asaas_pay_777', status: 'CONFIRMED', value: 79.9 }) },
+      );
+
+      await controller.handleWebhook(
+        paymentEvent(
+          AsaasWebhookEvent.PAYMENT_CONFIRMED,
+          basePaymentData({
+            id: 'asaas_pay_777',
+            status: 'CONFIRMED',
+            externalReference: 'sub-1',
+            value: 79.9,
+          }),
+        ),
+        'test-token',
+      );
+
+      expect(state.payments).toHaveLength(1);
+      expect(state.payments[0].asaasPaymentId).toBe('asaas_pay_777');
+      expect(state.client_subscriptions[0].status).toBe('ACTIVE');
+    });
+  });
+
   describe('Segurança', () => {
     it('rejeita webhook com token inválido', async () => {
       const { controller } = await buildController({});

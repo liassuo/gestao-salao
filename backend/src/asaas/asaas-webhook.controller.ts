@@ -177,6 +177,18 @@ export class AsaasWebhookController {
       }
       if (externalRef || asaasSubId) {
         if (linkedSub) {
+          // H-B: não recriar o payment (que conta como receita em dashboard/caixa/comissão)
+          // sem a cobrança estar REALMENTE liquidada no Asaas. O corpo do webhook não é
+          // fonte da verdade. Sem este gate, um evento forjado/reentregue/mal-classificado
+          // de cobrança recorrente gravava receita fantasma com o status do CORPO, mesmo
+          // sem renovar a assinatura (o gate de renovação só roda depois do insert).
+          const fallbackSettled = await this.isChargeSettled(asaasPaymentId, status);
+          if (!fallbackSettled) {
+            this.logger.warn(
+              `Webhook fallback: cobrança ${asaasPaymentId} (assinatura ${linkedSub.id}) NÃO liquidada no Asaas — payment não recriado (evita receita sem pagamento). Cron de reconciliação cobre se liquidar depois.`,
+            );
+            return;
+          }
           const billingType = paymentData.billingType || 'PIX';
           const localMethod = billingType === 'CREDIT_CARD' ? 'CARD' : 'PIX';
           const valueReais = Number(paymentData.value || 0);
@@ -263,6 +275,17 @@ export class AsaasWebhookController {
             .maybeSingle();
 
           if (linkedAppt) {
+            // H-B (mesmo gate do ramo de assinatura): não recriar o payment de
+            // agendamento — que também conta como receita em caixa/dashboard — sem a
+            // cobrança estar liquidada no Asaas. Senão um evento forjado/reentregue/
+            // mal-classificado grava receita fantasma sem pagamento real.
+            const apptFallbackSettled = await this.isChargeSettled(asaasPaymentId, status);
+            if (!apptFallbackSettled) {
+              this.logger.warn(
+                `Webhook fallback (agendamento): cobrança ${asaasPaymentId} (agendamento ${(linkedAppt as any).id}) NÃO liquidada no Asaas — payment não recriado (evita receita sem pagamento).`,
+              );
+              return;
+            }
             const billingType = paymentData.billingType || 'PIX';
             const localMethod = billingType === 'CREDIT_CARD' ? 'CARD' : 'PIX';
             const amountCentavos = Math.round(Number(paymentData.value || 0) * 100);
