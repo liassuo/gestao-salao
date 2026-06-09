@@ -32,7 +32,6 @@ import type {
   CreatePlanPayload,
   UpdatePlanPayload,
   SubscribeClientPayload,
-  SubscriptionStatus,
 } from '@/types';
 
 type Tab = 'plans' | 'subscriptions';
