@@ -68,9 +68,17 @@ describe('CommissionsService', () => {
     it('combines avulso×rate, subscription pote (50%/fichas) and products×rate into one breakdown per professional', async () => {
       chains['appointments'] = mockChain();
       chains['appointments'].lte
-        // 1) regular (avulso) query terminal
+        // 1) regular (avulso) query terminal — serviço avulso vem dos order_items
+        //    SERVICE da comanda (não de appointment.totalPrice, que mistura produto).
         .mockResolvedValueOnce({
-          data: [{ professionalId: 'prof-A', totalPrice: 5000 }],
+          data: [
+            {
+              professionalId: 'prof-A',
+              orders: [
+                { status: 'PAID', order_items: [{ unitPrice: 5000, quantity: 1, itemType: 'SERVICE' }] },
+              ],
+            },
+          ],
           error: null,
         })
         // 2) subscription appointment ids terminal
@@ -165,6 +173,98 @@ describe('CommissionsService', () => {
       // extra pago 5000 → 50% = 2500 (antes ia pro pote e não rendia taxa)
       expect(a.amountServices).toBe(2500);
       expect(a.amount).toBe(7500);
+    });
+
+    it('does NOT double-count a product that sits on a regular appointment comanda (H-A)', async () => {
+      // Bug: o serviço avulso somava appointment.totalPrice (que JÁ inclui o produto,
+      // pois orders.addItem faz appointment.totalPrice = order.totalAmount) no bucket
+      // de serviços, e o mesmo produto entrava de novo no bucket de produtos → produto
+      // contado 2×. Correção: serviço avulso vem só dos order_items SERVICE.
+      chains['appointments'] = mockChain();
+      chains['appointments'].lte
+        // 1) regular (avulso): corte 5000 (SERVICE) + pomada 3000 (PRODUCT) na comanda.
+        .mockResolvedValueOnce({
+          data: [
+            {
+              professionalId: 'prof-A',
+              totalPrice: 8000, // 5000 + 3000 — NÃO deve ser usado para serviço
+              orders: [
+                {
+                  status: 'PAID',
+                  order_items: [
+                    { unitPrice: 5000, quantity: 1, itemType: 'SERVICE' },
+                    { unitPrice: 3000, quantity: 1, itemType: 'PRODUCT' },
+                  ],
+                },
+              ],
+            },
+          ],
+          error: null,
+        })
+        // 2) attended (atribui o produto): o mesmo agendamento avulso
+        .mockResolvedValueOnce({
+          data: [{ id: 'appt-r', usedSubscriptionCut: false, status: 'ATTENDED' }],
+          error: null,
+        });
+
+      chains['orders'] = mockChain();
+      // balcão: nenhum
+      chains['orders'].lte.mockResolvedValue({ data: [], error: null });
+      // comanda do agendamento (linked, PAID): produto 3000 → bucket de produtos (1×)
+      chains['orders'].in.mockResolvedValue({
+        data: [{ professionalId: 'prof-A', items: [{ unitPrice: 3000, quantity: 1, itemType: 'PRODUCT' }] }],
+        error: null,
+      });
+
+      chains['professionals'] = mockChain();
+      chains['professionals'].single.mockResolvedValue({
+        data: { id: 'prof-A', commissionRate: 50, branchId: null },
+        error: null,
+      });
+
+      const result = await service.computeCommissionBreakdownForPeriod(
+        '2026-06-01T00:00:00',
+        '2026-06-30T23:59:59',
+      );
+
+      expect(result).toHaveLength(1);
+      const a = result[0];
+      expect(a.amountServices).toBe(2500); // 5000 (SÓ o corte) × 50%
+      expect(a.amountProducts).toBe(1500); // 3000 × 50% — contado UMA vez
+      expect(a.amount).toBe(4000); // não 5500 (produto contado 2×)
+    });
+
+    it('keeps service commission for a LEGACY avulso appointment with no backing order (pre-comanda automática)', async () => {
+      // Agendamentos atendidos antes da comanda automática (~2026-04-01) não têm
+      // order/order_items. A comissão de serviço deve cair no fallback de totalPrice —
+      // senão períodos históricos mostram comissão de serviço 0 (regressão).
+      chains['appointments'] = mockChain();
+      chains['appointments'].lte
+        // regular (avulso) legado: totalPrice setado, orders vazio (PostgREST devolve [])
+        .mockResolvedValueOnce({
+          data: [{ professionalId: 'prof-A', totalPrice: 6000, orders: [] }],
+          error: null,
+        })
+        // attended: nenhum (sem produtos)
+        .mockResolvedValueOnce({ data: [], error: null });
+
+      chains['orders'] = mockChain();
+      chains['orders'].lte.mockResolvedValue({ data: [], error: null });
+      chains['orders'].in.mockResolvedValue({ data: [], error: null });
+
+      chains['professionals'] = mockChain();
+      chains['professionals'].single.mockResolvedValue({
+        data: { id: 'prof-A', commissionRate: 50, branchId: null },
+        error: null,
+      });
+
+      const result = await service.computeCommissionBreakdownForPeriod(
+        '2026-02-01T00:00:00',
+        '2026-02-28T23:59:59',
+      );
+
+      expect(result).toHaveLength(1);
+      expect(result[0].amountServices).toBe(3000); // 6000 × 50% via fallback totalPrice
     });
 
     it('uses subscriptionRevenueOverride for the pote when provided', async () => {

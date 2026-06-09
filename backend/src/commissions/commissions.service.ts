@@ -189,10 +189,16 @@ export class CommissionsService {
       amount: number;
     }>
   > {
-    // 1) Serviços avulsos (appointments sem assinatura)
+    // 1) Serviços avulsos (appointments sem assinatura). A comissão de serviço sai dos
+    //    order_items SERVICE da comanda — NÃO de appointment.totalPrice. totalPrice mistura
+    //    serviço + produto (orders.addItem faz appointment.totalPrice = order.totalAmount,
+    //    somando QUALQUER item), então usá-lo aqui contava o produto 2× (uma no bucket de
+    //    serviços via totalPrice e outra no bucket de produtos abaixo).
     const { data: regularAppointments } = await this.supabase
       .from('appointments')
-      .select('professionalId, totalPrice')
+      .select(
+        'professionalId, totalPrice, orders(status, order_items(unitPrice, quantity, itemType, consumedSubscriptionCut))',
+      )
       .eq('status', 'ATTENDED')
       .neq('usedSubscriptionCut', true)
       .gte('scheduledAt', startStr)
@@ -273,7 +279,24 @@ export class CommissionsService {
     };
 
     for (const appt of regularAppointments || []) {
-      getEntry(appt.professionalId).services += appt.totalPrice;
+      const orders = (appt as any).orders || [];
+      let serviceTotal = 0;
+      if (orders.length === 0) {
+        // Agendamento legado (anterior à comanda automática, ~2026-04-01): não tem
+        // order/order_items. Mantém o comportamento antigo via totalPrice — esses
+        // atendimentos não têm produto na comanda, então não há dupla contagem.
+        serviceTotal = (appt as any).totalPrice || 0;
+      } else {
+        for (const ord of orders) {
+          if (ord.status === 'CANCELED') continue; // comanda cancelada não rende comissão
+          for (const it of ord.order_items || []) {
+            if (it.itemType !== 'SERVICE') continue; // produto entra no bucket de produtos
+            if (it.consumedSubscriptionCut) continue; // coberto pelo plano não é avulso (defensivo)
+            serviceTotal += (it.unitPrice || 0) * (it.quantity || 1);
+          }
+        }
+      }
+      getEntry((appt as any).professionalId).services += serviceTotal;
     }
 
     // Pote de fichas (item COBERTO) + extras pagos (item NÃO coberto → avulso × taxa).
