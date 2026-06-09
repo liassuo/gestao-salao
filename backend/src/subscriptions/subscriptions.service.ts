@@ -1819,6 +1819,110 @@ export class SubscriptionsService {
     return { subscription: updated, pixData, invoiceUrl };
   }
 
+  /**
+   * ADMIN: gera um LINK de pagamento Asaas (invoiceUrl) para o cliente renovar
+   * uma assinatura encerrada/vencida/aguardando, sem login no app. O admin manda
+   * o link pelo WhatsApp; o cliente abre e paga (PIX avulso OU cartão — que fica
+   * recorrente). A assinatura NÃO é ativada aqui: vira PENDING_PAYMENT e só o
+   * webhook do Asaas a ativa quando o pagamento for confirmado. Nada entra no
+   * caixa ao gerar o link (paidAt:null) — mesma blindagem do fluxo /me/reactivate.
+   *
+   * billingType UNDEFINED → checkout aberto (cliente escolhe PIX ou cartão no
+   * link). Como cria uma ASSINATURA recorrente Asaas, pagamento no cartão passa a
+   * cobrar automático nos próximos meses; PIX é mensal manual.
+   */
+  async renewSubscriptionViaAsaas(subscriptionId: string) {
+    if (!this.asaasService.configured) {
+      throw new BadRequestException('Integração Asaas não está configurada.');
+    }
+    const subscription = await this.findSubscription(subscriptionId);
+
+    // Só renova quem não está ativo. ACTIVE tem o fluxo próprio (não recobrar quem
+    // já está em dia por aqui).
+    const renewableStatuses = ['SUSPENDED', 'EXPIRED', 'CANCELED', 'PENDING_PAYMENT'];
+    if (!renewableStatuses.includes(subscription.status)) {
+      throw new BadRequestException(
+        `Assinatura com status ${subscription.status} não pode ser renovada por link.`,
+      );
+    }
+
+    const now = new Date();
+    const newEndDate = new Date(now);
+    newEndDate.setMonth(newEndDate.getMonth() + 1);
+    const prevStatus = subscription.status;
+
+    // Aguardando pagamento + novo ciclo. Ativação só vem pelo webhook.
+    await this.supabase
+      .from('client_subscriptions')
+      .update({
+        status: 'PENDING_PAYMENT',
+        startDate: now.toISOString(),
+        endDate: newEndDate.toISOString(),
+        cutsUsedThisMonth: 0,
+        canceledAt: null,
+        updatedAt: now.toISOString(),
+      })
+      .eq('id', subscription.id);
+
+    try {
+      const asaasCustomerId = await this.ensureAsaasCustomer(subscription.clientId);
+
+      // billingType UNDEFINED = link aberto (PIX ou cartão). Assinatura recorrente
+      // → cartão fica automático nos próximos meses.
+      const charge = await this.createRecurringSubscriptionAndFirstCharge({
+        clientSubscriptionId: subscription.id,
+        customer: asaasCustomerId,
+        billingType: AsaasBillingType.UNDEFINED,
+        valueReais: this.asaasService.centavosToReais(subscription.plan?.price ?? 0),
+        description: `Renovação: Plano ${subscription.plan?.name ?? ''}`.trim(),
+      });
+
+      const invoiceUrl = charge.invoiceUrl || null;
+
+      // Idempotência: não duplica payment se o webhook já criou um durante o retry.
+      const { data: existingPay } = await this.supabase
+        .from('payments')
+        .select('id')
+        .eq('asaasPaymentId', charge.id)
+        .maybeSingle();
+      if (!existingPay) {
+        await this.supabase.from('payments').insert({
+          id: randomUUID(),
+          clientId: subscription.clientId,
+          subscriptionId: subscription.id,
+          amount: subscription.plan?.price ?? 0,
+          method: asaasBillingToLocalPaymentMethod(charge.billingType || AsaasBillingType.PIX),
+          registeredBy: await this.resolveSystemRegisteredBy(),
+          notes: `Renovação via link Asaas #${charge.id}`,
+          asaasPaymentId: charge.id,
+          asaasStatus: charge.status,
+          paidAt: null, // NÃO pago — só o webhook marca pago e lança no caixa
+          invoiceUrl,
+          bankSlipUrl: charge.bankSlipUrl || null,
+          createdAt: now.toISOString(),
+          updatedAt: now.toISOString(),
+        });
+      }
+
+      return {
+        invoiceUrl,
+        client: {
+          name: subscription.client?.name ?? null,
+          phone: subscription.client?.phone ?? null,
+        },
+        planName: subscription.plan?.name ?? null,
+      };
+    } catch (e) {
+      // Falha ao gerar cobrança → reverte ao status anterior para permitir retry.
+      await this.supabase
+        .from('client_subscriptions')
+        .update({ status: prevStatus, updatedAt: now.toISOString() })
+        .eq('id', subscription.id);
+      const detail = e instanceof Error ? e.message : String(e);
+      throw new BadRequestException(`Erro ao gerar link de renovação. Tente novamente. (${detail})`);
+    }
+  }
+
   async forceCharge(subscriptionId: string) {
     const subscription = await this.findSubscription(subscriptionId);
     const plan = subscription.plan;

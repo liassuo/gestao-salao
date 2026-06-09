@@ -430,6 +430,33 @@ describe('SubscriptionsService — findAllSubscriptions expõe método e inadimp
 });
 
 /**
+ * Renovação via link Asaas (admin): gera invoiceUrl pro cliente pagar remoto.
+ * Salvaguardas: não ativa nem lança no caixa ao gerar o link; só renova status
+ * não-ativos (ACTIVE tem fluxo próprio); exige Asaas configurado.
+ */
+describe('SubscriptionsService — renovação via link Asaas (renewSubscriptionViaAsaas)', () => {
+  it('rejeita quando o Asaas não está configurado', async () => {
+    const tables = baseTables();
+    tables.client_subscriptions = [
+      { id: 'sub-1', clientId: 'client-1', planId: 'plan-1', status: 'SUSPENDED', plan: { id: 'plan-1', name: 'Mensal', price: 8000 } },
+    ];
+    const { service } = await buildService(tables, false); // asaasConfigured=false
+    await expect(service.renewSubscriptionViaAsaas('sub-1')).rejects.toThrow(/Asaas não está configurada/i);
+  });
+
+  it('rejeita renovar uma assinatura ACTIVE (não recobra quem está em dia por aqui)', async () => {
+    const tables = baseTables();
+    tables.client_subscriptions = [
+      { id: 'sub-1', clientId: 'client-1', planId: 'plan-1', status: 'ACTIVE', endDate: '2026-12-01T00:00:00', plan: { id: 'plan-1', name: 'Mensal', price: 8000 } },
+    ];
+    const { service } = await buildService(tables, true); // asaasConfigured=true
+    await expect(service.renewSubscriptionViaAsaas('sub-1')).rejects.toThrow(/não pode ser renovada/i);
+    // status inalterado (não virou PENDING_PAYMENT)
+    expect(tables.client_subscriptions[0].status).toBe('ACTIVE');
+  });
+});
+
+/**
  * Gate de pagamento do ciclo espelhado para o frontend e para o consumo de crédito.
  *
  * Bug: o modal/app mostrava o corte coberto pelo plano (olhando só status=ACTIVE)

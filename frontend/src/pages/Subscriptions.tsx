@@ -13,6 +13,7 @@ import {
   useReopenSubscriptionPix,
   useRegenerateSubscriptionPix,
   useConfirmSubscriptionPayment,
+  useRenewViaAsaas,
   useDeleteSubscription,
   useClients,
   getApiErrorMessage,
@@ -24,6 +25,7 @@ import {
   SubscribeClientModal,
   ConfirmCancelModal,
   ReconcileAsaasModal,
+  RenewLinkModal,
 } from '@/components/subscriptions';
 import { Modal, SkeletonTable, useToast, PixPaymentModal, ConfirmModal } from '@/components/ui';
 import type {
@@ -75,8 +77,14 @@ export function Subscriptions() {
   const [confirmingPayment, setConfirmingPayment] = useState<ClientSubscription | null>(null);
   const [confirmMethod, setConfirmMethod] = useState<'CASH' | 'PIX' | 'CARD'>('CASH');
   const [deletingSubscription, setDeletingSubscription] = useState<ClientSubscription | null>(null);
-  const [reactivatingSubscription, setReactivatingSubscription] = useState<ClientSubscription | null>(null);
-  const [reactivateMethod, setReactivateMethod] = useState<'CASH' | 'PIX' | 'CARD'>('CASH');
+  // Renovação via link Asaas: ao clicar, o backend gera o invoiceUrl e abrimos um
+  // modal com o link + botão WhatsApp. A assinatura só ativa quando o cliente paga.
+  const [renewLinkData, setRenewLinkData] = useState<{
+    invoiceUrl: string;
+    clientName: string;
+    clientPhone: string | null;
+    planName: string;
+  } | null>(null);
 
   // Pix Payment state
   const [pixModalData, setPixModalData] = useState<{ pixData: any; amount: number; description?: string; subscriptionId?: string } | null>(null);
@@ -96,6 +104,7 @@ export function Subscriptions() {
   const reopenPix = useReopenSubscriptionPix();
   const regeneratePix = useRegenerateSubscriptionPix();
   const confirmPayment = useConfirmSubscriptionPayment();
+  const renewViaAsaas = useRenewViaAsaas();
   const deleteSubscription = useDeleteSubscription();
   const toast = useToast();
 
@@ -291,20 +300,22 @@ export function Subscriptions() {
     }
   };
 
-  const handleReactivate = async () => {
-    if (!reactivatingSubscription) return;
-    const sub = reactivatingSubscription;
+  // Renovar via Asaas: gera o link de pagamento (PIX ou cartão) e abre o modal
+  // pro admin mandar pelo WhatsApp. Não ativa nem lança no caixa — só o webhook
+  // ativa quando o cliente paga.
+  const handleRenewViaAsaas = async (sub: ClientSubscription) => {
     try {
-      // Reativação no balcão: pagamento recebido agora → ativa e cai no caixa de
-      // hoje em uma ação só (mesmo fluxo da nova assinatura). Sem gerar PIX.
-      await subscribeClient.mutateAsync({
-        clientId: sub.client.id,
-        planId: sub.plan.id,
-        paymentMethod: reactivateMethod,
+      const result = await renewViaAsaas.mutateAsync(sub.id);
+      if (!result.invoiceUrl) {
+        toast.error('Erro', 'Não foi possível gerar o link de pagamento. Tente novamente.');
+        return;
+      }
+      setRenewLinkData({
+        invoiceUrl: result.invoiceUrl,
+        clientName: result.client?.name || sub.client?.name || 'cliente',
+        clientPhone: result.client?.phone || sub.client?.phone || null,
+        planName: result.planName || sub.plan?.name || 'Plano',
       });
-      setReactivatingSubscription(null);
-      setReactivateMethod('CASH');
-      toast.success('Assinatura reativada', 'O pagamento foi registrado no caixa de hoje.');
     } catch (err) {
       toast.error('Erro', getApiErrorMessage(err));
     }
@@ -484,7 +495,7 @@ export function Subscriptions() {
                 onReopenPix={handleReopenPix}
                 onConfirmPayment={setConfirmingPayment}
                 onDelete={setDeletingSubscription}
-                onReactivate={setReactivatingSubscription}
+                onReactivate={handleRenewViaAsaas}
                 isLoading={
                   cancelSubscription.isPending ||
                   useCut.isPending ||
@@ -651,51 +662,15 @@ export function Subscriptions() {
         </div>
       </ConfirmModal>
 
-      {/* Reativar assinatura encerrada */}
-      <ConfirmModal
-        isOpen={!!reactivatingSubscription}
-        onClose={() => {
-          setReactivatingSubscription(null);
-          setReactivateMethod('CASH');
-        }}
-        onConfirm={handleReactivate}
-        title="Reativar assinatura"
-        message={
-          reactivatingSubscription
-            ? `Reativar a assinatura de ${reactivatingSubscription.client?.name || 'cliente'} no plano ${reactivatingSubscription.plan?.name || ''} (${(reactivatingSubscription.plan?.price ? (reactivatingSubscription.plan.price / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '')}). Use quando o cliente já pagou no balcão — a assinatura é ativada e o valor entra no caixa de hoje.`
-            : ''
-        }
-        confirmLabel="Reativar"
-        variant="info"
-        isLoading={subscribeClient.isPending}
-      >
-        <div>
-          <label className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">
-            Como foi pago?
-          </label>
-          <div className="grid grid-cols-3 gap-2">
-            {([
-              { value: 'CASH', label: 'Dinheiro' },
-              { value: 'PIX', label: 'PIX' },
-              { value: 'CARD', label: 'Cartão' },
-            ] as const).map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                disabled={subscribeClient.isPending}
-                onClick={() => setReactivateMethod(opt.value)}
-                className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                  reactivateMethod === opt.value
-                    ? 'border-[#8B6914] bg-[#C8923A]/20 text-[var(--text-primary)]'
-                    : 'border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--hover-bg)]'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </ConfirmModal>
+      {/* Renovação via link Asaas: link gerado pro cliente pagar (PIX ou cartão). */}
+      <RenewLinkModal
+        isOpen={!!renewLinkData}
+        onClose={() => setRenewLinkData(null)}
+        clientName={renewLinkData?.clientName || 'cliente'}
+        clientPhone={renewLinkData?.clientPhone || null}
+        planName={renewLinkData?.planName || 'Plano'}
+        renewUrl={renewLinkData?.invoiceUrl || ''}
+      />
 
       {/* Excluir do histórico */}
       <ConfirmModal

@@ -5,3 +5,4 @@ export { SubscribeClientModal } from './SubscribeClientModal';
 export { ConfirmCancelModal } from './ConfirmCancelModal';
 export { SubscriptionStatusBanner } from './SubscriptionStatusBanner';
 export { ReconcileAsaasModal } from './ReconcileAsaasModal';
+export { RenewLinkModal } from './RenewLinkModal';
