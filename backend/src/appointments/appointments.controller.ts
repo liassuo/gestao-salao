@@ -185,13 +185,10 @@ export class AppointmentsController {
       source: 'CLIENT',
     });
 
-    // Usar crédito de assinatura se solicitado
-    if (dto.useSubscriptionCut) {
-      const subscription = await this.subscriptionsService.getMySubscription(req.user.id);
-      if (subscription) {
-        await this.subscriptionsService.useCut(subscription.id);
-      }
-    }
+    // O débito dos cortes da assinatura é feito DENTRO de create() (RPC
+    // debit_subscription_cuts), na quantidade real de serviços cobertos consumidos.
+    // Não debitar aqui também — antes este bloco debitava 1 corte fixo, gastando 1 só
+    // mesmo com vários serviços cobertos na mesma reserva (M5).
 
     // Push notification (fire-and-forget)
     this.notificationsService.notifyNewBooking(appointment).catch(() => {});

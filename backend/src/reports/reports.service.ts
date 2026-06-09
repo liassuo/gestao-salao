@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { SupabaseService } from '../supabase/supabase.service';
 import { fetchPaymentsByBusinessDate } from '../common/business-date.helper';
 import { CommissionsService } from '../commissions/commissions.service';
+import { CashRegisterService } from '../cash-register/cash-register.service';
 
 export interface ReportFilters {
   startDate: string; // "YYYY-MM-DDT00:00:00"
@@ -14,6 +15,7 @@ export class ReportsService {
   constructor(
     private readonly supabase: SupabaseService,
     private readonly commissionsService: CommissionsService,
+    private readonly cashRegisterService: CashRegisterService,
   ) {}
 
   async getSalesReport(filters: ReportFilters) {
@@ -70,22 +72,12 @@ export class ReportsService {
   async getProfessionalReport(filters: ReportFilters) {
     const { startDate, endDate, professionalId } = filters;
 
-    let query = this.supabase
-      .from('professionals')
-      .select('id, name, commissionRate')
-      .eq('isActive', true);
-
-    if (professionalId) {
-      query = query.eq('id', professionalId);
-    }
-
-    const { data: professionals } = await query;
-
     // Comissão usa a MESMA regra da tela Comissões (avulso×taxa + pote de assinatura
     // 50%/fichas + produtos×taxa), para os números baterem entre as duas telas. Antes
     // este relatório fazia receita×taxa, ignorando pote e produtos — divergia. O pote é
     // GLOBAL (depende das fichas de todos os profissionais), então calculamos uma única
-    // vez e indexamos por profissional.
+    // vez e indexamos por profissional. Também serve para saber QUEM teve atividade no
+    // período.
     const commissionBreakdown =
       await this.commissionsService.computeCommissionBreakdownForPeriod(
         startDate,
@@ -93,6 +85,22 @@ export class ReportsService {
       );
     const commissionByProfessional = new Map(
       commissionBreakdown.map((b) => [b.professionalId, b.amount]),
+    );
+
+    // Inclui profissionais ATIVOS + qualquer um com atendimento/venda no período (mesmo
+    // desativado depois) — senão a receita/comissão de um profissional desligado sumia
+    // do relatório, divergindo do caixa/comissões (M2).
+    let query = this.supabase
+      .from('professionals')
+      .select('id, name, commissionRate, isActive');
+
+    if (professionalId) {
+      query = query.eq('id', professionalId);
+    }
+
+    const { data: allProfessionals } = await query;
+    const professionals = (allProfessionals || []).filter(
+      (p) => p.isActive || commissionByProfessional.has(p.id),
     );
 
     const result = [];
@@ -337,7 +345,25 @@ export class ReportsService {
       .lte('date', endDate)
       .order('date', { ascending: false });
 
-    const summary = (registers || []).reduce(
+    // Caixa AINDA ABERTO tem totalCash/Pix/Card/Revenue nulos (só preenchidos no
+    // fechamento). Recalcula em tempo real para o relatório não subnotificar o dia
+    // corrente — senão "Total Faturado" do mês fica abaixo do real (Dashboard/Vendas,
+    // que contam payments, já mostram a receita do dia aberto).
+    const enrichedRegisters = await Promise.all(
+      (registers || []).map(async (r) => {
+        if (!r.isOpen) return r;
+        const totals = await this.cashRegisterService.calculateDailyTotals(r.date);
+        return {
+          ...r,
+          totalCash: totals.cash,
+          totalPix: totals.pix,
+          totalCard: totals.card,
+          totalRevenue: totals.total,
+        };
+      }),
+    );
+
+    const summary = enrichedRegisters.reduce(
       (acc, r) => ({
         totalCash: acc.totalCash + (r.totalCash || 0),
         totalPix: acc.totalPix + (r.totalPix || 0),
@@ -351,10 +377,10 @@ export class ReportsService {
     return {
       summary: {
         ...summary,
-        daysCount: (registers || []).length,
-        averageDaily: (registers || []).length > 0 ? Math.round(summary.totalRevenue / (registers || []).length) : 0,
+        daysCount: enrichedRegisters.length,
+        averageDaily: enrichedRegisters.length > 0 ? Math.round(summary.totalRevenue / enrichedRegisters.length) : 0,
       },
-      registers: registers || [],
+      registers: enrichedRegisters,
     };
   }
 }
