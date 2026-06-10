@@ -173,9 +173,21 @@ export function ClientSubscriptionTable({
                     </div>
                   </td>
                   <td className="whitespace-nowrap px-4 py-4">
-                    <span className="text-sm text-[var(--text-secondary)]">
-                      {formatDate(subscription.startDate)}
-                    </span>
+                    <div className="flex flex-col">
+                      {/* Início do CICLO atual (muda todo mês) */}
+                      <span className="text-sm text-[var(--text-secondary)]">
+                        {formatDate(subscription.startDate)}
+                      </span>
+                      {/* Desde quando o cliente assina (data original — createdAt).
+                          Só mostra se for diferente do início do ciclo (já é assinante
+                          de um mês anterior), pra não repetir a mesma data. */}
+                      {subscription.createdAt &&
+                        formatDate(subscription.createdAt) !== formatDate(subscription.startDate) && (
+                          <span className="text-xs text-[var(--text-muted)]">
+                            assinante desde {formatDate(subscription.createdAt)}
+                          </span>
+                        )}
+                    </div>
                   </td>
                   <td className="whitespace-nowrap px-4 py-4">
                     <span className="text-sm text-[var(--text-secondary)]">
