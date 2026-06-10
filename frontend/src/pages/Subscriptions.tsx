@@ -38,23 +38,27 @@ import type {
 } from '@/types';
 
 type Tab = 'plans' | 'subscriptions';
-type StatusFilter = 'ACTIVE' | 'PENDING_CYCLE' | 'PENDING_PAYMENT' | 'ENDED' | 'ALL';
+type StatusFilter = 'ACTIVE' | 'PENDING_CYCLE' | 'PENDING_PAYMENT' | 'ENDED' | 'CANCELED' | 'ALL';
 
 const STATUS_FILTER_LABEL: Record<StatusFilter, string> = {
   ACTIVE: 'Ativas',
   PENDING_CYCLE: 'Ciclo não pago',
   PENDING_PAYMENT: 'Aguardando',
   ENDED: 'Encerradas',
+  CANCELED: 'Canceladas',
   ALL: 'Todas',
 };
 
 // "Ciclo não pago": ACTIVE, não inadimplente, cujo ciclo vigente não foi pago
 // (currentCyclePaid===false). É um recorte derivado, não um status — por isso
 // recebe a assinatura inteira, não só o status.
+// "Encerradas" = suspensas/expiradas (pode renovar). "Canceladas" = canceladas de
+// vez — aba separada para o admin distinguir quem saiu de quem só venceu.
 function matchesStatusFilter(sub: ClientSubscription, filter: StatusFilter): boolean {
   if (filter === 'ALL') return true;
   if (filter === 'ENDED')
-    return sub.status === 'CANCELED' || sub.status === 'EXPIRED' || sub.status === 'SUSPENDED';
+    return sub.status === 'EXPIRED' || sub.status === 'SUSPENDED';
+  if (filter === 'CANCELED') return sub.status === 'CANCELED';
   if (filter === 'PENDING_CYCLE')
     return sub.status === 'ACTIVE' && !sub.inadimplente && sub.currentCyclePaid === false;
   return sub.status === filter;
@@ -124,14 +128,15 @@ export function Subscriptions() {
     });
   }, [allSubscriptions, statusFilter, normalizedQuery]);
   const statusCounts = useMemo(() => {
-    const counts: Record<StatusFilter, number> = { ACTIVE: 0, PENDING_CYCLE: 0, PENDING_PAYMENT: 0, ENDED: 0, ALL: allSubscriptions.length };
+    const counts: Record<StatusFilter, number> = { ACTIVE: 0, PENDING_CYCLE: 0, PENDING_PAYMENT: 0, ENDED: 0, CANCELED: 0, ALL: allSubscriptions.length };
     for (const s of allSubscriptions) {
       if (s.status === 'ACTIVE') {
         counts.ACTIVE++;
         // Recorte aditivo: "Ciclo não pago" é um subconjunto das Ativas.
         if (!s.inadimplente && s.currentCyclePaid === false) counts.PENDING_CYCLE++;
       } else if (s.status === 'PENDING_PAYMENT') counts.PENDING_PAYMENT++;
-      else if (s.status === 'CANCELED' || s.status === 'EXPIRED' || s.status === 'SUSPENDED') counts.ENDED++;
+      else if (s.status === 'CANCELED') counts.CANCELED++;
+      else if (s.status === 'EXPIRED' || s.status === 'SUSPENDED') counts.ENDED++;
     }
     return counts;
   }, [allSubscriptions]);
@@ -482,7 +487,7 @@ export function Subscriptions() {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  {(['ACTIVE', 'PENDING_CYCLE', 'PENDING_PAYMENT', 'ENDED', 'ALL'] as StatusFilter[]).map((filter) => {
+                  {(['ACTIVE', 'PENDING_CYCLE', 'PENDING_PAYMENT', 'ENDED', 'CANCELED', 'ALL'] as StatusFilter[]).map((filter) => {
                     const isActive = statusFilter === filter;
                     return (
                       <button
