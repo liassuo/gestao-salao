@@ -10,6 +10,12 @@ interface Props {
   planName: string | undefined;
   remainingCuts: number;
   cutsPerMonth: number;
+  /**
+   * Se o ciclo vigente está pago (vem do backend, isCurrentCyclePaid). Quando ACTIVE
+   * mas === false, a assinatura NÃO concede desconto/corte — o serviço é cobrado
+   * integral. undefined = backend antigo → assume pago (comportamento legado).
+   */
+  currentCyclePaid?: boolean;
   /** Texto contextual do contexto (ex: "agendamento", "comanda"). Usado nas mensagens. */
   context?: string;
 }
@@ -26,6 +32,7 @@ export function SubscriptionStatusBanner({
   planName,
   remainingCuts,
   cutsPerMonth,
+  currentCyclePaid,
   context = 'agendamento',
 }: Props) {
   const toast = useToast();
@@ -64,6 +71,54 @@ export function SubscriptionStatusBanner({
       );
     }
   };
+
+  // ACTIVE mas o ciclo do mês NÃO foi pago: a assinatura NÃO cobre o serviço (o
+  // backend cobra integral). Avisa em âmbar com CTAs, em vez do verde "no plano" —
+  // antes aparecia "Plano ativo — limite atingido (0/0)", enganoso (o cliente
+  // parecia coberto enquanto era cobrado cheio). undefined = legado → assume pago.
+  const cycleUnpaid = status === 'ACTIVE' && currentCyclePaid === false;
+
+  if (cycleUnpaid) {
+    const isSyncing = syncSubscription.isPending;
+    const isConfirming = confirmSubscription.isPending;
+    return (
+      <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
+        <div className="mb-2 flex items-start gap-2">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-amber-800">
+              Plano {planName ?? ''} — assinatura SEM pagamento do mês
+            </p>
+            <p className="text-xs text-amber-700/80">
+              O ciclo atual não foi pago, então o desconto da assinatura NÃO é aplicado
+              neste {context} — o serviço está sendo cobrado integral. Confirme o
+              pagamento do mês para o plano cobrir.
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={handleSync}
+            disabled={isSyncing || isConfirming || !subscriptionId}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-amber-600/40 bg-amber-600/10 px-3 py-1.5 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-600/20 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isSyncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            Reconciliar com Asaas
+          </button>
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={isSyncing || isConfirming || !subscriptionId}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-amber-600/40 bg-amber-600/10 px-3 py-1.5 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-600/20 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isConfirming ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+            Confirmar pagamento do mês
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (status === 'ACTIVE') {
     const unlimited = cutsPerMonth === UNLIMITED_CUTS;

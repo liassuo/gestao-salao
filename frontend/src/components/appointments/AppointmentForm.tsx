@@ -360,6 +360,7 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
           planName={clientSub.plan?.name}
           remainingCuts={activeSubscriptionView?.remainingCuts ?? 0}
           cutsPerMonth={activeSubscriptionView?.cutsPerMonth ?? 0}
+          currentCyclePaid={clientSub.currentCyclePaid}
           context="agendamento"
         />
       )}

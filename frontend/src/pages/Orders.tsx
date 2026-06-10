@@ -729,6 +729,7 @@ export function Orders() {
                   (activeSub?.remainingCuts ?? 0) - resolvedCart.cutsConsumed,
                 )}
                 cutsPerMonth={activeSub?.cutsPerMonth ?? 0}
+                currentCyclePaid={clientSub.currentCyclePaid}
                 context="comanda"
               />
               {activeSub && resolvedCart.cutsConsumed > 0 && (
