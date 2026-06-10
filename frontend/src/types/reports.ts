@@ -138,3 +138,56 @@ export interface CashRegisterReport {
     transactionsCount: number;
   }[];
 }
+
+// ===== Conciliação Asaas (bruto cobrado x líquido recebido) =====
+// Espelha backend reports.service.ts getAsaasReconciliation/reconcileOneAsaasCharge.
+// Todos os *Centavos são inteiros em centavos; net/fee podem ser null.
+export type AsaasReconciliationStatus =
+  | 'OK'
+  | 'OK_COM_TAXA'
+  | 'VALOR_DIVERGENTE'
+  | 'ESTORNADO'
+  | 'AGUARDANDO_LIQUIDO'
+  | 'ERRO_CONSULTA';
+
+export interface AsaasReconciliationItem {
+  paymentId: string;
+  asaasPaymentId: string;
+  clientId: string | null;
+  method: string | null;
+  billingType: string | null;
+  paidAt: string | null;
+  businessDate: string | null;
+  localStatus: string | null;
+  appAmountCentavos: number;
+  asaasStatus: string | null;
+  asaasValueCentavos: number | null;
+  asaasNetCentavos: number | null;
+  feeCentavos: number | null;
+  divergent: boolean;
+  error: boolean;
+  status: AsaasReconciliationStatus;
+  errorMessage?: string;
+}
+
+export interface AsaasReconciliationSummary {
+  count: number;
+  okCount: number;
+  divergentCount: number;
+  refundedCount: number;
+  pendingNetCount: number;
+  errorCount: number;
+  totalAppAmountCentavos: number;
+  totalAsaasValueCentavos: number;
+  totalAsaasNetCentavos: number;
+  totalFeeCentavos: number;
+}
+
+export interface AsaasReconciliation {
+  configured: boolean;
+  truncated: boolean;
+  message?: string;
+  period: { startDate: string; endDate: string };
+  items: AsaasReconciliationItem[];
+  summary: AsaasReconciliationSummary;
+}

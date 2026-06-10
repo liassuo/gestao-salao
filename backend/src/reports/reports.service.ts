@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { SupabaseService } from '../supabase/supabase.service';
-import { fetchPaymentsByBusinessDate } from '../common/business-date.helper';
+import { fetchPaymentsByBusinessDate, isRevenuePayment } from '../common/business-date.helper';
 import { CommissionsService } from '../commissions/commissions.service';
 import { CashRegisterService } from '../cash-register/cash-register.service';
+import { AsaasService } from '../asaas/asaas.service';
 
 export interface ReportFilters {
   startDate: string; // "YYYY-MM-DDT00:00:00"
@@ -16,6 +17,7 @@ export class ReportsService {
     private readonly supabase: SupabaseService,
     private readonly commissionsService: CommissionsService,
     private readonly cashRegisterService: CashRegisterService,
+    private readonly asaasService: AsaasService,
   ) {}
 
   async getSalesReport(filters: ReportFilters) {
@@ -382,5 +384,196 @@ export class ReportsService {
       },
       registers: enrichedRegisters,
     };
+  }
+
+  /**
+   * Conciliação Asaas: para cada pagamento com asaasPaymentId no período, compara o
+   * BRUTO cobrado pelo app (payments.amount, centavos) com o que o Asaas registrou —
+   * `value` (bruto) e `netValue` (LÍQUIDO, já descontada a taxa do gateway). O banco
+   * só guarda o bruto; o líquido vive no Asaas (getCharge). Serve para responder
+   * "chegou menos que deveria?": geralmente é a TAXA (value − netValue); se o bruto
+   * do app != value do Asaas, é divergência real de registro a investigar.
+   *
+   * Tudo em centavos (value/netValue do Asaas vêm em reais → ×100).
+   */
+  // Teto de cobranças consultadas num único request: cada uma é uma chamada HTTP ao
+  // Asaas. Sem teto, um período largo dispararia centenas de getCharge sequenciais —
+  // estoura o TimeoutInterceptor (30s) e arrisca rate-limit (429) na chave do Asaas.
+  private static readonly ASAAS_RECON_MAX = 300;
+
+  async getAsaasReconciliation(filters: ReportFilters) {
+    const { startDate, endDate } = filters;
+    const MAX = ReportsService.ASAAS_RECON_MAX;
+
+    const emptySummary = {
+      count: 0,
+      okCount: 0,
+      divergentCount: 0,
+      refundedCount: 0,
+      pendingNetCount: 0,
+      errorCount: 0,
+      totalAppAmountCentavos: 0,
+      totalAsaasValueCentavos: 0,
+      totalAsaasNetCentavos: 0,
+      totalFeeCentavos: 0,
+    };
+
+    if (!this.asaasService.configured) {
+      return {
+        configured: false,
+        truncated: false,
+        message:
+          'Asaas não configurado (defina ASAAS_API_KEY). Sem isso não dá para puxar o valor líquido recebido.',
+        period: { startDate, endDate },
+        items: [] as any[],
+        summary: emptySummary,
+      };
+    }
+
+    // Pagamentos com cobrança Asaas pagos no período (pela data REAL do pagamento,
+    // paidAt — alinha com a régua de liquidação do gateway, não com o dia contábil).
+    // Mais recentes primeiro + teto (MAX) para limitar o nº de getCharge por request.
+    const { data: payments, error } = await this.supabase
+      .from('payments')
+      .select(
+        'id, asaasPaymentId, amount, method, billingType, asaasStatus, paidAt, businessDate, clientId',
+      )
+      .not('asaasPaymentId', 'is', null)
+      .gte('paidAt', startDate)
+      .lte('paidAt', endDate)
+      .order('paidAt', { ascending: false })
+      .limit(MAX);
+
+    if (error) {
+      throw new Error(`Falha ao buscar pagamentos Asaas: ${error.message}`);
+    }
+
+    const list = payments || [];
+    const truncated = list.length >= MAX; // atingiu o teto → pode haver mais fora do relatório
+
+    // Consulta o Asaas em lotes pequenos para não estourar rate limit; um erro numa
+    // cobrança não derruba o relatório (a linha vem marcada com error/ERRO_CONSULTA).
+    const items: any[] = [];
+    const CHUNK = 5;
+    for (let i = 0; i < list.length; i += CHUNK) {
+      const batch = list.slice(i, i + CHUNK);
+      const settled = await Promise.all(batch.map((p) => this.reconcileOneAsaasCharge(p)));
+      items.push(...settled);
+    }
+
+    // Taxa/líquido só somam linhas com taxa conhecida (feeCentavos != null): exclui
+    // estorno (ESTORNADO), liquidação sem líquido publicado (AGUARDANDO_LIQUIDO) e erro.
+    const withFee = items.filter((i) => i.feeCentavos != null);
+    const revenueValue = items.filter(
+      (i) => !i.error && i.status !== 'ESTORNADO' && i.asaasValueCentavos != null,
+    );
+    const summary = {
+      count: items.length,
+      okCount: items.filter((i) => i.status === 'OK' || i.status === 'OK_COM_TAXA').length,
+      divergentCount: items.filter((i) => i.status === 'VALOR_DIVERGENTE').length,
+      refundedCount: items.filter((i) => i.status === 'ESTORNADO').length,
+      pendingNetCount: items.filter((i) => i.status === 'AGUARDANDO_LIQUIDO').length,
+      errorCount: items.filter((i) => i.error).length,
+      totalAppAmountCentavos: items.reduce((s, i) => s + (i.appAmountCentavos || 0), 0),
+      totalAsaasValueCentavos: revenueValue.reduce((s, i) => s + i.asaasValueCentavos, 0),
+      totalAsaasNetCentavos: withFee.reduce((s, i) => s + i.asaasNetCentavos, 0),
+      totalFeeCentavos: withFee.reduce((s, i) => s + i.feeCentavos, 0),
+    };
+
+    return {
+      configured: true,
+      truncated,
+      period: { startDate, endDate },
+      items,
+      summary,
+    };
+  }
+
+  private async reconcileOneAsaasCharge(p: any) {
+    const base = {
+      paymentId: p.id,
+      asaasPaymentId: p.asaasPaymentId,
+      clientId: p.clientId,
+      method: p.method,
+      billingType: p.billingType,
+      paidAt: p.paidAt,
+      businessDate: p.businessDate,
+      localStatus: p.asaasStatus,
+      appAmountCentavos: p.amount,
+    };
+    try {
+      const charge = await this.asaasService.getCharge(p.asaasPaymentId);
+      const asaasValueCentavos = Math.round((charge.value || 0) * 100);
+      const netCentavos =
+        charge.netValue != null ? Math.round(charge.netValue * 100) : null;
+      const divergent = p.amount !== asaasValueCentavos;
+
+      // Estorno/cancelamento/chargeback: dinheiro que SAIU, não é taxa de gateway.
+      // Marca ESTORNADO e não deixa value−net virar uma "taxa" fantasma nos totais.
+      if (!isRevenuePayment({ asaasStatus: charge.status })) {
+        return {
+          ...base,
+          asaasStatus: charge.status,
+          asaasValueCentavos,
+          asaasNetCentavos: netCentavos,
+          feeCentavos: null,
+          divergent: false,
+          error: false,
+          status: 'ESTORNADO',
+        };
+      }
+
+      // Divergência de VALOR (app != value do Asaas) é o sinal prioritário a investigar.
+      if (divergent) {
+        return {
+          ...base,
+          asaasStatus: charge.status,
+          asaasValueCentavos,
+          asaasNetCentavos: netCentavos,
+          feeCentavos: netCentavos != null ? asaasValueCentavos - netCentavos : null,
+          divergent: true,
+          error: false,
+          status: 'VALOR_DIVERGENTE',
+        };
+      }
+
+      // Liquidada, mas o Asaas ainda não publicou o líquido → não inventa taxa 0.
+      if (netCentavos == null) {
+        return {
+          ...base,
+          asaasStatus: charge.status,
+          asaasValueCentavos,
+          asaasNetCentavos: null,
+          feeCentavos: null,
+          divergent: false,
+          error: false,
+          status: 'AGUARDANDO_LIQUIDO',
+        };
+      }
+
+      const feeCentavos = asaasValueCentavos - netCentavos;
+      return {
+        ...base,
+        asaasStatus: charge.status,
+        asaasValueCentavos,
+        asaasNetCentavos: netCentavos,
+        feeCentavos,
+        divergent: false,
+        error: false,
+        status: feeCentavos > 0 ? 'OK_COM_TAXA' : 'OK',
+      };
+    } catch (e: any) {
+      return {
+        ...base,
+        asaasStatus: null,
+        asaasValueCentavos: null,
+        asaasNetCentavos: null,
+        feeCentavos: null,
+        divergent: false,
+        error: true,
+        status: 'ERRO_CONSULTA',
+        errorMessage: String(e?.message || e),
+      };
+    }
   }
 }

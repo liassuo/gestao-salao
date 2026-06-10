@@ -9,8 +9,8 @@ import {
   CashRegister,
   Clients,
   Commissions,
+  ConciliacaoAsaas,
   Dashboard,
-  Debts,
   Login,
   Orders,
   Payments,
@@ -124,10 +124,6 @@ export const router = createBrowserRouter([
         element: withRoleProtection('/pagamentos', <Payments />),
       },
       {
-        path: 'dividas',
-        element: withRoleProtection('/dividas', <Debts />),
-      },
-      {
         path: 'caixa',
         element: withRoleProtection('/caixa', <CashRegister />),
       },
@@ -142,6 +138,10 @@ export const router = createBrowserRouter([
       {
         path: 'relatorios',
         element: withRoleProtection('/relatorios', <Reports />),
+      },
+      {
+        path: 'conciliacao-asaas',
+        element: withRoleProtection('/conciliacao-asaas', <ConciliacaoAsaas />),
       },
       {
         path: 'estoque/produtos',

@@ -6,7 +6,6 @@ import {
   UserCog,
   Scissors,
   CreditCard,
-  Receipt,
   Wallet,
   BarChart3,
   Settings,
@@ -18,6 +17,7 @@ import {
   ArrowLeftRight,
   ClipboardList,
   Tag,
+  Scale,
 } from 'lucide-react';
 import type { Role } from '@/auth/roles';
 
@@ -74,12 +74,6 @@ export const menuItems: MenuItem[] = [
     roles: ['ADMIN'],
   },
   {
-    icon: Receipt,
-    label: 'Dívidas',
-    path: '/dividas',
-    roles: ['ADMIN'],
-  },
-  {
     icon: Wallet,
     label: 'Caixa',
     path: '/caixa',
@@ -101,6 +95,12 @@ export const menuItems: MenuItem[] = [
     icon: BarChart3,
     label: 'Relatórios',
     path: '/relatorios',
+    roles: ['ADMIN'],
+  },
+  {
+    icon: Scale,
+    label: 'Conciliação Asaas',
+    path: '/conciliacao-asaas',
     roles: ['ADMIN'],
   },
   // Estoque group
