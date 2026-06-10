@@ -14,6 +14,7 @@ import {
   useRegenerateSubscriptionPix,
   useConfirmSubscriptionPayment,
   useRenewViaAsaas,
+  useChargeCurrentCycle,
   useDeleteSubscription,
   useClients,
   getApiErrorMessage,
@@ -105,6 +106,7 @@ export function Subscriptions() {
   const regeneratePix = useRegenerateSubscriptionPix();
   const confirmPayment = useConfirmSubscriptionPayment();
   const renewViaAsaas = useRenewViaAsaas();
+  const chargeCurrentCycle = useChargeCurrentCycle();
   const deleteSubscription = useDeleteSubscription();
   const toast = useToast();
 
@@ -321,6 +323,27 @@ export function Subscriptions() {
     }
   };
 
+  // Gerar cobrança do ciclo atual (assinatura ATIVA com ciclo não pago): mesmo
+  // fluxo de link Asaas, mas sem renovar o ciclo. Reusa o RenewLinkModal porque
+  // o backend devolve o mesmo shape { invoiceUrl, client, planName }.
+  const handleChargeCurrentCycle = async (sub: ClientSubscription) => {
+    try {
+      const result = await chargeCurrentCycle.mutateAsync(sub.id);
+      if (!result.invoiceUrl) {
+        toast.error('Erro', 'Não foi possível gerar o link de pagamento. Tente novamente.');
+        return;
+      }
+      setRenewLinkData({
+        invoiceUrl: result.invoiceUrl,
+        clientName: result.client?.name || sub.client?.name || 'cliente',
+        clientPhone: result.client?.phone || sub.client?.phone || null,
+        planName: result.planName || sub.plan?.name || 'Plano',
+      });
+    } catch (err) {
+      toast.error('Erro', getApiErrorMessage(err));
+    }
+  };
+
   const tabs = [
     { id: 'plans' as Tab, label: 'Planos', icon: CreditCard },
     { id: 'subscriptions' as Tab, label: 'Assinaturas', icon: Users },
@@ -496,12 +519,14 @@ export function Subscriptions() {
                 onConfirmPayment={setConfirmingPayment}
                 onDelete={setDeletingSubscription}
                 onReactivate={handleRenewViaAsaas}
+                onChargeCycle={handleChargeCurrentCycle}
                 isLoading={
                   cancelSubscription.isPending ||
                   useCut.isPending ||
                   resetCuts.isPending ||
                   reopenPix.isPending ||
                   confirmPayment.isPending ||
+                  chargeCurrentCycle.isPending ||
                   deleteSubscription.isPending
                 }
                 onNewSubscription={handleOpenSubscribeModal}

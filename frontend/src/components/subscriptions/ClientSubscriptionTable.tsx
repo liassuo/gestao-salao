@@ -14,6 +14,8 @@ interface ClientSubscriptionTableProps {
   onConfirmPayment?: (subscription: ClientSubscription) => void;
   onDelete?: (subscription: ClientSubscription) => void;
   onReactivate?: (subscription: ClientSubscription) => void;
+  /** Gera link de cobrança do ciclo atual (ACTIVE com ciclo não pago). */
+  onChargeCycle?: (subscription: ClientSubscription) => void;
   isLoading?: boolean;
   onNewSubscription?: () => void;
 }
@@ -59,6 +61,7 @@ export function ClientSubscriptionTable({
   onConfirmPayment,
   onDelete,
   onReactivate,
+  onChargeCycle,
   isLoading,
   onNewSubscription,
 }: ClientSubscriptionTableProps) {
@@ -290,6 +293,20 @@ export function ClientSubscriptionTable({
                                   <RefreshCw className="h-4 w-4 text-green-500" />
                                   Renovar Cortes
                                 </button>
+                                {/* Ciclo vigente não pago: gera link de cobrança (PIX/cartão)
+                                    do ciclo atual pra mandar pro cliente — sem renovar o ciclo. */}
+                                {onChargeCycle && subscription.currentCyclePaid === false && (
+                                  <button
+                                    onClick={() => {
+                                      onChargeCycle(subscription);
+                                      setOpenMenuId(null);
+                                    }}
+                                    className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+                                  >
+                                    <CreditCard className="h-4 w-4 text-blue-500" />
+                                    Gerar cobrança
+                                  </button>
+                                )}
                                 <div className="my-1 border-t border-[var(--border-color)]" />
                                 <button
                                   onClick={() => {

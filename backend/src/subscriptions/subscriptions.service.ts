@@ -1990,6 +1990,83 @@ export class SubscriptionsService {
     }
   }
 
+  /**
+   * Gera um LINK de pagamento Asaas (invoiceUrl) para o CICLO ATUAL de uma
+   * assinatura ACTIVE cujo ciclo vigente ainda não foi pago ("Ciclo não pago").
+   *
+   * Diferente de renewSubscriptionViaAsaas (que é para assinaturas encerradas):
+   * NÃO avança o ciclo, NÃO zera cortes e NÃO mexe em startDate/endDate — o
+   * cliente continua no mesmo ciclo, só está cobrando o que ele já deve. O link
+   * é aberto (PIX ou cartão) e cria a assinatura recorrente no Asaas, então o
+   * cartão passa a cobrar automático nos próximos meses. A ativação do ciclo
+   * (currentCyclePaid) vem pelo webhook quando o cliente paga — nada entra no
+   * caixa até lá.
+   */
+  async chargeCurrentCycleViaAsaas(subscriptionId: string) {
+    if (!this.asaasService.configured) {
+      throw new BadRequestException('Integração Asaas não está configurada.');
+    }
+    const subscription = await this.findSubscription(subscriptionId);
+
+    // Só ACTIVE. Encerradas usam renew-asaas; PENDING_PAYMENT usa regenerate-pix.
+    if (subscription.status !== 'ACTIVE') {
+      throw new BadRequestException(
+        `Apenas assinaturas ativas têm ciclo a cobrar. Status atual: ${subscription.status}.`,
+      );
+    }
+
+    const now = new Date();
+
+    const asaasCustomerId = await this.ensureAsaasCustomer(subscription.clientId);
+
+    // billingType UNDEFINED = link aberto (PIX ou cartão). Assinatura recorrente
+    // → cartão fica automático nos próximos meses. Não tocamos em datas/cortes:
+    // é o ciclo atual em aberto, não uma renovação.
+    const charge = await this.createRecurringSubscriptionAndFirstCharge({
+      clientSubscriptionId: subscription.id,
+      customer: asaasCustomerId,
+      billingType: AsaasBillingType.UNDEFINED,
+      valueReais: this.asaasService.centavosToReais(subscription.plan?.price ?? 0),
+      description: `Assinatura: Plano ${subscription.plan?.name ?? ''}`.trim(),
+    });
+
+    const invoiceUrl = charge.invoiceUrl || null;
+
+    // Idempotência: não duplica payment se o webhook já criou um durante o retry.
+    const { data: existingPay } = await this.supabase
+      .from('payments')
+      .select('id')
+      .eq('asaasPaymentId', charge.id)
+      .maybeSingle();
+    if (!existingPay) {
+      await this.supabase.from('payments').insert({
+        id: randomUUID(),
+        clientId: subscription.clientId,
+        subscriptionId: subscription.id,
+        amount: subscription.plan?.price ?? 0,
+        method: asaasBillingToLocalPaymentMethod(charge.billingType || AsaasBillingType.PIX),
+        registeredBy: await this.resolveSystemRegisteredBy(),
+        notes: `Cobrança do ciclo via link Asaas #${charge.id}`,
+        asaasPaymentId: charge.id,
+        asaasStatus: charge.status,
+        paidAt: null, // NÃO pago — só o webhook marca pago e lança no caixa
+        invoiceUrl,
+        bankSlipUrl: charge.bankSlipUrl || null,
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+      });
+    }
+
+    return {
+      invoiceUrl,
+      client: {
+        name: subscription.client?.name ?? null,
+        phone: subscription.client?.phone ?? null,
+      },
+      planName: subscription.plan?.name ?? null,
+    };
+  }
+
   async forceCharge(subscriptionId: string) {
     const subscription = await this.findSubscription(subscriptionId);
     const plan = subscription.plan;

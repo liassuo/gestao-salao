@@ -175,6 +175,17 @@ export function useRenewViaAsaas() {
   });
 }
 
+export function useChargeCurrentCycle() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => subscriptionsService.chargeCurrentCycle(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [SUBSCRIPTIONS_KEY] });
+    },
+  });
+}
+
 export function useSyncSubscriptionWithAsaas() {
   const queryClient = useQueryClient();
 

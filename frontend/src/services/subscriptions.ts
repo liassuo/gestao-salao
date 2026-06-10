@@ -137,6 +137,17 @@ export const subscriptionsService = {
     return response.data;
   },
 
+  // Gera o link de pagamento Asaas (invoiceUrl) do CICLO ATUAL de uma assinatura
+  // ativa com ciclo não pago — mesmo shape do renewViaAsaas, sem renovar o ciclo.
+  async chargeCurrentCycle(id: string): Promise<{
+    invoiceUrl: string | null;
+    client: { name: string | null; phone: string | null };
+    planName: string | null;
+  }> {
+    const response = await api.post(`/subscriptions/${id}/charge-cycle`);
+    return response.data;
+  },
+
   async confirmPayment(
     id: string,
     method: 'CASH' | 'PIX' | 'CARD' = 'CASH',

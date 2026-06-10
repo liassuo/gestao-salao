@@ -365,6 +365,20 @@ export class SubscriptionsController {
   }
 
   /**
+   * POST /subscriptions/:id/charge-cycle
+   * Gera um LINK de pagamento Asaas (invoiceUrl) para o CICLO ATUAL de uma
+   * assinatura ATIVA cujo ciclo vigente não foi pago ("Ciclo não pago"). Admin
+   * manda pelo WhatsApp. Não avança o ciclo nem mexe em cortes/datas; só o
+   * webhook marca o ciclo como pago quando o cliente paga.
+   */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @Post(':id/charge-cycle')
+  async chargeCurrentCycle(@Param('id', ParseUUIDPipe) id: string) {
+    return this.subscriptionsService.chargeCurrentCycleViaAsaas(id);
+  }
+
+  /**
    * POST /subscriptions/:id/confirm-payment
    * Confirma manualmente o pagamento de uma assinatura PENDING_PAYMENT (Admin)
    */
