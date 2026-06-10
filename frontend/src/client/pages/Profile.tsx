@@ -23,6 +23,7 @@ interface ClientProfile {
 
 interface ProfileForm {
   name: string;
+  email: string;
   phone: string;
   cpf: string;
   birthDate: string;
@@ -149,7 +150,7 @@ export function ClientProfile() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
   const [form, setForm] = useState<ProfileForm>({
-    name: '', phone: '', cpf: '', birthDate: '',
+    name: '', email: '', phone: '', cpf: '', birthDate: '',
     address: '', addressNumber: '', neighborhood: '', city: '', state: '',
   });
 
@@ -173,6 +174,7 @@ export function ClientProfile() {
   const startEditing = () => {
     setForm({
       name: profile?.name || user?.name || '',
+      email: profile?.email || '',
       phone: profile?.phone ? maskPhone(profile.phone) : '',
       cpf: profile?.cpf ? maskCpf(profile.cpf) : '',
       birthDate: dateIsoToBr(profile?.birthDate),
@@ -188,11 +190,17 @@ export function ClientProfile() {
   const handleSave = async () => {
     if (!user?.id) return;
     if (!form.name.trim()) { showToast('Nome é obrigatório', 'err'); return; }
+    const emailTrimmed = form.email.trim();
+    if (emailTrimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
+      showToast('E-mail inválido', 'err');
+      return;
+    }
 
     setSaving(true);
     try {
       const payload: Record<string, string> = {
         name: form.name.trim(),
+        email: emailTrimmed,
         phone: form.phone.replace(/\D/g, ''),
         cpf: form.cpf.replace(/\D/g, ''),
         address: form.address.trim(),
@@ -294,6 +302,7 @@ export function ClientProfile() {
             <div className="bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl p-4 mb-4">
               <p className="text-xs font-semibold text-[var(--text-muted)] uppercase mb-3">Dados Pessoais</p>
               <EditField label="Nome *" value={form.name} onChange={(v) => setForm({ ...form, name: v })} placeholder="Seu nome completo" />
+              <EditField label="E-mail" value={form.email} onChange={(v) => setForm({ ...form, email: v })} placeholder="seu@email.com" inputMode="email" />
               <EditField label="Telefone" value={form.phone} onChange={(v) => setForm({ ...form, phone: maskPhone(v) })} placeholder="(00) 00000-0000" />
               <EditField label="CPF" value={form.cpf} onChange={(v) => setForm({ ...form, cpf: maskCpf(v) })} placeholder="000.000.000-00" />
               <EditField label="Data de Nascimento" value={form.birthDate} onChange={(v) => setForm({ ...form, birthDate: formatDateBrInput(v) })} placeholder="DD/MM/AAAA" inputMode="numeric" maxLength={10} />
