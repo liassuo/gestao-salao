@@ -159,6 +159,19 @@ export const subscriptionsService = {
     return response.data;
   },
 
+  // Confirma o pagamento do ciclo vigente de uma assinatura ATIVA não paga (pagou
+  // por fora). Só registra o pagamento — não renova vencimento nem zera cortes.
+  async confirmCyclePayment(
+    id: string,
+    method: 'CASH' | 'PIX' | 'CARD' = 'CASH',
+  ): Promise<ClientSubscription> {
+    const response = await api.post<ClientSubscription>(
+      `/subscriptions/${id}/confirm-cycle`,
+      { method },
+    );
+    return response.data;
+  },
+
   async syncWithAsaas(id: string): Promise<ClientSubscription> {
     const response = await api.post<ClientSubscription>(`/subscriptions/${id}/sync-asaas`);
     return response.data;

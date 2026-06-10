@@ -457,6 +457,48 @@ describe('SubscriptionsService — renovação via link Asaas (renewSubscription
 });
 
 /**
+ * Confirmar pagamento do CICLO de uma assinatura ACTIVE não paga (cliente pagou por
+ * fora). Só registra o pagamento — NÃO mexe no vencimento nem zera os cortes.
+ */
+describe('SubscriptionsService — confirmar pagamento do ciclo (ACTIVE não paga)', () => {
+  it('registra o pagamento e NÃO altera endDate nem cutsUsedThisMonth', async () => {
+    const tables = baseTables();
+    tables.client_subscriptions = [
+      {
+        id: 'sub-1', clientId: 'client-1', planId: 'plan-1', status: 'ACTIVE',
+        startDate: '2026-06-06T00:00:00', endDate: '2026-07-06T00:00:00',
+        cutsUsedThisMonth: 1,
+        plan: { id: 'plan-1', name: 'Mensal', price: 7000 },
+      },
+    ];
+    const { service, state } = await buildService(tables);
+
+    await service.confirmCyclePaymentManually('sub-1', 'PIX');
+
+    // pagamento registrado (vai pro caixa)
+    const pay = state.payments.find((p) => p.subscriptionId === 'sub-1');
+    expect(pay).toBeTruthy();
+    expect(pay!.method).toBe('PIX');
+    expect(pay!.amount).toBe(7000);
+    expect(pay!.paidAt).toBeTruthy();
+    // NÃO mexeu no vencimento nem nos cortes
+    const sub = state.client_subscriptions[0];
+    expect(sub.endDate).toBe('2026-07-06T00:00:00');
+    expect(sub.cutsUsedThisMonth).toBe(1);
+    expect(sub.status).toBe('ACTIVE');
+  });
+
+  it('rejeita se a assinatura não está ACTIVE', async () => {
+    const tables = baseTables();
+    tables.client_subscriptions = [
+      { id: 'sub-1', clientId: 'client-1', planId: 'plan-1', status: 'PENDING_PAYMENT', plan: { id: 'plan-1', name: 'Mensal', price: 7000 } },
+    ];
+    const { service } = await buildService(tables);
+    await expect(service.confirmCyclePaymentManually('sub-1', 'CASH')).rejects.toThrow(/ativa/i);
+  });
+});
+
+/**
  * Bug do teste do dono: cancelar uma assinatura com cobrança não paga deixava a
  * dívida em aberto + hasDebts → cliente cancelado aparecia "Inadimplente" fantasma.
  * Fix: cancelar anula as dívidas de assinatura em aberto (amountPaid=0, paidAt=null —

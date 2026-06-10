@@ -16,6 +16,8 @@ interface ClientSubscriptionTableProps {
   onReactivate?: (subscription: ClientSubscription) => void;
   /** Gera link de cobrança do ciclo atual (ACTIVE com ciclo não pago). */
   onChargeCycle?: (subscription: ClientSubscription) => void;
+  /** Confirma o pagamento do ciclo vigente já recebido (ACTIVE não pago, pagou por fora). */
+  onConfirmCycle?: (subscription: ClientSubscription) => void;
   isLoading?: boolean;
   onNewSubscription?: () => void;
 }
@@ -62,6 +64,7 @@ export function ClientSubscriptionTable({
   onDelete,
   onReactivate,
   onChargeCycle,
+  onConfirmCycle,
   isLoading,
   onNewSubscription,
 }: ClientSubscriptionTableProps) {
@@ -305,6 +308,20 @@ export function ClientSubscriptionTable({
                                   >
                                     <CreditCard className="h-4 w-4 text-blue-500" />
                                     Gerar cobrança
+                                  </button>
+                                )}
+                                {/* Cliente já pagou o mês por fora (balcão): registra o
+                                    pagamento do ciclo sem renovar vencimento nem zerar cortes. */}
+                                {onConfirmCycle && subscription.currentCyclePaid === false && (
+                                  <button
+                                    onClick={() => {
+                                      onConfirmCycle(subscription);
+                                      setOpenMenuId(null);
+                                    }}
+                                    className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--hover-bg)]"
+                                  >
+                                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                                    Confirmar pagamento
                                   </button>
                                 )}
                                 <div className="my-1 border-t border-[var(--border-color)]" />

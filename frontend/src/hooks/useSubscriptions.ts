@@ -175,6 +175,19 @@ export function useRenewViaAsaas() {
   });
 }
 
+export function useConfirmCyclePayment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, method }: { id: string; method?: 'CASH' | 'PIX' | 'CARD' }) =>
+      subscriptionsService.confirmCyclePayment(id, method),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [SUBSCRIPTIONS_KEY] });
+      queryClient.invalidateQueries({ queryKey: [SUBSCRIPTION_PLANS_KEY] });
+    },
+  });
+}
+
 export function useChargeCurrentCycle() {
   const queryClient = useQueryClient();
 

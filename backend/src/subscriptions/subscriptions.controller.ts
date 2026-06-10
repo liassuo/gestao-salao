@@ -393,6 +393,22 @@ export class SubscriptionsController {
   }
 
   /**
+   * POST /subscriptions/:id/confirm-cycle
+   * Confirma o pagamento do CICLO VIGENTE de uma assinatura ATIVA cujo mês não foi
+   * pago (pagou por fora/balcão). Só registra o pagamento (vai pro caixa); NÃO
+   * renova o vencimento nem zera os cortes. (Admin)
+   */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @Post(':id/confirm-cycle')
+  async confirmCycle(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body?: ConfirmPaymentDto,
+  ) {
+    return this.subscriptionsService.confirmCyclePaymentManually(id, body?.method);
+  }
+
+  /**
    * POST /subscriptions/:id/sync-asaas
    * Reconcilia o estado da assinatura com o Asaas (fonte da verdade).
    * Usar quando o cliente pagou o PIX, o Asaas confirmou, mas o webhook não

@@ -32,6 +32,7 @@ export {
   useReopenSubscriptionPix,
   useRegenerateSubscriptionPix,
   useConfirmSubscriptionPayment,
+  useConfirmCyclePayment,
   useRenewViaAsaas,
   useChargeCurrentCycle,
   useSyncSubscriptionWithAsaas,

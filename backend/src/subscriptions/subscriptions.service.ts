@@ -1089,6 +1089,43 @@ export class SubscriptionsService {
   }
 
   /**
+   * Confirma o pagamento do CICLO VIGENTE de uma assinatura JÁ ATIVA cujo mês não
+   * foi pago (currentCyclePaid=false — ex: assinante ativo que pagou por fora /
+   * balcão e ninguém registrou). Diferente de confirmPaymentManually:
+   *  - exige status ACTIVE (não PENDING_PAYMENT);
+   *  - APENAS registra o pagamento do mês (vai pro caixa, marca o ciclo pago);
+   *  - NÃO mexe no endDate (não renova/estende o prazo) nem zera os cortes já usados.
+   * Assim o assinante fica "em dia" mantendo o ciclo e o saldo de cortes atuais.
+   */
+  async confirmCyclePaymentManually(subscriptionId: string, method?: string) {
+    const subscription = await this.findSubscription(subscriptionId);
+
+    if (subscription.status !== 'ACTIVE') {
+      throw new BadRequestException(
+        'Confirmação de ciclo só vale para assinatura ativa. Para outras, use o fluxo de reativação/confirmação.',
+      );
+    }
+
+    const nowLocal = nowLocalIsoString();
+    await this.recordBalcaoSubscriptionPayment(
+      {
+        id: subscription.id,
+        clientId: subscription.clientId,
+        amount: subscription.plan?.price ?? 0,
+        planName: subscription.plan?.name ?? '',
+      },
+      method || 'CASH',
+      nowLocal,
+      'Confirmação de pagamento do ciclo',
+    );
+
+    this.logger.log(
+      `Pagamento do ciclo da assinatura ${subscription.id} confirmado manualmente (admin, ${method || 'CASH'}) — sem alterar vencimento/cortes`,
+    );
+    return this.findSubscription(subscriptionId);
+  }
+
+  /**
    * Lança no CAIXA DO DIA o pagamento de uma mensalidade recebida no balcão
    * (dinheiro/PIX/cartão na maquininha) — sem passar pelo Asaas. Usado tanto na
    * confirmação manual de uma assinatura PENDING_PAYMENT quanto na assinatura/

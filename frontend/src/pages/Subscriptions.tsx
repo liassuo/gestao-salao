@@ -13,6 +13,7 @@ import {
   useReopenSubscriptionPix,
   useRegenerateSubscriptionPix,
   useConfirmSubscriptionPayment,
+  useConfirmCyclePayment,
   useRenewViaAsaas,
   useChargeCurrentCycle,
   useDeleteSubscription,
@@ -81,6 +82,9 @@ export function Subscriptions() {
   const [searchQuery, setSearchQuery] = useState('');
   const [confirmingPayment, setConfirmingPayment] = useState<ClientSubscription | null>(null);
   const [confirmMethod, setConfirmMethod] = useState<'CASH' | 'PIX' | 'CARD'>('CASH');
+  // true = confirmar pagamento do CICLO de uma ACTIVE não paga (só registra, não
+  // renova/zera cortes); false = confirmar PENDING_PAYMENT (ativa de fato).
+  const [confirmIsCycle, setConfirmIsCycle] = useState(false);
   const [deletingSubscription, setDeletingSubscription] = useState<ClientSubscription | null>(null);
   // Renovação via link Asaas: ao clicar, o backend gera o invoiceUrl e abrimos um
   // modal com o link + botão WhatsApp. A assinatura só ativa quando o cliente paga.
@@ -109,6 +113,7 @@ export function Subscriptions() {
   const reopenPix = useReopenSubscriptionPix();
   const regeneratePix = useRegenerateSubscriptionPix();
   const confirmPayment = useConfirmSubscriptionPayment();
+  const confirmCyclePayment = useConfirmCyclePayment();
   const renewViaAsaas = useRenewViaAsaas();
   const chargeCurrentCycle = useChargeCurrentCycle();
   const deleteSubscription = useDeleteSubscription();
@@ -283,14 +288,28 @@ export function Subscriptions() {
     }
   };
 
+  // Abre o modal de método para CONFIRMAR O PAGAMENTO DO CICLO de uma ACTIVE não
+  // paga (cliente pagou por fora). Reusa o mesmo modal/seletor.
+  const handleOpenConfirmCycle = (sub: ClientSubscription) => {
+    setConfirmIsCycle(true);
+    setConfirmMethod('CASH');
+    setConfirmingPayment(sub);
+  };
+
   const handleConfirmPayment = async () => {
     if (!confirmingPayment) return;
+    const name = confirmingPayment.client?.name || 'cliente';
     try {
-      await confirmPayment.mutateAsync({ id: confirmingPayment.id, method: confirmMethod });
-      const name = confirmingPayment.client?.name || 'cliente';
+      if (confirmIsCycle) {
+        await confirmCyclePayment.mutateAsync({ id: confirmingPayment.id, method: confirmMethod });
+        toast.success('Pagamento confirmado', `Ciclo de ${name} registrado (sem alterar vencimento).`);
+      } else {
+        await confirmPayment.mutateAsync({ id: confirmingPayment.id, method: confirmMethod });
+        toast.success('Pagamento confirmado', `Assinatura de ${name} ativada.`);
+      }
       setConfirmingPayment(null);
       setConfirmMethod('CASH');
-      toast.success('Pagamento confirmado', `Assinatura de ${name} ativada.`);
+      setConfirmIsCycle(false);
     } catch (err) {
       toast.error('Erro', getApiErrorMessage(err));
     }
@@ -525,6 +544,7 @@ export function Subscriptions() {
                 onDelete={setDeletingSubscription}
                 onReactivate={handleRenewViaAsaas}
                 onChargeCycle={handleChargeCurrentCycle}
+                onConfirmCycle={handleOpenConfirmCycle}
                 isLoading={
                   cancelSubscription.isPending ||
                   useCut.isPending ||
@@ -646,23 +666,26 @@ export function Subscriptions() {
         description={pixModalData?.description}
       />
 
-      {/* Confirmar pagamento manual */}
+      {/* Confirmar pagamento manual (ativação PENDING_PAYMENT) ou do ciclo (ACTIVE não paga) */}
       <ConfirmModal
         isOpen={!!confirmingPayment}
         onClose={() => {
           setConfirmingPayment(null);
           setConfirmMethod('CASH');
+          setConfirmIsCycle(false);
         }}
         onConfirm={handleConfirmPayment}
-        title="Confirmar pagamento manual"
+        title={confirmIsCycle ? 'Confirmar pagamento do mês' : 'Confirmar pagamento manual'}
         message={
           confirmingPayment
-            ? `Marcar a assinatura de ${confirmingPayment.client?.name || 'cliente'} como ATIVA. Use quando o cliente já tiver pago no balcão. O pagamento é registrado no caixa e a ação zera os cortes do mês e renova a validade.`
+            ? confirmIsCycle
+              ? `Registrar o pagamento do mês de ${confirmingPayment.client?.name || 'cliente'} (assinante já pagou por fora). O valor entra no caixa de hoje; o vencimento e os cortes do mês NÃO mudam.`
+              : `Marcar a assinatura de ${confirmingPayment.client?.name || 'cliente'} como ATIVA. Use quando o cliente já tiver pago no balcão. O pagamento é registrado no caixa e a ação zera os cortes do mês e renova a validade.`
             : ''
         }
         confirmLabel="Confirmar pagamento"
         variant="info"
-        isLoading={confirmPayment.isPending}
+        isLoading={confirmPayment.isPending || confirmCyclePayment.isPending}
       >
         <div>
           <label className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">
