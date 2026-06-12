@@ -496,6 +496,22 @@ describe('SubscriptionsService — confirmar pagamento do ciclo (ACTIVE não pag
     const { service } = await buildService(tables);
     await expect(service.confirmCyclePaymentManually('sub-1', 'CASH')).rejects.toThrow(/ativa/i);
   });
+
+  it('BLOQUEIA quando o ciclo JÁ tem pagamento (anti-duplicata no caixa)', async () => {
+    const recent = (d: number) => new Date(Date.now() + d * 86400000).toISOString();
+    const tables = baseTables();
+    tables.client_subscriptions = [
+      { id: 'sub-1', clientId: 'client-1', planId: 'plan-1', status: 'ACTIVE', startDate: recent(-1), createdAt: recent(-1), endDate: recent(29), plan: { id: 'plan-1', name: 'Mensal', price: 7000 } },
+    ];
+    // já existe pagamento do ciclo (ex: cartão recorrente do Asaas caiu)
+    tables.payments = [
+      { id: 'pay-real', subscriptionId: 'sub-1', clientId: 'client-1', method: 'CARD', paidAt: recent(0), createdAt: recent(0), asaasPaymentId: 'pay_xyz' },
+    ];
+    const { service, state } = await buildService(tables);
+    await expect(service.confirmCyclePaymentManually('sub-1', 'CASH')).rejects.toThrow(/já tem pagamento/i);
+    // não criou um 2º pagamento (não duplicou no caixa)
+    expect(state.payments.length).toBe(1);
+  });
 });
 
 /**

@@ -1106,6 +1106,16 @@ export class SubscriptionsService {
       );
     }
 
+    // GUARDA ANTI-DUPLICATA: se o ciclo vigente JÁ tem pagamento confirmado (ex.: o
+    // cartão recorrente do Asaas já caiu), NÃO registra outro — senão entra em dobro
+    // no caixa (bug reportado: admin clicava "Confirmar pagamento" em quem já pagou
+    // e o valor duplicava). Mesma régua de isCurrentCyclePaid.
+    if (await isCurrentCyclePaid(this.supabase, subscription)) {
+      throw new BadRequestException(
+        'Este ciclo já tem pagamento registrado — não é necessário confirmar de novo (evita lançar em dobro no caixa).',
+      );
+    }
+
     const nowLocal = nowLocalIsoString();
     await this.recordBalcaoSubscriptionPayment(
       {
