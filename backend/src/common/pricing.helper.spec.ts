@@ -477,5 +477,25 @@ describe('pricing.helper', () => {
       expect(sub).not.toBeNull();
       expect(sub!.subscriptionId).toBe('sub-123');
     });
+
+    it('conta pagamento na BORDA: ciclo com hora + pagamento de meia-noite do dia anterior (caso Roberto)', async () => {
+      // Ciclo iniciou HOJE às 14h; pagamento foi ONTEM, gravado só com a data (00:00).
+      // Com a margem antiga (start - 1 dia mantendo a hora) o pagamento de ontem-00:00
+      // caía ANTES do piso (ontem-14h) e era tido como "fora do ciclo". O piso
+      // normalizado p/ 00:00 conserta (caso Roberto: pagou 29/05, ciclo inicia 30/05).
+      const hojeAs14 = new Date(); hojeAs14.setHours(14, 0, 0, 0);
+      const ontem = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const ontemData = ontem.toISOString().slice(0, 10); // só a data (vira 00:00)
+      const amanha = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      const row = {
+        ...planRow(amanha),
+        startDate: hojeAs14.toISOString(),
+        createdAt: hojeAs14.toISOString(),
+      };
+      const supabase = makeSupabase(row, [{ paidAt: ontemData }]);
+      const sub = await getActiveClientSubscription(supabase, 'c1');
+      expect(sub).not.toBeNull();
+      expect(sub!.subscriptionId).toBe('sub-123');
+    });
   });
 });

@@ -103,7 +103,16 @@ export async function isCurrentCyclePaid(
   const createdMs = row.createdAt ? new Date(row.createdAt).getTime() : 0;
   const cycleStartMs = Math.max(startMs, createdMs);
   const ONE_DAY = 24 * 60 * 60 * 1000;
-  const cycleFloorMs = cycleStartMs > 0 ? cycleStartMs - ONE_DAY : 0;
+  // Piso = início do ciclo menos 1 dia, NORMALIZADO para o começo do dia em UTC.
+  // Sem normalizar, um startDate com hora (ex: 30/05 14h) gera piso em 29/05 14h, e
+  // um pagamento gravado como "29/05" (interpretado 00:00 UTC) cai ANTES do piso e é
+  // tido como "fora do ciclo" — falso negativo de borda (caso Roberto: pagou 29/05,
+  // ciclo inicia 30/05, aparecia "ciclo não pago"). Usa setUTCHours porque o paidAt
+  // data-só é UTC; com horário local o fuso (GMT-3) jogaria o piso 3h à frente.
+  const cycleFloorMs =
+    cycleStartMs > 0
+      ? new Date(cycleStartMs - ONE_DAY).setUTCHours(0, 0, 0, 0)
+      : 0;
 
   const { data: payments } = await supabase
     .from('payments')
