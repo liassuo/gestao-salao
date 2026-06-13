@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { BarChart3, Calendar, AlertTriangle } from 'lucide-react';
+import { BarChart3, AlertTriangle } from 'lucide-react';
 import { reportsService } from '../services/reports';
 import type { AsaasReconciliation, AsaasReconciliationStatus } from '../types/reports';
 import { formatCurrency, formatDate, firstDayOfMonthIso, todayIso } from '../utils/format';
-import { Spinner, useToast } from '../components/ui';
+import { Spinner, useToast, DateInput } from '../components/ui';
 import { PinGate } from '../components/auth';
 
 // Rótulo + cor por status (mesma régua do backend). Tokens de cor do tema.
@@ -215,16 +215,7 @@ function DateField({ label, value, onChange }: { label: string; value: string; o
   return (
     <div>
       <label htmlFor={id} className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">{label}</label>
-      <div className="relative">
-        <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
-        <input
-          id={id}
-          type="date"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-2 pl-10 pr-4 text-sm text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none"
-        />
-      </div>
+      <DateInput id={id} value={value} onChange={onChange} />
     </div>
   );
 }
