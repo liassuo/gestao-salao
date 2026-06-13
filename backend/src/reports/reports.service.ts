@@ -91,6 +91,10 @@ export class ReportsService {
     // Comanda (order) ligada ao pagamento por orders.paymentId — traz o profissional
     // e os serviços. Pagamentos sem comanda (assinatura, avulso, manual) ficam sem
     // profissional/serviços, mas ainda exibem data/cliente/valor/método.
+    // NÃO embutimos professionals aqui: `orders` tem DUAS FKs para professionals
+    // (professionalId e consumerProfessionalId), então o embed `professionals(...)`
+    // é ambíguo no PostgREST (PGRST201) e fazia o relatório inteiro falhar. Trazemos
+    // só professionalId no order e resolvemos o nome num fetch em lote separado.
     const paymentIds = payments.map((p) => p.id);
     const orderByPaymentId = new Map<string, any>();
     for (let i = 0; i < paymentIds.length; i += CHUNK) {
@@ -98,7 +102,7 @@ export class ReportsService {
       const { data, error } = await this.supabase
         .from('orders')
         .select(
-          'paymentId, professional:professionals(name), items:order_items(itemType, service:services(name))',
+          'paymentId, professionalId, items:order_items(itemType, service:services(name))',
         )
         .in('paymentId', batch);
       if (error) throw error;
@@ -107,15 +111,31 @@ export class ReportsService {
       }
     }
 
+    // Nome do profissional por id (das comandas acima), em lote.
+    const professionalIds = [
+      ...new Set(
+        ([...orderByPaymentId.values()]
+          .map((o) => o.professionalId)
+          .filter(Boolean)) as string[],
+      ),
+    ];
+    const professionalNameById = new Map<string, string>();
+    for (let i = 0; i < professionalIds.length; i += CHUNK) {
+      const batch = professionalIds.slice(i, i + CHUNK);
+      const { data, error } = await this.supabase
+        .from('professionals')
+        .select('id, name')
+        .in('id', batch);
+      if (error) throw error;
+      for (const pr of data || []) professionalNameById.set(pr.id, pr.name);
+    }
+
     const transactions = payments.map((p) => {
       const order = orderByPaymentId.get(p.id);
-      // Embeds do PostgREST podem vir como objeto (to-one) ou array — normaliza.
-      const professional = Array.isArray(order?.professional)
-        ? order?.professional[0]
-        : order?.professional;
       const serviceNames = ((order?.items || []) as any[])
         .filter((it) => it.itemType === 'SERVICE')
         .map((it) => {
+          // Embed do PostgREST pode vir como objeto (to-one) ou array — normaliza.
           const svc = Array.isArray(it.service) ? it.service[0] : it.service;
           return svc?.name ?? null;
         })
@@ -127,7 +147,9 @@ export class ReportsService {
         method: p.method,
         origin: p.asaasPaymentId ? 'APP' : 'PRESENCIAL',
         clientName: p.clientId ? clientNameById.get(p.clientId) ?? null : null,
-        professionalName: professional?.name ?? null,
+        professionalName: order?.professionalId
+          ? professionalNameById.get(order.professionalId) ?? null
+          : null,
         services: serviceNames.join(', '),
       };
     });
