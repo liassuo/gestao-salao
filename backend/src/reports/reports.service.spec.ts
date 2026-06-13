@@ -70,6 +70,80 @@ describe('ReportsService', () => {
     service = module.get<ReportsService>(ReportsService);
   });
 
+  describe('getSalesReport (transações enriquecidas)', () => {
+    it('mapeia cada transação para o formato do front (date/clientName/professionalName/services), não a linha crua de payments', async () => {
+      // Antes: transactions = payments crus (sem date/clientName/...), então a tela
+      // mostrava "Data inválida" e Cliente/Profissional/Serviços em branco.
+      seed('payments', {
+        data: [
+          {
+            id: 'pay-1',
+            amount: 4000,
+            method: 'PIX',
+            businessDate: '2026-06-10',
+            paidAt: '2026-06-10T12:00:00',
+            clientId: 'cli-1',
+            asaasStatus: null,
+          },
+        ],
+        error: null,
+      });
+      seed('clients', { data: [{ id: 'cli-1', name: 'João' }], error: null });
+      seed('orders', {
+        data: [
+          {
+            paymentId: 'pay-1',
+            professional: { name: 'Alex' },
+            items: [
+              { itemType: 'SERVICE', service: { name: 'Corte' } },
+              { itemType: 'SERVICE', service: { name: 'Barba' } },
+            ],
+          },
+        ],
+        error: null,
+      });
+
+      const result = await service.getSalesReport(period);
+      const tx = result.transactions.find((t: any) => t.id === 'pay-1');
+
+      expect(tx).toBeDefined();
+      expect(tx.date).toBe('2026-06-10'); // businessDate, não undefined
+      expect(tx.clientName).toBe('João');
+      expect(tx.professionalName).toBe('Alex');
+      expect(tx.services).toBe('Corte, Barba');
+      expect(tx.amount).toBe(4000);
+      expect(tx.method).toBe('PIX');
+    });
+
+    it('usa paidAt como data quando não há businessDate (registro legado) e tolera pagamento sem comanda', async () => {
+      seed('payments', {
+        data: [
+          {
+            id: 'pay-2',
+            amount: 7000,
+            method: 'CASH',
+            businessDate: null,
+            paidAt: '2026-06-05T09:30:00',
+            clientId: null,
+            asaasStatus: null,
+          },
+        ],
+        error: null,
+      });
+      seed('clients', { data: [], error: null });
+      seed('orders', { data: [], error: null });
+
+      const result = await service.getSalesReport(period);
+      const tx = result.transactions.find((t: any) => t.id === 'pay-2');
+
+      expect(tx).toBeDefined();
+      expect(tx.date).toBe('2026-06-05T09:30:00'); // fallback paidAt
+      expect(tx.clientName).toBeNull();
+      expect(tx.professionalName).toBeNull();
+      expect(tx.services).toBe('');
+    });
+  });
+
   describe('getProfessionalReport (H3)', () => {
     it('reports the SAME commission as the Comissões screen (from the shared breakdown), not totalPrice×rate', async () => {
       seed('professionals', {
