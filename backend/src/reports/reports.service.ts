@@ -46,12 +46,23 @@ export class ReportsService {
       CARD: { total: 0, count: 0 },
     };
 
+    // Origem do pagamento: APP = cobrança paga pelo gateway Asaas (tem asaasPaymentId);
+    // PRESENCIAL = pago pessoalmente (dinheiro, maquininha física, PIX manual digitado),
+    // sem passar pelo app. Mesmo discriminador da tela Conciliação Asaas.
+    const byOrigin = {
+      PRESENCIAL: { total: 0, count: 0 },
+      APP: { total: 0, count: 0 },
+    };
+
     for (const payment of payments || []) {
       const method = payment.method as keyof typeof byMethod;
       if (byMethod[method]) {
         byMethod[method].total += payment.amount;
         byMethod[method].count += 1;
       }
+      const origin = payment.asaasPaymentId ? 'APP' : 'PRESENCIAL';
+      byOrigin[origin].total += payment.amount;
+      byOrigin[origin].count += 1;
     }
 
     // Enriquece as transações para a tabela do relatório. O front espera
@@ -114,6 +125,7 @@ export class ReportsService {
         date: p.businessDate ?? p.paidAt ?? null,
         amount: p.amount,
         method: p.method,
+        origin: p.asaasPaymentId ? 'APP' : 'PRESENCIAL',
         clientName: p.clientId ? clientNameById.get(p.clientId) ?? null : null,
         professionalName: professional?.name ?? null,
         services: serviceNames.join(', '),
@@ -129,6 +141,12 @@ export class ReportsService {
       },
       byMethod: Object.entries(byMethod).map(([method, data]) => ({
         method,
+        total: data.total,
+        count: data.count,
+        percentage: totalRevenue > 0 ? Math.round((data.total / totalRevenue) * 100) : 0,
+      })),
+      byOrigin: Object.entries(byOrigin).map(([origin, data]) => ({
+        origin,
         total: data.total,
         count: data.count,
         percentage: totalRevenue > 0 ? Math.round((data.total / totalRevenue) * 100) : 0,

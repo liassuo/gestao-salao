@@ -14,6 +14,12 @@ export interface SalesReport {
     count: number;
     percentage: number;
   }[];
+  byOrigin: {
+    origin: 'PRESENCIAL' | 'APP';
+    total: number;
+    count: number;
+    percentage: number;
+  }[];
   daily: {
     date: string;
     amount: number;
@@ -23,6 +29,7 @@ export interface SalesReport {
     date: string;
     amount: number;
     method: string;
+    origin: 'PRESENCIAL' | 'APP';
     clientName: string;
     professionalName: string;
     services: string;

@@ -142,6 +142,53 @@ describe('ReportsService', () => {
       expect(tx.professionalName).toBeNull();
       expect(tx.services).toBe('');
     });
+
+    it('separa origem PRESENCIAL (manual) x APP/Asaas (asaasPaymentId) por transação e em byOrigin', async () => {
+      seed('payments', {
+        data: [
+          {
+            id: 'pay-app',
+            amount: 1000,
+            method: 'PIX',
+            businessDate: '2026-06-10',
+            paidAt: '2026-06-10T12:00:00',
+            clientId: null,
+            asaasPaymentId: 'ch_app', // pago pelo APP via Asaas
+            asaasStatus: 'RECEIVED',
+          },
+          {
+            id: 'pay-presencial',
+            amount: 3000,
+            method: 'CASH',
+            businessDate: '2026-06-10',
+            paidAt: '2026-06-10T13:00:00',
+            clientId: null,
+            asaasPaymentId: null, // pago pessoalmente (sem gateway)
+            asaasStatus: null,
+          },
+        ],
+        error: null,
+      });
+      seed('clients', { data: [], error: null });
+      seed('orders', { data: [], error: null });
+
+      const result = await service.getSalesReport(period);
+
+      const txApp = result.transactions.find((t: any) => t.id === 'pay-app');
+      const txPres = result.transactions.find((t: any) => t.id === 'pay-presencial');
+      expect(txApp.origin).toBe('APP');
+      expect(txPres.origin).toBe('PRESENCIAL');
+
+      const app = result.byOrigin.find((o: any) => o.origin === 'APP');
+      const pres = result.byOrigin.find((o: any) => o.origin === 'PRESENCIAL');
+      expect(app).toBeDefined();
+      expect(pres).toBeDefined();
+      // 1000 (app) : 3000 (presencial) → 25% / 75% (estável mesmo com o mock
+      // duplicando linhas por consultar payments duas vezes).
+      expect(app.percentage).toBe(25);
+      expect(pres.percentage).toBe(75);
+      expect(app.total / pres.total).toBeCloseTo(1 / 3);
+    });
   });
 
   describe('getProfessionalReport (H3)', () => {
