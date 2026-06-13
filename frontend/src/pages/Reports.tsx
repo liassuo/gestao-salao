@@ -18,6 +18,11 @@ import autoTable from 'jspdf-autotable';
 
 type ReportType = 'sales' | 'professionals' | 'services' | 'clients' | 'debts' | 'cash-register';
 
+const originLabel: Record<'PRESENCIAL' | 'APP', string> = {
+  PRESENCIAL: 'Presencial',
+  APP: 'APP (Asaas)',
+};
+
 const reportOptions = [
   { id: 'sales' as ReportType, label: 'Vendas', icon: DollarSign },
   { id: 'professionals' as ReportType, label: 'Profissionais', icon: Users },
@@ -113,6 +118,23 @@ export function Reports() {
       headStyles: { fillColor: [139, 105, 20] },
     });
 
+    // Vendas: tabela extra separando origem presencial x APP (Asaas).
+    if (selectedReport === 'sales' && Array.isArray(data.byOrigin) && data.byOrigin.length > 0) {
+      const lastY = (doc as any).lastAutoTable?.finalY ?? 32;
+      autoTable(doc, {
+        startY: lastY + 8,
+        head: [['Origem', 'Transacoes', 'Valor', '%']],
+        body: data.byOrigin.map((o: SalesReport['byOrigin'][number]) => [
+          o.origin === 'APP' ? 'APP (Asaas)' : 'Presencial',
+          String(o.count),
+          formatCurrency(o.total),
+          `${o.percentage}%`,
+        ]),
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [139, 105, 20] },
+      });
+    }
+
     doc.save(`relatorio-${reportLabel}-${startDate}-${endDate}.pdf`);
   };
 
@@ -132,6 +154,22 @@ export function Reports() {
           <p className="text-sm text-[var(--text-muted)]">Ticket Médio</p>
           <p className="text-2xl font-bold text-[var(--text-primary)]">{formatCurrency(report.summary.averageTicket)}</p>
         </div>
+      </div>
+
+      {/* By Origin (presencial x APP) */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {(['PRESENCIAL', 'APP'] as const).map((origin) => {
+          const entry = report.byOrigin?.find((o) => o.origin === origin);
+          return (
+            <div key={origin} className="rounded-xl border border-[var(--border-color)] bg-[var(--hover-bg)] p-4">
+              <p className="text-sm text-[var(--text-muted)]">{originLabel[origin]}</p>
+              <p className="text-2xl font-bold text-[#C8923A]">{formatCurrency(entry?.total ?? 0)}</p>
+              <p className="mt-1 text-sm text-[var(--text-muted)]">
+                {entry?.count ?? 0} transações ({entry?.percentage ?? 0}%)
+              </p>
+            </div>
+          );
+        })}
       </div>
 
       {/* By Method */}
@@ -163,6 +201,7 @@ export function Reports() {
                 <th className="pb-2 text-left">Profissional</th>
                 <th className="pb-2 text-left">Serviços</th>
                 <th className="pb-2 text-left">Método</th>
+                <th className="pb-2 text-left">Origem</th>
                 <th className="pb-2 text-right">Valor</th>
               </tr>
             </thead>
@@ -174,6 +213,7 @@ export function Reports() {
                   <td className="py-2">{tx.professionalName}</td>
                   <td className="py-2 max-w-[200px] truncate">{tx.services}</td>
                   <td className="py-2">{tx.method}</td>
+                  <td className="py-2">{originLabel[tx.origin] ?? tx.origin}</td>
                   <td className="py-2 text-right font-medium text-[var(--text-primary)]">{formatCurrency(tx.amount)}</td>
                 </tr>
               ))}

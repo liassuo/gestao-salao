@@ -46,13 +46,91 @@ export class ReportsService {
       CARD: { total: 0, count: 0 },
     };
 
+    // Origem do pagamento: APP = cobrança paga pelo gateway Asaas (tem asaasPaymentId);
+    // PRESENCIAL = pago pessoalmente (dinheiro, maquininha física, PIX manual digitado),
+    // sem passar pelo app. Mesmo discriminador da tela Conciliação Asaas.
+    const byOrigin = {
+      PRESENCIAL: { total: 0, count: 0 },
+      APP: { total: 0, count: 0 },
+    };
+
     for (const payment of payments || []) {
       const method = payment.method as keyof typeof byMethod;
       if (byMethod[method]) {
         byMethod[method].total += payment.amount;
         byMethod[method].count += 1;
       }
+      const origin = payment.asaasPaymentId ? 'APP' : 'PRESENCIAL';
+      byOrigin[origin].total += payment.amount;
+      byOrigin[origin].count += 1;
     }
+
+    // Enriquece as transações para a tabela do relatório. O front espera
+    // { id, date, amount, method, clientName, professionalName, services }; antes
+    // devolvíamos a linha CRUA de payments (sem date/clientName/professionalName/
+    // services), então a tela mostrava "Data inválida" e Cliente/Profissional/
+    // Serviços em branco. A data exibida é o DIA CONTÁBIL (businessDate, fallback
+    // paidAt), coerente com o restante do relatório.
+    const CHUNK = 300; // .in serializa na query string — busca em lotes (igual getServicesReport)
+
+    // Cliente: payments.clientId → clients.name.
+    const clientIds = [
+      ...new Set((payments.map((p) => p.clientId).filter(Boolean) as string[])),
+    ];
+    const clientNameById = new Map<string, string>();
+    for (let i = 0; i < clientIds.length; i += CHUNK) {
+      const batch = clientIds.slice(i, i + CHUNK);
+      const { data, error } = await this.supabase
+        .from('clients')
+        .select('id, name')
+        .in('id', batch);
+      if (error) throw error;
+      for (const c of data || []) clientNameById.set(c.id, c.name);
+    }
+
+    // Comanda (order) ligada ao pagamento por orders.paymentId — traz o profissional
+    // e os serviços. Pagamentos sem comanda (assinatura, avulso, manual) ficam sem
+    // profissional/serviços, mas ainda exibem data/cliente/valor/método.
+    const paymentIds = payments.map((p) => p.id);
+    const orderByPaymentId = new Map<string, any>();
+    for (let i = 0; i < paymentIds.length; i += CHUNK) {
+      const batch = paymentIds.slice(i, i + CHUNK);
+      const { data, error } = await this.supabase
+        .from('orders')
+        .select(
+          'paymentId, professional:professionals(name), items:order_items(itemType, service:services(name))',
+        )
+        .in('paymentId', batch);
+      if (error) throw error;
+      for (const o of data || []) {
+        if ((o as any).paymentId) orderByPaymentId.set((o as any).paymentId, o);
+      }
+    }
+
+    const transactions = payments.map((p) => {
+      const order = orderByPaymentId.get(p.id);
+      // Embeds do PostgREST podem vir como objeto (to-one) ou array — normaliza.
+      const professional = Array.isArray(order?.professional)
+        ? order?.professional[0]
+        : order?.professional;
+      const serviceNames = ((order?.items || []) as any[])
+        .filter((it) => it.itemType === 'SERVICE')
+        .map((it) => {
+          const svc = Array.isArray(it.service) ? it.service[0] : it.service;
+          return svc?.name ?? null;
+        })
+        .filter(Boolean);
+      return {
+        id: p.id,
+        date: p.businessDate ?? p.paidAt ?? null,
+        amount: p.amount,
+        method: p.method,
+        origin: p.asaasPaymentId ? 'APP' : 'PRESENCIAL',
+        clientName: p.clientId ? clientNameById.get(p.clientId) ?? null : null,
+        professionalName: professional?.name ?? null,
+        services: serviceNames.join(', '),
+      };
+    });
 
     return {
       period: { startDate, endDate },
@@ -67,7 +145,13 @@ export class ReportsService {
         count: data.count,
         percentage: totalRevenue > 0 ? Math.round((data.total / totalRevenue) * 100) : 0,
       })),
-      transactions: payments || [],
+      byOrigin: Object.entries(byOrigin).map(([origin, data]) => ({
+        origin,
+        total: data.total,
+        count: data.count,
+        percentage: totalRevenue > 0 ? Math.round((data.total / totalRevenue) * 100) : 0,
+      })),
+      transactions,
     };
   }
 
