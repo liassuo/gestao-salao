@@ -482,12 +482,17 @@ export class SubscriptionsService {
   }
 
   /**
-   * Concede uma assinatura CORTESIA (grátis) a um cliente: o admin "dá" o plano até
-   * a data escolhida (limite de 1 mês). Nasce ACTIVE com isComp=true e, ao contrário
-   * de subscribeClient, NÃO registra pagamento, NÃO gera cobrança Asaas e NÃO entra
-   * em caixa/conciliação/receita/pote. Quando vence, vira EXPIRED sem gerar dívida
-   * (os pontos de suspensão respeitam isComp) e o cliente vê o fluxo normal de
-   * renovação PAGA. Só admin (guard no controller).
+   * Concede uma assinatura a um cliente: o admin "dá" o plano até a data escolhida
+   * (limite de 1 mês). Nasce ACTIVE. Duas variantes, conforme `paymentMethod`:
+   *
+   * - SEM paymentMethod → CORTESIA grátis: isComp=true, NÃO registra pagamento, NÃO
+   *   gera cobrança Asaas, NÃO entra em caixa/conciliação/receita/pote. Ao vencer
+   *   vira EXPIRED sem dívida (os pontos de suspensão respeitam isComp).
+   * - COM paymentMethod → 1ª mensalidade CONTABILIZADA no caixa (recordBalcao, como
+   *   receita pelo método) e isComp=false: comporta-se como assinatura paga normal
+   *   (ao vencer, SUSPENDED + inadimplência).
+   *
+   * As renovações seguintes são pagas/contabilizadas pelo fluxo normal. Só admin.
    */
   async grantCourtesy(dto: GrantCourtesyDto) {
     const { data: client } = await this.supabase
@@ -539,6 +544,9 @@ export class SubscriptionsService {
       );
     }
 
+    // Contabilizar no caixa? Com paymentMethod a 1ª mensalidade vira receita e a
+    // assinatura é tratada como paga (isComp=false). Sem método, é cortesia grátis.
+    const accountInCash = !!dto.paymentMethod;
     const subNow = nowLocalIsoString();
     const fields = {
       planId: dto.planId,
@@ -547,7 +555,7 @@ export class SubscriptionsService {
       cutsUsedThisMonth: 0,
       lastResetDate: subNow,
       status: 'ACTIVE',
-      isComp: true,
+      isComp: !accountInCash,
       canceledAt: null,
       updatedAt: subNow,
     };
@@ -585,8 +593,25 @@ export class SubscriptionsService {
       throw new BadRequestException(`${msg}${hint}`);
     }
 
+    // Contabilizar a 1ª mensalidade no caixa (entra como receita pelo método).
+    // recordBalcaoSubscriptionPayment é idempotente quanto a falha (só loga) e já
+    // reseta isComp=false — coerente com "é uma assinatura paga".
+    if (accountInCash) {
+      await this.recordBalcaoSubscriptionPayment(
+        {
+          id: inserted.id,
+          clientId: dto.clientId,
+          amount: plan.price ?? 0,
+          planName: plan.name ?? '',
+        },
+        dto.paymentMethod as string,
+        subNow,
+        'Assinatura concedida (1ª mensalidade no caixa)',
+      );
+    }
+
     this.logger.log(
-      `Assinatura CORTESIA concedida (cliente ${dto.clientId}, plano ${plan.name}) até ${endDate.toISOString()}`,
+      `Assinatura ${accountInCash ? 'concedida + contabilizada no caixa' : 'CORTESIA concedida'} (cliente ${dto.clientId}, plano ${plan.name}) até ${endDate.toISOString()}`,
     );
 
     const { data: subscription } = await this.supabase

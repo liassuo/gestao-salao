@@ -535,6 +535,26 @@ describe('SubscriptionsService — assinatura CORTESIA (grátis)', () => {
     );
   });
 
+  it('com paymentMethod: contabiliza a 1ª mensalidade no caixa e isComp=false (assinatura paga)', async () => {
+    const { service, state } = await buildService(baseTables());
+
+    const sub = await service.grantCourtesy({
+      clientId: 'client-1',
+      planId: 'plan-1',
+      endDate: future(15),
+      paymentMethod: 'PIX',
+    } as any);
+
+    expect(sub.status).toBe('ACTIVE');
+    expect(sub.isComp).toBe(false); // contabilizado = paga, não é cortesia
+    expect(state.payments).toHaveLength(1);
+    expect(state.payments[0].method).toBe('PIX');
+    expect(state.payments[0].amount).toBe(8000);
+    expect(state.payments[0].subscriptionId).toBe(sub.id);
+    expect(state.payments[0].paidAt).toBeTruthy();
+    expect(state.payments[0].cashRegisterId).toBe('caixa-hoje');
+  });
+
   it('rejeita término além de 1 mês', async () => {
     const { service } = await buildService(baseTables());
     await expect(

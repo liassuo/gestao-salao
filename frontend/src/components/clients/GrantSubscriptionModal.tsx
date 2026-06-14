@@ -33,6 +33,8 @@ export function GrantSubscriptionModal({
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [planId, setPlanId] = useState('');
   const [endDate, setEndDate] = useState(plusOneMonthIso());
+  const [accountInCash, setAccountInCash] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'PIX' | 'CARD'>('CASH');
   const [loading, setLoading] = useState(false);
   const [loadingPlans, setLoadingPlans] = useState(false);
 
@@ -40,6 +42,8 @@ export function GrantSubscriptionModal({
     if (!isOpen) return;
     setPlanId('');
     setEndDate(plusOneMonthIso());
+    setAccountInCash(false);
+    setPaymentMethod('CASH');
     setLoadingPlans(true);
     subscriptionsService
       .listPlans()
@@ -60,8 +64,18 @@ export function GrantSubscriptionModal({
     if (!client || !valid) return;
     setLoading(true);
     try {
-      await subscriptionsService.grantCourtesy({ clientId: client.id, planId, endDate });
-      toast.success('Assinatura concedida', `${client.name} recebeu a assinatura cortesia.`);
+      await subscriptionsService.grantCourtesy({
+        clientId: client.id,
+        planId,
+        endDate,
+        ...(accountInCash ? { paymentMethod } : {}),
+      });
+      toast.success(
+        'Assinatura concedida',
+        accountInCash
+          ? `${client.name} recebeu a assinatura (1ª mensalidade no caixa).`
+          : `${client.name} recebeu a assinatura cortesia.`,
+      );
       onGranted();
       onClose();
     } catch (err) {
@@ -76,7 +90,9 @@ export function GrantSubscriptionModal({
       <div className="space-y-4">
         <p className="text-sm text-[var(--text-muted)]">
           {client
-            ? `${client.name} ganhará uma assinatura grátis. Sem cobrança — quando terminar, o cliente poderá renovar pagando.`
+            ? accountInCash
+              ? `${client.name} receberá a assinatura e a 1ª mensalidade será contabilizada no caixa. As próximas renovações são pagas normalmente.`
+              : `${client.name} ganhará uma assinatura grátis (não entra no caixa). Quando terminar, o cliente poderá renovar pagando.`
             : ''}
         </p>
 
@@ -109,6 +125,40 @@ export function GrantSubscriptionModal({
           )}
           {notFuture && (
             <p className="mt-1 text-xs text-[#A63030]">Escolha uma data futura.</p>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-[var(--border-color)] p-3">
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={accountInCash}
+              onChange={(e) => setAccountInCash(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-[#C8923A]"
+            />
+            <span className="text-sm">
+              <span className="font-medium text-[var(--text-primary)]">Contabilizar no caixa</span>
+              <span className="block text-xs text-[var(--text-muted)]">
+                Lança a 1ª mensalidade como receita. Desligado = cortesia grátis.
+              </span>
+            </span>
+          </label>
+
+          {accountInCash && (
+            <div className="mt-3">
+              <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">
+                Forma de pagamento
+              </label>
+              <select
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value as 'CASH' | 'PIX' | 'CARD')}
+                className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none"
+              >
+                <option value="CASH">Dinheiro</option>
+                <option value="PIX">PIX</option>
+                <option value="CARD">Cartão</option>
+              </select>
+            </div>
           )}
         </div>
 
