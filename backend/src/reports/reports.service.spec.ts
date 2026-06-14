@@ -93,7 +93,7 @@ describe('ReportsService', () => {
         data: [
           {
             paymentId: 'pay-1',
-            professional: { name: 'Alex' },
+            professionalId: 'prof-1',
             items: [
               { itemType: 'SERVICE', service: { name: 'Corte' } },
               { itemType: 'SERVICE', service: { name: 'Barba' } },
@@ -102,6 +102,7 @@ describe('ReportsService', () => {
         ],
         error: null,
       });
+      seed('professionals', { data: [{ id: 'prof-1', name: 'Alex' }], error: null });
 
       const result = await service.getSalesReport(period);
       const tx = result.transactions.find((t: any) => t.id === 'pay-1');
@@ -113,6 +114,15 @@ describe('ReportsService', () => {
       expect(tx.services).toBe('Corte, Barba');
       expect(tx.amount).toBe(4000);
       expect(tx.method).toBe('PIX');
+
+      // Regressão: `orders` tem 2 FKs para professionals (professionalId +
+      // consumerProfessionalId), então embutir `professionals(...)` é ambíguo no
+      // PostgREST (PGRST201) e quebrava o relatório inteiro. O nome do profissional
+      // deve vir de um fetch em lote na tabela professionals, não de um embed.
+      const ordersSelect = (chains['orders'].select as jest.Mock).mock.calls
+        .map((c: any[]) => String(c[0]))
+        .join(' | ');
+      expect(ordersSelect).not.toMatch(/professionals\s*\(/);
     });
 
     it('usa paidAt como data quando não há businessDate (registro legado) e tolera pagamento sem comanda', async () => {
