@@ -1,4 +1,4 @@
-import { Users, Phone, Mail, MoreVertical, Edit2, Trash2, KeyRound, UserX, UserCheck, MessageCircle } from 'lucide-react';
+import { Users, Phone, Mail, MoreVertical, Edit2, Trash2, KeyRound, UserX, UserCheck, MessageCircle, Gift } from 'lucide-react';
 import { useState, useRef } from 'react';
 import { EmptyState } from '@/components/ui';
 import { formatPhone } from '@/utils/format';
@@ -10,6 +10,7 @@ interface ClientsTableProps {
   onDelete: (client: Client) => void;
   onResetPassword?: (client: Client) => void;
   onReactivate?: (client: Client) => void;
+  onGrantSubscription?: (client: Client) => void;
   isLoading?: boolean;
   onNewClient?: () => void;
   mode?: 'active' | 'inactive';
@@ -38,6 +39,7 @@ export function ClientsTable({
   onDelete,
   onResetPassword,
   onReactivate,
+  onGrantSubscription,
   isLoading,
   onNewClient,
   mode = 'active',
@@ -160,13 +162,13 @@ export function ClientsTable({
                           const btn = menuBtnRefs.current[client.id];
                           if (btn) {
                             const rect = btn.getBoundingClientRect();
-                            const itemCount = 2 + (onResetPassword ? 1 : 0) + (onReactivate ? 1 : 0);
+                            const itemCount = 2 + (onResetPassword ? 1 : 0) + (onReactivate ? 1 : 0) + (onGrantSubscription ? 1 : 0);
                             const menuHeight = itemCount * 40 + 12;
                             const spaceBelow = window.innerHeight - rect.bottom;
                             const top = spaceBelow < menuHeight + 8
                               ? rect.top - menuHeight - 4
                               : rect.bottom + 4;
-                            setMenuPos({ top, left: rect.right - 144 });
+                            setMenuPos({ top, left: rect.right - 192 });
                           }
                           setOpenMenuId(client.id);
                         }
@@ -184,7 +186,7 @@ export function ClientsTable({
                           onClick={() => setOpenMenuId(null)}
                         />
                         <div
-                          className="fixed z-20 w-36 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-1 shadow-lg"
+                          className="fixed z-20 w-48 rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-1 shadow-lg"
                           style={{ top: menuPos.top, left: menuPos.left }}
                         >
                           <button
@@ -207,6 +209,18 @@ export function ClientsTable({
                             >
                               <KeyRound className="h-4 w-4" />
                               Resetar Senha
+                            </button>
+                          )}
+                          {onGrantSubscription && (
+                            <button
+                              onClick={() => {
+                                onGrantSubscription(client);
+                                setOpenMenuId(null);
+                              }}
+                              className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[#C8923A] hover:bg-[#C8923A]/10"
+                            >
+                              <Gift className="h-4 w-4" />
+                              Conceder assinatura
                             </button>
                           )}
                           {onReactivate && (

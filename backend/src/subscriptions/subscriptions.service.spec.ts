@@ -514,6 +514,110 @@ describe('SubscriptionsService — confirmar pagamento do ciclo (ACTIVE não pag
   });
 });
 
+describe('SubscriptionsService — assinatura CORTESIA (grátis)', () => {
+  const future = (d: number) => new Date(Date.now() + d * 86400000).toISOString();
+
+  it('concede ACTIVE com isComp=true e NÃO registra pagamento (não entra no caixa)', async () => {
+    const { service, state } = await buildService(baseTables());
+
+    const sub = await service.grantCourtesy({
+      clientId: 'client-1',
+      planId: 'plan-1',
+      endDate: future(15),
+    } as any);
+
+    expect(sub.status).toBe('ACTIVE');
+    expect(sub.isComp).toBe(true);
+    expect(state.payments).toHaveLength(0); // cortesia: sem receita/caixa
+    expect(state.client_subscriptions).toHaveLength(1);
+    expect(String(state.client_subscriptions[0].endDate).substring(0, 10)).toBe(
+      future(15).substring(0, 10),
+    );
+  });
+
+  it('rejeita término além de 1 mês', async () => {
+    const { service } = await buildService(baseTables());
+    await expect(
+      service.grantCourtesy({ clientId: 'client-1', planId: 'plan-1', endDate: future(45) } as any),
+    ).rejects.toThrow(/1 m[êe]s/i);
+  });
+
+  it('rejeita término no passado', async () => {
+    const { service } = await buildService(baseTables());
+    await expect(
+      service.grantCourtesy({ clientId: 'client-1', planId: 'plan-1', endDate: future(-1) } as any),
+    ).rejects.toThrow(/futura/i);
+  });
+
+  it('rejeita se o cliente já tem assinatura ativa', async () => {
+    const tables = baseTables();
+    tables.client_subscriptions = [
+      { id: 'sub-x', clientId: 'client-1', planId: 'plan-1', status: 'ACTIVE', endDate: future(20) },
+    ];
+    const { service } = await buildService(tables);
+    await expect(
+      service.grantCourtesy({ clientId: 'client-1', planId: 'plan-1', endDate: future(10) } as any),
+    ).rejects.toThrow(/já possui/i);
+  });
+
+  it('reaproveita a linha EXPIRED do cliente (constraint UNIQUE no clientId)', async () => {
+    const tables = baseTables();
+    tables.client_subscriptions = [
+      { id: 'sub-old', clientId: 'client-1', planId: 'plan-1', status: 'EXPIRED', endDate: '2020-01-01T00:00:00', isComp: false },
+    ];
+    const { service, state } = await buildService(tables);
+
+    const sub = await service.grantCourtesy({
+      clientId: 'client-1',
+      planId: 'plan-1',
+      endDate: future(10),
+    } as any);
+
+    expect(sub.id).toBe('sub-old');
+    expect(sub.status).toBe('ACTIVE');
+    expect(sub.isComp).toBe(true);
+    expect(state.client_subscriptions).toHaveLength(1); // reusou, não duplicou
+  });
+
+  it('cron: cortesia vencida vira EXPIRED e NÃO gera dívida', async () => {
+    const tables = baseTables();
+    tables.client_subscriptions = [
+      {
+        id: 'sub-comp', clientId: 'client-1', planId: 'plan-1', status: 'ACTIVE',
+        canceledAt: null, isComp: true, endDate: '2020-01-01T00:00:00.000',
+        plan: { name: 'Mensal', price: 8000 },
+      },
+    ];
+    tables.clients = [{ id: 'client-1', name: 'João', hasDebts: false }];
+    tables.debts = [];
+    const { service, state } = await buildService(tables);
+
+    await service.suspendExpiredActiveSubscriptionsCron();
+
+    expect(state.client_subscriptions[0].status).toBe('EXPIRED');
+    expect(state.debts).toHaveLength(0); // cortesia não vira inadimplência
+    expect(state.clients[0].hasDebts).toBe(false);
+  });
+
+  it('pagar o ciclo de uma cortesia reseta isComp=false (lapso futuro cobra normal)', async () => {
+    const recent = (d: number) => new Date(Date.now() + d * 86400000).toISOString();
+    const tables = baseTables();
+    tables.client_subscriptions = [
+      {
+        id: 'sub-comp', clientId: 'client-1', planId: 'plan-1', status: 'ACTIVE',
+        isComp: true, startDate: recent(-1), createdAt: recent(-1), endDate: recent(20),
+        cutsUsedThisMonth: 0, plan: { id: 'plan-1', name: 'Mensal', price: 8000 },
+      },
+    ];
+    const { service, state } = await buildService(tables);
+
+    await service.confirmCyclePaymentManually('sub-comp', 'CASH');
+
+    expect(state.payments).toHaveLength(1); // virou pago
+    expect(state.client_subscriptions[0].isComp).toBe(false);
+  });
+});
+
 /**
  * Bug do teste do dono: cancelar uma assinatura com cobrança não paga deixava a
  * dívida em aberto + hasDebts → cliente cancelado aparecia "Inadimplente" fantasma.

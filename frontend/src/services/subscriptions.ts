@@ -63,6 +63,17 @@ export const subscriptionsService = {
     return response.data;
   },
 
+  // Concede uma assinatura CORTESIA (grátis) ao cliente até endDate (ISO, máx 1 mês).
+  // Sem pagamento/cobrança. Admin only.
+  async grantCourtesy(payload: {
+    clientId: string;
+    planId: string;
+    endDate: string;
+  }): Promise<ClientSubscription> {
+    const response = await api.post<ClientSubscription>('/subscriptions/grant', payload);
+    return response.data;
+  },
+
   async cancelSubscription(id: string, immediate?: boolean): Promise<ClientSubscription> {
     const url = immediate
       ? `/subscriptions/${id}/cancel?immediate=true`
