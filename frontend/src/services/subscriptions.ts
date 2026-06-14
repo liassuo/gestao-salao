@@ -63,6 +63,19 @@ export const subscriptionsService = {
     return response.data;
   },
 
+  // Concede uma assinatura ao cliente até endDate (ISO, máx 1 mês). Admin only.
+  // Sem paymentMethod = cortesia grátis (sem caixa). Com paymentMethod = 1ª
+  // mensalidade contabilizada no caixa pelo método informado.
+  async grantCourtesy(payload: {
+    clientId: string;
+    planId: string;
+    endDate: string;
+    paymentMethod?: 'CASH' | 'PIX' | 'CARD';
+  }): Promise<ClientSubscription> {
+    const response = await api.post<ClientSubscription>('/subscriptions/grant', payload);
+    return response.data;
+  },
+
   async cancelSubscription(id: string, immediate?: boolean): Promise<ClientSubscription> {
     const url = immediate
       ? `/subscriptions/${id}/cancel?immediate=true`

@@ -27,6 +27,7 @@ import {
   SubscribeClientDto,
   SubscribeMeDto,
   ReactivateMeDto,
+  GrantCourtesyDto,
 } from './dto';
 
 @Injectable()
@@ -480,6 +481,149 @@ export class SubscriptionsService {
     return this.subscribeClient(dto);
   }
 
+  /**
+   * Concede uma assinatura a um cliente: o admin "dá" o plano até a data escolhida
+   * (limite de 1 mês). Nasce ACTIVE. Duas variantes, conforme `paymentMethod`:
+   *
+   * - SEM paymentMethod → CORTESIA grátis: isComp=true, NÃO registra pagamento, NÃO
+   *   gera cobrança Asaas, NÃO entra em caixa/conciliação/receita/pote. Ao vencer
+   *   vira EXPIRED sem dívida (os pontos de suspensão respeitam isComp).
+   * - COM paymentMethod → 1ª mensalidade CONTABILIZADA no caixa (recordBalcao, como
+   *   receita pelo método) e isComp=false: comporta-se como assinatura paga normal
+   *   (ao vencer, SUSPENDED + inadimplência).
+   *
+   * As renovações seguintes são pagas/contabilizadas pelo fluxo normal. Só admin.
+   */
+  async grantCourtesy(dto: GrantCourtesyDto) {
+    const { data: client } = await this.supabase
+      .from('clients')
+      .select('id, isActive')
+      .eq('id', dto.clientId)
+      .single();
+    if (!client) throw new NotFoundException('Cliente não encontrado');
+    if (client.isActive === false) {
+      throw new BadRequestException('Cliente inativo não pode receber assinatura');
+    }
+
+    const { data: plan } = await this.supabase
+      .from('subscription_plans')
+      .select('id, name, cutsPerMonth, price')
+      .eq('id', dto.planId)
+      .eq('isActive', true)
+      .single();
+    if (!plan) throw new NotFoundException('Plano não encontrado ou inativo');
+
+    // Término: precisa ser futuro e no máximo 1 mês a partir de hoje.
+    const now = new Date();
+    const endDate = new Date(dto.endDate);
+    if (Number.isNaN(endDate.getTime())) {
+      throw new BadRequestException('Data de término inválida');
+    }
+    if (endDate <= now) {
+      throw new BadRequestException('A data de término deve ser futura');
+    }
+    const maxEnd = new Date(now);
+    maxEnd.setMonth(maxEnd.getMonth() + 1);
+    // Tolerância de 1 dia para não barrar o usuário que escolhe exatamente o limite
+    // (comparação por dia, ignorando hora).
+    if (endDate.getTime() > maxEnd.getTime() + 24 * 60 * 60 * 1000) {
+      throw new BadRequestException('A cortesia tem limite de 1 mês');
+    }
+
+    // Dedup: não conceder se o cliente já tem assinatura viva (ACTIVE/PENDING).
+    // EXPIRED/SUSPENDED/CANCELED são reaproveitadas (constraint UNIQUE no clientId).
+    const { data: live } = await this.supabase
+      .from('client_subscriptions')
+      .select('id')
+      .eq('clientId', dto.clientId)
+      .in('status', ['ACTIVE', 'PENDING_PAYMENT'])
+      .limit(1);
+    if (live && live.length > 0) {
+      throw new BadRequestException(
+        'Cliente já possui uma assinatura ativa ou aguardando pagamento',
+      );
+    }
+
+    // Contabilizar no caixa? Com paymentMethod a 1ª mensalidade vira receita e a
+    // assinatura é tratada como paga (isComp=false). Sem método, é cortesia grátis.
+    const accountInCash = !!dto.paymentMethod;
+    const subNow = nowLocalIsoString();
+    const fields = {
+      planId: dto.planId,
+      startDate: now.toISOString(),
+      endDate: endDate.toISOString(),
+      cutsUsedThisMonth: 0,
+      lastResetDate: subNow,
+      status: 'ACTIVE',
+      isComp: !accountInCash,
+      canceledAt: null,
+      updatedAt: subNow,
+    };
+
+    // Reutiliza a linha existente do cliente (UNIQUE clientId), senão cria.
+    const { data: existingSub } = await this.supabase
+      .from('client_subscriptions')
+      .select('id')
+      .eq('clientId', dto.clientId)
+      .limit(1)
+      .single();
+
+    let query;
+    if (existingSub) {
+      query = this.supabase
+        .from('client_subscriptions')
+        .update(fields)
+        .eq('id', existingSub.id);
+    } else {
+      query = this.supabase.from('client_subscriptions').insert({
+        id: randomUUID(),
+        clientId: dto.clientId,
+        createdAt: subNow,
+        ...fields,
+      });
+    }
+
+    const { data: inserted, error } = await query.select('*').single();
+    if (error) {
+      this.logger.error(`grantCourtesy insert/update falhou: ${JSON.stringify(error)}`);
+      const msg = (error as { message?: string }).message || 'Erro ao conceder assinatura';
+      const hint = /isComp/i.test(msg)
+        ? ' Aplique no PostgreSQL o script backend/sql/alter_client_subscriptions_add_is_comp.sql.'
+        : '';
+      throw new BadRequestException(`${msg}${hint}`);
+    }
+
+    // Contabilizar a 1ª mensalidade no caixa (entra como receita pelo método).
+    // recordBalcaoSubscriptionPayment é idempotente quanto a falha (só loga) e já
+    // reseta isComp=false — coerente com "é uma assinatura paga".
+    if (accountInCash) {
+      await this.recordBalcaoSubscriptionPayment(
+        {
+          id: inserted.id,
+          clientId: dto.clientId,
+          amount: plan.price ?? 0,
+          planName: plan.name ?? '',
+        },
+        dto.paymentMethod as string,
+        subNow,
+        'Assinatura concedida (1ª mensalidade no caixa)',
+      );
+    }
+
+    this.logger.log(
+      `Assinatura ${accountInCash ? 'concedida + contabilizada no caixa' : 'CORTESIA concedida'} (cliente ${dto.clientId}, plano ${plan.name}) até ${endDate.toISOString()}`,
+    );
+
+    const { data: subscription } = await this.supabase
+      .from('client_subscriptions')
+      .select(
+        '*, client:clients(id, name, phone), plan:subscription_plans!planId(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))',
+      )
+      .eq('id', inserted.id)
+      .single();
+    return subscription ?? inserted;
+  }
+
   async findSubscription(id: string) {
     const { data: subscription, error } = await this.supabase
       .from('client_subscriptions')
@@ -696,6 +840,17 @@ export class SubscriptionsService {
       const endDate = new Date(subscription.endDate);
       if (new Date() > endDate) {
         const now = nowLocalIsoString();
+        // Cortesia vencida: EXPIRED sem inadimplência (mesma régua do cron).
+        if (subscription.isComp) {
+          const { data: expiredSub } = await this.supabase
+            .from('client_subscriptions')
+            .update({ status: 'EXPIRED', updatedAt: now })
+            .eq('id', subscription.id)
+            .select('*, client:clients(id, name, phone), plan:subscription_plans!planId(id, name, price, cutsPerMonth, discountPercent, services:subscription_plan_services(serviceId, discountPercent))')
+            .single();
+          this.logger.log(`Cortesia ${subscription.id} expirada na leitura (sem dívida)`);
+          return expiredSub ?? subscription;
+        }
         const { data: suspended } = await this.supabase
           .from('client_subscriptions')
           .update({ status: 'SUSPENDED', updatedAt: now })
@@ -1181,6 +1336,14 @@ export class SubscriptionsService {
     await this.cashRegisterService
       .linkPaymentToBusinessDateRegister(paymentId, businessDate)
       .catch((e) => this.logger.warn(`Falha ao vincular pagamento ${paymentId} ao caixa: ${e}`));
+
+    // Houve pagamento real → o ciclo deixa de ser cortesia. Assim, um lapso futuro
+    // volta a gerar inadimplência normalmente (não fica "grátis para sempre").
+    await this.supabase
+      .from('client_subscriptions')
+      .update({ isComp: false })
+      .eq('id', sub.id)
+      .eq('isComp', true);
   }
 
   /**
@@ -2214,7 +2377,7 @@ export class SubscriptionsService {
     const nowIso = new Date().toISOString();
     const { data: expired } = await this.supabase
       .from('client_subscriptions')
-      .select('id, clientId, endDate, plan:subscription_plans!planId(name, price)')
+      .select('id, clientId, endDate, isComp, plan:subscription_plans!planId(name, price)')
       .eq('status', 'ACTIVE')
       .is('canceledAt', null) // canceladas vencidas viram CANCELED no outro cron
       .lt('endDate', nowIso)
@@ -2225,6 +2388,20 @@ export class SubscriptionsService {
     const now = nowLocalIsoString();
     let suspended = 0;
     for (const sub of expired as any[]) {
+      // Cortesia (grátis) vencida: vira EXPIRED e NÃO gera inadimplência — nunca houve
+      // cobrança a pagar. O cliente vê o fluxo normal de renovação PAGA.
+      if (sub.isComp) {
+        const { error: expErr } = await this.supabase
+          .from('client_subscriptions')
+          .update({ status: 'EXPIRED', updatedAt: now })
+          .eq('id', sub.id);
+        if (expErr) {
+          this.logger.warn(`[suspend-expired-cron] falha ao expirar cortesia ${sub.id}: ${expErr.message}`);
+          continue;
+        }
+        this.logger.log(`[suspend-expired-cron] cortesia ${sub.id} expirada (sem dívida)`);
+        continue;
+      }
       const { error } = await this.supabase
         .from('client_subscriptions')
         .update({ status: 'SUSPENDED', updatedAt: now })
@@ -2746,6 +2923,7 @@ export class SubscriptionsService {
             endDate: newEnd.toISOString(),
             cutsUsedThisMonth: 0,
             lastResetDate: now,
+            isComp: false, // ativação por pagamento Asaas → não é mais cortesia
             updatedAt: now,
           })
           .eq('id', subscriptionId);

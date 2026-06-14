@@ -27,6 +27,7 @@ import {
   SubscribeMeDto,
   ReactivateMeDto,
   ConfirmPaymentDto,
+  GrantCourtesyDto,
 } from './dto';
 
 interface RequestWithUser extends Request {
@@ -205,6 +206,19 @@ export class SubscriptionsController {
   @HttpCode(HttpStatus.CREATED)
   async subscribe(@Body() dto: SubscribeClientDto) {
     return this.subscriptionsService.subscribe(dto);
+  }
+
+  /**
+   * POST /subscriptions/grant
+   * Concede uma assinatura CORTESIA (grátis) a um cliente até a data escolhida
+   * (limite 1 mês). Sem pagamento/cobrança/dívida. Admin only.
+   */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @Post('grant')
+  @HttpCode(HttpStatus.CREATED)
+  async grantCourtesy(@Body() dto: GrantCourtesyDto) {
+    return this.subscriptionsService.grantCourtesy(dto);
   }
 
   /**

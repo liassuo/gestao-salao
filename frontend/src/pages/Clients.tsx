@@ -8,10 +8,11 @@ import {
   useDeleteClient,
   getApiErrorMessage,
 } from '@/hooks';
-import { ClientsTable, ClientForm, ConfirmDeleteModal, ResetPasswordResultModal } from '@/components/clients';
+import { ClientsTable, ClientForm, ConfirmDeleteModal, ResetPasswordResultModal, GrantSubscriptionModal } from '@/components/clients';
 import { ConfirmModal, Modal, SkeletonTable, useToast } from '@/components/ui';
 import type { Client, ClientFilters, CreateClientPayload, UpdateClientPayload } from '@/types';
 import { clientsService, type ResetClientPasswordResponse } from '@/services/clients';
+import { useAuth, isAdmin } from '@/auth';
 
 export function Clients() {
   const [tab, setTab] = useState<'active' | 'inactive'>('active');
@@ -28,6 +29,11 @@ export function Clients() {
   // Resultado do reset de senha (modal mostra senha + botoes copiar/WhatsApp).
   // null = modal fechado. So existe no estado entre o reset e o usuario fechar.
   const [resetResult, setResetResult] = useState<ResetClientPasswordResponse | null>(null);
+  // Cliente alvo do modal "Conceder assinatura" (cortesia). null = fechado.
+  const [grantingClient, setGrantingClient] = useState<Client | null>(null);
+
+  const { user } = useAuth();
+  const userIsAdmin = isAdmin(user);
 
   const queryFilters: ClientFilters = {
     ...filters,
@@ -248,6 +254,7 @@ export function Clients() {
           onDelete={setDeletingClient}
           onResetPassword={tab === 'active' ? handleResetPassword : undefined}
           onReactivate={tab === 'inactive' ? handleReactivateClient : undefined}
+          onGrantSubscription={userIsAdmin && tab === 'active' ? setGrantingClient : undefined}
           isLoading={deleteClient.isPending}
           onNewClient={tab === 'active' ? handleOpenCreateModal : undefined}
           mode={tab}
@@ -316,6 +323,14 @@ export function Clients() {
         clientName={resetResult?.clientName ?? ''}
         clientPhone={resetResult?.clientPhone ?? null}
         tempPassword={resetResult?.tempPassword ?? ''}
+      />
+
+      {/* Conceder assinatura cortesia (admin) */}
+      <GrantSubscriptionModal
+        isOpen={!!grantingClient}
+        client={grantingClient}
+        onClose={() => setGrantingClient(null)}
+        onGranted={() => queryClient.invalidateQueries({ queryKey: ['clients'] })}
       />
     </div>
   );
