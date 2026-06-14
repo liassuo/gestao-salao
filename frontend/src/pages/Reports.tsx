@@ -6,13 +6,12 @@ import {
   Scissors,
   AlertCircle,
   Wallet,
-  Calendar,
   Download,
 } from 'lucide-react';
 import { reportsService } from '../services/reports';
 import type { SalesReport, ProfessionalReport, ServicesReport, ClientsReport, DebtsReport, CashRegisterReport } from '../services/reports';
 import { formatCurrency, formatDate, formatPhone, firstDayOfMonthIso, todayIso } from '../utils/format';
-import { Spinner } from '../components/ui';
+import { Spinner, DateInput } from '../components/ui';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -587,29 +586,13 @@ export function Reports() {
             <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">
               Data Inicial
             </label>
-            <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-2 pl-10 pr-4 text-sm text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none"
-              />
-            </div>
+            <DateInput value={startDate} onChange={setStartDate} />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">
               Data Final
             </label>
-            <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] py-2 pl-10 pr-4 text-sm text-[var(--text-primary)] focus:border-[#C8923A] focus:outline-none"
-              />
-            </div>
+            <DateInput value={endDate} onChange={setEndDate} />
           </div>
           <div className="flex gap-2">
             <button

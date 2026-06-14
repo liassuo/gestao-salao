@@ -14,4 +14,5 @@ export { ToastProvider, useToast } from './ToastContext';
 export { PixPaymentModal } from './PixPaymentModal';
 export { CreditCardModal } from './CreditCardModal';
 export { PeriodShortcuts } from './PeriodShortcuts';
+export { DateInput } from './DateInput';
 export { BrandWordmark } from './BrandWordmark';
