@@ -733,7 +733,6 @@ export class SubscriptionsService {
       }
     }
 
-    const ONE_DAY = 24 * 60 * 60 * 1000;
     const nowMs = Date.now();
 
     return subs.map((s) => {
@@ -758,10 +757,12 @@ export class SubscriptionsService {
       let currentCyclePaid: boolean | undefined = undefined;
       const expired = s.endDate && new Date(s.endDate).getTime() <= nowMs;
       if (s.status === 'ACTIVE' && !expired) {
-        const startMs = s.startDate ? new Date(s.startDate).getTime() : 0;
-        const createdMs = s.createdAt ? new Date(s.createdAt).getTime() : 0;
-        const cycleStartMs = Math.max(startMs || 0, createdMs || 0);
-        const cycleFloorMs = cycleStartMs > 0 ? cycleStartMs - ONE_DAY : 0;
+        // Piso normalizado p/ meia-noite UTC — MESMA régua de isCurrentCyclePaid
+        // (subscriptionCycleFloorMs). Sem isto, a lista usava `cycleStart - 1dia` cru e
+        // discordava do gate na borda do dia: um pagamento gravado como "YYYY-MM-DD"
+        // (00:00 UTC) caía 3h ANTES do piso cru (que carrega a hora do startDate em
+        // GMT-3) → "Ciclo não pago" numa assinatura PAGA (casos Roberto/Gustavo Henrique).
+        const cycleFloorMs = this.subscriptionCycleFloorMs(s);
         const paidAts = paidAtsBySub.get(s.id) ?? [];
         currentCyclePaid = paidAts.some((ms) => ms >= cycleFloorMs);
       }
@@ -1381,13 +1382,10 @@ export class SubscriptionsService {
     // mesma linha client_subscriptions) — reconhecê-las aqui reativava a assinatura e
     // jogava receita de meses atrás no caixa do dia da reconciliação (receita-fantasma).
     const PAID_STATUSES = ['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'];
-    // Início do ciclo: o mais recente entre startDate e createdAt; tolerância de 1 dia
-    // para cobrir pagamento feito pouco antes da virada (timezone/fuso).
-    const cycleStartMs = Math.max(
-      subscription.startDate ? new Date(subscription.startDate).getTime() : 0,
-      subscription.createdAt ? new Date(subscription.createdAt).getTime() : 0,
-    );
-    const cycleFloorMs = cycleStartMs > 0 ? cycleStartMs - 24 * 60 * 60 * 1000 : 0;
+    // Piso do ciclo: MESMA régua de isCurrentCyclePaid/findAllSubscriptions
+    // (subscriptionCycleFloorMs) — max(startDate,createdAt) - 1 dia, normalizado p/
+    // meia-noite UTC. Tolerância de 1 dia cobre pagamento feito pouco antes da virada.
+    const cycleFloorMs = this.subscriptionCycleFloorMs(subscription);
     const chargePaidMs = (c: any): number | null => {
       const raw = c?.paymentDate || c?.confirmedDate || c?.clientPaymentDate || null;
       if (!raw) return null;
