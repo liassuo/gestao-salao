@@ -786,3 +786,195 @@ describe('SubscriptionsService — gate de pagamento do ciclo (currentCyclePaid 
     expect(state.client_subscriptions[0].cutsUsedThisMonth).toBe(1);
   });
 });
+
+/**
+ * Regressão do caso Odilon: cliente pagou (Asaas RECEIVED) mas o webhook de confirmação
+ * nunca processou (payments.asaasStatus ficou null). A reconciliação (botão "Reconciliar
+ * com Asaas" / reconcilePendingSubscriptionsCron) recuperava o STATUS da assinatura
+ * (PENDING_PAYMENT/SUSPENDED → ACTIVE) mas NÃO quitava a dívida de "Cobrança não paga"
+ * nem limpava clients.hasDebts — então o cliente seguia INADIMPLENTE pra sempre, mesmo
+ * pago. Só o caminho do webhook (settleOverdueDebtForPayment) limpava a dívida.
+ *
+ * Estes testes garantem que syncWithAsaas, ao ATIVAR com uma cobrança paga encontrada,
+ * também quita a dívida do ciclo e recalcula hasDebts.
+ */
+function asaasMockWithPaidCharge() {
+  const paidCharge = {
+    id: 'pay_paid',
+    status: 'RECEIVED',
+    value: 70,
+    externalReference: 'sub-1',
+    paymentDate: localDateString(), // dentro do ciclo e no caixa de hoje
+    billingType: 'PIX',
+  };
+  return {
+    configured: true,
+    reaisToCentavos: (reais: number) => Math.round((reais || 0) * 100),
+    getSubscriptionPayments: async () => [],
+    getPayments: async () => ({ data: [paidCharge] }),
+    getCharge: async () => paidCharge,
+  };
+}
+
+async function buildServiceWithAsaas(initial: Tables, asaasMock: any) {
+  const sb = createStatefulSupabase(initial);
+  const moduleRef: TestingModule = await Test.createTestingModule({
+    providers: [
+      SubscriptionsService,
+      { provide: SupabaseService, useValue: sb },
+      { provide: ConfigService, useValue: { get: (_: string, d?: any) => d } },
+      { provide: AsaasService, useValue: asaasMock },
+      { provide: CashRegisterService, useValue: new CashRegisterService(sb as any) },
+    ],
+  }).compile();
+  return { service: moduleRef.get(SubscriptionsService), state: (sb as any)._state as Tables };
+}
+
+function odilonTables(): Tables {
+  const t = baseTables();
+  t.client_subscriptions = [
+    {
+      id: 'sub-1',
+      clientId: 'client-1',
+      planId: 'plan-1',
+      status: 'PENDING_PAYMENT',
+      asaasSubscriptionId: 'sub_asaas',
+      startDate: '2020-01-01T00:00:00', // floor do ciclo bem no passado → cobrança paga conta
+      createdAt: '2020-01-01T00:00:00',
+      endDate: '2020-02-01T00:00:00',
+      cutsUsedThisMonth: 4,
+    },
+  ];
+  t.clients = [{ id: 'client-1', name: 'Odilon', phone: '1199', hasDebts: true }];
+  t.debts = [
+    {
+      id: 'debt-1',
+      clientId: 'client-1',
+      amount: 7000,
+      remainingBalance: 7000,
+      amountPaid: 0,
+      isSettled: false,
+      description: 'Cobrança não paga — Mensal [sub:sub-1:cycle:2026-06-14]',
+    },
+  ];
+  return t;
+}
+
+describe('SubscriptionsService — reconciliação quita a inadimplência (caso Odilon)', () => {
+  it('syncWithAsaas: ao reativar com cobrança paga, quita a dívida e limpa hasDebts', async () => {
+    const { service, state } = await buildServiceWithAsaas(odilonTables(), asaasMockWithPaidCharge());
+
+    const updated = await service.reconcileSubscription('sub-1');
+
+    // status recuperado
+    expect((updated as any).status).toBe('ACTIVE');
+    // dívida quitada
+    expect(state.debts[0].isSettled).toBe(true);
+    expect(state.debts[0].remainingBalance).toBe(0);
+    // não está mais inadimplente
+    expect(state.clients[0].hasDebts).toBe(false);
+  });
+
+  it('syncWithAsaas: NÃO mexe em dívidas quando não há cobrança paga (não some inadimplência indevida)', async () => {
+    const t = odilonTables();
+    const asaas = {
+      configured: true,
+      reaisToCentavos: (r: number) => Math.round((r || 0) * 100),
+      getSubscriptionPayments: async () => [],
+      getPayments: async () => ({ data: [{ id: 'pay_pend', status: 'PENDING', value: 70, externalReference: 'sub-1' }] }),
+      getCharge: async () => ({ id: 'pay_pend', status: 'PENDING', value: 70 }),
+    };
+    const { service, state } = await buildServiceWithAsaas(t, asaas);
+
+    const updated = await service.reconcileSubscription('sub-1');
+
+    expect((updated as any).status).toBe('PENDING_PAYMENT'); // não ativou
+    expect(state.debts[0].isSettled).toBe(false); // dívida intacta
+    expect(state.clients[0].hasDebts).toBe(true);
+  });
+});
+
+/**
+ * Regressão "Ativo + Ciclo não pago": assinatura JÁ ACTIVE cujo pagamento do ciclo foi
+ * recebido no Asaas (RECEIVED) mas o webhook se perdeu — o payment local ficou com paidAt
+ * de um ciclo anterior (ex.: confirmedDate antecipado de cartão), então isCurrentCyclePaid
+ * dá falso. Antes, syncWithAsaas saía cedo p/ TODA assinatura ACTIVE, então nem o botão nem
+ * o cron curavam o "Ciclo não pago". Agora reconcilia ACTIVE quando o ciclo não consta pago:
+ * corrige o paidAt local (sem renovar janela/zerar cortes nem mexer no caixa).
+ */
+function activeCicloTables(localPaidAt: string): Tables {
+  const t = baseTables();
+  t.client_subscriptions = [
+    {
+      id: 'sub-a',
+      clientId: 'client-1',
+      planId: 'plan-1',
+      status: 'ACTIVE',
+      startDate: '2026-06-06T00:00:00', // piso do ciclo = 2026-06-05
+      createdAt: '2026-05-05T00:00:00',
+      endDate: '2026-07-06T00:00:00',
+      cutsUsedThisMonth: 2,
+    },
+  ];
+  t.clients = [{ id: 'client-1', name: 'Lucas', phone: '1199', hasDebts: false }];
+  t.debts = [];
+  t.payments = [
+    {
+      id: 'pay-local',
+      subscriptionId: 'sub-a',
+      clientId: 'client-1',
+      method: 'CARD',
+      asaasPaymentId: 'pay_x',
+      asaasStatus: 'CONFIRMED',
+      paidAt: localPaidAt,
+      businessDate: String(localPaidAt).substring(0, 10),
+      createdAt: '2026-05-05T00:00:00',
+    },
+  ];
+  return t;
+}
+
+function asaasInCycleCharge() {
+  const charge = {
+    id: 'pay_x',
+    status: 'RECEIVED',
+    value: 70,
+    externalReference: 'sub-a',
+    paymentDate: '2026-06-08', // dentro do ciclo (>= piso 06-05)
+    billingType: 'CREDIT_CARD',
+  };
+  return {
+    configured: true,
+    reaisToCentavos: (reais: number) => Math.round((reais || 0) * 100),
+    getSubscriptionPayments: async () => [],
+    getPayments: async () => ({ data: [charge] }),
+    getCharge: async () => charge,
+  };
+}
+
+describe('SubscriptionsService — reconcilia ACTIVE com "Ciclo não pago" (webhook perdido)', () => {
+  it('corrige o paidAt do ciclo (data real do Asaas) mantendo ACTIVE, sem renovar janela', async () => {
+    // paidAt local 2026-05-05 (ciclo anterior) → isCurrentCyclePaid falso
+    const { service, state } = await buildServiceWithAsaas(activeCicloTables('2026-05-05T12:00:00'), asaasInCycleCharge());
+
+    const updated = await service.reconcileSubscription('sub-a');
+
+    expect((updated as any).status).toBe('ACTIVE');
+    // paidAt corrigido p/ a data real (dentro do ciclo) → some "Ciclo não pago"
+    expect(String(state.payments[0].paidAt).startsWith('2026-06-08')).toBe(true);
+    // NÃO renovou a janela nem zerou cortes (não é renovação)
+    expect(state.client_subscriptions[0].endDate).toBe('2026-07-06T00:00:00');
+    expect(state.client_subscriptions[0].cutsUsedThisMonth).toBe(2);
+    // businessDate (caixa) preservado
+    expect(state.payments[0].businessDate).toBe('2026-05-05');
+  });
+
+  it('ciclo já pago (paidAt dentro do ciclo): no-op, não duplica pagamento', async () => {
+    const { service, state } = await buildServiceWithAsaas(activeCicloTables('2026-06-07T12:00:00'), asaasInCycleCharge());
+
+    await service.reconcileSubscription('sub-a');
+
+    expect(state.payments).toHaveLength(1); // não inseriu 2º payment
+    expect(state.payments[0].paidAt).toBe('2026-06-07T12:00:00'); // intacto
+  });
+});
