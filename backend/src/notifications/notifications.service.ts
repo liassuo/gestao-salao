@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { SupabaseService } from '../supabase/supabase.service';
+import { MailService } from '../mail/mail.service';
 import * as webpush from 'web-push';
 import { randomUUID } from 'crypto';
 
@@ -12,7 +13,36 @@ export class NotificationsService implements OnModuleInit {
   constructor(
     private readonly supabase: SupabaseService,
     private readonly config: ConfigService,
+    private readonly mail: MailService,
   ) {}
+
+  /**
+   * Registra um envio em notification_log para NÃO repetir (anti-flood). Retorna
+   * true se PODE enviar (não enviado ainda), false se já foi enviado.
+   * Usa o índice UNIQUE em dedupeKey: o insert falha no 2º envio do mesmo aviso.
+   */
+  private async claimNotification(
+    dedupeKey: string,
+    kind: string,
+    clientId: string | null,
+    channel: string,
+  ): Promise<boolean> {
+    const { error } = await this.supabase.from('notification_log').insert({
+      id: randomUUID(),
+      dedupeKey,
+      kind,
+      clientId,
+      channel,
+      createdAt: new Date().toISOString(),
+    });
+    // 23505 = unique_violation → já foi enviado antes.
+    if (error) {
+      if ((error as any).code === '23505') return false;
+      // Outro erro (ex: tabela não existe ainda): loga e deixa enviar (não trava o aviso).
+      this.logger.warn(`claimNotification falhou (${dedupeKey}): ${error.message}`);
+    }
+    return true;
+  }
 
   onModuleInit() {
     const publicKey = this.config.get<string>('VAPID_PUBLIC_KEY');
@@ -127,6 +157,108 @@ export class NotificationsService implements OnModuleInit {
 
       this.logger.log(`Reminder sent for appointment ${appt.id}`);
     }
+  }
+
+  /**
+   * Lembrete de agendamento por E-MAIL, na manhã do dia (08:00). Complementa o push
+   * (que é 10-20 min antes e exige o cliente ter autorizado) — alcança quem não tem
+   * push. 1 e-mail por agendamento/dia (dedup por notification_log). Só quem tem
+   * e-mail cadastrado recebe; sem e-mail é ignorado sem erro.
+   */
+  @Cron('0 8 * * *')
+  async sendAppointmentReminderEmails() {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const { data: appointments } = await this.supabase
+      .from('appointments')
+      .select(
+        'id, scheduledAt, clientId, client:clients(name, email), professional:professionals(name), services:appointment_services(service:services(name))',
+      )
+      .eq('status', 'SCHEDULED')
+      .gte('scheduledAt', startOfDay.toISOString())
+      .lte('scheduledAt', endOfDay.toISOString());
+
+    if (!appointments?.length) return;
+
+    let sent = 0;
+    for (const appt of appointments as any[]) {
+      const email = appt.client?.email;
+      if (!email) continue; // sem e-mail → não envia (decisão do dono)
+
+      const dedupeKey = `appt-reminder:${appt.id}`;
+      if (!(await this.claimNotification(dedupeKey, 'APPOINTMENT_REMINDER', appt.clientId, 'EMAIL'))) {
+        continue; // já enviado hoje
+      }
+
+      const scheduledAt = new Date(appt.scheduledAt);
+      const time = scheduledAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      const profName = appt.professional?.name || '';
+      const serviceNames = (appt.services || []).map((s: any) => s.service?.name).filter(Boolean).join(', ');
+
+      await this.mail.sendAppointmentReminderEmail(email, appt.client?.name || 'cliente', time, profName, serviceNames);
+      sent++;
+    }
+    if (sent > 0) this.logger.log(`[appt-reminder-email] ${sent} lembrete(s) de agendamento enviados por e-mail`);
+  }
+
+  /**
+   * Aviso de assinatura próxima do vencimento por E-MAIL. Roda 1x/dia (09:00) e
+   * avisa em DOIS momentos: 3 dias antes e no dia do vencimento. Controlado para
+   * NÃO floodar (o Asaas foi desligado por mandar demais) — dedup por
+   * notification_log garante no máximo 1 e-mail por marco. Só ACTIVE com e-mail.
+   */
+  @Cron('0 9 * * *')
+  async sendSubscriptionExpiryReminders() {
+    const now = new Date();
+    const renewUrl = (this.config.get<string>('CLIENT_APP_URL') || 'https://barbeariaamerica.com.br').replace(/\/+$/, '') + '/planos';
+
+    // Assinaturas ACTIVE que vencem nos próximos 3 dias (inclui hoje).
+    const limite = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+    limite.setHours(23, 59, 59, 999);
+
+    const { data: subs } = await this.supabase
+      .from('client_subscriptions')
+      .select('id, endDate, clientId, client:clients(name, email), plan:subscription_plans!planId(name)')
+      .eq('status', 'ACTIVE')
+      .gte('endDate', now.toISOString())
+      .lte('endDate', limite.toISOString());
+
+    if (!subs?.length) return;
+
+    let sent = 0;
+    for (const sub of subs as any[]) {
+      const email = sub.client?.email;
+      if (!email || !sub.endDate) continue; // sem e-mail → não envia
+
+      const end = new Date(sub.endDate);
+      const daysLeft = Math.ceil((end.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+
+      // Só os marcos definidos: 3 dias antes e no dia (0). Os dias 2 e 1 não disparam
+      // e-mail (evita flood) — quem caiu no marco de 3 dias já foi avisado.
+      let marco: '3d' | '0d' | null = null;
+      if (daysLeft >= 3) marco = '3d';
+      else if (daysLeft <= 0) marco = '0d';
+      else continue;
+
+      const cycleEnd = sub.endDate.slice(0, 10);
+      const dedupeKey = `sub-expiry:${sub.id}:${cycleEnd}:${marco}`;
+      if (!(await this.claimNotification(dedupeKey, 'SUB_EXPIRY', sub.clientId, 'EMAIL'))) {
+        continue; // já avisado neste marco/ciclo
+      }
+
+      await this.mail.sendSubscriptionExpiringEmail(
+        email,
+        sub.client?.name || 'cliente',
+        sub.plan?.name || 'sua assinatura',
+        Math.max(0, daysLeft),
+        renewUrl,
+      );
+      sent++;
+    }
+    if (sent > 0) this.logger.log(`[sub-expiry] ${sent} aviso(s) de vencimento enviados por e-mail`);
   }
 
   /** Envia notificação customizada para um cliente */
