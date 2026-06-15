@@ -978,3 +978,68 @@ describe('SubscriptionsService — reconcilia ACTIVE com "Ciclo não pago" (webh
     expect(state.payments[0].paidAt).toBe('2026-06-07T12:00:00'); // intacto
   });
 });
+
+/**
+ * Regressão do badge "Ciclo não pago" FALSO na LISTA (casos Roberto/Gustavo Henrique):
+ * findAllSubscriptions calculava o piso do ciclo como `cycleStart - 1dia` SEM normalizar
+ * p/ meia-noite UTC, divergindo de isCurrentCyclePaid (que normaliza). Um pagamento na
+ * borda do dia (gravado "YYYY-MM-DD" = 00:00 UTC) caía ANTES do piso cru (que carrega a
+ * hora do startDate) → assinatura PAGA aparecia "Ciclo não pago". Agora ambos usam
+ * subscriptionCycleFloorMs (normalizado), então a lista bate com o gate.
+ */
+describe('SubscriptionsService — findAllSubscriptions: currentCyclePaid na borda do dia', () => {
+  function futureIso() {
+    return new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  }
+
+  it('pagamento na virada do dia conta como ciclo pago (bate com isCurrentCyclePaid)', async () => {
+    const tables = baseTables();
+    tables.client_subscriptions = [
+      {
+        id: 'sub-b',
+        clientId: 'client-1',
+        planId: 'plan-1',
+        status: 'ACTIVE',
+        startDate: '2026-06-15T10:00:00', // carrega hora → piso cru ficava às 10h-1dia
+        createdAt: '2026-05-05T00:00:00',
+        endDate: futureIso(), // não vencida
+      },
+    ];
+    tables.clients = [{ id: 'client-1', name: 'Roberto', hasDebts: false }];
+    tables.debts = [];
+    tables.payments = [
+      { id: 'p1', subscriptionId: 'sub-b', clientId: 'client-1', method: 'PIX', asaasStatus: 'RECEIVED', paidAt: '2026-06-14', createdAt: '2026-06-14T00:00:00' },
+    ];
+    const { service } = await buildService(tables);
+
+    const list = await service.findAllSubscriptions('ACTIVE');
+    const sub = list.find((s: any) => s.id === 'sub-b');
+    expect(sub.currentCyclePaid).toBe(true); // antes do fix: false (badge "Ciclo não pago" indevido)
+    expect(sub.paymentStatus).toBe('PAID');
+  });
+
+  it('pagamento de ciclo anterior NÃO conta (currentCyclePaid=false)', async () => {
+    const tables = baseTables();
+    tables.client_subscriptions = [
+      {
+        id: 'sub-c',
+        clientId: 'client-1',
+        planId: 'plan-1',
+        status: 'ACTIVE',
+        startDate: '2026-06-06T00:00:00',
+        createdAt: '2026-05-05T00:00:00',
+        endDate: futureIso(),
+      },
+    ];
+    tables.clients = [{ id: 'client-1', name: 'luciano', hasDebts: false }];
+    tables.debts = [];
+    tables.payments = [
+      { id: 'p2', subscriptionId: 'sub-c', clientId: 'client-1', method: 'PIX', asaasStatus: 'RECEIVED', paidAt: '2026-05-05T12:00:00', createdAt: '2026-05-05T00:00:00' },
+    ];
+    const { service } = await buildService(tables);
+
+    const list = await service.findAllSubscriptions('ACTIVE');
+    const sub = list.find((s: any) => s.id === 'sub-c');
+    expect(sub.currentCyclePaid).toBe(false);
+  });
+});
