@@ -474,6 +474,13 @@ export class AsaasWebhookController {
 
     // A partir daqui, efeitos colaterais financeiros que NÃO devem repetir.
     if (alreadyProcessed) {
+      // Pagamento de dívida em REENTREGA: a 1ª entrega já quitou a dívida e (quase sempre)
+      // já reativou. Se reativar falhou na 1ª entrega — caso raro, exige falha entre quitar
+      // e reativar — a assinatura fica presa em "Encerradas". NÃO tentamos auto-curar isso
+      // aqui: a detecção segura exigiria correlacionar a dívida já quitada a ESTE pagamento,
+      // e o atalho amplo ("qualquer dívida de assinatura quitada") reativava de graça quem
+      // pagou um ciclo antigo (verificação adversarial 2026-06-15). Esse caso raro é coberto
+      // pelo script reconcile-suspended-paid-debts.mjs (que casa a prova no Asaas).
       this.logger.log(`Webhook ${asaasPaymentId}: promoção do agendamento garantida; efeitos financeiros pulados (idempotência).`);
       return;
     }
@@ -550,54 +557,172 @@ export class AsaasWebhookController {
       await this.settleOverdueDebtForPayment(localPayment.clientId, asaasPaymentId);
     }
 
-    // Se for pagamento de dívida, quitar dívidas apenas se o valor pago cobre o total pendente
+    // Se for pagamento de dívida: quitar dívidas + reativar assinatura encerrada.
+    // Idempotente — extraído para helper porque também roda no caminho de reentrega
+    // (alreadyProcessed) abaixo, garantindo a auto-cura mesmo se o 1º webhook quitou
+    // a dívida mas falhou em reativar.
     if (localPayment.notes === 'DEBT_PAYMENT' && localPayment.clientId) {
-      const debtNow = nowLocalIsoString();
-
-      const { data: pendingDebts } = await this.supabase
-        .from('debts')
-        .select('id, amount, remainingBalance')
-        .eq('clientId', localPayment.clientId)
-        .eq('isSettled', false);
-
-      const totalPending = (pendingDebts || []).reduce(
-        (sum, d) => sum + (d.remainingBalance ?? d.amount),
-        0,
-      );
-
-      if (localPayment.amount < totalPending) {
-        this.logger.warn(
-          `Pagamento de dívida insuficiente para cliente ${localPayment.clientId}: ` +
-          `pago ${localPayment.amount}, total pendente atual ${totalPending}. Dívidas não quitadas.`,
-        );
-        return;
-      }
-
-      for (const debt of pendingDebts || []) {
-        await this.supabase
-          .from('debts')
-          .update({
-            amountPaid: debt.amount,
-            remainingBalance: 0,
-            isSettled: true,
-            paidAt: debtNow,
-          })
-          .eq('id', debt.id);
-      }
-
-      await this.supabase
-        .from('clients')
-        .update({ hasDebts: false })
-        .eq('id', localPayment.clientId);
-
-      this.logger.log(
-        `Dívidas do cliente ${localPayment.clientId} quitadas via PIX (${pendingDebts?.length || 0} dívida(s))`,
+      await this.settleDebtPaymentAndReactivate(
+        localPayment.clientId,
+        localPayment.amount,
+        asaasPaymentId,
+        status,
       );
     }
 
     this.logger.log(
       `Pagamento local ${localPayment.id} atualizado como confirmado`,
     );
+  }
+
+  /**
+   * Pagamento de dívida (tela "Pagar com PIX", createPixChargeForDebts: notes='DEBT_PAYMENT',
+   * SEM subscriptionId) confirmado. Quita as dívidas do cliente e, se entre elas havia a
+   * mensalidade de uma assinatura encerrada ('Cobrança não paga'), REATIVA a assinatura.
+   *
+   * IDEMPOTENTE — pode rodar mais de uma vez:
+   *  - só quita dívida ainda aberta (isSettled=false);
+   *  - só reativa assinatura ainda SUSPENDED (filtro na escrita).
+   * NOTA: roda só no caminho normal (não no de reentrega/alreadyProcessed) — o caso de
+   * reentrega é coberto pelo script reconcile-suspended-paid-debts.mjs (ver bloco
+   * alreadyProcessed em handlePaymentConfirmed).
+   *
+   * BLINDAGENS (espelham o resto do fluxo, e foram o que a revisão exigiu):
+   *  - cobertura: só quita se o valor pago cobre o total pendente (senão a dívida fica);
+   *  - vínculo: só reativa assinatura se havia dívida 'Cobrança não paga' entre as pagas
+   *    (pagar uma dívida avulsa de comanda NÃO reativa assinatura de graça);
+   *  - liquidação ao vivo: só reativa se isChargeSettled confirma o pagamento no Asaas;
+   *  - reativa ANTES de quitar e ABORTA a quitação se a reativação falhar — assim nunca
+   *    fica SEM-dívida-e-Encerrado (o bug original); no pior caso fica ATIVO-com-dívida.
+   */
+  private async settleDebtPaymentAndReactivate(
+    clientId: string,
+    paidAmount: number,
+    asaasPaymentId: string,
+    eventStatus: string,
+  ) {
+    const debtNow = nowLocalIsoString();
+
+    const { data: pendingDebts } = await this.supabase
+      .from('debts')
+      .select('id, amount, remainingBalance, description')
+      .eq('clientId', clientId)
+      .eq('isSettled', false);
+
+    const totalPending = (pendingDebts || []).reduce(
+      (sum, d) => sum + (d.remainingBalance ?? d.amount),
+      0,
+    );
+
+    // Cobertura: se o pagamento não cobre o pendente, NÃO quita (deixa a dívida).
+    // Aborta inclusive a reativação — não destrava assinatura sem o ciclo pago.
+    if (totalPending > 0 && paidAmount < totalPending) {
+      this.logger.warn(
+        `Pagamento de dívida insuficiente para cliente ${clientId}: ` +
+        `pago ${paidAmount}, total pendente atual ${totalPending}. Dívidas não quitadas, assinatura não reativada.`,
+      );
+      return;
+    }
+
+    // Houve dívida de ASSINATURA paga por este fluxo? Só conta a que está ABERTA agora
+    // (rótulo exclusivo 'Cobrança não paga'). Dívida avulsa (comanda/manual) não usa
+    // esse rótulo → pagá-la não reativa assinatura de graça.
+    //
+    // NOTA DE PROJETO (não é furo): o caso de REENTREGA em que a 1ª entrega já quitou a
+    // dívida (pendingDebts vazio) NÃO é auto-curado aqui de propósito. Tentar detectá-lo
+    // por "qualquer dívida de assinatura já quitada do cliente" reativava de graça quem
+    // pagou um ciclo antigo (verificação adversarial 2026-06-15). Esse caso — raro, exige
+    // o webhook falhar exatamente entre quitar e reativar — é coberto pelo script
+    // reconcile-suspended-paid-debts.mjs, que correlaciona a prova com a dívida no Asaas.
+    const hadSubscriptionDebt = (pendingDebts || []).some((d) =>
+      /^Cobrança não paga/i.test(d.description || ''),
+    );
+
+    // REATIVAR ANTES de quitar. Reativar é idempotente (filtro SUSPENDED) e reversível;
+    // quitar é a operação que "perde a cobrança". Se a quitação falhar depois, o pior
+    // estado é ATIVO-com-dívida-visível (recuperável) em vez de SEM-dívida-e-Encerrado
+    // (que era o bug original). Só reativa com dívida de assinatura + liquidação ao vivo.
+    if (hadSubscriptionDebt) {
+      const debtSettled = await this.isChargeSettled(asaasPaymentId, eventStatus);
+      if (!debtSettled) {
+        this.logger.warn(
+          `Pagamento de dívida ${asaasPaymentId}: cobrança não liquidada no Asaas — assinatura NÃO reativada (evita reativar sem pagamento real).`,
+        );
+        return; // sem liquidação confirmada não quita nem reativa
+      }
+
+      const { data: suspendedSubs } = await this.supabase
+        .from('client_subscriptions')
+        .select('id')
+        .eq('clientId', clientId)
+        .eq('status', 'SUSPENDED')
+        .order('createdAt', { ascending: false });
+
+      for (const susp of suspendedSubs || []) {
+        const reactNow = new Date();
+        const reactEnd = new Date(reactNow);
+        reactEnd.setMonth(reactEnd.getMonth() + 1);
+
+        const { error: reactError } = await this.supabase
+          .from('client_subscriptions')
+          .update({
+            status: 'ACTIVE',
+            cutsUsedThisMonth: 0,
+            lastResetDate: reactNow.toISOString(),
+            endDate: reactEnd.toISOString(),
+            updatedAt: reactNow.toISOString(),
+          })
+          .eq('id', susp.id)
+          .eq('status', 'SUSPENDED'); // idempotência
+
+        // Se a reativação falhar, NÃO quita a dívida: deixar a dívida em aberto mantém
+        // o cliente "Encerrado-COM-dívida" (recuperável: ele paga de novo ou o script
+        // reconcilia) em vez de "Encerrado-SEM-dívida" (irrecuperável — a carga some).
+        if (reactError) {
+          this.logger.error(
+            `Falha ao reativar assinatura ${susp.id} (cobrança ${asaasPaymentId}): ${reactError.message}. ` +
+            `Dívida NÃO será quitada para preservar a cobrança; reconciliação cobre depois.`,
+          );
+          return;
+        }
+
+        this.logger.log(
+          `Assinatura ${susp.id} REATIVADA após quitação de dívida via PIX (cobrança ${asaasPaymentId}).`,
+        );
+      }
+    }
+
+    // Agora quita as dívidas em aberto (idempotente: só toca isSettled=false).
+    for (const debt of pendingDebts || []) {
+      await this.supabase
+        .from('debts')
+        .update({
+          amountPaid: debt.amount,
+          remainingBalance: 0,
+          isSettled: true,
+          paidAt: debtNow,
+        })
+        .eq('id', debt.id)
+        .eq('isSettled', false);
+    }
+
+    // Recalcula hasDebts em vez de forçar false (pode ter sobrado dívida de outra
+    // natureza — embora o guard de cobertura acima torne isso raro).
+    const { count: remainingCount } = await this.supabase
+      .from('debts')
+      .select('id', { count: 'exact', head: true })
+      .eq('clientId', clientId)
+      .eq('isSettled', false);
+    await this.supabase
+      .from('clients')
+      .update({ hasDebts: (remainingCount || 0) > 0 })
+      .eq('id', clientId);
+
+    if ((pendingDebts || []).length > 0) {
+      this.logger.log(
+        `Dívidas do cliente ${clientId} quitadas via PIX (${pendingDebts!.length} dívida(s)).`,
+      );
+    }
   }
 
   /**
