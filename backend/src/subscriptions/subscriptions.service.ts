@@ -1359,7 +1359,16 @@ export class SubscriptionsService {
   async syncWithAsaas(subscriptionId: string) {
     const subscription = await this.findSubscription(subscriptionId);
     if (!this.asaasService.configured) return subscription;
-    if (subscription.status === 'ACTIVE' || subscription.status === 'CANCELED') {
+    if (subscription.status === 'CANCELED') return subscription;
+
+    // ACTIVE: só há o que reconciliar se o CICLO VIGENTE não consta pago. Caso real:
+    // cliente pagou (Asaas RECEIVED) mas o webhook se perdeu e o payment local ficou
+    // com paidAt de um ciclo anterior (ou ausente) → isCurrentCyclePaid dá falso e a
+    // assinatura aparece "Ativo + Ciclo não pago". Antes o sync saía cedo p/ toda ACTIVE,
+    // então esses casos nunca eram curados (nem pelo botão nem pelo cron). Se o ciclo já
+    // consta pago, nada a fazer.
+    const wasActive = subscription.status === 'ACTIVE';
+    if (wasActive && (await isCurrentCyclePaid(this.supabase, subscription))) {
       return subscription;
     }
 
@@ -1401,10 +1410,27 @@ export class SubscriptionsService {
     }
 
     this.logger.warn(
-      `[sync-asaas] Assinatura ${subscription.id} estava ${subscription.status} mas Asaas mostra cobrança ${paid.id} como ${paid.status}. Ativando retroativamente.`,
+      `[sync-asaas] Assinatura ${subscription.id} estava ${subscription.status} mas Asaas mostra cobrança ${paid.id} como ${paid.status}. Reconciliando.`,
     );
 
+    // Grava/corrige o payment local com a DATA REAL do pagamento (paidAt). É isto que faz
+    // isCurrentCyclePaid voltar a true e some o "Ciclo não pago".
     await this.upsertLocalPaymentFromCharge(subscription, paid, true);
+
+    // Quita a inadimplência do ciclo em qualquer caso (some "Inadimplente").
+    await this.settleSubscriptionDelinquencyDebts(subscription, paid.id).catch((e) =>
+      this.logger.error(`[sync-asaas] falha ao quitar dívida da assinatura ${subscription.id}: ${e}`),
+    );
+
+    // Já estava ACTIVE: o pagamento do ciclo só não constava (webhook perdido). Registrar
+    // o payment com a data real já cura o "Ciclo não pago". NÃO renova a janela (endDate)
+    // nem zera os cortes — não é uma renovação, é a correção do ciclo CORRENTE.
+    if (wasActive) {
+      this.logger.log(
+        `[sync-asaas] Assinatura ${subscription.id} (ACTIVE) — ciclo reconciliado com cobrança ${paid.id}.`,
+      );
+      return await this.findSubscription(subscription.id);
+    }
 
     const now = new Date();
     // Ativação retroativa a partir de status não-ACTIVE (PENDING/SUSPENDED): o ciclo
@@ -1432,7 +1458,71 @@ export class SubscriptionsService {
     }
 
     this.logger.log(`[sync-asaas] Assinatura ${subscription.id} ativada via reconciliação (cobrança ${paid.id}).`);
+    // (a inadimplência do ciclo já foi quitada acima, antes do branch wasActive)
+
     return updated;
+  }
+
+  /**
+   * Quita a(s) dívida(s) de inadimplência de uma assinatura e recalcula clients.hasDebts.
+   * Correlaciona pela tag embutida na descrição: [sub:<id>:cycle:...] (cron de vencimento)
+   * ou [asaas:<paymentId>] (webhook OVERDUE); fallback pela régua 'Cobrança não paga%'
+   * (dívidas legadas sem tag). Idempotente: se não há dívida em aberto, é no-op.
+   */
+  private async settleSubscriptionDelinquencyDebts(subscription: any, paidChargeId?: string) {
+    const clientId = subscription?.clientId;
+    if (!clientId) return;
+
+    const openDebts = async (descLike: string) => {
+      const { data } = await this.supabase
+        .from('debts')
+        .select('id, amount')
+        .eq('clientId', clientId)
+        .eq('isSettled', false)
+        .ilike('description', descLike);
+      return data || [];
+    };
+
+    // 1º tenta escopar à PRÓPRIA assinatura (não quita dívida de outra assinatura do mesmo
+    // cliente). 2º à cobrança paga. 3º régua ampla (legado sem tag).
+    let debts = await openDebts(`%[sub:${subscription.id}%`);
+    if (debts.length === 0 && paidChargeId) {
+      debts = await openDebts(`%[asaas:${paidChargeId}]%`);
+    }
+    if (debts.length === 0) {
+      debts = await openDebts('Cobrança não paga%');
+    }
+    if (debts.length === 0) return;
+
+    const now = nowLocalIsoString();
+    for (const debt of debts) {
+      await this.supabase
+        .from('debts')
+        .update({
+          amountPaid: debt.amount,
+          remainingBalance: 0,
+          isSettled: true,
+          paidAt: now,
+          updatedAt: now,
+        })
+        .eq('id', debt.id);
+    }
+
+    // Recalcula hasDebts pelas dívidas em aberto RESTANTES (preserva dívida avulsa).
+    const { data: remaining } = await this.supabase
+      .from('debts')
+      .select('id')
+      .eq('clientId', clientId)
+      .eq('isSettled', false);
+
+    await this.supabase
+      .from('clients')
+      .update({ hasDebts: (remaining?.length ?? 0) > 0 })
+      .eq('id', clientId);
+
+    this.logger.log(
+      `[sync-asaas] Dívida(s) de inadimplência da assinatura ${subscription.id} quitada(s) na reconciliação (${debts.length} registro(s)).`,
+    );
   }
 
   /**
@@ -1507,6 +1597,21 @@ export class SubscriptionsService {
   }
 
   /**
+   * Piso do ciclo vigente em ms (mesma régua de isCurrentCyclePaid): o mais recente
+   * entre startDate e createdAt, menos 1 dia, normalizado p/ início do dia em UTC.
+   */
+  private subscriptionCycleFloorMs(subscription: {
+    startDate?: string | null;
+    createdAt?: string | null;
+  }): number {
+    const startMs = subscription.startDate ? new Date(subscription.startDate).getTime() : 0;
+    const createdMs = subscription.createdAt ? new Date(subscription.createdAt).getTime() : 0;
+    const cycleStartMs = Math.max(startMs, createdMs);
+    const ONE_DAY = 24 * 60 * 60 * 1000;
+    return cycleStartMs > 0 ? new Date(cycleStartMs - ONE_DAY).setUTCHours(0, 0, 0, 0) : 0;
+  }
+
+  /**
    * Insere ou atualiza o registro local de payment a partir de uma cobrança Asaas.
    * Se markPaid=true, marca como pago usando a DATA REAL do pagamento informada
    * pelo Asaas (não a data da reconciliação). Se o Asaas não informar a data
@@ -1544,8 +1649,26 @@ export class SubscriptionsService {
       if (cardLast4) update.cardLast4 = cardLast4;
       if (cardBrand) update.cardBrand = cardBrand;
       if (effectivelyPaid && !existing.paidAt) {
+        // 1º registro do pagamento: data real + dia contábil + vincula caixa (abaixo).
         update.paidAt = paidAtValue;
         update.businessDate = businessDate;
+      } else if (effectivelyPaid && existing.paidAt) {
+        // Já tinha paidAt, mas pode estar FORA do ciclo vigente (data de um ciclo
+        // anterior / confirmedDate antecipado de cartão) → isCurrentCyclePaid usa paidAt
+        // e dá falso: "Ciclo não pago" mesmo a cobrança estando paga no Asaas. Corrige
+        // SÓ o paidAt p/ a data real da cobrança. NÃO mexe no businessDate: a receita já
+        // está alocada no caixa (cartão com antecipação entra o dinheiro no dia da
+        // confirmação) e mover perturbaria caixa já fechado sem necessidade.
+        const floorMs = this.subscriptionCycleFloorMs(subscription);
+        const existingMs = new Date(existing.paidAt).getTime();
+        const newMs = paidDate ? new Date(paidDate).getTime() : NaN;
+        const staleOutOfCycle =
+          floorMs > 0 &&
+          !Number.isNaN(existingMs) &&
+          existingMs < floorMs &&
+          !Number.isNaN(newMs) &&
+          newMs >= floorMs;
+        if (staleOutOfCycle) update.paidAt = paidAtValue;
       }
       await this.supabase.from('payments').update(update).eq('id', existing.id);
       // Vincula ao caixa do dia contábil (recalcula se já fechado) ao confirmar.
