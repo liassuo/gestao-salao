@@ -258,6 +258,38 @@ export class ClientsService {
       throw new NotFoundException('Cliente não encontrado');
     }
 
+    // Cancelar as assinaturas do cliente removido. Sem isto a assinatura ficava órfã
+    // (ACTIVE/SUSPENDED/PENDING) e aparecia na lista como "Cliente removido + Ativa".
+    // Cancela primeiro a recorrente no Asaas (se houver) p/ parar cobrança futura —
+    // depois disto o asaasCustomerId é zerado e o vínculo se perde.
+    const NON_TERMINAL = ['ACTIVE', 'PENDING_PAYMENT', 'SUSPENDED'];
+    const { data: subs } = await this.supabase
+      .from('client_subscriptions')
+      .select('id, status, asaasSubscriptionId')
+      .eq('clientId', id)
+      .in('status', NON_TERMINAL);
+
+    if (subs && subs.length > 0) {
+      for (const sub of subs as any[]) {
+        if (sub.asaasSubscriptionId && this.asaasService.configured) {
+          try {
+            await this.asaasService.cancelSubscription(sub.asaasSubscriptionId);
+          } catch (e) {
+            this.logger.warn(
+              `hardDelete: falha ao cancelar assinatura Asaas ${sub.asaasSubscriptionId} do cliente ${id}: ${e}`,
+            );
+          }
+        }
+      }
+
+      const canceledAt = new Date().toISOString();
+      await this.supabase
+        .from('client_subscriptions')
+        .update({ status: 'CANCELED', canceledAt, updatedAt: canceledAt })
+        .eq('clientId', id)
+        .in('status', NON_TERMINAL);
+    }
+
     const suffix = id.slice(0, 8);
     const { error } = await this.supabase
       .from('clients')

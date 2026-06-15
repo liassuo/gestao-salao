@@ -535,4 +535,71 @@ describe('ClientsService', () => {
       expect(clientsChain.update).toHaveBeenCalledWith({ hasDebts: false });
     });
   });
+
+  // ─── hardDelete cancela assinaturas ─────────────────────────────────────
+  /**
+   * Regressão: hardDelete anonimizava o cliente mas deixava a assinatura no status
+   * atual → órfã na lista ("Cliente removido + Ativa"). Agora cancela as assinaturas
+   * não-terminais e a recorrente no Asaas (se houver). Usa um mock thenable próprio
+   * (o chain compartilhado não resolve await sem single()).
+   */
+  describe('hardDelete — cancela assinaturas do cliente removido', () => {
+    function buildHardDeleteService(initialSubs: any[]) {
+      let subs = initialSubs.map((s) => ({ ...s }));
+      const subUpdates: any[] = [];
+      const asaas: any = { configured: true, cancelSubscription: jest.fn().mockResolvedValue({}) };
+      const supabase: any = {
+        from(table: string) {
+          const b: any = { _table: table, _mode: 'select', _payload: null };
+          b.select = () => b;
+          b.update = (p: any) => { b._mode = 'update'; b._payload = p; return b; };
+          b.eq = () => b;
+          b.in = () => b;
+          b.single = async () =>
+            table === 'clients' ? { data: { id: 'cli-1' }, error: null } : { data: null, error: null };
+          b.maybeSingle = b.single;
+          b.then = (resolve: any) => {
+            if (b._mode === 'update') {
+              if (table === 'client_subscriptions') {
+                subs = subs.map((s) => ({ ...s, ...b._payload }));
+                subUpdates.push(b._payload);
+              }
+              return Promise.resolve({ data: null, error: null }).then(resolve);
+            }
+            if (table === 'client_subscriptions') return Promise.resolve({ data: subs, error: null }).then(resolve);
+            return Promise.resolve({ data: [], error: null }).then(resolve);
+          };
+          return b;
+        },
+      };
+      const svc = new ClientsService(supabase, asaas);
+      return { svc, asaas, getSubs: () => subs, subUpdates };
+    }
+
+    it('cancela assinaturas não-terminais (CANCELED + canceledAt) e a recorrente no Asaas', async () => {
+      const { svc, asaas, getSubs, subUpdates } = buildHardDeleteService([
+        { id: 's1', status: 'ACTIVE', asaasSubscriptionId: 'asub_1' },
+        { id: 's2', status: 'SUSPENDED', asaasSubscriptionId: null },
+      ]);
+
+      await svc.hardDelete('cli-1');
+
+      // Asaas cancelado só p/ a sub recorrente
+      expect(asaas.cancelSubscription).toHaveBeenCalledTimes(1);
+      expect(asaas.cancelSubscription).toHaveBeenCalledWith('asub_1');
+      // Ambas viram CANCELED com canceledAt
+      expect(subUpdates[0].status).toBe('CANCELED');
+      expect(subUpdates[0].canceledAt).toBeTruthy();
+      expect(getSubs().every((s: any) => s.status === 'CANCELED')).toBe(true);
+    });
+
+    it('sem assinaturas: não chama Asaas nem update de assinatura', async () => {
+      const { svc, asaas, subUpdates } = buildHardDeleteService([]);
+
+      await svc.hardDelete('cli-1');
+
+      expect(asaas.cancelSubscription).not.toHaveBeenCalled();
+      expect(subUpdates).toHaveLength(0);
+    });
+  });
 });
