@@ -689,6 +689,19 @@ export class AsaasWebhookController {
         this.logger.log(
           `Assinatura ${susp.id} REATIVADA após quitação de dívida via PIX (cobrança ${asaasPaymentId}).`,
         );
+
+        // CICLO PAGO: vincular o payment DEBT_PAYMENT (que JÁ existe e JÁ entrou no caixa)
+        // a esta assinatura. Sem o subscriptionId, isCurrentCyclePaid não enxerga o
+        // pagamento → a comanda cobra o corte cheio (cliente paga 2x). NÃO criamos um
+        // payment novo (isso DOBRARIA o caixa, que soma por linha); só carimbamos o que
+        // já está lá. O paidAt já foi gravado no início de handlePaymentConfirmed, então
+        // o pagamento cai dentro do ciclo. Filtro subscriptionId IS NULL = idempotente.
+        await this.supabase
+          .from('payments')
+          .update({ subscriptionId: susp.id, updatedAt: new Date().toISOString() })
+          .eq('asaasPaymentId', asaasPaymentId)
+          .eq('notes', 'DEBT_PAYMENT')
+          .is('subscriptionId', null);
       }
     }
 
