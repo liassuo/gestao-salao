@@ -93,6 +93,22 @@ async function reactivateIfSuspended(subId, patch) {
   if (!r.ok) throw new Error(`reactivate ${r.status} ${(await r.text()).slice(0, 200)}`);
   return r.json();
 }
+// Carimba o payment local de uma cobrança com o subscriptionId, p/ isCurrentCyclePaid
+// enxergar o pagamento (corte coberto na comanda). NÃO cria payment novo (dobraria
+// caixa); só vincula a linha que já existe e ainda não tem subscriptionId. Retorna
+// as linhas afetadas (vazio = sem payment local p/ essa cobrança, ou já vinculado).
+async function stampPaymentSubscription(asaasPaymentId, subId, nowIso) {
+  const u = new URL(SB + 'payments');
+  u.searchParams.set('asaasPaymentId', 'eq.' + asaasPaymentId);
+  u.searchParams.set('subscriptionId', 'is.null');
+  const r = await fetch(u, {
+    method: 'PATCH',
+    headers: { ...sh, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+    body: JSON.stringify({ subscriptionId: subId, updatedAt: nowIso }),
+  });
+  if (!r.ok) throw new Error(`stamp payment ${r.status} ${(await r.text()).slice(0, 200)}`);
+  return r.json();
+}
 // GET /v3/payments/{id} — status REAL e ao vivo da cobrança (não a listagem).
 async function asaasGetCharge(id) {
   const r = await fetch(`https://api.asaas.com/v3/payments/${id}`, { headers: { access_token: AKEY } });
@@ -261,6 +277,11 @@ async function main() {
       });
       const didReactivate = Array.isArray(reactRows) && reactRows.length > 0;
 
+      // Vincular o payment da prova à assinatura → ciclo conta como pago (corte coberto
+      // na comanda). Só carimba a linha existente; não cria payment (não dobra caixa).
+      const stamped = await stampPaymentSubscription(proof.chargeId, sub.id, nowIso);
+      const didStamp = Array.isArray(stamped) && stamped.length > 0;
+
       const settledDebtIds = [];
       for (const d of openDebts) {
         await sbpatch('debts', d.id, {
@@ -274,12 +295,12 @@ async function main() {
       await sbpatch('clients', clientId, { hasDebts: remaining.length > 0 });
 
       console.log(
-        `    OK — ${didReactivate ? 'reativada' : 'JÁ não-SUSPENDED (no-op)'} até ${reactEndIso.slice(0, 10)}; ${settledDebtIds.length} dívida(s) quitada(s); hasDebts=${remaining.length > 0}`,
+        `    OK — ${didReactivate ? 'reativada' : 'JÁ não-SUSPENDED (no-op)'} até ${reactEndIso.slice(0, 10)}; ${settledDebtIds.length} dívida(s) quitada(s); pagamento ${didStamp ? 'vinculado (ciclo pago)' : 'sem payment local p/ vincular'}; hasDebts=${remaining.length > 0}`,
       );
       reactivated++;
       audit.push({
         clientId, subId: sub.id, name, action: 'REACTIVATED',
-        didReactivate, endDate: reactEndIso, totalPending,
+        didReactivate, stampedCyclePaid: didStamp, endDate: reactEndIso, totalPending,
         proof, settledDebtIds, remainingDebts: remaining.length, at: nowIso,
       });
     } catch (e) {
