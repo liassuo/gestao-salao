@@ -168,6 +168,21 @@ export interface AsaasCharge {
     value: number;
     type: string;
   };
+  // O Asaas devolve os estornos da cobrança INLINE no objeto do pagamento (atributo
+  // `refunds`) — não é preciso bater no endpoint GET /payments/{id}/refunds à parte.
+  refunds?: AsaasRefund[];
+}
+
+// Estorno de uma cobrança (atributo `refunds` do pagamento; status DONE/PENDING/CANCELLED).
+// value/dateCreated/effectiveDate vêm do gateway; effectiveDate é a data em que o
+// dinheiro efetivamente voltou (preferida para exibir), dateCreated é quando foi pedido.
+export interface AsaasRefund {
+  value: number; // em reais
+  status: 'PENDING' | 'CANCELLED' | 'DONE' | string;
+  dateCreated?: string | null;
+  effectiveDate?: string | null;
+  description?: string | null;
+  transactionReceiptUrl?: string | null;
 }
 
 export interface AsaasCreateChargePayload {
