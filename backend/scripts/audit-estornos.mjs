@@ -1,132 +1,130 @@
-// AUDITORIA read-only (NÃO escreve nada). Cruza banco (Supabase) x Asaas p/ listar
-// os ESTORNOS e separar os que PROVAVELMENTE foram causados pela exclusão de cobrança
-// paga (cancel/no-show/atender excluíam DELETE /payments sem conferir status real →
-// estorno automático de cartão CONFIRMED/RECEIVED). Roda com a chave de prod.
+// AUDITORIA read-only (NÃO escreve nada). Investiga a queixa "o app estornou e o
+// barbeiro recobrou na maquininha". Roda com a chave de prod.
 //
-// Hipótese investigada (PR fix/estorno-automatico-cancelcharge-guard):
-//   Excluir uma cobrança de cartão CONFIRMED/RECEIVED no Asaas GERA ESTORNO. Os
-//   fluxos de agendamento decidiam excluir pelo `paidAt` LOCAL (null no race do
-//   webhook PAYMENT_CONFIRMED) → estornavam cobrança já paga.
+// POR QUE a auditoria por status LOCAL não achava nada:
+//   Quando o app EXCLUI a cobrança (cancel/no-show/atender → DELETE /payments), o
+//   Asaas dispara PAYMENT_DELETED — evento DESMARCADO no painel — então o handler
+//   handlePaymentDeleted nunca roda e o `payments.asaasStatus` LOCAL fica velho
+//   (PENDING/CONFIRMED). Filtrar asaasStatus=REFUNDED local não vê esses casos.
+//   => Aqui consultamos o Asaas DIRETO (getCharge) e o padrão de duplo-pagamento.
 //
-// 2 listas:
-//  PROVÁVEL EXCLUSÃO: estorno cujo pagamento tem agendamento CANCELED/NO_SHOW/ATTENDED
-//          e a data do estorno cai PERTO (<= JANELA_DIAS) da ação no agendamento.
-//          Forte suspeita de ter sido causado pela exclusão da cobrança.
-//  MANUAL/OUTRO: estorno sem essa correlação (sem agendamento, agendamento ainda ativo,
-//          ou estorno distante da ação) → provável estorno manual no painel / chargeback.
+// 2 passes:
+//  PASS A — ASAAS DIRETO: para cada pagamento Asaas de agendamento CANCELED/NO_SHOW/
+//           ATTENDED no período, consulta o charge REAL no Asaas e sinaliza se está
+//           `deleted`, REFUNDED/REFUND_IN_PROGRESS, ou tem refunds[]. É a digital da
+//           cobrança que o app excluiu/estornou (independe do status local).
+//  PASS B — DUPLO PAGAMENTO (só banco, não depende de Asaas/webhook): agendamento com
+//           cobrança Asaas E um pagamento de maquininha/balcão (sem asaasPaymentId).
+//           Casa exatamente com "estornou no app, recobrou na maquininha".
 //
 // Uso (a partir de backend/):
 //   ASAAS_PROD_KEY='$aact_prod_...' node scripts/audit-estornos.mjs
-//   # opcional: janela de correlação (default 3) e recorte por data de atualização:
-//   JANELA_DIAS=3 DESDE=2026-01-01 node scripts/audit-estornos.mjs
+//   # opcional: recorte por data de criação do pagamento (default: últimos 90 dias)
+//   DESDE=2026-01-01 ASAAS_PROD_KEY='$aact_prod_...' node scripts/audit-estornos.mjs
 
 import 'dotenv/config';
 const SUPA_URL = process.env.SUPABASE_URL, SKEY = process.env.SUPABASE_SERVICE_ROLE_KEY, AKEY = process.env.ASAAS_PROD_KEY;
 if (!SUPA_URL || !SKEY) { console.error('ABORTADO: Supabase ausente.'); process.exit(1); }
 if (!AKEY || !AKEY.startsWith('$aact_prod')) { console.error('ABORTADO: ASAAS_PROD_KEY ausente/não-prod.'); process.exit(1); }
 
-const JANELA_DIAS = Number(process.env.JANELA_DIAS || 3);
-const DESDE = process.env.DESDE || null; // ISO date opcional (filtra payments.updatedAt)
-const REFUND_STATUSES = ['REFUNDED', 'REFUND_IN_PROGRESS'];
+const DESDE = process.env.DESDE || new Date(Date.now() - 90 * 864e5).toISOString().slice(0, 10);
 const ACAO_STATUSES = ['CANCELED', 'NO_SHOW', 'ATTENDED'];
-const DIA_MS = 864e5;
+const REFUND_STATUSES = ['REFUNDED', 'REFUND_IN_PROGRESS'];
+const CHUNK = 5; // lotes de getCharge p/ não estourar rate-limit do Asaas
 
 const SB = SUPA_URL.replace(/\/+$/, '') + '/rest/v1/';
 const sh = { apikey: SKEY, Authorization: 'Bearer ' + SKEY };
 const sg = async (t, p) => { const u = new URL(SB + t); for (const [k, v] of Object.entries(p)) u.searchParams.set(k, v); const r = await fetch(u, { headers: sh }); if (!r.ok) throw new Error(`${t} ${r.status} ${await r.text()}`); return r.json(); };
-// getCharge: objeto único; null em erro (cobrança 404/deletada que não responde).
-const agCharge = async (id) => { try { const r = await fetch('https://api.asaas.com/v3/payments/' + id, { headers: { access_token: AKEY } }); return r.ok ? r.json() : null; } catch { return null; } };
+const agCharge = async (id) => { try { const r = await fetch('https://api.asaas.com/v3/payments/' + id, { headers: { access_token: AKEY } }); return r.ok ? await r.json() : { _http: r.status }; } catch (e) { return { _err: String(e) }; } };
 const reais = (cent) => 'R$' + ((cent || 0) / 100).toFixed(2);
-const reaisFromAsaas = (v) => 'R$' + ((v || 0)).toFixed(2);
 const dt = (s) => (s ? new Date(s).toISOString().slice(0, 16).replace('T', ' ') : '—');
-const dayGap = (a, b) => (a && b ? Math.abs(new Date(a).getTime() - new Date(b).getTime()) / DIA_MS : null);
-
-// Data REAL do estorno a partir do charge do Asaas (effectiveDate > dateCreated do
-// refund DONE/PENDING); fallback p/ updatedAt local quando não há refunds[].
-function refundInfo(charge, payment) {
-  const refunds = Array.isArray(charge?.refunds) ? charge.refunds : [];
-  const live = refunds.filter((r) => r.status !== 'CANCELLED');
-  if (live.length) {
-    const r = live[live.length - 1];
-    return {
-      date: r.effectiveDate || r.dateCreated || payment.updatedAt || null,
-      valueReais: live.reduce((s, x) => s + (x.value || 0), 0),
-      status: r.status,
-      receipt: r.transactionReceiptUrl || null,
-      synthetic: false,
-    };
-  }
-  // Sem refunds[] (ex.: chargeback) → sintetiza pelo bruto da cobrança.
-  return { date: payment.updatedAt || null, valueReais: charge?.value || (payment.amount || 0) / 100, status: charge?.status || payment.asaasStatus, receipt: null, synthetic: true };
-}
 
 async function main() {
   console.log('===== AUDITORIA ESTORNOS (read-only) — ' + new Date().toISOString().slice(0, 16) + ' =====');
-  console.log(`Janela de correlação: ${JANELA_DIAS} dia(s)${DESDE ? ` · desde ${DESDE}` : ''}\n`);
+  console.log(`Recorte: pagamentos criados desde ${DESDE}\n`);
 
-  const params = {
-    select: 'id,asaasPaymentId,amount,method,billingType,asaasStatus,paidAt,businessDate,updatedAt,appointmentId,clientId,client:clients(name,phone),appointment:appointments!appointmentId(id,status,canceledAt,attendedAt,scheduledAt,updatedAt,isPaid)',
-    asaasStatus: `in.(${REFUND_STATUSES.join(',')})`,
-    order: 'updatedAt.desc',
-  };
-  if (DESDE) params.updatedAt = `gte.${DESDE}`;
+  // Todos os pagamentos do período ligados a um agendamento (Asaas e maquininha).
+  const pays = await sg('payments', {
+    select: 'id,asaasPaymentId,amount,method,billingType,asaasStatus,paidAt,createdAt,appointmentId,clientId,client:clients(name,phone),appointment:appointments!appointmentId(id,status,canceledAt,attendedAt,updatedAt)',
+    appointmentId: 'not.is.null',
+    createdAt: `gte.${DESDE}`,
+    order: 'createdAt.desc',
+    limit: '5000',
+  });
+  console.log(`Pagamentos no recorte: ${pays.length}`);
 
-  const payments = await sg('payments', params);
-  if (!payments.length) { console.log('Nenhum pagamento com status de estorno no recorte. ✓'); return; }
+  // ---- PASS A: consulta o Asaas direto p/ as cobranças de agendamentos "ação" ----
+  const suspeitos = pays.filter(
+    (p) => p.asaasPaymentId && p.appointment && ACAO_STATUSES.includes(p.appointment.status),
+  );
+  console.log(`Cobranças Asaas em agendamento CANCELED/NO_SHOW/ATTENDED a consultar no Asaas: ${suspeitos.length}\n`);
 
-  const provavel = [], outro = [];
-
-  for (const p of payments) {
-    const charge = p.asaasPaymentId ? await agCharge(p.asaasPaymentId) : null;
-    const rf = refundInfo(charge, p);
-    const appt = p.appointment || null;
-    const billing = p.billingType || p.method || '?';
-    const isCard = /CARD|CREDIT/i.test(billing);
-
-    // Data da ação que pode ter disparado a exclusão (cancelamento/atendimento/no-show).
-    const acaoDate = appt ? (appt.canceledAt || appt.attendedAt || appt.updatedAt || null) : null;
-    const gap = dayGap(rf.date, acaoDate);
-    const correlacionado =
-      appt && ACAO_STATUSES.includes(appt.status) && gap != null && gap <= JANELA_DIAS;
-
-    const row = {
-      cliente: p.client?.name || '(sem nome)',
-      valor: reaisFromAsaas(rf.valueReais),
-      billing,
-      isCard,
-      asaasStatus: p.asaasStatus,
-      refundStatus: rf.status + (rf.synthetic ? ' (sintetizado)' : ''),
-      apptStatus: appt?.status || '(sem agendamento)',
-      acaoDate: dt(acaoDate),
-      estornoDate: dt(rf.date),
-      gapDias: gap == null ? '—' : gap.toFixed(1),
-      asaasPaymentId: p.asaasPaymentId,
-    };
-    (correlacionado ? provavel : outro).push(row);
+  const achados = [];
+  for (let i = 0; i < suspeitos.length; i += CHUNK) {
+    const lote = suspeitos.slice(i, i + CHUNK);
+    const charges = await Promise.all(lote.map((p) => agCharge(p.asaasPaymentId)));
+    lote.forEach((p, k) => {
+      const c = charges[k] || {};
+      const refunds = Array.isArray(c.refunds) ? c.refunds.filter((r) => r.status !== 'CANCELLED') : [];
+      const estornadoNoAsaas =
+        c.deleted === true || REFUND_STATUSES.includes(c.status) || refunds.length > 0;
+      if (estornadoNoAsaas) {
+        const appt = p.appointment;
+        achados.push({
+          cliente: p.client?.name || '(sem nome)',
+          valor: reais(p.amount),
+          billing: p.billingType || p.method || '?',
+          apptStatus: appt.status,
+          acao: dt(appt.canceledAt || appt.attendedAt || appt.updatedAt),
+          asaasStatusReal: c.status || (c._http ? `HTTP ${c._http}` : c._err || '?'),
+          deleted: c.deleted === true,
+          refundReais: refunds.reduce((s, r) => s + (r.value || 0), 0),
+          asaasPaymentId: p.asaasPaymentId,
+          localStatus: p.asaasStatus,
+        });
+      }
+    });
   }
 
-  const print = (title, rows) => {
-    console.log(`\n===== ${title} (${rows.length}) =====`);
-    if (!rows.length) { console.log('  (nenhum)'); return; }
-    for (const r of rows) {
-      console.log(
-        `  ${r.cliente} · ${r.valor} · ${r.billing}${r.isCard ? ' 💳' : ''} · agendamento=${r.apptStatus}\n` +
-        `     ação=${r.acaoDate} | estorno=${r.estornoDate} | gap=${r.gapDias}d | asaasStatus=${r.asaasStatus} | refund=${r.refundStatus}\n` +
-        `     charge=${r.asaasPaymentId}`,
-      );
+  console.log(`\n===== PASS A — COBRANÇAS ESTORNADAS/EXCLUÍDAS NO ASAAS (${achados.length}) =====`);
+  if (!achados.length) console.log('  (nenhuma)');
+  for (const a of achados) {
+    console.log(
+      `  ${a.cliente} · ${a.valor} · ${a.billing} · agendamento=${a.apptStatus} (ação ${a.acao})\n` +
+      `     Asaas REAL: status=${a.asaasStatusReal}${a.deleted ? ' · DELETED' : ''}${a.refundReais ? ` · refund R$${a.refundReais.toFixed(2)}` : ''} | local=${a.localStatus}\n` +
+      `     charge=${a.asaasPaymentId}`,
+    );
+  }
+
+  // ---- PASS B: duplo pagamento (Asaas + maquininha) no mesmo agendamento ----
+  const porAppt = new Map();
+  for (const p of pays) {
+    if (!porAppt.has(p.appointmentId)) porAppt.set(p.appointmentId, []);
+    porAppt.get(p.appointmentId).push(p);
+  }
+  const duplos = [];
+  for (const [apptId, lista] of porAppt) {
+    const asaas = lista.filter((p) => p.asaasPaymentId);
+    const maquininha = lista.filter((p) => !p.asaasPaymentId); // sem cobrança Asaas = balcão/maquininha
+    if (asaas.length && maquininha.length) {
+      duplos.push({ apptId, asaas, maquininha, appt: lista[0].appointment, cliente: lista[0].client?.name || '(sem nome)' });
     }
-  };
+  }
 
-  print('PROVÁVEL EXCLUSÃO (suspeita: estorno causado pela exclusão da cobrança paga)', provavel);
-  print('MANUAL/OUTRO (sem correlação com cancel/no-show/atender)', outro);
+  console.log(`\n===== PASS B — DUPLO PAGAMENTO: Asaas + maquininha no mesmo agendamento (${duplos.length}) =====`);
+  if (!duplos.length) console.log('  (nenhum)');
+  for (const d of duplos) {
+    console.log(`  ${d.cliente} · agendamento=${d.appt?.status || '?'} (${d.apptId})`);
+    for (const a of d.asaas) console.log(`     [Asaas]      ${reais(a.amount)} ${a.billingType || a.method} pago=${dt(a.paidAt)} local=${a.asaasStatus} charge=${a.asaasPaymentId}`);
+    for (const m of d.maquininha) console.log(`     [maquininha] ${reais(m.amount)} ${m.method || m.billingType} pago=${dt(m.paidAt)} criado=${dt(m.createdAt)}`);
+  }
 
-  const cards = provavel.filter((r) => r.isCard).length;
   console.log('\n===== RESUMO =====');
-  console.log(`  Total de estornos analisados: ${payments.length}`);
-  console.log(`  PROVÁVEL EXCLUSÃO: ${provavel.length} (cartão: ${cards})`);
-  console.log(`  MANUAL/OUTRO: ${outro.length}`);
-  console.log('\n  Nota: "PROVÁVEL EXCLUSÃO" = agendamento CANCELED/NO_SHOW/ATTENDED + estorno dentro');
-  console.log(`        de ${JANELA_DIAS} dia(s) da ação. A guarda do PR impede novos casos; estes são histórico.`);
+  console.log(`  Pagamentos analisados: ${pays.length}`);
+  console.log(`  PASS A (estornadas/excluídas no Asaas): ${achados.length}`);
+  console.log(`  PASS B (duplo pagamento Asaas+maquininha): ${duplos.length}`);
+  console.log('\n  PASS A = cobrança que o app excluiu/estornou (Asaas direto, ignora status local desatualizado).');
+  console.log('  PASS B = digital de "estornou no app e recobrou na maquininha" (só banco). Cruze A x B pelo cliente.');
 }
 
 main().catch((e) => { console.error('FALHA:', e); process.exit(1); });
