@@ -1,4 +1,5 @@
 import { SupabaseService } from '../supabase/supabase.service';
+import { isRevenuePayment } from './business-date.helper';
 
 export interface PromotionMatch {
   discountPercent: number;
@@ -95,10 +96,10 @@ export async function getActiveClientPlan(
  *
  * Confirmação manual (admin) grava payment com paidAt → também satisfaz o gate.
  */
-export async function isCurrentCyclePaid(
-  supabase: SupabaseService,
-  row: { id: string; startDate?: string | null; createdAt?: string | null },
-): Promise<boolean> {
+export function subscriptionCycleFloorMs(row: {
+  startDate?: string | null;
+  createdAt?: string | null;
+}): number {
   const startMs = row.startDate ? new Date(row.startDate).getTime() : 0;
   const createdMs = row.createdAt ? new Date(row.createdAt).getTime() : 0;
   const cycleStartMs = Math.max(startMs, createdMs);
@@ -109,19 +110,31 @@ export async function isCurrentCyclePaid(
   // tido como "fora do ciclo" — falso negativo de borda (caso Roberto: pagou 29/05,
   // ciclo inicia 30/05, aparecia "ciclo não pago"). Usa setUTCHours porque o paidAt
   // data-só é UTC; com horário local o fuso (GMT-3) jogaria o piso 3h à frente.
-  const cycleFloorMs =
-    cycleStartMs > 0
-      ? new Date(cycleStartMs - ONE_DAY).setUTCHours(0, 0, 0, 0)
-      : 0;
+  return cycleStartMs > 0
+    ? new Date(cycleStartMs - ONE_DAY).setUTCHours(0, 0, 0, 0)
+    : 0;
+}
+
+export async function isCurrentCyclePaid(
+  supabase: SupabaseService,
+  row: { id: string; startDate?: string | null; createdAt?: string | null },
+): Promise<boolean> {
+  const cycleFloorMs = subscriptionCycleFloorMs(row);
 
   const { data: payments } = await supabase
     .from('payments')
-    .select('paidAt')
+    .select('paidAt, asaasStatus')
     .eq('subscriptionId', row.id)
     .not('paidAt', 'is', null);
 
-  for (const p of (payments || []) as { paidAt: string | null }[]) {
+  for (const p of (payments || []) as { paidAt: string | null; asaasStatus?: string | null }[]) {
     if (!p.paidAt) continue;
+    // Pagamento estornado/cancelado/chargeback NÃO conta como ciclo pago — o dinheiro
+    // saiu. O estorno (handlePaymentRefunded) marca asaasStatus mas NÃO limpa o paidAt,
+    // então sem este filtro um pagamento estornado mantinha o plano "Em dia"/concedendo
+    // cortes de graça. Mesma fonte de verdade da receita (isRevenuePayment), usada em
+    // caixa/dashboard/relatórios/comissões.
+    if (!isRevenuePayment(p)) continue;
     const paidMs = new Date(p.paidAt).getTime();
     if (Number.isNaN(paidMs)) continue;
     if (paidMs >= cycleFloorMs) return true;

@@ -501,6 +501,108 @@ describe('AsaasWebhookController (e2e)', () => {
     });
   });
 
+  describe('handlePaymentConfirmed — vencimento: quita ciclo corrente vs renova próximo', () => {
+    it('cobrança de RECUPERAÇÃO do ciclo vigente (ACTIVE, ciclo em aberto): quita e MANTÉM o vencimento e os cortes', async () => {
+      // Caso do dono: assinatura renovou no sistema mas o mês corrente não foi pago.
+      // Disparamos a cobrança do ciclo; quando o cliente paga, deve apenas marcar o
+      // ciclo como pago — sem empurrar o vencimento +1 mês (senão paga 1, ganha 2).
+      const { controller, state } = await buildController({
+        client_subscriptions: [
+          {
+            id: 'sub-1',
+            clientId: 'client-1',
+            status: 'ACTIVE',
+            startDate: '2027-12-01T00:00:00.000',
+            createdAt: '2027-12-01T00:00:00.000',
+            endDate: '2027-12-31T00:00:00.000',
+            cutsUsedThisMonth: 2,
+            plan: { name: 'Mensal' },
+          },
+        ],
+        payments: [
+          {
+            id: 'pay-local-1',
+            asaasPaymentId: 'asaas_pay_001',
+            clientId: 'client-1',
+            subscriptionId: 'sub-1',
+            amount: 5000,
+            asaasStatus: 'PENDING',
+            paidAt: null,
+          },
+        ],
+        clients: [{ id: 'client-1', hasDebts: false }],
+        debts: [],
+        cash_registers: [],
+      });
+
+      await controller.handleWebhook(
+        paymentEvent(AsaasWebhookEvent.PAYMENT_RECEIVED, basePaymentData({ status: 'RECEIVED' })),
+        'test-token',
+      );
+
+      const sub = state.client_subscriptions[0];
+      expect(sub.status).toBe('ACTIVE');
+      expect(sub.endDate).toBe('2027-12-31T00:00:00.000'); // vencimento INALTERADO
+      expect(sub.cutsUsedThisMonth).toBe(2); // cortes NÃO zerados (mesmo ciclo)
+      expect(state.payments[0].paidAt).toBeTruthy(); // ciclo agora consta pago
+    });
+
+    it('renovação do PRÓXIMO ciclo (ACTIVE, ciclo atual já pago por outro pagamento): avança vencimento +1 mês e zera cortes', async () => {
+      const { controller, state } = await buildController({
+        client_subscriptions: [
+          {
+            id: 'sub-1',
+            clientId: 'client-1',
+            status: 'ACTIVE',
+            startDate: '2027-12-01T00:00:00.000',
+            createdAt: '2027-12-01T00:00:00.000',
+            endDate: '2027-12-31T00:00:00.000',
+            cutsUsedThisMonth: 3,
+            plan: { name: 'Mensal' },
+          },
+        ],
+        payments: [
+          // Pagamento do ciclo VIGENTE (já cobre o mês corrente).
+          {
+            id: 'pay-local-1',
+            asaasPaymentId: 'asaas_pay_001',
+            clientId: 'client-1',
+            subscriptionId: 'sub-1',
+            amount: 5000,
+            asaasStatus: 'CONFIRMED',
+            paidAt: '2027-12-15T00:00:00.000',
+          },
+          // Nova cobrança (próximo ciclo) que está sendo confirmada agora.
+          {
+            id: 'pay-local-2',
+            asaasPaymentId: 'asaas_pay_002',
+            clientId: 'client-1',
+            subscriptionId: 'sub-1',
+            amount: 5000,
+            asaasStatus: 'PENDING',
+            paidAt: null,
+          },
+        ],
+        clients: [{ id: 'client-1', hasDebts: false }],
+        debts: [],
+        cash_registers: [],
+      });
+
+      await controller.handleWebhook(
+        paymentEvent(
+          AsaasWebhookEvent.PAYMENT_RECEIVED,
+          basePaymentData({ id: 'asaas_pay_002', status: 'RECEIVED' }),
+        ),
+        'test-token',
+      );
+
+      const sub = state.client_subscriptions[0];
+      expect(sub.status).toBe('ACTIVE');
+      expect(sub.endDate.startsWith('2028-01-31')).toBe(true); // 12-31 + 1 mês
+      expect(sub.cutsUsedThisMonth).toBe(0); // ciclo novo → cortes zerados
+    });
+  });
+
   describe('handlePaymentConfirmed — renova só com cobrança liquidada (Asaas como fonte da verdade)', () => {
     it('NÃO ativa a assinatura quando a cobrança real (getCharge) ainda está PENDING, mesmo recebendo PAYMENT_CONFIRMED', async () => {
       const { controller, state } = await buildController(

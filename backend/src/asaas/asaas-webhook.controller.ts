@@ -12,6 +12,8 @@ import { ApiTags, ApiOperation, ApiExcludeEndpoint } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../supabase/supabase.service';
 import { nowLocalIsoString, resolveBusinessDate } from '../common/datetime.util';
+import { subscriptionCycleFloorMs } from '../common/pricing.helper';
+import { isRevenuePayment } from '../common/business-date.helper';
 import { AsaasService } from './asaas.service';
 import { CashRegisterService } from '../cash-register/cash-register.service';
 import { AsaasWebhookEvent, AsaasChargeStatus } from './asaas.types';
@@ -515,42 +517,85 @@ export class AsaasWebhookController {
       confirmBusinessDate,
     );
 
-    // Se vinculado a assinatura, ativar e estender endDate + resetar cortes
+    // Se vinculado a assinatura, ativar e (talvez) renovar a janela.
     if (localPayment.subscriptionId) {
       const now = new Date();
 
       const { data: currentSub } = await this.supabase
         .from('client_subscriptions')
-        .select('status, endDate')
+        .select('status, endDate, startDate, createdAt')
         .eq('id', localPayment.subscriptionId)
         .single();
 
-      // Regra do vencimento:
-      //  - 1ª ativação (assinatura ainda NÃO estava ACTIVE — veio de PENDING_PAYMENT/
-      //    SUSPENDED): o ciclo começa no pagamento → agora + 1 mês. Não estender o
-      //    endDate da criação (que já era "agora + 1 mês"), senão infla p/ 2 meses.
-      //  - Renovação recorrente (já estava ACTIVE): acumula a partir do endDate atual
-      //    (ou de hoje, se já venceu), preservando o dia de cobrança.
       const wasActive = currentSub?.status === 'ACTIVE';
-      const currentEnd = currentSub?.endDate ? new Date(currentSub.endDate) : now;
-      const baseDate = wasActive && currentEnd > now ? currentEnd : now;
-      const newEndDate = new Date(baseDate);
-      newEndDate.setMonth(newEndDate.getMonth() + 1);
 
-      await this.supabase
-        .from('client_subscriptions')
-        .update({
-          status: 'ACTIVE',
-          cutsUsedThisMonth: 0,
-          lastResetDate: now.toISOString(),
-          endDate: newEndDate.toISOString(),
-          updatedAt: now.toISOString(),
-        })
-        .eq('id', localPayment.subscriptionId);
+      // Este pagamento QUITA o ciclo vigente em aberto ou COMPRA o próximo?
+      // Olha os OUTROS pagamentos de receita da assinatura (exclui este — o paidAt
+      // dele já foi gravado acima) dentro do ciclo atual. Se o ciclo já estava pago
+      // por outro pagamento, ESTE é a renovação do PRÓXIMO ciclo → avança o
+      // vencimento. Se o ciclo estava em ABERTO, este pagamento só quita o ciclo
+      // corrente → NÃO move o vencimento nem zera os cortes (não é um mês novo).
+      let cycleWasAlreadyPaid = false;
+      if (wasActive) {
+        const floorMs = subscriptionCycleFloorMs({
+          startDate: (currentSub as any)?.startDate,
+          createdAt: (currentSub as any)?.createdAt,
+        });
+        const { data: subPays } = await this.supabase
+          .from('payments')
+          .select('id, paidAt, asaasStatus')
+          .eq('subscriptionId', localPayment.subscriptionId)
+          .not('paidAt', 'is', null);
+        cycleWasAlreadyPaid = (subPays || []).some((p: any) => {
+          // Exclui ESTE pagamento (paidAt dele já foi gravado acima) — interessa se
+          // OUTRO pagamento de receita já cobria o ciclo vigente.
+          if (p.id === localPayment.id) return false;
+          if (!p.paidAt || !isRevenuePayment(p)) return false;
+          const ms = new Date(p.paidAt).getTime();
+          return !Number.isNaN(ms) && ms >= floorMs;
+        });
+      }
 
-      this.logger.log(
-        `Assinatura ${localPayment.subscriptionId} ativada/renovada até ${newEndDate.toISOString()}`,
-      );
+      // Renova (avança vencimento + zera cortes) somente em:
+      //  - 1ª ativação (NÃO estava ACTIVE): ciclo começa agora → agora + 1 mês.
+      //  - Renovação do PRÓXIMO ciclo (ACTIVE e ciclo atual já pago): acumula a
+      //    partir do endDate atual (ou de hoje se já venceu), preservando o dia.
+      // Caso contrário (ACTIVE + ciclo vigente em aberto = cobrança de recuperação
+      // do mês corrente): apenas garante ACTIVE e mantém o vencimento e os cortes.
+      const renews = !wasActive || cycleWasAlreadyPaid;
+
+      if (renews) {
+        const currentEnd = currentSub?.endDate ? new Date(currentSub.endDate) : now;
+        const baseDate = wasActive && currentEnd > now ? currentEnd : now;
+        const newEndDate = new Date(baseDate);
+        newEndDate.setMonth(newEndDate.getMonth() + 1);
+
+        await this.supabase
+          .from('client_subscriptions')
+          .update({
+            status: 'ACTIVE',
+            cutsUsedThisMonth: 0,
+            lastResetDate: now.toISOString(),
+            endDate: newEndDate.toISOString(),
+            updatedAt: now.toISOString(),
+          })
+          .eq('id', localPayment.subscriptionId);
+
+        this.logger.log(
+          `Assinatura ${localPayment.subscriptionId} ativada/renovada até ${newEndDate.toISOString()}`,
+        );
+      } else {
+        // Quitação do ciclo CORRENTE (cobrança de recuperação): mantém vencimento e
+        // cortes. O paidAt deste pagamento já faz isCurrentCyclePaid virar true.
+        await this.supabase
+          .from('client_subscriptions')
+          .update({ status: 'ACTIVE', updatedAt: now.toISOString() })
+          .eq('id', localPayment.subscriptionId);
+
+        this.logger.log(
+          `Assinatura ${localPayment.subscriptionId}: ciclo vigente quitado (cobrança de recuperação) — vencimento ${currentSub?.endDate ?? 'atual'} mantido.`,
+        );
+      }
 
       // Quitar a dívida de "Cobrança não paga" criada quando este mesmo pagamento ficou OVERDUE.
       // A correlação é feita pela tag [asaas:<id>] embutida na descrição.
