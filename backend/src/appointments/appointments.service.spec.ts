@@ -18,6 +18,7 @@ const mockAsaasService = {
   findCustomerByExternalReference: jest.fn(),
   createCharge: jest.fn(),
   cancelCharge: jest.fn().mockResolvedValue(undefined),
+  getCharge: jest.fn(),
   getPixQrCode: jest.fn(),
 };
 
@@ -863,6 +864,102 @@ describe('AppointmentsService', () => {
 
       const result = await service.getCalendarData('2026-04-01');
       expect(result).toEqual([]);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Guarda anti-estorno: excluir (DELETE /payments) uma cobrança de cartão
+  // CONFIRMED/RECEIVED no Asaas GERA ESTORNO. cancel/no-show/atender decidiam
+  // excluir só pelo `paidAt` LOCAL — null se o webhook de confirmação atrasou —
+  // então estornavam cobranças JÁ pagas. A guarda confere o status REAL antes.
+  // -----------------------------------------------------------------------
+  describe('guarda anti-estorno ao excluir cobrança Asaas', () => {
+    beforeEach(() => {
+      mockAsaasService.configured = true;
+      mockAsaasService.getCharge = jest.fn();
+      mockAsaasService.cancelCharge = jest.fn().mockResolvedValue(undefined);
+    });
+    afterEach(() => {
+      mockAsaasService.configured = false;
+    });
+
+    // payments é consultado com .single() (cancel) ou .maybeSingle() (no-show/atender)
+    const seedPayment = (data: any) => {
+      chains['payments'] = mockChain();
+      chains['payments'].single.mockResolvedValue({ data, error: null });
+      chains['payments'].maybeSingle.mockResolvedValue({ data, error: null });
+    };
+
+    it('cancel(): NÃO exclui a cobrança quando o Asaas diz CONFIRMED (evita estorno)', async () => {
+      const appt = mockChain();
+      chains['appointments'] = appt;
+      appt.single
+        .mockResolvedValueOnce({ data: { id: 'appt-1', status: 'PENDING_PAYMENT' }, error: null })
+        .mockResolvedValueOnce({ data: { id: 'appt-1', status: 'CANCELED' }, error: null });
+      seedPayment({ id: 'pay-1', asaasPaymentId: 'ch_card' });
+      mockAsaasService.getCharge.mockResolvedValue({ id: 'ch_card', status: 'CONFIRMED' });
+
+      await service.cancel('appt-1');
+
+      expect(mockAsaasService.getCharge).toHaveBeenCalledWith('ch_card');
+      expect(mockAsaasService.cancelCharge).not.toHaveBeenCalled();
+    });
+
+    it('cancel(): exclui a cobrança quando o Asaas confirma PENDING (sem risco de estorno)', async () => {
+      const appt = mockChain();
+      chains['appointments'] = appt;
+      appt.single
+        .mockResolvedValueOnce({ data: { id: 'appt-1', status: 'PENDING_PAYMENT' }, error: null })
+        .mockResolvedValueOnce({ data: { id: 'appt-1', status: 'CANCELED' }, error: null });
+      seedPayment({ id: 'pay-1', asaasPaymentId: 'ch_pix' });
+      mockAsaasService.getCharge.mockResolvedValue({ id: 'ch_pix', status: 'PENDING' });
+
+      await service.cancel('appt-1');
+
+      expect(mockAsaasService.cancelCharge).toHaveBeenCalledWith('ch_pix');
+    });
+
+    it('cancel(): NÃO exclui se a consulta ao Asaas falhar (não arrisca estorno no escuro)', async () => {
+      const appt = mockChain();
+      chains['appointments'] = appt;
+      appt.single
+        .mockResolvedValueOnce({ data: { id: 'appt-1', status: 'PENDING_PAYMENT' }, error: null })
+        .mockResolvedValueOnce({ data: { id: 'appt-1', status: 'CANCELED' }, error: null });
+      seedPayment({ id: 'pay-1', asaasPaymentId: 'ch_x' });
+      mockAsaasService.getCharge.mockRejectedValue(new Error('asaas timeout'));
+
+      await service.cancel('appt-1');
+
+      expect(mockAsaasService.cancelCharge).not.toHaveBeenCalled();
+    });
+
+    it('markAsNoShow(): NÃO exclui cobrança RECEIVED (evita estorno)', async () => {
+      const appt = mockChain();
+      chains['appointments'] = appt;
+      appt.single
+        .mockResolvedValueOnce({ data: { id: 'appt-1', status: 'PENDING_PAYMENT', usedSubscriptionCut: false, clientId: 'c1' }, error: null })
+        .mockResolvedValueOnce({ data: { id: 'appt-1', status: 'NO_SHOW' }, error: null });
+      seedPayment({ id: 'pay-1', asaasPaymentId: 'ch_card' });
+      mockAsaasService.getCharge.mockResolvedValue({ id: 'ch_card', status: 'RECEIVED' });
+
+      await service.markAsNoShow('appt-1');
+
+      expect(mockAsaasService.cancelCharge).not.toHaveBeenCalled();
+    });
+
+    it('markAsAttended(): NÃO exclui cobrança de cartão CONFIRMED ao atender sem pagamento online', async () => {
+      const appt = mockChain();
+      chains['appointments'] = appt;
+      appt.single
+        .mockResolvedValueOnce({ data: { id: 'appt-1', status: 'SCHEDULED', clientId: 'c1', totalPrice: 5000, isPaid: false }, error: null })
+        .mockResolvedValueOnce({ data: { id: 'appt-1', status: 'ATTENDED' }, error: null });
+      // orders (linkedOrder) → null por padrão → effectiveTotal=5000 → isZeroTotal=false
+      seedPayment({ id: 'pay-1', asaasPaymentId: 'ch_card', asaasStatus: null, method: 'CARD' });
+      mockAsaasService.getCharge.mockResolvedValue({ id: 'ch_card', status: 'CONFIRMED' });
+
+      await service.markAsAttended('appt-1');
+
+      expect(mockAsaasService.cancelCharge).not.toHaveBeenCalled();
     });
   });
 });

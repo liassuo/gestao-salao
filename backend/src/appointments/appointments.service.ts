@@ -617,12 +617,10 @@ export class AppointmentsService {
         .single();
 
       if (pendingPayment?.asaasPaymentId) {
-        try {
-          await this.asaasService.cancelCharge(pendingPayment.asaasPaymentId);
-          this.logger.log(`Cobrança Asaas ${pendingPayment.asaasPaymentId} cancelada (agendamento ${id} cancelado)`);
-        } catch (e) {
-          this.logger.warn(`Falha ao cancelar cobrança Asaas ${pendingPayment.asaasPaymentId}: ${e}`);
-        }
+        await this.cancelAsaasChargeIfUnpaid(
+          pendingPayment.asaasPaymentId,
+          `cancelamento do agendamento ${id}`,
+        );
       }
     }
 
@@ -699,6 +697,47 @@ export class AppointmentsService {
     );
   }
 
+  /**
+   * Exclui uma cobrança no Asaas SOMENTE se ela ainda não foi paga.
+   *
+   * Excluir (DELETE /payments) uma cobrança de cartão CONFIRMED/RECEIVED no Asaas
+   * GERA ESTORNO automático. Os fluxos de cancelamento/no-show/atendimento decidem
+   * excluir com base no `paidAt` LOCAL — que fica null enquanto o webhook de
+   * confirmação não chega (atraso/falha/evento não habilitado). Resultado: excluíamos
+   * "no escuro" uma cobrança JÁ paga e o cliente levava um estorno indevido.
+   *
+   * Esta guarda confere o status REAL no Asaas antes de excluir (mesma régua da
+   * BLINDAGEM 3 do cron de auto-cancelamento). Se a cobrança está paga, ou se a
+   * consulta falha, NÃO exclui — a baixa vem pelo webhook.
+   */
+  private async cancelAsaasChargeIfUnpaid(
+    asaasPaymentId: string,
+    ctx: string,
+  ): Promise<void> {
+    try {
+      const charge = await this.asaasService.getCharge(asaasPaymentId);
+      if (['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(charge.status)) {
+        this.logger.warn(
+          `Cobrança Asaas ${asaasPaymentId} está ${charge.status} (paga) — NÃO excluída (${ctx}) para evitar estorno indevido; baixa virá pelo webhook.`,
+        );
+        return;
+      }
+    } catch (e) {
+      // Não conseguiu confirmar o status: NÃO exclui no escuro (poderia estornar uma
+      // cobrança paga). Adia/ignora a exclusão e loga — igual ao cron.
+      this.logger.warn(
+        `Falha ao consultar cobrança ${asaasPaymentId} antes de excluir (${ctx}); exclusão ABORTADA para não arriscar estorno: ${e}`,
+      );
+      return;
+    }
+    try {
+      await this.asaasService.cancelCharge(asaasPaymentId);
+      this.logger.log(`Cobrança Asaas ${asaasPaymentId} excluída (${ctx}).`);
+    } catch (e) {
+      this.logger.warn(`Falha ao excluir cobrança Asaas ${asaasPaymentId} (${ctx}): ${e}`);
+    }
+  }
+
   async markAsAttended(id: string, paymentMethod?: string, registeredBy?: string) {
     const { data: appointment, error } = await this.supabase
       .from('appointments')
@@ -770,12 +809,10 @@ export class AppointmentsService {
 
       // Cancelar cobrança no Asaas (se existir)
       if (pendingPayment.asaasPaymentId && this.asaasService.configured) {
-        try {
-          await this.asaasService.cancelCharge(pendingPayment.asaasPaymentId);
-          this.logger.log(`Cobrança Asaas ${pendingPayment.asaasPaymentId} cancelada (agendamento ${id} atendido sem pagamento online)`);
-        } catch (e) {
-          this.logger.warn(`Falha ao cancelar cobrança Asaas ${pendingPayment.asaasPaymentId}: ${e}`);
-        }
+        await this.cancelAsaasChargeIfUnpaid(
+          pendingPayment.asaasPaymentId,
+          `agendamento ${id} atendido sem pagamento online`,
+        );
       }
 
       // Se paymentMethod foi informado, marcar como pago e vincular ao caixa
@@ -993,12 +1030,10 @@ export class AppointmentsService {
         .maybeSingle();
 
       if (pendingPayment?.asaasPaymentId) {
-        try {
-          await this.asaasService.cancelCharge(pendingPayment.asaasPaymentId);
-          this.logger.log(`Cobrança Asaas ${pendingPayment.asaasPaymentId} cancelada (no-show ${id})`);
-        } catch (e) {
-          this.logger.warn(`Falha ao cancelar cobrança Asaas no no-show: ${e}`);
-        }
+        await this.cancelAsaasChargeIfUnpaid(
+          pendingPayment.asaasPaymentId,
+          `no-show ${id}`,
+        );
       }
     }
 
