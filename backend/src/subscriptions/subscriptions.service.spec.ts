@@ -1043,3 +1043,95 @@ describe('SubscriptionsService — findAllSubscriptions: currentCyclePaid na bor
     expect(sub.currentCyclePaid).toBe(false);
   });
 });
+
+/**
+ * "Cobrar no cartão": debita o ciclo vigente DIRETO no cartão salvo (token Asaas)
+ * sem reabrir link. Requer cliente com asaasCreditCardToken (cartão online; maquininha
+ * não tokeniza). syncWithAsaas confirma SEM renovar o vencimento (assinatura ACTIVE).
+ */
+function cardChargeTables(withToken: boolean): Tables {
+  const t = baseTables();
+  t.clients = [
+    {
+      id: 'client-1',
+      name: 'Marcos',
+      phone: '1199',
+      cpf: '12345678900',
+      asaasCustomerId: 'cus_1',
+      asaasCreditCardToken: withToken ? 'tok_123' : null,
+      asaasCreditCardLast4: withToken ? '9884' : null,
+      asaasCreditCardBrand: withToken ? 'VISA' : null,
+    },
+  ];
+  t.client_subscriptions = [
+    {
+      id: 'sub-1',
+      clientId: 'client-1',
+      planId: 'plan-1',
+      status: 'ACTIVE',
+      startDate: '2020-01-01T00:00:00',
+      createdAt: '2020-01-01T00:00:00',
+      endDate: '2099-01-01T00:00:00',
+      cutsUsedThisMonth: 1,
+      plan: { id: 'plan-1', name: 'Mensal', price: 8000 },
+      client: { id: 'client-1', name: 'Marcos', phone: '1199' },
+    },
+  ];
+  return t;
+}
+
+describe('SubscriptionsService — Cobrar no cartão salvo (chargeStoredCardForCurrentCycle)', () => {
+  it('sem cartão tokenizado: lança erro e NÃO cria cobrança', async () => {
+    const createCharge = jest.fn();
+    const asaas = {
+      configured: true,
+      centavosToReais: (c: number) => (c || 0) / 100,
+      findCustomerByExternalReference: async () => ({ id: 'cus_1' }),
+      createCharge,
+    };
+    const { service } = await buildServiceWithAsaas(cardChargeTables(false), asaas);
+
+    await expect(service.chargeStoredCardForCurrentCycle('sub-1')).rejects.toThrow(/cart[aã]o salvo/i);
+    expect(createCharge).not.toHaveBeenCalled();
+  });
+
+  it('com cartão tokenizado: debita via CREDIT_CARD + token e registra o pagamento', async () => {
+    const paidCharge = {
+      id: 'card_charge_1',
+      status: 'CONFIRMED',
+      value: 80,
+      billingType: 'CREDIT_CARD',
+      externalReference: 'sub-1',
+      paymentDate: localDateString(),
+    };
+    const createCharge = jest.fn(async () => paidCharge);
+    const asaas = {
+      configured: true,
+      centavosToReais: (c: number) => (c || 0) / 100,
+      reaisToCentavos: (r: number) => Math.round((r || 0) * 100),
+      findCustomerByExternalReference: async () => ({ id: 'cus_1' }),
+      createCharge,
+      getSubscriptionPayments: async () => [],
+      getPayments: async () => ({ data: [paidCharge] }),
+      getCharge: async () => paidCharge,
+    };
+    const { service, state } = await buildServiceWithAsaas(cardChargeTables(true), asaas);
+
+    const res = await service.chargeStoredCardForCurrentCycle('sub-1');
+
+    expect(createCharge).toHaveBeenCalledTimes(1);
+    const payload = (createCharge.mock.calls[0] as any[])[0];
+    expect(payload.billingType).toBe('CREDIT_CARD');
+    expect(payload.creditCardToken).toBe('tok_123');
+    expect(payload.externalReference).toBe('sub-1');
+    expect(res.charged).toBe(true);
+
+    // Pagamento local registrado p/ esta cobrança.
+    const pay = state.payments.find((p) => p.asaasPaymentId === 'card_charge_1');
+    expect(pay).toBeTruthy();
+    expect(pay!.subscriptionId).toBe('sub-1');
+
+    // Vencimento NÃO foi empurrado (quitação do ciclo corrente, não renovação).
+    expect(state.client_subscriptions[0].endDate).toBe('2099-01-01T00:00:00');
+  });
+});

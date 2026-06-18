@@ -180,6 +180,10 @@ export interface AsaasCreateChargePayload {
   installmentCount?: number;
   installmentValue?: number;
   creditCard?: AsaasCreditCard;
+  // Cartão já tokenizado (cobrança anterior online). Com billingType CREDIT_CARD +
+  // creditCardToken o Asaas debita o cartão salvo na hora, sem o cliente reabrir o
+  // link. Mutuamente exclusivo com `creditCard` (dados completos).
+  creditCardToken?: string;
   creditCardHolderInfo?: AsaasCreditCardHolderInfo;
   remoteIp?: string;
   callback?: AsaasCallback;

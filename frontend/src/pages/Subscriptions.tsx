@@ -16,6 +16,7 @@ import {
   useConfirmCyclePayment,
   useRenewViaAsaas,
   useChargeCurrentCycle,
+  useChargeCurrentCycleCard,
   useDeleteSubscription,
   useClients,
   getApiErrorMessage,
@@ -116,6 +117,7 @@ export function Subscriptions() {
   const confirmCyclePayment = useConfirmCyclePayment();
   const renewViaAsaas = useRenewViaAsaas();
   const chargeCurrentCycle = useChargeCurrentCycle();
+  const chargeCurrentCycleCard = useChargeCurrentCycleCard();
   const deleteSubscription = useDeleteSubscription();
   const toast = useToast();
 
@@ -368,6 +370,23 @@ export function Subscriptions() {
     }
   };
 
+  // Cobrar o ciclo DIRETO no cartão salvo do cliente (sem reabrir link). Só
+  // habilitado quando hasCardOnFile. Não renova o vencimento. Cartão recusado /
+  // sem token → erro 400 com mensagem do backend.
+  const handleChargeCurrentCycleCard = async (sub: ClientSubscription) => {
+    try {
+      const result = await chargeCurrentCycleCard.mutateAsync(sub.id);
+      const card = result.cardLabel ? ` (${result.cardLabel})` : '';
+      if (result.confirmed) {
+        toast.success('Cobrado', `Ciclo debitado no cartão${card}. Vencimento mantido.`);
+      } else {
+        toast.success('Cobrança enviada', `Débito no cartão${card} em processamento. Confirma em instantes.`);
+      }
+    } catch (err) {
+      toast.error('Erro', getApiErrorMessage(err));
+    }
+  };
+
   const tabs = [
     { id: 'plans' as Tab, label: 'Planos', icon: CreditCard },
     { id: 'subscriptions' as Tab, label: 'Assinaturas', icon: Users },
@@ -544,6 +563,7 @@ export function Subscriptions() {
                 onDelete={setDeletingSubscription}
                 onReactivate={handleRenewViaAsaas}
                 onChargeCycle={handleChargeCurrentCycle}
+                onChargeCycleCard={handleChargeCurrentCycleCard}
                 onConfirmCycle={handleOpenConfirmCycle}
                 isLoading={
                   cancelSubscription.isPending ||
@@ -552,6 +572,7 @@ export function Subscriptions() {
                   reopenPix.isPending ||
                   confirmPayment.isPending ||
                   chargeCurrentCycle.isPending ||
+                  chargeCurrentCycleCard.isPending ||
                   deleteSubscription.isPending
                 }
                 onNewSubscription={handleOpenSubscribeModal}

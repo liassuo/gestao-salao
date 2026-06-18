@@ -393,6 +393,19 @@ export class SubscriptionsController {
   }
 
   /**
+   * POST /subscriptions/:id/charge-cycle-card
+   * Debita o CICLO ATUAL DIRETO no cartão salvo do cliente (sem reabrir link).
+   * Só funciona se o cliente tem cartão tokenizado (pagou online no cartão antes;
+   * maquininha não tokeniza). Não renova o vencimento — só quita o ciclo. (Admin)
+   */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @Post(':id/charge-cycle-card')
+  async chargeCurrentCycleCard(@Param('id', ParseUUIDPipe) id: string) {
+    return this.subscriptionsService.chargeStoredCardForCurrentCycle(id);
+  }
+
+  /**
    * POST /subscriptions/:id/confirm-payment
    * Confirma manualmente o pagamento de uma assinatura PENDING_PAYMENT (Admin)
    */

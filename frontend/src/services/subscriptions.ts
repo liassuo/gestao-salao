@@ -161,6 +161,21 @@ export const subscriptionsService = {
     return response.data;
   },
 
+  // Debita o ciclo atual DIRETO no cartão salvo do cliente (sem reabrir link).
+  // Só funciona se o cliente tem cartão tokenizado (hasCardOnFile). Não renova o
+  // vencimento. Cartão recusado / sem token → erro 400 tratado no chamador.
+  async chargeCurrentCycleCard(id: string): Promise<{
+    charged: boolean;
+    confirmed: boolean;
+    status: string;
+    client: { name: string | null; phone: string | null };
+    planName: string | null;
+    cardLabel: string | null;
+  }> {
+    const response = await api.post(`/subscriptions/${id}/charge-cycle-card`);
+    return response.data;
+  },
+
   async confirmPayment(
     id: string,
     method: 'CASH' | 'PIX' | 'CARD' = 'CASH',

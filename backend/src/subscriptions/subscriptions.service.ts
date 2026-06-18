@@ -725,6 +725,8 @@ export class SubscriptionsService {
 
     // Clientes com dívida de assinatura em aberto ('Cobrança não paga%').
     const delinquentClients = new Set<string>();
+    // Clientes com cartão tokenizado salvo → admin pode "Cobrar no cartão" direto.
+    const clientsWithCard = new Set<string>();
     if (clientIds.length > 0) {
       const { data: debts } = await this.supabase
         .from('debts')
@@ -734,6 +736,15 @@ export class SubscriptionsService {
         .ilike('description', 'Cobrança não paga%');
       for (const d of (debts || []) as any[]) {
         if (d.clientId) delinquentClients.add(d.clientId);
+      }
+
+      const { data: cardClients } = await this.supabase
+        .from('clients')
+        .select('id')
+        .in('id', clientIds)
+        .not('asaasCreditCardToken', 'is', null);
+      for (const c of (cardClients || []) as any[]) {
+        if (c.id) clientsWithCard.add(c.id);
       }
     }
 
@@ -777,7 +788,9 @@ export class SubscriptionsService {
       else if (s.status === 'ACTIVE' && currentCyclePaid !== undefined)
         paymentStatus = currentCyclePaid ? 'PAID' : 'PENDING';
 
-      return { ...s, latestPayment, inadimplente, currentCyclePaid, paymentStatus };
+      const hasCardOnFile = clientsWithCard.has(s.clientId);
+
+      return { ...s, latestPayment, inadimplente, currentCyclePaid, paymentStatus, hasCardOnFile };
     });
   }
 
@@ -1644,6 +1657,10 @@ export class SubscriptionsService {
     const cardLast4 = charge.creditCard?.creditCardNumber || null;
     const cardBrand = charge.creditCard?.creditCardBrand || null;
 
+    // Cartão tokenizado (só vem em cobrança ONLINE paga no cartão — maquininha não
+    // tokeniza). Guarda no cliente p/ a ação "Cobrar no cartão" debitar direto depois.
+    await this.captureClientCardToken(subscription.clientId, charge);
+
     if (existing) {
       const update: any = { asaasStatus: charge.status, updatedAt: now };
       if (cardLast4) update.cardLast4 = cardLast4;
@@ -2397,6 +2414,128 @@ export class SubscriptionsService {
         phone: subscription.client?.phone ?? null,
       },
       planName: subscription.plan?.name ?? null,
+    };
+  }
+
+  /**
+   * Guarda no cliente o cartão tokenizado de uma cobrança Asaas, quando presente.
+   * O Asaas só devolve `creditCard.creditCardToken` em cobrança ONLINE paga no
+   * cartão (link/app) — maquininha NÃO tokeniza. Idempotente: sempre sobrescreve
+   * com o último token visto. Sem token → no-op (mantém o que havia).
+   */
+  private async captureClientCardToken(clientId: string | null | undefined, charge: any) {
+    const token = charge?.creditCard?.creditCardToken || null;
+    if (!clientId || !token) return;
+    await this.supabase
+      .from('clients')
+      .update({
+        asaasCreditCardToken: token,
+        asaasCreditCardLast4: charge.creditCard?.creditCardNumber || null,
+        asaasCreditCardBrand: charge.creditCard?.creditCardBrand || null,
+        updatedAt: nowLocalIsoString(),
+      })
+      .eq('id', clientId);
+  }
+
+  /**
+   * ADMIN: debita o ciclo vigente DIRETO no cartão salvo do cliente (sem reabrir
+   * link). Só funciona se o cliente tem `asaasCreditCardToken` (pagou online no
+   * cartão antes). Maquininha não tokeniza → cai no erro e o admin usa "Gerar
+   * cobrança" (link). Não mexe em data/cortes aqui; a confirmação vem do
+   * webhook/syncWithAsaas, que p/ assinatura ACTIVE quita o ciclo MANTENDO o
+   * vencimento (não renova). Cartão recusado → BadRequest, nada é marcado pago.
+   */
+  async chargeStoredCardForCurrentCycle(subscriptionId: string) {
+    if (!this.asaasService.configured) {
+      throw new BadRequestException('Integração Asaas não está configurada.');
+    }
+    const subscription = await this.findSubscription(subscriptionId);
+    if (subscription.status !== 'ACTIVE') {
+      throw new BadRequestException(
+        `Apenas assinaturas ativas têm ciclo a cobrar. Status atual: ${subscription.status}.`,
+      );
+    }
+
+    const { data: client } = await this.supabase
+      .from('clients')
+      .select('id, name, phone, asaasCreditCardToken, asaasCreditCardLast4, asaasCreditCardBrand')
+      .eq('id', subscription.clientId)
+      .maybeSingle();
+    const token = (client as any)?.asaasCreditCardToken || null;
+    if (!token) {
+      throw new BadRequestException(
+        'Cliente não tem cartão salvo para débito direto (maquininha não tokeniza). Use "Gerar cobrança" para enviar o link.',
+      );
+    }
+
+    const asaasCustomerId = await this.ensureAsaasCustomer(subscription.clientId);
+    const today = nowLocalIsoString().split('T')[0];
+
+    let charge: AsaasCharge;
+    try {
+      charge = await this.asaasService.createCharge({
+        customer: asaasCustomerId,
+        billingType: AsaasBillingType.CREDIT_CARD,
+        value: this.asaasService.centavosToReais(subscription.plan?.price ?? 0),
+        dueDate: today,
+        description: `Assinatura: Plano ${subscription.plan?.name ?? ''}`.trim(),
+        externalReference: subscription.id,
+        creditCardToken: token,
+      });
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
+      throw new BadRequestException(`Não foi possível cobrar o cartão salvo. (${detail})`);
+    }
+
+    // Registra o payment local (idempotente — o webhook pode já ter criado).
+    const { data: existingPay } = await this.supabase
+      .from('payments')
+      .select('id')
+      .eq('asaasPaymentId', charge.id)
+      .maybeSingle();
+    if (!existingPay) {
+      const now = nowLocalIsoString();
+      await this.supabase.from('payments').insert({
+        id: randomUUID(),
+        clientId: subscription.clientId,
+        subscriptionId: subscription.id,
+        amount: subscription.plan?.price ?? 0,
+        method: asaasBillingToLocalPaymentMethod(AsaasBillingType.CREDIT_CARD),
+        registeredBy: await this.resolveSystemRegisteredBy(),
+        notes: `Débito no cartão salvo do ciclo #${charge.id}`,
+        asaasPaymentId: charge.id,
+        asaasStatus: charge.status,
+        paidAt: null, // confirmação vem pelo webhook/sync
+        cardLast4: (client as any)?.asaasCreditCardLast4 ?? null,
+        cardBrand: (client as any)?.asaasCreditCardBrand ?? null,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    // Cartão tokenizado costuma confirmar na hora → reconcilia já. syncWithAsaas
+    // numa ACTIVE com ciclo não pago grava o paidAt e quita SEM renovar a janela.
+    let confirmed = false;
+    try {
+      await this.syncWithAsaas(subscription.id);
+      const fresh = await this.findSubscription(subscription.id);
+      confirmed = await isCurrentCyclePaid(this.supabase, fresh);
+    } catch (e) {
+      this.logger.warn(`[charge-card] reconciliação pós-débito falhou (${subscription.id}): ${e}`);
+    }
+
+    const cardLast4 = (client as any)?.asaasCreditCardLast4 ?? null;
+    const cardBrand = (client as any)?.asaasCreditCardBrand ?? null;
+    return {
+      charged: true,
+      confirmed, // true se já liquidou (cartão aprovado e reconciliado)
+      status: charge.status,
+      client: {
+        name: subscription.client?.name ?? null,
+        phone: subscription.client?.phone ?? null,
+      },
+      planName: subscription.plan?.name ?? null,
+      cardLabel: cardLast4 ? `${cardBrand ?? 'Cartão'} •••• ${cardLast4}` : null,
     };
   }
 
