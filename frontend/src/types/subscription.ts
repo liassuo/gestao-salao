@@ -62,6 +62,12 @@ export interface ClientSubscription {
    * undefined = backend antigo / não-ACTIVE → degrada para "não mostrar pendente".
    */
   paymentStatus?: 'PAID' | 'PENDING' | 'OVERDUE' | null;
+  /**
+   * Cliente tem cartão tokenizado salvo (asaasCreditCardToken) → admin pode
+   * "Cobrar no cartão" o ciclo direto, sem reabrir link. undefined/false = sem
+   * cartão salvo (maquininha não tokeniza) → usar "Gerar cobrança" (link).
+   */
+  hasCardOnFile?: boolean;
   createdAt: string;
   client: {
     id: string;

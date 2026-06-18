@@ -429,6 +429,21 @@ export class AsaasWebhookController {
         .eq('id', localPayment.id);
     }
 
+    // Captura o cartão tokenizado (só vem em cobrança ONLINE paga no cartão —
+    // maquininha não tokeniza) p/ a ação "Cobrar no cartão" debitar direto depois.
+    const cardToken = (paymentData as any)?.creditCard?.creditCardToken;
+    if (cardToken && localPayment.clientId) {
+      await this.supabase
+        .from('clients')
+        .update({
+          asaasCreditCardToken: cardToken,
+          asaasCreditCardLast4: (paymentData as any)?.creditCard?.creditCardNumber || null,
+          asaasCreditCardBrand: (paymentData as any)?.creditCard?.creditCardBrand || null,
+          updatedAt: nowLocalIsoString(),
+        })
+        .eq('id', localPayment.clientId);
+    }
+
     // Se vinculado a agendamento, marcar como pago e confirmar/RESTAURAR o status.
     // SEMPRE roda (mesmo se alreadyProcessed) — é idempotente e cura o agendamento
     // que ficou PENDING_PAYMENT ou foi cancelado por engano pelo cron na janela de race.

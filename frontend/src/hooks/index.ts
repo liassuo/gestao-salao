@@ -35,6 +35,7 @@ export {
   useConfirmCyclePayment,
   useRenewViaAsaas,
   useChargeCurrentCycle,
+  useChargeCurrentCycleCard,
   useSyncSubscriptionWithAsaas,
   useDeleteSubscription,
   SUBSCRIPTION_PLANS_KEY,

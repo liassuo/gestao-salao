@@ -199,6 +199,17 @@ export function useChargeCurrentCycle() {
   });
 }
 
+export function useChargeCurrentCycleCard() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => subscriptionsService.chargeCurrentCycleCard(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [SUBSCRIPTIONS_KEY] });
+    },
+  });
+}
+
 export function useSyncSubscriptionWithAsaas() {
   const queryClient = useQueryClient();
 
