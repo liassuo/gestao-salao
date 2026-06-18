@@ -159,6 +159,21 @@ export function ClientSubscriptionTable({
                             paymentMethodLabel(subscription.latestPayment?.method)}
                         </span>
                       )}
+                      {/* Débito automático: assinatura ACTIVE (não cancelada) com cartão
+                          tokenizado é renovada sozinha pelo cron perto do vencimento. Mesma
+                          condição que torna o cron elegível (hasCardOnFile só existe se o
+                          cliente pagou online no cartão → o cron debita aquele token). */}
+                      {subscription.status === 'ACTIVE' &&
+                        subscription.hasCardOnFile &&
+                        !subscription.canceledAt && (
+                          <span
+                            title="Renova automaticamente no cartão salvo perto do vencimento"
+                            className="ml-1 mt-1 inline-flex items-center gap-1 rounded-full bg-violet-500/15 px-2 py-0.5 text-xs font-medium text-violet-400"
+                          >
+                            <RefreshCw className="h-3 w-3" />
+                            Renovação automática
+                          </span>
+                        )}
                     </div>
                   </td>
                   <td className="whitespace-nowrap px-4 py-4">

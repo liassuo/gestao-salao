@@ -1080,6 +1080,154 @@ function cardChargeTables(withToken: boolean): Tables {
   return t;
 }
 
+/**
+ * Débito automático recorrente no cartão salvo (autoChargeTokenizedRenewalsCron):
+ * rola assinaturas ACTIVE em dia que vencem nos próximos 2 dias, debitando o cartão
+ * tokenizado e avançando o vencimento +1 mês. Só toca quem tem token + ciclo pago.
+ */
+function autoRenewTables(opts: { token?: boolean; paidInCycle?: boolean; recentPayment?: boolean }): Tables {
+  const rel = (d: number) => new Date(Date.now() + d * 86400000).toISOString();
+  const t = baseTables();
+  t.clients = [
+    {
+      id: 'client-1',
+      name: 'Ana',
+      phone: '1199',
+      cpf: '12345678900',
+      asaasCustomerId: 'cus_1',
+      asaasCreditCardToken: opts.token ? 'tok_x' : null,
+    },
+  ];
+  t.client_subscriptions = [
+    {
+      id: 'sub-1',
+      clientId: 'client-1',
+      planId: 'plan-1',
+      status: 'ACTIVE',
+      canceledAt: null,
+      startDate: rel(-40),
+      createdAt: rel(-40),
+      endDate: rel(1), // vence amanhã → dentro da janela de lead
+      cutsUsedThisMonth: 2,
+      plan: { id: 'plan-1', name: 'Mensal', price: 8000 },
+      client: { id: 'client-1', name: 'Ana', phone: '1199' },
+    },
+  ];
+  t.payments = [];
+  if (opts.paidInCycle) {
+    // Pagamento do ciclo vigente (feito na última renovação ~1 mês atrás → FORA da
+    // janela de idempotência, mas conta como ciclo pago).
+    t.payments.push({
+      id: 'pay-cycle',
+      subscriptionId: 'sub-1',
+      clientId: 'client-1',
+      method: 'CARD',
+      paidAt: rel(-29),
+      createdAt: rel(-29),
+      asaasStatus: 'CONFIRMED',
+    });
+  }
+  if (opts.recentPayment) {
+    // Cobrança já lançada para ESTA virada (idempotência deve pular).
+    t.payments.push({
+      id: 'pay-turn',
+      subscriptionId: 'sub-1',
+      clientId: 'client-1',
+      paidAt: null,
+      createdAt: rel(0),
+      asaasStatus: 'PENDING',
+    });
+  }
+  return t;
+}
+
+function makeAutoRenewAsaas(createCharge: jest.Mock) {
+  return {
+    configured: true,
+    centavosToReais: (c: number) => (c || 0) / 100,
+    reaisToCentavos: (r: number) => Math.round((r || 0) * 100),
+    findCustomerByExternalReference: async () => ({ id: 'cus_1' }),
+    createCharge,
+  };
+}
+
+describe('SubscriptionsService — débito automático recorrente (autoChargeTokenizedRenewalsCron)', () => {
+  it('em dia + token + vencendo: debita o cartão e avança o vencimento +1 mês', async () => {
+    const today = localDateString();
+    const createCharge = jest.fn(async () => ({
+      id: 'auto_1',
+      status: 'CONFIRMED',
+      value: 80,
+      billingType: 'CREDIT_CARD',
+      externalReference: 'sub-1',
+      confirmedDate: today,
+    }));
+    const { service, state } = await buildServiceWithAsaas(
+      autoRenewTables({ token: true, paidInCycle: true }),
+      makeAutoRenewAsaas(createCharge),
+    );
+    const endBefore = state.client_subscriptions[0].endDate;
+
+    await service.autoChargeTokenizedRenewalsCron();
+
+    expect(createCharge).toHaveBeenCalledTimes(1);
+    const payload = (createCharge.mock.calls[0] as any[])[0];
+    expect(payload.billingType).toBe('CREDIT_CARD');
+    expect(payload.creditCardToken).toBe('tok_x');
+    expect(payload.externalReference).toBe('sub-1');
+
+    const sub = state.client_subscriptions[0];
+    // Vencimento avançou ~1 mês (>= 25 dias à frente do anterior).
+    expect(new Date(sub.endDate).getTime()).toBeGreaterThan(
+      new Date(endBefore).getTime() + 25 * 86400000,
+    );
+    expect(sub.cutsUsedThisMonth).toBe(0);
+    const pay = state.payments.find((p) => p.asaasPaymentId === 'auto_1');
+    expect(pay).toBeTruthy();
+    expect(pay!.paidAt).toBeTruthy();
+  });
+
+  it('sem cartão tokenizado: não cobra nem avança', async () => {
+    const createCharge = jest.fn();
+    const { service, state } = await buildServiceWithAsaas(
+      autoRenewTables({ token: false, paidInCycle: true }),
+      makeAutoRenewAsaas(createCharge),
+    );
+    const endBefore = state.client_subscriptions[0].endDate;
+
+    await service.autoChargeTokenizedRenewalsCron();
+
+    expect(createCharge).not.toHaveBeenCalled();
+    expect(state.client_subscriptions[0].endDate).toBe(endBefore);
+  });
+
+  it('ciclo vigente NÃO pago (inadimplente): não auto-debita (segue o fluxo de inadimplência)', async () => {
+    const createCharge = jest.fn();
+    const { service, state } = await buildServiceWithAsaas(
+      autoRenewTables({ token: true, paidInCycle: false }),
+      makeAutoRenewAsaas(createCharge),
+    );
+    const endBefore = state.client_subscriptions[0].endDate;
+
+    await service.autoChargeTokenizedRenewalsCron();
+
+    expect(createCharge).not.toHaveBeenCalled();
+    expect(state.client_subscriptions[0].endDate).toBe(endBefore);
+  });
+
+  it('idempotência: já há cobrança lançada para esta virada → não recobra', async () => {
+    const createCharge = jest.fn();
+    const { service } = await buildServiceWithAsaas(
+      autoRenewTables({ token: true, paidInCycle: true, recentPayment: true }),
+      makeAutoRenewAsaas(createCharge),
+    );
+
+    await service.autoChargeTokenizedRenewalsCron();
+
+    expect(createCharge).not.toHaveBeenCalled();
+  });
+});
+
 describe('SubscriptionsService — Cobrar no cartão salvo (chargeStoredCardForCurrentCycle)', () => {
   it('sem cartão tokenizado: lança erro e NÃO cria cobrança', async () => {
     const createCharge = jest.fn();

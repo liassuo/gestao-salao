@@ -2688,6 +2688,148 @@ export class SubscriptionsService {
   }
 
   /**
+   * DÉBITO AUTOMÁTICO RECORRENTE no cartão salvo (rede de segurança própria, não
+   * depende da recorrência nativa do Asaas — que o histórico mostra falhar). Roda
+   * todo dia: para cada assinatura ACTIVE em DIA (ciclo vigente pago) que vence nos
+   * próximos LEAD dias e cujo cliente tem cartão tokenizado, cria uma cobrança
+   * CREDIT_CARD com o token (autoriza na hora) e AVANÇA o vencimento +1 mês — igual
+   * uma assinatura recorrente normal.
+   *
+   * Blindagens (dinheiro real):
+   *  - SÓ renova quem está EM DIA (isCurrentCyclePaid). Ciclo em aberto/inadimplente
+   *    NÃO é auto-debitado aqui — segue o fluxo de inadimplência (suspend-cron).
+   *  - Idempotência POR VIRADA: se já existe payment lançado para esta virada
+   *    (janela [endDate-LEAD-1, endDate]), não recobra — vale p/ sucesso E recusa.
+   *  - Cartão recusado → grava um marcador (não recobra) e deixa a inadimplência
+   *    normal acontecer quando o vencimento passar.
+   *  - Kill switch: env DISABLE_AUTO_CARD_RENEWAL=true desliga o cron.
+   *  - Maquininha não tokeniza → sem token, é pulado (recorrência via link/inadimplência).
+   */
+  @Cron('0 8 * * *') // todo dia às 08:00
+  async autoChargeTokenizedRenewalsCron() {
+    if (!this.asaasService.configured) return;
+    if (this.configService.get('DISABLE_AUTO_CARD_RENEWAL') === 'true') return;
+
+    const LEAD_DAYS = 2;
+    const ONE_DAY = 24 * 60 * 60 * 1000;
+    const now = new Date();
+    const nowIso = now.toISOString();
+    const windowEndIso = new Date(now.getTime() + LEAD_DAYS * ONE_DAY).toISOString();
+
+    // ACTIVE, não cancelada, vencendo dentro da janela de lead (ainda NÃO vencida —
+    // se já venceu, é o suspend-cron que trata).
+    const { data: due } = await this.supabase
+      .from('client_subscriptions')
+      .select('id, clientId, endDate, startDate, createdAt, plan:subscription_plans!planId(id, name, price)')
+      .eq('status', 'ACTIVE')
+      .is('canceledAt', null)
+      .gte('endDate', nowIso)
+      .lte('endDate', windowEndIso)
+      .limit(200);
+
+    if (!due || due.length === 0) return;
+
+    const SETTLED = ['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'];
+    let charged = 0;
+
+    for (const row of due as any[]) {
+      const { data: client } = await this.supabase
+        .from('clients')
+        .select('asaasCreditCardToken')
+        .eq('id', row.clientId)
+        .maybeSingle();
+      const token = (client as any)?.asaasCreditCardToken;
+      if (!token) continue; // sem cartão tokenizado → não dá p/ auto-debitar
+
+      // Idempotência POR VIRADA: já há cobrança lançada nesta janela? (sucesso pendente,
+      // pago, ou marcador de recusa). A janela é curta (~3 dias antes do vencimento), então
+      // nada de ciclos anteriores cai aqui.
+      const sinceIso = new Date(
+        new Date(row.endDate).getTime() - (LEAD_DAYS + 1) * ONE_DAY,
+      ).toISOString();
+      const { data: recent } = await this.supabase
+        .from('payments')
+        .select('id')
+        .eq('subscriptionId', row.id)
+        .gte('createdAt', sinceIso)
+        .limit(1);
+      if (recent && recent.length > 0) continue;
+
+      const subscription = await this.findSubscription(row.id).catch(() => null);
+      if (!subscription) continue;
+
+      // SÓ renova quem está EM DIA. Ciclo vigente não pago = inadimplência, não rolagem.
+      if (!(await isCurrentCyclePaid(this.supabase, subscription))) continue;
+
+      try {
+        const today = nowLocalIsoString().split('T')[0];
+        const charge = await this.asaasService.createCharge({
+          customer: await this.ensureAsaasCustomer(row.clientId),
+          billingType: AsaasBillingType.CREDIT_CARD,
+          value: this.asaasService.centavosToReais(row.plan?.price ?? 0),
+          dueDate: today,
+          description: `Renovação automática: Plano ${row.plan?.name ?? ''}`.trim(),
+          externalReference: row.id,
+          creditCardToken: token,
+        });
+
+        if (SETTLED.includes(charge.status)) {
+          // Cartão autorizou na hora → grava o pagamento (paidAt + caixa) e RENOVA a
+          // janela +1 mês. Não espera o webhook (que, se vier, é idempotente).
+          if (!charge.confirmedDate && !charge.paymentDate) charge.confirmedDate = today;
+          await this.upsertLocalPaymentFromCharge(subscription, charge, true);
+
+          const currentEnd = subscription.endDate ? new Date(subscription.endDate) : now;
+          const base = currentEnd > now ? currentEnd : now;
+          const newEnd = new Date(base);
+          newEnd.setMonth(newEnd.getMonth() + 1);
+          await this.supabase
+            .from('client_subscriptions')
+            .update({
+              cutsUsedThisMonth: 0,
+              lastResetDate: now.toISOString(),
+              endDate: newEnd.toISOString(),
+              updatedAt: now.toISOString(),
+            })
+            .eq('id', row.id);
+          await this.settleSubscriptionDelinquencyDebts(subscription, charge.id).catch(() => {});
+          charged += 1;
+        } else {
+          // Criada mas não liquidou na hora (raro p/ cartão) → registra pendente; o
+          // webhook confirma e renova depois (caminho normal).
+          await this.upsertLocalPaymentFromCharge(subscription, charge, false);
+        }
+      } catch (e) {
+        // Cartão recusado / falha. Grava um MARCADOR (asaasStatus DECLINED, sem paidAt)
+        // só p/ a idempotência não recobrar a mesma virada. A inadimplência acontece
+        // pelo suspend-cron quando o vencimento passar (dívida + suspensão).
+        this.logger.warn(`[auto-card-renew] falha ao debitar o cartão da assinatura ${row.id}: ${e}`);
+        const ts = nowLocalIsoString();
+        await this.supabase
+          .from('payments')
+          .insert({
+            id: randomUUID(),
+            clientId: row.clientId,
+            subscriptionId: row.id,
+            amount: row.plan?.price ?? 0,
+            method: asaasBillingToLocalPaymentMethod(AsaasBillingType.CREDIT_CARD),
+            registeredBy: await this.resolveSystemRegisteredBy().catch(() => null),
+            notes: 'Débito automático no cartão recusado',
+            asaasStatus: 'DECLINED',
+            paidAt: null,
+            createdAt: ts,
+            updatedAt: ts,
+          })
+          .then(undefined, () => {});
+      }
+    }
+
+    if (charged > 0) {
+      this.logger.log(`[auto-card-renew] ${charged} assinatura(s) renovada(s) automaticamente no cartão salvo`);
+    }
+  }
+
+  /**
    * Registra a inadimplência de uma assinatura vencida sem pagamento: cria a dívida
    * e marca clients.hasDebts. Idempotente POR CLIENTE — não empilha com a dívida do
    * webhook OVERDUE (ambas usam o rótulo 'Cobrança não paga'), evitando valor em dobro.
