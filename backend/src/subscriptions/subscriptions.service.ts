@@ -9,7 +9,8 @@ import { randomUUID } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../supabase/supabase.service';
 import { nowLocalIsoString, resolveBusinessDate } from '../common/datetime.util';
-import { isCurrentCyclePaid } from '../common/pricing.helper';
+import { isCurrentCyclePaid, subscriptionCycleFloorMs } from '../common/pricing.helper';
+import { isRevenuePayment } from '../common/business-date.helper';
 import { AsaasService } from '../asaas/asaas.service';
 import { CashRegisterService } from '../cash-register/cash-register.service';
 import {
@@ -708,7 +709,10 @@ export class SubscriptionsService {
         if (!cur || String(p.createdAt ?? '') >= String(cur.createdAt ?? '')) {
           latestBySub.set(p.subscriptionId, p);
         }
-        if (p.paidAt) {
+        // Estornado/cancelado/chargeback NÃO conta p/ currentCyclePaid — espelha
+        // isRevenuePayment e a régua de isCurrentCyclePaid (senão a lista mostrava
+        // "Em dia" numa assinatura cujo pagamento do ciclo foi estornado).
+        if (p.paidAt && isRevenuePayment(p)) {
           const ms = new Date(p.paidAt).getTime();
           if (!Number.isNaN(ms)) {
             const arr = paidAtsBySub.get(p.subscriptionId) ?? [];
@@ -1602,11 +1606,9 @@ export class SubscriptionsService {
     startDate?: string | null;
     createdAt?: string | null;
   }): number {
-    const startMs = subscription.startDate ? new Date(subscription.startDate).getTime() : 0;
-    const createdMs = subscription.createdAt ? new Date(subscription.createdAt).getTime() : 0;
-    const cycleStartMs = Math.max(startMs, createdMs);
-    const ONE_DAY = 24 * 60 * 60 * 1000;
-    return cycleStartMs > 0 ? new Date(cycleStartMs - ONE_DAY).setUTCHours(0, 0, 0, 0) : 0;
+    // Fonte única: pricing.helper.subscriptionCycleFloorMs (mesma régua de
+    // isCurrentCyclePaid). Não reimplementar `start - 1dia` cru aqui.
+    return subscriptionCycleFloorMs(subscription);
   }
 
   /**

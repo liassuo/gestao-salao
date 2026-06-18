@@ -478,6 +478,32 @@ describe('pricing.helper', () => {
       expect(sub!.subscriptionId).toBe('sub-123');
     });
 
+    it('retorna null quando o pagamento do ciclo foi ESTORNADO (asaasStatus REFUNDED) — caso Márcio', async () => {
+      // Cliente pagou DENTRO do ciclo vigente, mas o pagamento foi estornado no Asaas
+      // (asaasStatus=REFUNDED). O estorno NÃO limpa o paidAt local → antes este pagamento
+      // ainda satisfazia o gate e o plano seguia "Em dia"/concedendo cortes mesmo o
+      // dinheiro tendo saído ("só foi cobrado em maio mas a assinatura renovou"). Deve
+      // tratar como NÃO pago, espelhando isRevenuePayment (caixa/dashboard/relatórios).
+      const amanha = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      const pagtoNoCiclo = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString();
+      const supabase = makeSupabase(planRow(amanha), [
+        { paidAt: pagtoNoCiclo, asaasStatus: 'REFUNDED' },
+      ]);
+      expect(await getActiveClientSubscription(supabase, 'c1')).toBeNull();
+    });
+
+    it('ignora estorno mas mantém quando há OUTRO pagamento de receita no ciclo', async () => {
+      // Estornou uma cobrança mas pagou outra (válida) no mesmo ciclo → segue pago.
+      const amanha = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      const noCiclo = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString();
+      const supabase = makeSupabase(planRow(amanha), [
+        { paidAt: noCiclo, asaasStatus: 'REFUNDED' },
+        { paidAt: noCiclo, asaasStatus: 'CONFIRMED' },
+      ]);
+      const sub = await getActiveClientSubscription(supabase, 'c1');
+      expect(sub).not.toBeNull();
+    });
+
     it('conta pagamento na BORDA: ciclo com hora + pagamento de meia-noite do dia anterior (caso Roberto)', async () => {
       // Ciclo iniciou HOJE às 14h; pagamento foi ONTEM, gravado só com a data (00:00).
       // Com a margem antiga (start - 1 dia mantendo a hora) o pagamento de ontem-00:00
