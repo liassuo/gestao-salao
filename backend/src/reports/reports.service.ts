@@ -522,6 +522,7 @@ export class ReportsService {
       totalAsaasValueCentavos: 0,
       totalAsaasNetCentavos: 0,
       totalFeeCentavos: 0,
+      totalRefundedCentavos: 0,
     };
 
     if (!this.asaasService.configured) {
@@ -567,6 +568,34 @@ export class ReportsService {
       items.push(...settled);
     }
 
+    // Cliente: clientId → clients.name, só para as linhas COM estorno (o painel de
+    // Estornos é a única coluna que mostra nome). Lote separado (sem embed) p/ evitar
+    // PGRST201 e não pesar nas centenas de linhas sem estorno.
+    const refundClientIds = [
+      ...new Set(
+        items
+          .filter((i) => (i.refunds || []).length)
+          .map((i) => i.clientId)
+          .filter(Boolean) as string[],
+      ),
+    ];
+    const clientNameById = new Map<string, string>();
+    const CLIENT_CHUNK = 200;
+    for (let i = 0; i < refundClientIds.length; i += CLIENT_CHUNK) {
+      const batch = refundClientIds.slice(i, i + CLIENT_CHUNK);
+      const { data: clientsData, error: clientsErr } = await this.supabase
+        .from('clients')
+        .select('id, name')
+        .in('id', batch);
+      if (clientsErr) {
+        throw new Error(`Falha ao buscar clientes dos estornos: ${clientsErr.message}`);
+      }
+      for (const c of clientsData || []) clientNameById.set(c.id, c.name);
+    }
+    for (const it of items) {
+      it.clientName = it.clientId ? clientNameById.get(it.clientId) ?? null : null;
+    }
+
     // Taxa/líquido só somam linhas com taxa conhecida (feeCentavos != null): exclui
     // estorno (ESTORNADO), liquidação sem líquido publicado (AGUARDANDO_LIQUIDO) e erro.
     const withFee = items.filter((i) => i.feeCentavos != null);
@@ -584,6 +613,16 @@ export class ReportsService {
       totalAsaasValueCentavos: revenueValue.reduce((s, i) => s + i.asaasValueCentavos, 0),
       totalAsaasNetCentavos: withFee.reduce((s, i) => s + i.asaasNetCentavos, 0),
       totalFeeCentavos: withFee.reduce((s, i) => s + i.feeCentavos, 0),
+      // Total estornado no período: soma os estornos de todas as linhas, exceto os
+      // CANCELLED (estorno que foi desfeito — dinheiro não saiu).
+      totalRefundedCentavos: items.reduce(
+        (s, i) =>
+          s +
+          (i.refunds || [])
+            .filter((r: any) => r.status !== 'CANCELLED')
+            .reduce((a: number, r: any) => a + (r.valueCentavos || 0), 0),
+        0,
+      ),
     };
 
     return {
@@ -613,10 +652,27 @@ export class ReportsService {
       const netCentavos =
         charge.netValue != null ? Math.round(charge.netValue * 100) : null;
       const divergent = p.amount !== asaasValueCentavos;
+      // Estornos vêm INLINE no objeto da cobrança (charge.refunds). Carregam em TODA
+      // linha — inclusive cobranças ainda RECEIVED com estorno PARCIAL, não só as
+      // totalmente estornadas — para a tela de Conciliação listá-los explicitamente.
+      const refunds = this.extractRefunds(charge);
 
       // Estorno/cancelamento/chargeback: dinheiro que SAIU, não é taxa de gateway.
       // Marca ESTORNADO e não deixa value−net virar uma "taxa" fantasma nos totais.
       if (!isRevenuePayment({ asaasStatus: charge.status })) {
+        // Chargeback/cancelamento podem não trazer refunds[]: sintetiza uma linha a
+        // partir do bruto para o estorno ainda aparecer no painel (não some da tela).
+        const refundRows = refunds.length
+          ? refunds
+          : [
+              {
+                valueCentavos: asaasValueCentavos,
+                status: charge.status,
+                date: base.paidAt ? String(base.paidAt).slice(0, 10) : null,
+                description: null,
+                receiptUrl: null,
+              },
+            ];
         return {
           ...base,
           asaasStatus: charge.status,
@@ -626,6 +682,7 @@ export class ReportsService {
           divergent: false,
           error: false,
           status: 'ESTORNADO',
+          refunds: refundRows,
         };
       }
 
@@ -640,6 +697,7 @@ export class ReportsService {
           divergent: true,
           error: false,
           status: 'VALOR_DIVERGENTE',
+          refunds,
         };
       }
 
@@ -654,6 +712,7 @@ export class ReportsService {
           divergent: false,
           error: false,
           status: 'AGUARDANDO_LIQUIDO',
+          refunds,
         };
       }
 
@@ -667,6 +726,7 @@ export class ReportsService {
         divergent: false,
         error: false,
         status: feeCentavos > 0 ? 'OK_COM_TAXA' : 'OK',
+        refunds,
       };
     } catch (e: any) {
       return {
@@ -679,7 +739,21 @@ export class ReportsService {
         error: true,
         status: 'ERRO_CONSULTA',
         errorMessage: String(e?.message || e),
+        refunds: [],
       };
     }
+  }
+
+  // Normaliza os estornos inline da cobrança (charge.refunds) para centavos. effectiveDate
+  // (dinheiro de volta) tem prioridade sobre dateCreated (pedido) na exibição da data.
+  private extractRefunds(charge: any) {
+    const list = Array.isArray(charge?.refunds) ? charge.refunds : [];
+    return list.map((r: any) => ({
+      valueCentavos: Math.round((r.value || 0) * 100),
+      status: r.status ?? null,
+      date: r.effectiveDate || r.dateCreated || null,
+      description: r.description ?? null,
+      receiptUrl: r.transactionReceiptUrl ?? null,
+    }));
   }
 }

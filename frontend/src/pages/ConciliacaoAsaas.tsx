@@ -1,7 +1,11 @@
 import { useState } from 'react';
-import { BarChart3, AlertTriangle } from 'lucide-react';
+import { BarChart3, AlertTriangle, Undo2, ExternalLink } from 'lucide-react';
 import { reportsService } from '../services/reports';
-import type { AsaasReconciliation, AsaasReconciliationStatus } from '../types/reports';
+import type {
+  AsaasReconciliation,
+  AsaasReconciliationStatus,
+  AsaasRefund,
+} from '../types/reports';
 import { formatCurrency, formatDate, firstDayOfMonthIso, todayIso } from '../utils/format';
 import { Spinner, useToast, DateInput } from '../components/ui';
 import { PinGate } from '../components/auth';
@@ -14,6 +18,14 @@ const STATUS_META: Record<AsaasReconciliationStatus, { label: string; cls: strin
   ESTORNADO: { label: 'Estornado', cls: 'bg-orange-500/15 text-orange-400 ring-1 ring-inset ring-orange-500/30' },
   AGUARDANDO_LIQUIDO: { label: 'Aguardando líquido', cls: 'bg-blue-500/15 text-blue-400 ring-1 ring-inset ring-blue-500/30' },
   ERRO_CONSULTA: { label: 'Erro consulta', cls: 'bg-red-500/15 text-red-400 ring-1 ring-inset ring-red-500/30' },
+};
+
+// Rótulo + cor por status do estorno (DONE/PENDING/CANCELLED do Asaas). Status
+// sintetizado (ex: CHARGEBACK_REQUESTED) cai no fallback neutro.
+const REFUND_STATUS_META: Record<string, { label: string; cls: string }> = {
+  DONE: { label: 'Concluído', cls: 'bg-emerald-500/15 text-emerald-400' },
+  PENDING: { label: 'Pendente', cls: 'bg-amber-500/15 text-amber-400' },
+  CANCELLED: { label: 'Cancelado', cls: 'bg-[var(--hover-bg)] text-[var(--text-muted)]' },
 };
 
 // Campos *Centavos podem ser null (estorno/aguardando/erro) → exibe "—".
@@ -151,6 +163,8 @@ export function ConciliacaoAsaas() {
             </tbody>
           </table>
         </div>
+
+        <EstornosPanel items={data.items} totalCentavos={s.totalRefundedCentavos} />
       </div>
     );
   };
@@ -183,6 +197,100 @@ export function ConciliacaoAsaas() {
       <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)] p-6">{renderContent()}</div>
     </div>
     </PinGate>
+  );
+}
+
+// Linha achatada do painel: um estorno + dados da cobrança de origem.
+type EstornoRow = AsaasRefund & {
+  clientName: string | null | undefined;
+  method: string | null;
+  asaasPaymentId: string;
+  key: string;
+};
+
+// Painel dedicado de Estornos: lista explícita dos refunds das cobranças do período
+// (o barbeiro reclamava de não enxergar os estornos). Some quando não há nenhum.
+function EstornosPanel({
+  items,
+  totalCentavos,
+}: {
+  items: AsaasReconciliation['items'];
+  totalCentavos: number;
+}) {
+  const rows: EstornoRow[] = items.flatMap((it) =>
+    (it.refunds ?? []).map((r, idx) => ({
+      ...r,
+      clientName: it.clientName,
+      method: it.billingType || it.method,
+      asaasPaymentId: it.asaasPaymentId,
+      key: `${it.paymentId}-${idx}`,
+    })),
+  );
+
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="space-y-3 rounded-xl border border-orange-500/30 bg-orange-500/5 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-orange-400">
+          <Undo2 className="h-4 w-4" />
+          Estornos no período ({rows.length})
+        </h2>
+        <span className="text-sm text-[var(--text-secondary)]">
+          Total estornado: <strong className="text-orange-400">{formatCurrency(totalCentavos)}</strong>
+        </span>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead className="border-b border-[var(--border-color)]">
+            <tr className="text-[var(--text-muted)]">
+              <th className="pb-2 pr-3 text-left font-medium">Data</th>
+              <th className="pb-2 pr-3 text-left font-medium">Cliente</th>
+              <th className="pb-2 pr-3 text-left font-medium">Método</th>
+              <th className="pb-2 pl-3 text-right font-medium">Valor estornado</th>
+              <th className="pb-2 px-3 text-left font-medium">Status</th>
+              <th className="pb-2 pl-3 text-left font-medium">Comprovante</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--border-color)]">
+            {rows.map((r) => {
+              const meta = r.status
+                ? REFUND_STATUS_META[r.status] ?? {
+                    label: r.status,
+                    cls: 'bg-[var(--hover-bg)] text-[var(--text-muted)]',
+                  }
+                : { label: '—', cls: 'bg-[var(--hover-bg)] text-[var(--text-muted)]' };
+              return (
+                <tr key={r.key} className="text-[var(--text-secondary)]">
+                  <td className="py-2 pr-3 whitespace-nowrap">{r.date ? formatDate(r.date) : '—'}</td>
+                  <td className="py-2 pr-3" title={r.description || ''}>{r.clientName || '—'}</td>
+                  <td className="py-2 pr-3 whitespace-nowrap">{r.method || '—'}</td>
+                  <td className="py-2 pl-3 text-right font-semibold text-orange-400">{money(r.valueCentavos)}</td>
+                  <td className="py-2 px-3">
+                    <span className={`inline-flex rounded-lg px-2 py-0.5 text-xs ${meta.cls}`}>{meta.label}</span>
+                  </td>
+                  <td className="py-2 pl-3">
+                    {r.receiptUrl ? (
+                      <a
+                        href={r.receiptUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[#C8923A] hover:underline"
+                      >
+                        ver <ExternalLink className="h-3 w-3" />
+                      </a>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 

@@ -550,6 +550,81 @@ describe('ReportsService', () => {
       expect(report.summary.totalFeeCentavos).toBe(0);
     });
 
+    it('expõe os estornos (refunds) da cobrança com valor/data/status/comprovante + clientName e soma em totalRefundedCentavos', async () => {
+      seed('payments', {
+        data: [
+          { id: 'p7', asaasPaymentId: 'ch_ref2', amount: 5000, method: 'PIX', billingType: 'PIX', asaasStatus: 'REFUNDED', paidAt: '2026-06-16T10:00:00', clientId: 'c7' },
+        ],
+        error: null,
+      });
+      seed('clients', { data: [{ id: 'c7', name: 'João' }], error: null });
+      asaas.getCharge.mockResolvedValue({
+        id: 'ch_ref2',
+        value: 50.0,
+        netValue: 0,
+        status: 'REFUNDED',
+        refunds: [
+          {
+            dateCreated: '2026-06-16',
+            effectiveDate: '2026-06-17',
+            status: 'DONE',
+            value: 50.0,
+            description: 'Estorno solicitado pelo cliente',
+            transactionReceiptUrl: 'https://asaas.com/comprovante/abc',
+          },
+        ],
+      });
+
+      const report = await service.getAsaasReconciliation(period);
+      const row = report.items.find((i: any) => i.asaasPaymentId === 'ch_ref2');
+
+      expect(row.status).toBe('ESTORNADO');
+      expect(row.clientName).toBe('João');
+      expect(row.refunds).toHaveLength(1);
+      expect(row.refunds[0]).toMatchObject({
+        valueCentavos: 5000,
+        status: 'DONE',
+        date: '2026-06-17', // effectiveDate tem prioridade sobre dateCreated
+        description: 'Estorno solicitado pelo cliente',
+        receiptUrl: 'https://asaas.com/comprovante/abc',
+      });
+      expect(report.summary.totalRefundedCentavos).toBe(5000);
+    });
+
+    it('sintetiza uma linha de estorno a partir do bruto quando a cobrança não traz refunds[] (ex: chargeback)', async () => {
+      seed('payments', {
+        data: [
+          { id: 'p8', asaasPaymentId: 'ch_cbk', amount: 8000, method: 'CARD', billingType: 'CREDIT_CARD', asaasStatus: 'CHARGEBACK_REQUESTED', paidAt: '2026-06-18T10:00:00', clientId: 'c8' },
+        ],
+        error: null,
+      });
+      asaas.getCharge.mockResolvedValue({ id: 'ch_cbk', value: 80.0, netValue: 0, status: 'CHARGEBACK_REQUESTED' });
+
+      const report = await service.getAsaasReconciliation(period);
+      const row = report.items.find((i: any) => i.asaasPaymentId === 'ch_cbk');
+
+      expect(row.status).toBe('ESTORNADO');
+      expect(row.refunds).toHaveLength(1);
+      expect(row.refunds[0].valueCentavos).toBe(8000);
+      expect(report.summary.totalRefundedCentavos).toBe(8000);
+    });
+
+    it('cobrança normal (OK) não traz refunds e não soma em totalRefundedCentavos', async () => {
+      seed('payments', {
+        data: [
+          { id: 'p9', asaasPaymentId: 'ch_ok2', amount: 5000, method: 'PIX', billingType: 'PIX', asaasStatus: 'RECEIVED', paidAt: '2026-06-19T10:00:00', clientId: 'c9' },
+        ],
+        error: null,
+      });
+      asaas.getCharge.mockResolvedValue({ id: 'ch_ok2', value: 50.0, netValue: 48.01, status: 'RECEIVED' });
+
+      const report = await service.getAsaasReconciliation(period);
+      const row = report.items.find((i: any) => i.asaasPaymentId === 'ch_ok2');
+
+      expect(row.refunds).toEqual([]);
+      expect(report.summary.totalRefundedCentavos).toBe(0);
+    });
+
     it('limita a quantidade de cobranças consultadas e sinaliza truncated (M2)', async () => {
       seed('payments', {
         data: [

@@ -157,10 +157,21 @@ export type AsaasReconciliationStatus =
   | 'AGUARDANDO_LIQUIDO'
   | 'ERRO_CONSULTA';
 
+// Estorno de uma cobrança (Asaas `refunds` inline). value já em centavos; status
+// DONE/PENDING/CANCELLED. date = effectiveDate || dateCreated. receiptUrl = comprovante.
+export interface AsaasRefund {
+  valueCentavos: number;
+  status: string | null;
+  date: string | null;
+  description: string | null;
+  receiptUrl: string | null;
+}
+
 export interface AsaasReconciliationItem {
   paymentId: string;
   asaasPaymentId: string;
   clientId: string | null;
+  clientName?: string | null;
   method: string | null;
   billingType: string | null;
   paidAt: string | null;
@@ -175,6 +186,7 @@ export interface AsaasReconciliationItem {
   error: boolean;
   status: AsaasReconciliationStatus;
   errorMessage?: string;
+  refunds?: AsaasRefund[];
 }
 
 export interface AsaasReconciliationSummary {
@@ -188,6 +200,7 @@ export interface AsaasReconciliationSummary {
   totalAsaasValueCentavos: number;
   totalAsaasNetCentavos: number;
   totalFeeCentavos: number;
+  totalRefundedCentavos: number;
 }
 
 export interface AsaasReconciliation {
