@@ -161,6 +161,7 @@ export interface AsaasReconciliationItem {
   paymentId: string;
   asaasPaymentId: string;
   clientId: string | null;
+  clientName: string | null;
   method: string | null;
   billingType: string | null;
   paidAt: string | null;
