@@ -557,13 +557,32 @@ export class ReportsService {
     const list = payments || [];
     const truncated = list.length >= MAX; // atingiu o teto → pode haver mais fora do relatório
 
+    // Nome do cliente por id (payments.clientId → clients.name), em lote — mesma régua
+    // do getSalesReport. .in serializa na query string, então busca em lotes de 300.
+    const clientIds = [...new Set(list.map((p) => p.clientId).filter(Boolean) as string[])];
+    const clientNameById = new Map<string, string>();
+    const NAME_CHUNK = 300;
+    for (let i = 0; i < clientIds.length; i += NAME_CHUNK) {
+      const batch = clientIds.slice(i, i + NAME_CHUNK);
+      const { data, error: nameErr } = await this.supabase
+        .from('clients')
+        .select('id, name')
+        .in('id', batch);
+      if (nameErr) throw nameErr;
+      for (const c of data || []) clientNameById.set(c.id, c.name);
+    }
+
     // Consulta o Asaas em lotes pequenos para não estourar rate limit; um erro numa
     // cobrança não derruba o relatório (a linha vem marcada com error/ERRO_CONSULTA).
     const items: any[] = [];
     const CHUNK = 5;
     for (let i = 0; i < list.length; i += CHUNK) {
       const batch = list.slice(i, i + CHUNK);
-      const settled = await Promise.all(batch.map((p) => this.reconcileOneAsaasCharge(p)));
+      const settled = await Promise.all(
+        batch.map((p) =>
+          this.reconcileOneAsaasCharge(p, p.clientId ? clientNameById.get(p.clientId) ?? null : null),
+        ),
+      );
       items.push(...settled);
     }
 
@@ -595,11 +614,12 @@ export class ReportsService {
     };
   }
 
-  private async reconcileOneAsaasCharge(p: any) {
+  private async reconcileOneAsaasCharge(p: any, clientName: string | null = null) {
     const base = {
       paymentId: p.id,
       asaasPaymentId: p.asaasPaymentId,
       clientId: p.clientId,
+      clientName,
       method: p.method,
       billingType: p.billingType,
       paidAt: p.paidAt,

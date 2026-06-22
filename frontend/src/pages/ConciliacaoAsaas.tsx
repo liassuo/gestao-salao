@@ -114,6 +114,7 @@ export function ConciliacaoAsaas() {
             <thead className="border-b border-[var(--border-color)]">
               <tr className="text-[var(--text-muted)]">
                 <th className="pb-2 pr-3 text-left font-medium">Data</th>
+                <th className="pb-2 pr-3 text-left font-medium">Cliente</th>
                 <th className="pb-2 pr-3 text-left font-medium">Método</th>
                 <th className="pb-2 pr-3 text-left font-medium">Status</th>
                 <th className="pb-2 pl-3 text-right font-medium">App (bruto)</th>
@@ -133,6 +134,7 @@ export function ConciliacaoAsaas() {
                 return (
                   <tr key={r.paymentId} className="text-[var(--text-secondary)]">
                     <td className="py-2 pr-3 whitespace-nowrap">{r.paidAt ? formatDate(r.paidAt) : '—'}</td>
+                    <td className="py-2 pr-3">{r.clientName || '—'}</td>
                     <td className="py-2 pr-3 whitespace-nowrap">{r.billingType || r.method || '—'}</td>
                     <td className="py-2 pr-3">
                       <span className={`inline-flex rounded-lg px-2 py-0.5 text-xs ${meta.cls}`} title={r.errorMessage || ''}>
