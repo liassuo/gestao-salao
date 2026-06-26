@@ -4,6 +4,8 @@ import * as request from 'supertest';
 import { ClientsController } from './clients.controller';
 import { ClientsService } from './clients.service';
 import { InAppNotificationsService } from '../in-app-notifications/in-app-notifications.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 
 const mockInAppNotifications = {
   send: jest.fn().mockResolvedValue(undefined),
@@ -42,7 +44,13 @@ describe('ClientsController', () => {
         { provide: ClientsService, useValue: mockService },
         { provide: InAppNotificationsService, useValue: mockInAppNotifications },
       ],
-    }).compile();
+    })
+      // Guards de auth não rodam em teste de controller (sem estratégia jwt registrada).
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(RolesGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     app = module.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));

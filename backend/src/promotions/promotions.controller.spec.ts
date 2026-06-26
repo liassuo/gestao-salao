@@ -9,6 +9,8 @@ import * as request from 'supertest';
 import { MulterModule } from '@nestjs/platform-express';
 import { PromotionsController } from './promotions.controller';
 import { PromotionsService } from './promotions.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 
 describe('PromotionsController', () => {
   let app: INestApplication;
@@ -51,7 +53,12 @@ describe('PromotionsController', () => {
       imports: [MulterModule.register()],
       controllers: [PromotionsController],
       providers: [{ provide: PromotionsService, useValue: mockService }],
-    }).compile();
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(RolesGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     app = module.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
