@@ -8,14 +8,24 @@ import {
   HttpCode,
   HttpStatus,
   BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '../common/enums';
 import { AsaasService } from './asaas.service';
 import { SupabaseService } from '../supabase/supabase.service';
 import { CreateChargeDto } from './dto';
 import { AsaasBillingType } from './asaas.types';
 
 @ApiTags('Asaas')
+@ApiBearerAuth()
+// Criar/cancelar cobrança e sincronizar customer = operação financeira → só ADMIN.
+// (O webhook do Asaas é outro controller, @Public, e não passa por aqui.)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN)
 @Controller('asaas')
 export class AsaasController {
   constructor(

@@ -13,7 +13,9 @@ import { CreateProductDto, UpdateProductDto, QueryProductDto } from './dto';
 
 @ApiTags('Products')
 @ApiBearerAuth()
+// Produtos/estoque = operação do salão → só ADMIN (inclui as leituras de estoque).
 @UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN)
 @Controller('products')
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}

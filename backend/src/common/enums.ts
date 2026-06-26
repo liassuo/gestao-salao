@@ -1,6 +1,7 @@
 export enum UserRole {
   ADMIN = 'ADMIN',
   PROFESSIONAL = 'PROFESSIONAL',
+  CLIENT = 'CLIENT',
 }
 
 export enum AppointmentStatus {

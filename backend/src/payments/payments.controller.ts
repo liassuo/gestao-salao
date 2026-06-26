@@ -11,12 +11,22 @@ import {
   HttpStatus,
   ParseUUIDPipe,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '../common/enums';
 import { PaymentsService } from './payments.service';
 import { CreatePaymentDto, UpdatePaymentDto, QueryPaymentDto } from './dto';
 import { InAppNotificationsService } from '../in-app-notifications/in-app-notifications.service';
 
 @ApiTags('Payments')
+@ApiBearerAuth()
+// Pagamentos do salão = financeiro → só ADMIN. (O app do cliente paga via /debts/my e
+// /appointments, não por aqui.)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN)
 @Controller('payments')
 export class PaymentsController {
   constructor(

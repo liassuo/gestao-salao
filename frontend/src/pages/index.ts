@@ -7,6 +7,7 @@ export * from './Commissions';
 export * from './ConciliacaoAsaas';
 export * from './Dashboard';
 export * from './Login';
+export * from './MyCommission';
 export * from './Orders';
 export * from './Payments';
 export * from './PaymentMethods';

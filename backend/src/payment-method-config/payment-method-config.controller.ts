@@ -11,7 +11,12 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '../common/enums';
 import { PaymentMethodConfigService } from './payment-method-config.service';
 import {
   CreatePaymentMethodConfigDto,
@@ -20,6 +25,10 @@ import {
 } from './dto';
 
 @ApiTags('PaymentMethodConfig')
+@ApiBearerAuth()
+// Configuração de formas de pagamento = config do salão → só ADMIN.
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN)
 @Controller('payment-method-config')
 export class PaymentMethodConfigController {
   constructor(

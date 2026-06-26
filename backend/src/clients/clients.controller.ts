@@ -7,11 +7,19 @@ import {
   Body,
   Param,
   Query,
+  Req,
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
+  ForbiddenException,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '../common/enums';
+import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 import { ClientsService, ClientFilters } from './clients.service';
 import { CreateClientDto, UpdateClientDto } from './dto';
 import { InAppNotificationsService } from '../in-app-notifications/in-app-notifications.service';
@@ -21,8 +29,16 @@ interface ClientQueryFilters {
   hasDebts?: string;
   isActive?: string;
 }
+interface RequestWithUser extends Request {
+  user: AuthenticatedUser;
+}
 
 @ApiTags('Clients')
+@ApiBearerAuth()
+// Lista/cadastro/exclusão de clientes = ADMIN. EXCEÇÃO: GET/PATCH /:id liberam CLIENT
+// SÓ para o próprio id (app do cliente edita o próprio perfil) — checado no método.
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN)
 @Controller('clients')
 export class ClientsController {
   constructor(
@@ -58,8 +74,13 @@ export class ClientsController {
    * GET /clients/:id
    * Returns a specific client with details
    */
+  // ADMIN vê qualquer cliente; CLIENT só o PRÓPRIO (id == req.user.id).
+  @Roles(UserRole.ADMIN, UserRole.CLIENT)
   @Get(':id')
-  async findOne(@Param('id', ParseUUIDPipe) id: string) {
+  async findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: RequestWithUser) {
+    if (req.user.role === UserRole.CLIENT && req.user.id !== id) {
+      throw new ForbiddenException('Você só pode acessar o seu próprio cadastro');
+    }
     return this.clientsService.findOne(id);
   }
 
@@ -92,11 +113,17 @@ export class ClientsController {
    * PATCH /clients/:id
    * Updates a client
    */
+  // ADMIN edita qualquer cliente; CLIENT só o PRÓPRIO cadastro.
+  @Roles(UserRole.ADMIN, UserRole.CLIENT)
   @Patch(':id')
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateClientDto,
+    @Req() req: RequestWithUser,
   ) {
+    if (req.user.role === UserRole.CLIENT && req.user.id !== id) {
+      throw new ForbiddenException('Você só pode editar o seu próprio cadastro');
+    }
     return this.clientsService.update(id, dto);
   }
 

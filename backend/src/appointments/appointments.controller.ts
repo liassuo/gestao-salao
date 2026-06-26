@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Controller,
   Get,
   Post,
@@ -75,6 +76,7 @@ export class AppointmentsController {
   /**
    * GET /appointments/calendar?date=2026-02-03
    */
+  @UseGuards(JwtAuthGuard)
   @Get('calendar')
   async getCalendarData(@Query('date') date: string, @Req() req: RequestWithUser) {
     const restrictId =
@@ -210,19 +212,39 @@ export class AppointmentsController {
     return appointment;
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get()
-  async findAll(@Query() query: QueryAppointmentDto) {
+  async findAll(@Query() query: QueryAppointmentDto, @Req() req: RequestWithUser) {
+    // Profissional só enxerga a PRÓPRIA agenda: força o professionalId do token,
+    // ignorando qualquer id vindo na query (não vê agendamento de outro barbeiro).
+    if (req.user?.role === 'PROFESSIONAL' && req.user.professionalId) {
+      return this.appointmentsService.findAll({ ...query, professionalId: req.user.professionalId });
+    }
     return this.appointmentsService.findAll(query);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get('unpaid')
-  async findUnpaid() {
+  async findUnpaid(@Req() req: RequestWithUser) {
+    // 'Não pagos' é visão financeira do salão → bloqueia profissional.
+    if (req.user?.role === 'PROFESSIONAL') {
+      throw new ForbiddenException('Acesso restrito ao administrador');
+    }
     return this.appointmentsService.findUnpaid();
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get(':id')
-  async findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.appointmentsService.findOne(id);
+  async findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: RequestWithUser) {
+    const appt = await this.appointmentsService.findOne(id);
+    // PROFESSIONAL só vê agendamento da PRÓPRIA agenda; CLIENT só o PRÓPRIO. ADMIN vê tudo.
+    if (req.user?.role === 'PROFESSIONAL' && (appt as any)?.professionalId !== req.user.professionalId) {
+      throw new ForbiddenException('Você só pode ver agendamentos da sua agenda');
+    }
+    if (req.user?.role === 'CLIENT' && (appt as any)?.clientId !== req.user.id) {
+      throw new ForbiddenException('Você só pode ver os seus agendamentos');
+    }
+    return appt;
   }
 
   @Patch(':id')

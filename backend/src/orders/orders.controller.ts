@@ -1,12 +1,20 @@
 import {
   Controller, Get, Post, Patch, Delete, Body, Param, Query,
-  ParseUUIDPipe, HttpCode, HttpStatus, Logger,
+  ParseUUIDPipe, HttpCode, HttpStatus, Logger, UseGuards,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '../common/enums';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto, UpdateOrderDto, AddOrderItemDto, QueryOrderDto, PayOrderDto } from './dto';
 
 @ApiTags('Orders')
+@ApiBearerAuth()
+// Comandas/vendas do salão → só ADMIN (operação de balcão, não do barbeiro).
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN)
 @Controller('orders')
 export class OrdersController {
   private readonly logger = new Logger(OrdersController.name);

@@ -13,6 +13,8 @@ import {
   UseInterceptors,
   UploadedFile,
   UseGuards,
+  Req,
+  ForbiddenException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
@@ -20,6 +22,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../common/enums';
+import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 import { ProfessionalsService } from './professionals.service';
 import {
   CreateProfessionalDto,
@@ -27,6 +30,10 @@ import {
   CreateVacationDto,
   UpdateVacationDto,
 } from './dto';
+
+interface RequestWithUser extends Request {
+  user: AuthenticatedUser;
+}
 
 @ApiTags('Professionals')
 @ApiBearerAuth()
@@ -90,13 +97,19 @@ export class ProfessionalsController {
 
   /**
    * GET /professionals/:id/appointments
-   * Returns professional's appointments for a specific date
+   * Agenda de um profissional num dia. ADMIN vê de qualquer um; PROFESSIONAL só a PRÓPRIA.
+   * (Antes era aberto a qualquer um — vazava a agenda de qualquer barbeiro.)
    */
+  @UseGuards(JwtAuthGuard)
   @Get(':id/appointments')
   async getAppointments(
     @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: RequestWithUser,
     @Query('date') dateStr?: string,
   ) {
+    if (req.user?.role === 'PROFESSIONAL' && req.user.professionalId !== id) {
+      throw new ForbiddenException('Você só pode ver a sua própria agenda');
+    }
     const date = dateStr ? new Date(dateStr) : new Date();
     return this.professionalsService.getAppointmentsByDate(id, date);
   }

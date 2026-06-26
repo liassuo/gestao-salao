@@ -182,6 +182,9 @@ export class SubscriptionsController {
    * GET /subscriptions/:id
    * Returns a specific subscription
    */
+  // Assinatura de cliente — ADMIN e o próprio cliente (app). Barbeiro NÃO acessa.
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.CLIENT)
   @Get(':id')
   async findSubscription(@Param('id', ParseUUIDPipe) id: string) {
     return this.subscriptionsService.findSubscription(id);
@@ -191,6 +194,8 @@ export class SubscriptionsController {
    * GET /subscriptions/client/:clientId
    * Returns subscription for a specific client
    */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.CLIENT)
   @Get('client/:clientId')
   async findByClient(@Param('clientId', ParseUUIDPipe) clientId: string) {
     return this.subscriptionsService.findByClient(clientId);
