@@ -14,6 +14,16 @@ export const commissionsService = {
     return response.data;
   },
 
+  // Comissão do PRÓPRIO profissional logado (o backend força o professionalId do token).
+  async listMine(filters?: Pick<CommissionFilters, 'status' | 'startDate' | 'endDate'>): Promise<Commission[]> {
+    const params = new URLSearchParams();
+    if (filters?.status) params.append('status', filters.status);
+    if (filters?.startDate) params.append('startDate', filters.startDate);
+    if (filters?.endDate) params.append('endDate', filters.endDate);
+    const response = await api.get<Commission[]>('/commissions/me', { params });
+    return response.data;
+  },
+
   async getById(id: string): Promise<Commission> {
     const response = await api.get<Commission>(`/commissions/${id}`);
     return response.data;

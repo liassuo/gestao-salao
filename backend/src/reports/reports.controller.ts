@@ -1,5 +1,5 @@
 import { Controller, Get, Query, BadRequestException, UseGuards } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -7,6 +7,10 @@ import { UserRole } from '../common/enums';
 import { ReportsService, ReportFilters } from './reports.service';
 
 @ApiTags('Reports')
+@ApiBearerAuth()
+// Relatórios são do salão inteiro → só ADMIN.
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN)
 @Controller('reports')
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}

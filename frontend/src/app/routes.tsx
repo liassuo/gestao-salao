@@ -9,6 +9,7 @@ import {
   CashRegister,
   Clients,
   Commissions,
+  MyCommission,
   ConciliacaoAsaas,
   Dashboard,
   Login,
@@ -102,6 +103,10 @@ export const router = createBrowserRouter([
       {
         path: 'agendamentos',
         element: withRoleProtection('/agendamentos', <Appointments />),
+      },
+      {
+        path: 'minha-comissao',
+        element: withRoleProtection('/minha-comissao', <MyCommission />),
       },
       {
         path: 'clientes',

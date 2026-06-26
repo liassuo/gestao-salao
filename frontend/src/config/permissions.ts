@@ -44,6 +44,12 @@ export const menuItems: MenuItem[] = [
     roles: ['ADMIN', 'PROFESSIONAL'],
   },
   {
+    icon: DollarSign,
+    label: 'Minha Comissão',
+    path: '/minha-comissao',
+    roles: ['PROFESSIONAL'],
+  },
+  {
     icon: Users,
     label: 'Clientes',
     path: '/clientes',

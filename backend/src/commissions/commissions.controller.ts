@@ -7,18 +7,49 @@ import {
   Body,
   Param,
   Query,
+  Req,
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '../common/enums';
+import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 import { CommissionsService } from './commissions.service';
 import { GenerateCommissionDto, QueryCommissionDto } from './dto';
 
+interface RequestWithUser extends Request {
+  user: AuthenticatedUser;
+}
+
 @ApiTags('Commissions')
+@ApiBearerAuth()
+// Tudo aqui é financeiro do salão → só ADMIN. Exceção: GET /commissions/me
+// (barbeiro vê a PRÓPRIA comissão), que sobrescreve com @Roles abaixo.
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN)
 @Controller('commissions')
 export class CommissionsController {
   constructor(private readonly commissionsService: CommissionsService) {}
+
+  /**
+   * GET /commissions/me — comissão do PRÓPRIO profissional logado no período.
+   * Força professionalId = req.user.professionalId (ignora qualquer id na query),
+   * então o barbeiro nunca vê a comissão de outro.
+   */
+  @Get('me')
+  @Roles(UserRole.ADMIN, UserRole.PROFESSIONAL)
+  async findMine(@Req() req: RequestWithUser, @Query() query: QueryCommissionDto) {
+    const professionalId = req.user.professionalId;
+    if (!professionalId) return [];
+    // Força o professionalId do TOKEN — ignora qualquer id vindo na query, então
+    // o barbeiro nunca consegue ver a comissão de outro.
+    return this.commissionsService.findAll({ ...query, professionalId });
+  }
 
   @Post('generate')
   @HttpCode(HttpStatus.CREATED)

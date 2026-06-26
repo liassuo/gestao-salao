@@ -13,10 +13,13 @@ import {
   UseGuards,
   Req,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { DebtsService } from './debts.service';
 import { CreateDebtDto, UpdateDebtDto, PayDebtDto, QueryDebtDto } from './dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '../common/enums';
 import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 import { InAppNotificationsService } from '../in-app-notifications/in-app-notifications.service';
 
@@ -25,6 +28,11 @@ interface RequestWithUser extends Request {
 }
 
 @ApiTags('Debts')
+@ApiBearerAuth()
+// Dívidas dos clientes = financeiro → só ADMIN. EXCEÇÃO: /my e /my/pay-pix (cliente vê/paga
+// a PRÓPRIA dívida) sobrescrevem com @Roles(CLIENT) abaixo.
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN)
 @Controller('debts')
 export class DebtsController {
   constructor(
@@ -83,7 +91,8 @@ export class DebtsController {
     return { clientId, totalDebt: total };
   }
 
-  @UseGuards(JwtAuthGuard)
+  // Cliente vê a PRÓPRIA dívida (usa req.user.id) — libera CLIENT, sobrescrevendo o ADMIN da classe.
+  @Roles(UserRole.ADMIN, UserRole.CLIENT)
   @Get('my')
   async getMyOutstandingDebts(@Req() req: RequestWithUser) {
     const debts = await this.debtsService.findOutstandingByClient(req.user.id);
@@ -91,7 +100,8 @@ export class DebtsController {
     return { debts, total };
   }
 
-  @UseGuards(JwtAuthGuard)
+  // Cliente paga a PRÓPRIA dívida via PIX (usa req.user.id) — libera CLIENT.
+  @Roles(UserRole.ADMIN, UserRole.CLIENT)
   @Post('my/pay-pix')
   @HttpCode(HttpStatus.CREATED)
   async payMyDebtsViaPix(@Req() req: RequestWithUser) {

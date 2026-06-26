@@ -1,9 +1,17 @@
-import { Controller, Get, Query, UseInterceptors } from '@nestjs/common';
+import { Controller, Get, Query, UseInterceptors, UseGuards } from '@nestjs/common';
 import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '../common/enums';
 import { DashboardService } from './dashboard.service';
 
 @ApiTags('Dashboard')
+@ApiBearerAuth()
+// Dashboard mostra números do salão inteiro → só ADMIN.
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN)
 @Controller('dashboard')
 @UseInterceptors(CacheInterceptor)
 export class DashboardController {
