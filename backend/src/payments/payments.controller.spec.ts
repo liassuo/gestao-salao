@@ -9,6 +9,8 @@ import * as request from 'supertest';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
 import { InAppNotificationsService } from '../in-app-notifications/in-app-notifications.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 
 const mockInAppNotifications = {
   send: jest.fn().mockResolvedValue(undefined),
@@ -59,7 +61,12 @@ describe('PaymentsController', () => {
         { provide: PaymentsService, useValue: mockService },
         { provide: InAppNotificationsService, useValue: mockInAppNotifications },
       ],
-    }).compile();
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(RolesGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     app = module.createNestApplication();
     app.useGlobalPipes(

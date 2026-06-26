@@ -78,7 +78,7 @@ export class ClientsController {
   @Roles(UserRole.ADMIN, UserRole.CLIENT)
   @Get(':id')
   async findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: RequestWithUser) {
-    if (req.user.role === UserRole.CLIENT && req.user.id !== id) {
+    if (req.user?.role === UserRole.CLIENT && req.user.id !== id) {
       throw new ForbiddenException('Você só pode acessar o seu próprio cadastro');
     }
     return this.clientsService.findOne(id);
@@ -121,7 +121,7 @@ export class ClientsController {
     @Body() dto: UpdateClientDto,
     @Req() req: RequestWithUser,
   ) {
-    if (req.user.role === UserRole.CLIENT && req.user.id !== id) {
+    if (req.user?.role === UserRole.CLIENT && req.user.id !== id) {
       throw new ForbiddenException('Você só pode editar o seu próprio cadastro');
     }
     return this.clientsService.update(id, dto);
