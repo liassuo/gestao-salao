@@ -154,7 +154,7 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleSelectClient = (client: typeof clients[0]) => {
+  const handleSelectClient = (client: (typeof filteredClients)[number]) => {
     setSelectedClient({ id: client.id, name: client.name, phone: client.phone });
     setClientSearch('');
     setClientDropdownOpen(false);
