@@ -136,6 +136,26 @@ export class ClientsService {
     }));
   }
 
+  /**
+   * Busca ENXUTA de clientes (só id, name, phone) para o autocomplete do
+   * agendamento. Diferente de findAll: exige termo de busca, limita resultados e
+   * NÃO expõe dados sensíveis (dívidas, cpf, e-mail). É o que o BARBEIRO usa para
+   * marcar horário sem ter acesso à base completa de clientes.
+   */
+  async searchMinimal(term: string) {
+    const q = (term || '').trim();
+    if (q.length < 2) return []; // sem termo → não lista a base inteira
+    const { data, error } = await this.supabase
+      .from('clients')
+      .select('id, name, phone')
+      .eq('isActive', true)
+      .or(`name.ilike.%${q}%,phone.ilike.%${q}%`)
+      .order('name', { ascending: true })
+      .limit(20);
+    if (error) throw error;
+    return data || [];
+  }
+
   async findOne(id: string) {
     const { data: client, error } = await this.supabase
       .from('clients')

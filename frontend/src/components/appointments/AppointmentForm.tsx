@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { AlertCircle, Loader2, Search, X } from 'lucide-react';
 import {
-  useClients,
+  useClientSearch,
   useProfessionals,
   useServices,
   useActivePromotions,
@@ -69,7 +69,6 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
   const isBarber = user?.role === 'PROFESSIONAL';
   const lockedProfessionalId = isBarber ? user?.professionalId : undefined;
 
-  const { data: clients = [], isLoading: isLoadingClients } = useClients();
   const { data: allProfessionals = [], isLoading: isLoadingProfessionals } = useProfessionals();
   const professionals = useMemo(
     () =>
@@ -135,13 +134,10 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
   const clientInputRef = useRef<HTMLInputElement>(null);
   const clientDropdownRef = useRef<HTMLDivElement>(null);
 
-  const filteredClients = useMemo(() => {
-    if (!clientSearch.trim()) return clients.slice(0, 10);
-    const q = clientSearch.toLowerCase();
-    return clients.filter(
-      (c) => c.name.toLowerCase().includes(q) || c.phone.includes(q),
-    ).slice(0, 10);
-  }, [clients, clientSearch]);
+  // Busca de cliente server-side (/clients/search) — funciona para ADMIN e BARBEIRO,
+  // sem baixar a base inteira. Só busca com 2+ caracteres.
+  const { data: searchResults = [], isLoading: isLoadingClients } = useClientSearch(clientSearch);
+  const filteredClients = searchResults.slice(0, 10);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {

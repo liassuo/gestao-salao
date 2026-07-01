@@ -71,6 +71,18 @@ export class ClientsController {
   }
 
   /**
+   * GET /clients/search?q=termo
+   * Busca ENXUTA (id, name, phone) para o autocomplete do agendamento.
+   * Liberada para PROFESSIONAL também — o barbeiro precisa achar o cliente para
+   * marcar horário, mas sem acesso à lista completa/dados sensíveis (findAll é ADMIN).
+   */
+  @Roles(UserRole.ADMIN, UserRole.PROFESSIONAL)
+  @Get('search')
+  async search(@Query('q') q?: string) {
+    return this.clientsService.searchMinimal(q || '');
+  }
+
+  /**
    * GET /clients/:id
    * Returns a specific client with details
    */
