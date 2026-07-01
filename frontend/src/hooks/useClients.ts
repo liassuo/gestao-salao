@@ -12,6 +12,18 @@ export function useClients(filters?: ClientFilters) {
   });
 }
 
+// Busca enxuta p/ o autocomplete do agendamento — usa /clients/search (liberado
+// ao barbeiro). Só dispara com 2+ caracteres; server-side (não baixa a base toda).
+export function useClientSearch(term: string) {
+  const q = (term || '').trim();
+  return useQuery({
+    queryKey: [...CLIENTS_KEY, 'search', q],
+    queryFn: () => clientsService.search(q),
+    enabled: q.length >= 2,
+    staleTime: 60 * 1000,
+  });
+}
+
 export function useClient(id: string) {
   return useQuery({
     queryKey: [...CLIENTS_KEY, id],

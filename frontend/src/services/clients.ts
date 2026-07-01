@@ -12,6 +12,15 @@ export const clientsService = {
     return response.data;
   },
 
+  // Busca enxuta (id, name, phone) para o autocomplete do agendamento. Liberada
+  // para o barbeiro (PROFESSIONAL), diferente de list() que é só ADMIN.
+  async search(term: string): Promise<Pick<Client, 'id' | 'name' | 'phone'>[]> {
+    const response = await api.get<Pick<Client, 'id' | 'name' | 'phone'>[]>('/clients/search', {
+      params: { q: term },
+    });
+    return response.data;
+  },
+
   async getById(id: string): Promise<Client> {
     const response = await api.get<Client>(`/clients/${id}`);
     return response.data;

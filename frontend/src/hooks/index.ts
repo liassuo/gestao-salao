@@ -3,7 +3,7 @@ export { useCashRegisters } from './useCashRegisters';
 export { useCashRegisterSummary } from './useCashRegisterSummary';
 export { useCashRegisterTransactions } from './useCashRegisterTransactions';
 export { useCashRegisterToday, useCashRegisterOpen, CASH_REGISTER_QUERY_KEY } from './useCashRegisterToday';
-export { useClients, useClient, useCreateClient, useUpdateClient, useDeleteClient } from './useClients';
+export { useClients, useClientSearch, useClient, useCreateClient, useUpdateClient, useDeleteClient } from './useClients';
 export { useCloseCashRegister } from './useCloseCashRegister';
 export { useReopenCashRegister } from './useReopenCashRegister';
 export { useCreateAppointment, getApiErrorMessage } from './useCreateAppointment';
