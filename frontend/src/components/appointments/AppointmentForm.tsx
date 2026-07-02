@@ -216,7 +216,12 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
     });
   };
 
-  const isDataLoading = isLoadingClients || isLoadingProfessionals || isLoadingServices;
+  // NÃO inclui a busca de cliente (isLoadingClients): ela recarrega a cada tecla
+  // digitada (useClientSearch muda de queryKey por caractere). Se entrasse aqui, o
+  // form inteiro desmontaria para o spinner a cada letra e o input de busca perderia
+  // o foco (no tablet, o teclado fechava a cada tecla). O loading da busca é mostrado
+  // inline no dropdown. Aqui só esperam os dados INICIAIS do form.
+  const isDataLoading = isLoadingProfessionals || isLoadingServices;
 
   if (isDataLoading) {
     return (
@@ -269,7 +274,13 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
                 errors.clientId ? 'border-[#A63030]' : 'border-[var(--border-color)]'
               }`}
             />
-            {clientDropdownOpen && filteredClients.length > 0 && (
+            {clientDropdownOpen && isLoadingClients && (
+              <div ref={clientDropdownRef} className="absolute z-20 mt-1 flex w-full items-center gap-2 rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] px-3 py-3 shadow-lg">
+                <Loader2 className="h-4 w-4 animate-spin text-[#C8923A]" />
+                <span className="text-sm text-[var(--text-muted)]">Buscando…</span>
+              </div>
+            )}
+            {clientDropdownOpen && !isLoadingClients && filteredClients.length > 0 && (
               <div ref={clientDropdownRef} className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] py-1 shadow-lg">
                 {filteredClients.map((client) => (
                   <button
@@ -284,7 +295,7 @@ export function AppointmentForm({ onSubmit, isLoading, error, prefill }: Appoint
                 ))}
               </div>
             )}
-            {clientDropdownOpen && clientSearch && filteredClients.length === 0 && (
+            {clientDropdownOpen && !isLoadingClients && clientSearch.trim().length >= 2 && filteredClients.length === 0 && (
               <div ref={clientDropdownRef} className="absolute z-20 mt-1 w-full rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] px-3 py-3 shadow-lg">
                 <p className="text-sm text-[var(--text-muted)]">Nenhum cliente encontrado — o nome digitado será usado como cliente avulso</p>
               </div>
