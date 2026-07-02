@@ -895,6 +895,83 @@ describe('SubscriptionsService — reconciliação quita a inadimplência (caso 
 });
 
 /**
+ * Regressão do caso Eduardo Ventura: assinatura RENOVADA (cobrança recorrente paga no
+ * PIX, RECEIVED no Asaas) mas o webhook nunca chegou. O vencimento passou → o cron a
+ * marcou SUSPENDED + Inadimplente. As reconciliações automáticas (cron e botão
+ * "Reconciliar com Asaas") só varriam status='PENDING_PAYMENT', então a assinatura
+ * SUSPENDED nunca era conferida contra o Asaas e o cliente ficava preso "Encerrada +
+ * Inadimplente" apesar de ter pago. Estes testes garantem que a varredura automática
+ * também cobre SUSPENDED (recentes), reaproveitando o syncWithAsaas que já sabe reativar.
+ */
+function suspendedPaidTables(): Tables {
+  const t = baseTables();
+  t.client_subscriptions = [
+    {
+      id: 'sub-1',
+      clientId: 'client-1',
+      planId: 'plan-1',
+      status: 'SUSPENDED',
+      asaasSubscriptionId: 'sub_asaas',
+      startDate: '2020-01-01T00:00:00', // piso do ciclo no passado → cobrança paga conta
+      createdAt: '2020-01-01T00:00:00',
+      endDate: '2020-02-01T00:00:00',
+      updatedAt: new Date().toISOString(), // suspensa recentemente (dentro da janela)
+      cutsUsedThisMonth: 4,
+    },
+  ];
+  t.clients = [{ id: 'client-1', name: 'Eduardo', phone: '1199', hasDebts: true }];
+  t.debts = [
+    {
+      id: 'debt-1',
+      clientId: 'client-1',
+      amount: 7900,
+      remainingBalance: 7900,
+      amountPaid: 0,
+      isSettled: false,
+      description: 'Cobrança não paga — Vip [sub:sub-1:cycle:2026-07-01]',
+    },
+  ];
+  return t;
+}
+
+describe('SubscriptionsService — reconcile automático cobre SUSPENDED paga (caso Eduardo)', () => {
+  it('reconcilePendingSubscriptionsCron: assinatura SUSPENDED com cobrança paga no Asaas é reativada e a dívida quitada', async () => {
+    const { service, state } = await buildServiceWithAsaas(suspendedPaidTables(), asaasMockWithPaidCharge());
+
+    await service.reconcilePendingSubscriptionsCron();
+
+    expect(state.client_subscriptions[0].status).toBe('ACTIVE');
+    expect(state.debts[0].isSettled).toBe(true);
+    expect(state.clients[0].hasDebts).toBe(false);
+  });
+
+  it('reconcilePendingWithAsaas (botão admin): também reativa a SUSPENDED paga', async () => {
+    const { service, state } = await buildServiceWithAsaas(suspendedPaidTables(), asaasMockWithPaidCharge());
+
+    const res = await service.reconcilePendingWithAsaas();
+
+    // A SUSPENDED entrou na varredura (checked) e foi reativada (efeito observável).
+    // Nota: não asseramos res.activated aqui — o StatefulSupabase devolve a MESMA
+    // referência de linha que o syncWithAsaas muta p/ ACTIVE, então o snapshot de
+    // "estava ativa antes" não é observável no mock (é no PostgREST real). O contrato
+    // que importa é o estado final da assinatura.
+    expect(res.checked).toBe(1);
+    expect(state.client_subscriptions[0].status).toBe('ACTIVE');
+  });
+
+  it('NÃO varre SUSPENDED antiga (fora da janela de recência) — evita estourar chamadas Asaas', async () => {
+    const t = suspendedPaidTables();
+    // suspensa há muito tempo (churn) → não deve ser reconciliada no sweep automático
+    t.client_subscriptions[0].updatedAt = '2020-01-01T00:00:00.000Z';
+    const { service, state } = await buildServiceWithAsaas(t, asaasMockWithPaidCharge());
+
+    await service.reconcilePendingSubscriptionsCron();
+
+    expect(state.client_subscriptions[0].status).toBe('SUSPENDED');
+  });
+});
+
+/**
  * Regressão "Ativo + Ciclo não pago": assinatura JÁ ACTIVE cujo pagamento do ciclo foi
  * recebido no Asaas (RECEIVED) mas o webhook se perdeu — o payment local ficou com paidAt
  * de um ciclo anterior (ex.: confirmedDate antecipado de cartão), então isCurrentCyclePaid

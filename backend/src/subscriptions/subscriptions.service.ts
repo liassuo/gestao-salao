@@ -35,6 +35,13 @@ import {
 export class SubscriptionsService {
   private readonly logger = new Logger(SubscriptionsService.name);
 
+  /**
+   * Janela de recência (dias) para incluir assinaturas SUSPENDED na reconciliação
+   * automática com o Asaas. Cobre o cliente que paga a renovação com atraso; churn
+   * antigo fica de fora p/ não pesar as chamadas ao Asaas a cada 10 min.
+   */
+  private static readonly RECONCILE_SUSPENDED_WINDOW_DAYS = 40;
+
   constructor(
     private readonly supabase: SupabaseService,
     private readonly asaasService: AsaasService,
@@ -3373,13 +3380,7 @@ export class SubscriptionsService {
       return { checked: 0, activated: 0, errors: 0, configured: false };
     }
 
-    const { data: pending } = await this.supabase
-      .from('client_subscriptions')
-      .select('id, clientId')
-      .eq('status', 'PENDING_PAYMENT')
-      .limit(200);
-
-    const items = pending || [];
+    const items = await this.collectReconcilableSubscriptions();
     if (items.length === 0) {
       return { checked: 0, activated: 0, errors: 0, configured: true };
     }
@@ -3390,8 +3391,9 @@ export class SubscriptionsService {
       try {
         const before = await this.findSubscription(sub.id).catch(() => null);
         if (!before) continue;
+        const wasActiveBefore = before.status === 'ACTIVE';
         const after = await this.syncWithAsaas(sub.id);
-        if (after?.status === 'ACTIVE' && before.status !== 'ACTIVE') {
+        if (after?.status === 'ACTIVE' && !wasActiveBefore) {
           activated += 1;
         }
       } catch (e) {
@@ -3406,27 +3408,64 @@ export class SubscriptionsService {
     return { checked: items.length, activated, errors, configured: true };
   }
 
-  @Cron(CronExpression.EVERY_10_MINUTES)
-  async reconcilePendingSubscriptionsCron() {
-    if (!this.asaasService.configured) return;
-
+  /**
+   * Alvos da reconciliação automática com o Asaas (cron + botão "Reconciliar com Asaas"):
+   * assinaturas cujo pagamento pode ter sido confirmado no Asaas SEM o webhook chegar.
+   *  - PENDING_PAYMENT: aguardando a 1ª confirmação (sempre incluída).
+   *  - SUSPENDED recente: renovação recorrente PAGA cujo webhook se perdeu → o vencimento
+   *    passou e o cron suspendeu (caso Eduardo Ventura: pagou o PIX, ficou "Encerrada +
+   *    Inadimplente"). syncWithAsaas já sabe reativar a partir de uma cobrança paga; o que
+   *    faltava era ALIMENTAR a varredura com as SUSPENDED. Limitado à janela de recência
+   *    (updatedAt) p/ não reprocessar churn antigo a cada 10 min (custo de chamadas Asaas);
+   *    SUSPENDED antiga segue recuperável sob demanda pelo POST /subscriptions/:id/sync-asaas.
+   */
+  private async collectReconcilableSubscriptions(): Promise<
+    Array<{ id: string; clientId: string }>
+  > {
     const { data: pending } = await this.supabase
       .from('client_subscriptions')
       .select('id, clientId')
       .eq('status', 'PENDING_PAYMENT')
       .limit(200);
 
+    const cutoffIso = new Date(
+      Date.now() -
+        SubscriptionsService.RECONCILE_SUSPENDED_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+    ).toISOString();
+    const { data: suspended } = await this.supabase
+      .from('client_subscriptions')
+      .select('id, clientId')
+      .eq('status', 'SUSPENDED')
+      .gte('updatedAt', cutoffIso)
+      .limit(200);
+
+    const byId = new Map<string, { id: string; clientId: string }>();
+    for (const s of [...(pending || []), ...(suspended || [])]) {
+      byId.set(s.id, { id: s.id, clientId: s.clientId });
+    }
+    return Array.from(byId.values());
+  }
+
+  @Cron(CronExpression.EVERY_10_MINUTES)
+  async reconcilePendingSubscriptionsCron() {
+    if (!this.asaasService.configured) return;
+
+    const pending = await this.collectReconcilableSubscriptions();
+
     if (!pending || pending.length === 0) return;
 
-    this.logger.log(`[reconcile-cron] verificando ${pending.length} assinatura(s) PENDING_PAYMENT`);
+    this.logger.log(
+      `[reconcile-cron] verificando ${pending.length} assinatura(s) (PENDING_PAYMENT + SUSPENDED recentes)`,
+    );
 
     let activated = 0;
     for (const sub of pending) {
       try {
         const before = await this.findSubscription(sub.id).catch(() => null);
         if (!before) continue;
+        const wasActiveBefore = before.status === 'ACTIVE';
         const after = await this.syncWithAsaas(sub.id);
-        if (after?.status === 'ACTIVE' && before.status !== 'ACTIVE') {
+        if (after?.status === 'ACTIVE' && !wasActiveBefore) {
           activated += 1;
         }
       } catch (e) {
