@@ -1409,7 +1409,25 @@ export class SubscriptionsService {
     // Piso do ciclo: MESMA régua de isCurrentCyclePaid/findAllSubscriptions
     // (subscriptionCycleFloorMs) — max(startDate,createdAt) - 1 dia, normalizado p/
     // meia-noite UTC. Tolerância de 1 dia cobre pagamento feito pouco antes da virada.
-    const cycleFloorMs = this.subscriptionCycleFloorMs(subscription);
+    let cycleFloorMs = this.subscriptionCycleFloorMs(subscription);
+
+    // ANTI-RENOVAÇÃO-GRÁTIS (caso Kaio, 04/07/2026): para assinatura SUSPENDED por
+    // VENCIMENTO, o piso por startDate aceita a cobrança que abriu o ciclo VENCIDO
+    // (paga ~1 mês atrás) como "prova de renovação" — o startDate não avança nas
+    // renovações, então o suspend-cron suspendia às 17:20 e esta reconciliação, às
+    // 17:30, reativava +1 mês DE GRAÇA e quitava a dívida recém-criada, todo mês.
+    // Prova de renovação tem que ser pagamento PRÓXIMO do vencimento que expirou:
+    // piso adicional = endDate - 14 dias (tolerância p/ quem paga a fatura do mês
+    // assim que o Asaas a gera, dias antes do vencimento). Só para SUSPENDED —
+    // PENDING_PAYMENT é 1ª ativação (o pagamento é ~1 mês antes do endDate criado
+    // junto) e ACTIVE não passa por aqui para renovar.
+    if (subscription.status === 'SUSPENDED' && subscription.endDate) {
+      const endMs = new Date(subscription.endDate).getTime();
+      if (!Number.isNaN(endMs)) {
+        const EARLY_PAY_TOLERANCE_MS = 14 * 24 * 60 * 60 * 1000;
+        cycleFloorMs = Math.max(cycleFloorMs, endMs - EARLY_PAY_TOLERANCE_MS);
+      }
+    }
     const chargePaidMs = (c: any): number | null => {
       const raw = c?.paymentDate || c?.confirmedDate || c?.clientPaymentDate || null;
       if (!raw) return null;

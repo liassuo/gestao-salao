@@ -972,6 +972,62 @@ describe('SubscriptionsService — reconcile automático cobre SUSPENDED paga (c
 });
 
 /**
+ * Regressão do caso Kaio (04/07/2026): assinatura VENCEU e o cron a suspendeu com
+ * dívida; a única cobrança paga no Asaas é a que ABRIU o ciclo vencido (~1 mês
+ * atrás). Como o startDate não avança nas renovações, o piso por startDate aceitava
+ * essa cobrança velha como "prova de renovação": a reconciliação reativava +1 mês
+ * DE GRAÇA e quitava a dívida recém-criada — todo mês. A prova de renovação tem que
+ * ser pagamento PRÓXIMO do vencimento expirado (endDate - 14 dias de tolerância).
+ */
+describe('SubscriptionsService — reconcile NÃO reativa SUSPENDED com cobrança do ciclo VENCIDO (caso Kaio)', () => {
+  const rel = (d: number) => new Date(Date.now() + d * 86400000).toISOString();
+
+  function kaioTables(paymentDaysAgo: number): { t: Tables; asaas: any } {
+    const t = suspendedPaidTables();
+    t.client_subscriptions[0].startDate = rel(-31);
+    t.client_subscriptions[0].createdAt = rel(-61);
+    t.client_subscriptions[0].endDate = rel(-1); // venceu ontem → suspend-cron suspendeu
+    const paidCharge = {
+      id: 'pay_cycle_charge',
+      status: 'RECEIVED',
+      value: 79.9,
+      externalReference: 'sub-1',
+      paymentDate: rel(-paymentDaysAgo).slice(0, 10),
+      billingType: 'PIX',
+    };
+    const asaas = {
+      configured: true,
+      reaisToCentavos: (r: number) => Math.round((r || 0) * 100),
+      getSubscriptionPayments: async () => [],
+      getPayments: async () => ({ data: [paidCharge] }),
+      getCharge: async () => paidCharge,
+    };
+    return { t, asaas };
+  }
+
+  it('cobrança paga ~1 mês atrás (abriu o ciclo vencido) NÃO reativa nem quita a dívida', async () => {
+    const { t, asaas } = kaioTables(31);
+    const { service, state } = await buildServiceWithAsaas(t, asaas);
+
+    await service.reconcilePendingSubscriptionsCron();
+
+    expect(state.client_subscriptions[0].status).toBe('SUSPENDED'); // sem mês grátis
+    expect(state.debts[0].isSettled).toBe(false); // dívida do ciclo vencido intacta
+    expect(state.clients[0].hasDebts).toBe(true);
+  });
+
+  it('cobrança paga no vencimento (renovação real com webhook perdido) SEGUE reativando', async () => {
+    const { t, asaas } = kaioTables(1); // pagou ontem, no dia do vencimento
+    const { service, state } = await buildServiceWithAsaas(t, asaas);
+
+    await service.reconcilePendingSubscriptionsCron();
+
+    expect(state.client_subscriptions[0].status).toBe('ACTIVE'); // caso Eduardo preservado
+    expect(state.debts[0].isSettled).toBe(true);
+  });
+});
+
+/**
  * Regressão "Ativo + Ciclo não pago": assinatura JÁ ACTIVE cujo pagamento do ciclo foi
  * recebido no Asaas (RECEIVED) mas o webhook se perdeu — o payment local ficou com paidAt
  * de um ciclo anterior (ex.: confirmedDate antecipado de cartão), então isCurrentCyclePaid
