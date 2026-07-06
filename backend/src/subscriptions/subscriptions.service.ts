@@ -3169,6 +3169,24 @@ export class SubscriptionsService {
         };
       }
     }
+    // Cobrança que referencia o CLIENTE (ex.: 'Quitação de dívida' —
+    // createPixChargeForDebts usa externalReference = clientId). Sem este fallback
+    // o card saía "sem vínculo" e sem cliente identificado.
+    if (externalRef) {
+      const { data: cli } = await this.supabase
+        .from('clients')
+        .select('id, name')
+        .eq('id', externalRef)
+        .maybeSingle();
+      if (cli) {
+        return {
+          kind: 'unknown',
+          clientId: (cli as any).id,
+          clientName: (cli as any).name || null,
+          description: `Pagamento avulso — ${(cli as any).name || 'cliente'}`,
+        };
+      }
+    }
     return { kind: 'unknown', clientId: null, clientName: null, description: null };
   }
 
@@ -3232,6 +3250,17 @@ export class SubscriptionsService {
         if (appt) {
           appointmentId = (appt as any).id;
           clientId = (appt as any).clientId;
+        } else {
+          // Cobrança que referencia o CLIENTE (ex.: 'Quitação de dívida' —
+          // createPixChargeForDebts usa externalReference = clientId). Sem este
+          // fallback, o insert abaixo ia com clientId NULL e estourava o NOT NULL
+          // ("Falha ao criar pagamento: null value in column clientId").
+          const { data: cli } = await this.supabase
+            .from('clients')
+            .select('id')
+            .eq('id', externalRef)
+            .maybeSingle();
+          if (cli) clientId = (cli as any).id;
         }
       }
     }
@@ -3255,6 +3284,16 @@ export class SubscriptionsService {
       appointmentId = appointmentId || (existingPayment as any).appointmentId || null;
       clientId = clientId || (existingPayment as any).clientId || null;
     } else {
+      // clientId é NOT NULL em payments: sem cliente identificado, não dá para
+      // registrar — devolve uma mensagem clara em vez do erro de constraint.
+      if (!clientId) {
+        return {
+          success: false,
+          action: 'NONE',
+          message:
+            'Não foi possível identificar o cliente desta cobrança (referência não corresponde a assinatura, agendamento ou cliente). Registre manualmente.',
+        };
+      }
       // registeredBy e NOT NULL: usa o primeiro admin como registrante "sistema"
       const { data: systemAdmin } = await this.supabase
         .from('users')
