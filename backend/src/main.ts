@@ -115,6 +115,11 @@ Esta API fornece endpoints para gerenciar:
   const port = process.env.PORT || 3000;
   await app.listen(port);
   console.log(`Application is running on: ${await app.getUrl()}`);
+  if (process.env.RENDER !== 'true' && process.env.CRONS_ENABLED !== 'true') {
+    console.warn(
+      'CRONS DESABILITADOS: ambiente sem RENDER=true/CRONS_ENABLED=true (proteção contra cron local rodando contra o banco de produção).',
+    );
+  }
   if (process.env.NODE_ENV !== 'production') {
     console.log(`Swagger docs available at: ${await app.getUrl()}/api/docs`);
   }

@@ -371,7 +371,7 @@ export class AsaasWebhookController {
     const alreadyProcessed =
       !justCreatedByFallback &&
       !!localPayment.paidAt &&
-      (localPayment.asaasStatus === 'RECEIVED' || localPayment.asaasStatus === 'CONFIRMED');
+      ['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(localPayment.asaasStatus as string);
 
     if (alreadyProcessed) {
       this.logger.log(
@@ -874,10 +874,14 @@ export class AsaasWebhookController {
         updatedAt: now,
       });
       if (insErr) {
+        // Não aborta: o payment local é só um espelho da cobrança — a parte que importa
+        // (suspender + lançar a dívida abaixo) usa os dados da assinatura, que já temos.
+        // Caso conhecido: bancos com "paidAt" NOT NULL rejeitam este insert (aplicar
+        // backend/sql/alter_payments_paidat_nullable.sql); antes deste fallback o handler
+        // desistia aqui e o cliente vencido ficava ATIVO e sem dívida até o cron.
         this.logger.error(
-          `Webhook overdue: falha ao recriar payment para ${asaasPaymentId}: ${insErr.message}`,
+          `Webhook overdue: falha ao recriar payment para ${asaasPaymentId} (${insErr.message}) — seguindo mesmo assim com suspensão/dívida.`,
         );
-        return;
       }
       localPayment = {
         id: newId,

@@ -43,6 +43,20 @@ export class InAppNotificationsService {
       // 2. Remover o actor (não auto-notificar)
       const filtered = recipientIds.filter((id) => id !== actor_id);
 
+      // actor_id tem FK para users.id, mas o chamador pode passar o id de um LOGIN DE
+      // CLIENTE do app (ex.: appointments.controller "novo agendamento pelo app"), que
+      // não existe em users — o insert inteiro estourava na FK e NENHUM admin recebia a
+      // notificação. Ator que não é users vira null (a notificação importa mais que ele).
+      let actorId: string | null = actor_id || null;
+      if (actorId) {
+        const { data: actorUser } = await this.supabase
+          .from('users')
+          .select('id')
+          .eq('id', actorId)
+          .maybeSingle();
+        if (!actorUser) actorId = null;
+      }
+
       if (filtered.length === 0) return;
 
       // 3. Para cada destinatário, aplicar anti-spam e criar notificações
@@ -72,7 +86,7 @@ export class InAppNotificationsService {
         toInsert.push({
           id: randomUUID(),
           recipient_id: recipientId,
-          actor_id: actor_id || null,
+          actor_id: actorId,
           type,
           title,
           message,
