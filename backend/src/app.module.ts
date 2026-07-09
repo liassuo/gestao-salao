@@ -58,7 +58,14 @@ import { MailModule } from './mail/mail.module';
       ttl: 30000, // 30s padrão — suficiente para evitar recálculos em rajadas de requests
       max: 100,   // Máximo de 100 itens em memória
     }),
-    ScheduleModule.forRoot(),
+    // Crons SÓ rodam no Render (que seta RENDER=true sozinho) ou com CRONS_ENABLED=true
+    // explícito. Um backend local com o .env de produção NÃO pode disparar cron contra o
+    // banco de prod: em 06-07/07/2026 um processo local com build antigo desfez 2x a
+    // reversão dos "mês grátis" (reativou 6 assinaturas e quitou dívidas indevidamente).
+    // Sem ScheduleModule os decorators @Cron ficam inertes; o resto do app funciona normal.
+    ...(process.env.RENDER === 'true' || process.env.CRONS_ENABLED === 'true'
+      ? [ScheduleModule.forRoot()]
+      : []),
     SupabaseModule,
     AuthModule,
     UsersModule,
