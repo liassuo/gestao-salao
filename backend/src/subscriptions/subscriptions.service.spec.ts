@@ -22,6 +22,7 @@ import { SupabaseService } from '../supabase/supabase.service';
 import { AsaasService } from '../asaas/asaas.service';
 import { CashRegisterService } from '../cash-register/cash-register.service';
 import { SubscriptionsService } from './subscriptions.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { localDateString } from '../common/datetime.util';
 
 type Row = Record<string, any>;
@@ -143,6 +144,10 @@ async function buildService(initial: Tables, asaasConfigured = false) {
       { provide: ConfigService, useValue: { get: (_: string, d?: any) => d } },
       { provide: AsaasService, useValue: { configured: asaasConfigured } },
       { provide: CashRegisterService, useValue: new CashRegisterService(sb as any) },
+      {
+        provide: NotificationsService,
+        useValue: { notifySubscriptionOverdue: jest.fn().mockResolvedValue(undefined) },
+      },
     ],
   }).compile();
 
@@ -453,6 +458,65 @@ describe('SubscriptionsService — renovação via link Asaas (renewSubscription
     await expect(service.renewSubscriptionViaAsaas('sub-1')).rejects.toThrow(/não pode ser renovada/i);
     // status inalterado (não virou PENDING_PAYMENT)
     expect(tables.client_subscriptions[0].status).toBe('ACTIVE');
+  });
+});
+
+/**
+ * DIA-ÂNCORA na confirmação manual (confirmPaymentManually) — pedido do dono
+ * 10/07/2026: renovação paga com poucos dias de atraso NÃO pode mudar o dia do
+ * vencimento (caso Kleudson: venceu dia 7, pagou dia 10, virava dia 10).
+ */
+describe('SubscriptionsService — dia-âncora na confirmação manual de pagamento', () => {
+  const daysAgoIso = (d: number) => new Date(Date.now() - d * 86400000).toISOString();
+
+  it('RENOVAÇÃO (tem ciclo pago anterior) com 3 dias de atraso: mantém o dia do vencimento', async () => {
+    const prevEnd = daysAgoIso(3); // venceu há 3 dias (dentro da carência de 7)
+    const tables = baseTables();
+    tables.client_subscriptions = [
+      {
+        id: 'sub-1', clientId: 'client-1', planId: 'plan-1', status: 'PENDING_PAYMENT',
+        startDate: daysAgoIso(33), createdAt: daysAgoIso(63), endDate: prevEnd,
+        plan: { id: 'plan-1', name: 'Mensal', price: 8000 },
+      },
+    ];
+    // ciclo anterior foi pago → é renovação, não 1ª ativação
+    tables.payments = [
+      { id: 'pay-old', subscriptionId: 'sub-1', clientId: 'client-1', method: 'PIX', paidAt: daysAgoIso(33), createdAt: daysAgoIso(33) },
+    ];
+    const { service, state } = await buildService(tables);
+
+    await service.confirmPaymentManually('sub-1', 'PIX');
+
+    const sub = state.client_subscriptions[0];
+    expect(sub.status).toBe('ACTIVE');
+    // novo ciclo ancorado no vencimento antigo: startDate = vencimento antigo,
+    // endDate = vencimento antigo + 1 mês (o DIA não desliza pro dia do pagamento)
+    expect(sub.startDate).toBe(new Date(prevEnd).toISOString());
+    const expectedEnd = new Date(prevEnd);
+    expectedEnd.setMonth(expectedEnd.getMonth() + 1);
+    expect(sub.endDate).toBe(expectedEnd.toISOString());
+  });
+
+  it('1ª ATIVAÇÃO (sem ciclo pago anterior): ciclo começa agora (endDate provisório não é âncora)', async () => {
+    const tables = baseTables();
+    tables.client_subscriptions = [
+      {
+        id: 'sub-1', clientId: 'client-1', planId: 'plan-1', status: 'PENDING_PAYMENT',
+        startDate: daysAgoIso(0), createdAt: daysAgoIso(0),
+        endDate: new Date(Date.now() + 30 * 86400000).toISOString(), // provisório da criação
+        plan: { id: 'plan-1', name: 'Mensal', price: 8000 },
+      },
+    ];
+    const { service, state } = await buildService(tables);
+
+    await service.confirmPaymentManually('sub-1', 'PIX');
+
+    const sub = state.client_subscriptions[0];
+    expect(sub.status).toBe('ACTIVE');
+    // endDate ≈ agora + 1 mês (não "provisório + 1 mês", que seria o bug do +2 meses)
+    const endMs = new Date(sub.endDate).getTime();
+    expect(endMs).toBeGreaterThan(Date.now() + 27 * 86400000);
+    expect(endMs).toBeLessThan(Date.now() + 32 * 86400000);
   });
 });
 
@@ -825,6 +889,10 @@ async function buildServiceWithAsaas(initial: Tables, asaasMock: any) {
       { provide: ConfigService, useValue: { get: (_: string, d?: any) => d } },
       { provide: AsaasService, useValue: asaasMock },
       { provide: CashRegisterService, useValue: new CashRegisterService(sb as any) },
+      {
+        provide: NotificationsService,
+        useValue: { notifySubscriptionOverdue: jest.fn().mockResolvedValue(undefined) },
+      },
     ],
   }).compile();
   return { service: moduleRef.get(SubscriptionsService), state: (sb as any)._state as Tables };

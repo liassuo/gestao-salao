@@ -11,8 +11,10 @@ import { SupabaseService } from '../supabase/supabase.service';
 import { nowLocalIsoString, resolveBusinessDate } from '../common/datetime.util';
 import { isCurrentCyclePaid, subscriptionCycleFloorMs } from '../common/pricing.helper';
 import { isRevenuePayment } from '../common/business-date.helper';
+import { computeRenewalCycle } from '../common/subscription-cycle.util';
 import { AsaasService } from '../asaas/asaas.service';
 import { CashRegisterService } from '../cash-register/cash-register.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   AsaasBillingType,
   AsaasSubscriptionCycle,
@@ -47,6 +49,7 @@ export class SubscriptionsService {
     private readonly asaasService: AsaasService,
     private readonly configService: ConfigService,
     private readonly cashRegisterService: CashRegisterService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   // SUBSCRIPTION PLANS
@@ -898,10 +901,33 @@ export class SubscriptionsService {
       }
     }
 
-    // Auto-cancelar se PENDING_PAYMENT e endDate já venceu (nunca pagou)
+    // Auto-cancelar PENDING_PAYMENT abandonado. Duas réguas:
+    //  - 1ª ativação (nunca teve ciclo pago): cancela quando o endDate provisório
+    //    da criação passa (~1 mês após criar) — comportamento histórico.
+    //  - RENOVAÇÃO em andamento (tem ciclo pago anterior): desde o dia-âncora o
+    //    endDate preservado é o vencimento ANTIGO (já passado na geração do link),
+    //    então cancelar por "endDate venceu" mataria o link na hora. Dá 30 dias
+    //    após o vencimento (mesma janela que existia quando o link reescrevia
+    //    endDate = geração + 1 mês).
     if (subscription && subscription.status === 'PENDING_PAYMENT') {
       const endDate = new Date(subscription.endDate);
       if (new Date() > endDate) {
+        const { data: priorPays } = await this.supabase
+          .from('payments')
+          .select('id, paidAt, asaasStatus')
+          .eq('subscriptionId', subscription.id)
+          .not('paidAt', 'is', null)
+          .limit(20);
+        const hadPriorPaidCycle = (priorPays || []).some(
+          (p: any) => p.paidAt && isRevenuePayment(p),
+        );
+        const RENEWAL_ABANDON_MS = 30 * 24 * 60 * 60 * 1000;
+        if (
+          hadPriorPaidCycle &&
+          Date.now() - endDate.getTime() <= RENEWAL_ABANDON_MS
+        ) {
+          return subscription; // renovação em aberto — não cancelar ainda
+        }
         const now = nowLocalIsoString();
         const { data: canceled } = await this.supabase
           .from('client_subscriptions')
@@ -1227,11 +1253,25 @@ export class SubscriptionsService {
     const nowIso = now.toISOString();
     const nowLocal = nowLocalIsoString();
 
-    // 1ª ativação (sempre vem de PENDING_PAYMENT): o ciclo começa AGORA, então o
-    // vencimento é agora + 1 mês. NÃO reaproveitar o endDate da criação — ele já
-    // era "agora + 1 mês" e mantê-lo/estendê-lo inflava o prazo (bug do +2 meses).
-    const newEndDate = new Date(now);
-    newEndDate.setMonth(newEndDate.getMonth() + 1);
+    // PENDING_PAYMENT pode ser 1ª ativação OU renovação (link de renovação gerado
+    // pelo admin/app — que agora PRESERVA o vencimento antigo como âncora). A régua
+    // é a existência de ciclo pago anterior: com ciclo anterior, o dia do vencimento
+    // se mantém (carência de 7 dias — caso Kleudson: venceu dia 7, pagou dia 10,
+    // continua vencendo dia 7); sem ciclo anterior, começa agora (o endDate
+    // provisório da criação NÃO é âncora — evita o bug do +2 meses).
+    const { data: priorPays } = await this.supabase
+      .from('payments')
+      .select('id, paidAt, asaasStatus')
+      .eq('subscriptionId', subscription.id)
+      .not('paidAt', 'is', null);
+    const hadPriorPaidCycle = (priorPays || []).some(
+      (p: any) => p.paidAt && isRevenuePayment(p),
+    );
+    const cycle = computeRenewalCycle({
+      prevEndDate: subscription.endDate,
+      refDate: now,
+      isRenewal: hadPriorPaidCycle,
+    });
 
     const { data: updated, error } = await this.supabase
       .from('client_subscriptions')
@@ -1239,7 +1279,8 @@ export class SubscriptionsService {
         status: 'ACTIVE',
         cutsUsedThisMonth: 0,
         lastResetDate: nowIso,
-        endDate: newEndDate.toISOString(),
+        ...(cycle.startDate ? { startDate: cycle.startDate.toISOString() } : {}),
+        endDate: cycle.endDate.toISOString(),
         updatedAt: nowIso,
       })
       .eq('id', subscription.id)
@@ -1264,7 +1305,10 @@ export class SubscriptionsService {
       'Confirmação manual de pagamento',
     );
 
-    this.logger.log(`Assinatura ${subscription.id} confirmada manualmente (admin, ${method || 'CASH'}) — status ACTIVE até ${newEndDate.toISOString()}`);
+    this.logger.log(
+      `Assinatura ${subscription.id} confirmada manualmente (admin, ${method || 'CASH'}) — status ACTIVE até ${cycle.endDate.toISOString()}` +
+        (cycle.anchored ? ' (dia-âncora preservado)' : ''),
+    );
     return updated;
   }
 
@@ -1418,12 +1462,22 @@ export class SubscriptionsService {
     // 17:30, reativava +1 mês DE GRAÇA e quitava a dívida recém-criada, todo mês.
     // Prova de renovação tem que ser pagamento PRÓXIMO do vencimento que expirou:
     // piso adicional = endDate - 14 dias (tolerância p/ quem paga a fatura do mês
-    // assim que o Asaas a gera, dias antes do vencimento). Só para SUSPENDED —
-    // PENDING_PAYMENT é 1ª ativação (o pagamento é ~1 mês antes do endDate criado
-    // junto) e ACTIVE não passa por aqui para renovar.
-    if (subscription.status === 'SUSPENDED' && subscription.endDate) {
+    // assim que o Asaas a gera, dias antes do vencimento). Vale para SUSPENDED e
+    // TAMBÉM para PENDING_PAYMENT com endDate JÁ VENCIDO — desde o dia-âncora, os
+    // fluxos de link de renovação preservam o vencimento antigo (não sobrescrevem
+    // mais com "agora + 1 mês"), então um PENDING de renovação carrega endDate
+    // passado e o piso por startDate antigo aceitaria a cobrança do ciclo VENCIDO
+    // como prova (a mesma renovação-grátis do caso Kaio). PENDING de 1ª ativação
+    // mantém endDate futuro (provisório da criação) e fica fora do piso extra —
+    // o pagamento dele é ~1 mês antes do endDate. ACTIVE não passa por aqui.
+    if (subscription.endDate) {
       const endMs = new Date(subscription.endDate).getTime();
-      if (!Number.isNaN(endMs)) {
+      const endIsPast = !Number.isNaN(endMs) && endMs <= Date.now();
+      if (
+        !Number.isNaN(endMs) &&
+        (subscription.status === 'SUSPENDED' ||
+          (subscription.status === 'PENDING_PAYMENT' && endIsPast))
+      ) {
         const EARLY_PAY_TOLERANCE_MS = 14 * 24 * 60 * 60 * 1000;
         cycleFloorMs = Math.max(cycleFloorMs, endMs - EARLY_PAY_TOLERANCE_MS);
       }
@@ -1473,11 +1527,31 @@ export class SubscriptionsService {
     }
 
     const now = new Date();
-    // Ativação retroativa a partir de status não-ACTIVE (PENDING/SUSPENDED): o ciclo
-    // recomeça no pagamento → agora + 1 mês. (Antes estendia do endDate atual, que já
-    // vinha "agora + 1 mês" da criação, inflando para 2 meses.)
-    const newEndDate = new Date(now);
-    newEndDate.setMonth(newEndDate.getMonth() + 1);
+    // Ativação retroativa a partir de status não-ACTIVE (PENDING/SUSPENDED).
+    // Dia-âncora: se houve ciclo pago antes (renovação), o novo ciclo ancora no
+    // vencimento antigo (carência de 7 dias sobre a DATA REAL do pagamento no
+    // Asaas); 1ª ativação recomeça no pagamento (endDate provisório não é âncora
+    // — evita o +2 meses). Exclui desta régua o próprio pagamento reconciliado.
+    const { data: priorPays } = await this.supabase
+      .from('payments')
+      .select('id, paidAt, asaasStatus, asaasPaymentId')
+      .eq('subscriptionId', subscription.id)
+      .not('paidAt', 'is', null);
+    const hadPriorPaidCycle = (priorPays || []).some(
+      (p: any) => p.asaasPaymentId !== paid.id && p.paidAt && isRevenuePayment(p),
+    );
+    const paidRefMs = chargePaidMs(paid);
+    let cycle = computeRenewalCycle({
+      prevEndDate: subscription.endDate,
+      refDate: paidRefMs ? new Date(paidRefMs) : now,
+      isRenewal: hadPriorPaidCycle,
+    });
+    // Pagamento com data antiga (reconciliação tardia): o ciclo ancorado poderia
+    // nascer JÁ VENCIDO → ativa e o cron re-suspende com dívida nova, em loop.
+    // Nesse caso recua ao comportamento clássico: ciclo a partir de agora.
+    if (cycle.endDate.getTime() <= now.getTime()) {
+      cycle = computeRenewalCycle({ prevEndDate: null, refDate: now, isRenewal: false });
+    }
 
     const { data: updated, error } = await this.supabase
       .from('client_subscriptions')
@@ -1485,7 +1559,8 @@ export class SubscriptionsService {
         status: 'ACTIVE',
         cutsUsedThisMonth: 0,
         lastResetDate: now.toISOString(),
-        endDate: newEndDate.toISOString(),
+        ...(cycle.startDate ? { startDate: cycle.startDate.toISOString() } : {}),
+        endDate: cycle.endDate.toISOString(),
         updatedAt: now.toISOString(),
       })
       .eq('id', subscription.id)
@@ -2154,18 +2229,17 @@ export class SubscriptionsService {
       throw new NotFoundException('Assinatura suspensa não encontrada');
     }
 
-    // Novo ciclo: endDate = hoje + 1 mês
     const now = new Date();
-    const newEndDate = new Date(now);
-    newEndDate.setMonth(newEndDate.getMonth() + 1);
 
-    // Marcar como aguardando pagamento e atualizar datas
+    // Marcar como aguardando pagamento. As DATAS não mudam aqui: o vencimento
+    // antigo fica preservado como ÂNCORA do dia (dia-âncora) — o ciclo novo só é
+    // calculado quando o pagamento CONFIRMA (webhook/confirmação manual/sync).
+    // Antes, gerar o link já reescrevia startDate/endDate = agora(+1 mês), e o
+    // dia de vencimento deslizava a cada renovação atrasada.
     await this.supabase
       .from('client_subscriptions')
       .update({
         status: 'PENDING_PAYMENT',
-        startDate: now.toISOString(),
-        endDate: newEndDate.toISOString(),
         cutsUsedThisMonth: 0,
         canceledAt: null,
         updatedAt: now.toISOString(),
@@ -2289,17 +2363,16 @@ export class SubscriptionsService {
     }
 
     const now = new Date();
-    const newEndDate = new Date(now);
-    newEndDate.setMonth(newEndDate.getMonth() + 1);
     const prevStatus = subscription.status;
 
-    // Aguardando pagamento + novo ciclo. Ativação só vem pelo webhook.
+    // Aguardando pagamento. Ativação só vem pelo webhook — e as DATAS não mudam
+    // aqui: o vencimento antigo fica preservado como ÂNCORA do dia (dia-âncora);
+    // o ciclo novo é calculado na confirmação do pagamento. Antes, gerar o link
+    // já reescrevia startDate/endDate e o dia de vencimento deslizava.
     await this.supabase
       .from('client_subscriptions')
       .update({
         status: 'PENDING_PAYMENT',
-        startDate: now.toISOString(),
-        endDate: newEndDate.toISOString(),
         cutsUsedThisMonth: 0,
         canceledAt: null,
         updatedAt: now.toISOString(),
@@ -2804,16 +2877,22 @@ export class SubscriptionsService {
           if (!charge.confirmedDate && !charge.paymentDate) charge.confirmedDate = today;
           await this.upsertLocalPaymentFromCharge(subscription, charge, true);
 
-          const currentEnd = subscription.endDate ? new Date(subscription.endDate) : now;
-          const base = currentEnd > now ? currentEnd : now;
-          const newEnd = new Date(base);
-          newEnd.setMonth(newEnd.getMonth() + 1);
+          // Dia-âncora: renovação adiantada de assinatura ATIVA acumula a partir do
+          // vencimento (o cron só roda na janela pré-vencimento, então o endDate é
+          // futuro e o dia se preserva; o ciclo corrente segue — startDate intacto).
+          const cycle = computeRenewalCycle({
+            prevEndDate: subscription.endDate,
+            refDate: now,
+            isRenewal: true,
+            allowFutureAnchor: true,
+          });
           await this.supabase
             .from('client_subscriptions')
             .update({
               cutsUsedThisMonth: 0,
               lastResetDate: now.toISOString(),
-              endDate: newEnd.toISOString(),
+              ...(cycle.startDate ? { startDate: cycle.startDate.toISOString() } : {}),
+              endDate: cycle.endDate.toISOString(),
               updatedAt: now.toISOString(),
             })
             .eq('id', row.id);
@@ -2914,6 +2993,20 @@ export class SubscriptionsService {
     this.logger.warn(
       `[suspend-expired-cron] assinatura ${sub.id} inadimplente — dívida ${amount} (${method}) criada para cliente ${sub.clientId}`,
     );
+
+    // Avisar o CLIENTE que ficou devendo (push + e-mail, dedupe por ciclo).
+    // Antes a dívida nascia em silêncio e ele só descobria no balcão.
+    await this.notificationsService
+      .notifySubscriptionOverdue({
+        clientId: sub.clientId,
+        subscriptionId: sub.id,
+        planName,
+        amountCentavos: amount,
+        cycleKey,
+      })
+      .catch((e) =>
+        this.logger.warn(`[suspend-expired-cron] falha ao notificar inadimplência de ${sub.clientId}: ${e}`),
+      );
   }
 
   /** Forma de cobrança esperada (PIX/Cartão/Dinheiro) a partir do último pagamento da assinatura. */
@@ -3380,15 +3473,36 @@ export class SubscriptionsService {
         .eq('id', subscriptionId)
         .maybeSingle();
       if (sub && (sub as any).status !== 'ACTIVE') {
-        // 1ª ativação (status não-ACTIVE): ciclo começa no pagamento → agora + 1 mês.
-        // Não reaproveitar o endDate da criação (já era "agora + 1 mês" → inflaria).
-        const newEnd = new Date();
-        newEnd.setMonth(newEnd.getMonth() + 1);
+        // Ativação por confirmação na central de reconciliação. Dia-âncora: com
+        // ciclo pago anterior (renovação), mantém o dia do vencimento (carência de
+        // 7 dias); 1ª ativação começa no pagamento (endDate provisório não é
+        // âncora). Exclui o payment desta própria confirmação da régua.
+        const { data: priorPays } = await this.supabase
+          .from('payments')
+          .select('id, paidAt, asaasStatus')
+          .eq('subscriptionId', subscriptionId)
+          .not('paidAt', 'is', null);
+        const hadPriorPaidCycle = (priorPays || []).some(
+          (p: any) => p.id !== paymentId && p.paidAt && isRevenuePayment(p),
+        );
+        const confirmedMs = new Date(confirmedAt).getTime();
+        const nowDate = new Date();
+        let cycle = computeRenewalCycle({
+          prevEndDate: (sub as any).endDate,
+          refDate: Number.isNaN(confirmedMs) ? nowDate : new Date(confirmedMs),
+          isRenewal: hadPriorPaidCycle,
+        });
+        // Confirmação tardia de pagamento antigo: ciclo ancorado nasceria já
+        // vencido (re-suspensão em loop) → recua ao ciclo a partir de agora.
+        if (cycle.endDate.getTime() <= nowDate.getTime()) {
+          cycle = computeRenewalCycle({ prevEndDate: null, refDate: nowDate, isRenewal: false });
+        }
         await this.supabase
           .from('client_subscriptions')
           .update({
             status: 'ACTIVE',
-            endDate: newEnd.toISOString(),
+            ...(cycle.startDate ? { startDate: cycle.startDate.toISOString() } : {}),
+            endDate: cycle.endDate.toISOString(),
             cutsUsedThisMonth: 0,
             lastResetDate: now,
             isComp: false, // ativação por pagamento Asaas → não é mais cortesia

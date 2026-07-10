@@ -3,6 +3,7 @@ import { SubscriptionsService } from './subscriptions.service';
 import { SubscriptionsController } from './subscriptions.controller';
 import { AsaasModule } from '../asaas/asaas.module';
 import { CashRegisterModule } from '../cash-register/cash-register.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 /**
  * Subscriptions module
@@ -10,7 +11,7 @@ import { CashRegisterModule } from '../cash-register/cash-register.module';
  * Handles plan catalog, client subscription management, and cut tracking
  */
 @Module({
-  imports: [AsaasModule, CashRegisterModule],
+  imports: [AsaasModule, CashRegisterModule, NotificationsModule],
   controllers: [SubscriptionsController],
   providers: [SubscriptionsService],
   exports: [SubscriptionsService],

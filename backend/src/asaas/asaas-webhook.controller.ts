@@ -14,8 +14,10 @@ import { SupabaseService } from '../supabase/supabase.service';
 import { nowLocalIsoString, resolveBusinessDate } from '../common/datetime.util';
 import { subscriptionCycleFloorMs } from '../common/pricing.helper';
 import { isRevenuePayment } from '../common/business-date.helper';
+import { computeRenewalCycle } from '../common/subscription-cycle.util';
 import { AsaasService } from './asaas.service';
 import { CashRegisterService } from '../cash-register/cash-register.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { AsaasWebhookEvent, AsaasChargeStatus } from './asaas.types';
 import { Public } from '../auth/decorators/public.decorator';
 import { SkipThrottle } from '@nestjs/throttler';
@@ -35,6 +37,7 @@ export class AsaasWebhookController {
     private readonly supabase: SupabaseService,
     private readonly asaasService: AsaasService,
     private readonly cashRegisterService: CashRegisterService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   @Post('asaas')
@@ -544,46 +547,52 @@ export class AsaasWebhookController {
 
       const wasActive = currentSub?.status === 'ACTIVE';
 
-      // Este pagamento QUITA o ciclo vigente em aberto ou COMPRA o próximo?
-      // Olha os OUTROS pagamentos de receita da assinatura (exclui este — o paidAt
-      // dele já foi gravado acima) dentro do ciclo atual. Se o ciclo já estava pago
-      // por outro pagamento, ESTE é a renovação do PRÓXIMO ciclo → avança o
-      // vencimento. Se o ciclo estava em ABERTO, este pagamento só quita o ciclo
-      // corrente → NÃO move o vencimento nem zera os cortes (não é um mês novo).
+      // OUTROS pagamentos de receita da assinatura (exclui este — o paidAt dele já
+      // foi gravado acima). Alimentam duas decisões:
+      //  - cycleWasAlreadyPaid: este pagamento QUITA o ciclo vigente ou COMPRA o próximo?
+      //  - hadPriorPaidCycle: é RENOVAÇÃO (houve ciclo pago antes) ou 1ª ativação?
+      //    Renovação ancora o novo ciclo no vencimento antigo (dia-âncora); 1ª ativação
+      //    começa no pagamento (o endDate provisório da criação NÃO é âncora).
+      const { data: subPays } = await this.supabase
+        .from('payments')
+        .select('id, paidAt, asaasStatus')
+        .eq('subscriptionId', localPayment.subscriptionId)
+        .not('paidAt', 'is', null);
+      const otherRevenuePays = (subPays || []).filter(
+        (p: any) => p.id !== localPayment.id && p.paidAt && isRevenuePayment(p),
+      );
+      const hadPriorPaidCycle = otherRevenuePays.length > 0;
+
       let cycleWasAlreadyPaid = false;
       if (wasActive) {
         const floorMs = subscriptionCycleFloorMs({
           startDate: (currentSub as any)?.startDate,
           createdAt: (currentSub as any)?.createdAt,
         });
-        const { data: subPays } = await this.supabase
-          .from('payments')
-          .select('id, paidAt, asaasStatus')
-          .eq('subscriptionId', localPayment.subscriptionId)
-          .not('paidAt', 'is', null);
-        cycleWasAlreadyPaid = (subPays || []).some((p: any) => {
-          // Exclui ESTE pagamento (paidAt dele já foi gravado acima) — interessa se
-          // OUTRO pagamento de receita já cobria o ciclo vigente.
-          if (p.id === localPayment.id) return false;
-          if (!p.paidAt || !isRevenuePayment(p)) return false;
+        cycleWasAlreadyPaid = otherRevenuePays.some((p: any) => {
           const ms = new Date(p.paidAt).getTime();
           return !Number.isNaN(ms) && ms >= floorMs;
         });
       }
 
       // Renova (avança vencimento + zera cortes) somente em:
-      //  - 1ª ativação (NÃO estava ACTIVE): ciclo começa agora → agora + 1 mês.
-      //  - Renovação do PRÓXIMO ciclo (ACTIVE e ciclo atual já pago): acumula a
-      //    partir do endDate atual (ou de hoje se já venceu), preservando o dia.
+      //  - 1ª ativação / reativação (NÃO estava ACTIVE);
+      //  - Renovação do PRÓXIMO ciclo (ACTIVE e ciclo atual já pago).
       // Caso contrário (ACTIVE + ciclo vigente em aberto = cobrança de recuperação
       // do mês corrente): apenas garante ACTIVE e mantém o vencimento e os cortes.
       const renews = !wasActive || cycleWasAlreadyPaid;
 
       if (renews) {
-        const currentEnd = currentSub?.endDate ? new Date(currentSub.endDate) : now;
-        const baseDate = wasActive && currentEnd > now ? currentEnd : now;
-        const newEndDate = new Date(baseDate);
-        newEndDate.setMonth(newEndDate.getMonth() + 1);
+        // Dia-âncora (ver subscription-cycle.util): renovação preserva o dia do
+        // vencimento (carência de 7 dias de atraso); só assinatura ATIVA pode
+        // ancorar em endDate futuro (renovação adiantada). Avança startDate junto
+        // quando um ciclo novo começa — impede pagamento antigo de valer p/ sempre.
+        const cycle = computeRenewalCycle({
+          prevEndDate: currentSub?.endDate,
+          refDate: now,
+          isRenewal: hadPriorPaidCycle,
+          allowFutureAnchor: wasActive,
+        });
 
         await this.supabase
           .from('client_subscriptions')
@@ -591,13 +600,15 @@ export class AsaasWebhookController {
             status: 'ACTIVE',
             cutsUsedThisMonth: 0,
             lastResetDate: now.toISOString(),
-            endDate: newEndDate.toISOString(),
+            ...(cycle.startDate ? { startDate: cycle.startDate.toISOString() } : {}),
+            endDate: cycle.endDate.toISOString(),
             updatedAt: now.toISOString(),
           })
           .eq('id', localPayment.subscriptionId);
 
         this.logger.log(
-          `Assinatura ${localPayment.subscriptionId} ativada/renovada até ${newEndDate.toISOString()}`,
+          `Assinatura ${localPayment.subscriptionId} ativada/renovada até ${cycle.endDate.toISOString()}` +
+            (cycle.anchored ? ' (dia-âncora preservado)' : ''),
         );
       } else {
         // Quitação do ciclo CORRENTE (cobrança de recuperação): mantém vencimento e
@@ -713,15 +724,21 @@ export class AsaasWebhookController {
 
       const { data: suspendedSubs } = await this.supabase
         .from('client_subscriptions')
-        .select('id')
+        .select('id, endDate')
         .eq('clientId', clientId)
         .eq('status', 'SUSPENDED')
         .order('createdAt', { ascending: false });
 
       for (const susp of suspendedSubs || []) {
         const reactNow = new Date();
-        const reactEnd = new Date(reactNow);
-        reactEnd.setMonth(reactEnd.getMonth() + 1);
+        // Dia-âncora: a dívida paga é a mensalidade do ciclo que venceu em endDate.
+        // Pagou dentro da carência → o vencimento mantém o dia (isRenewal sempre
+        // true aqui: SUSPENDED implica ciclo anterior existente).
+        const cycle = computeRenewalCycle({
+          prevEndDate: (susp as any).endDate,
+          refDate: reactNow,
+          isRenewal: true,
+        });
 
         const { error: reactError } = await this.supabase
           .from('client_subscriptions')
@@ -729,7 +746,8 @@ export class AsaasWebhookController {
             status: 'ACTIVE',
             cutsUsedThisMonth: 0,
             lastResetDate: reactNow.toISOString(),
-            endDate: reactEnd.toISOString(),
+            ...(cycle.startDate ? { startDate: cycle.startDate.toISOString() } : {}),
+            endDate: cycle.endDate.toISOString(),
             updatedAt: reactNow.toISOString(),
           })
           .eq('id', susp.id)
@@ -896,7 +914,7 @@ export class AsaasWebhookController {
       // Buscar nome do plano para descrição da dívida
       const { data: sub } = await this.supabase
         .from('client_subscriptions')
-        .select('id, status, plan:subscription_plans!planId(name)')
+        .select('id, status, endDate, plan:subscription_plans!planId(name)')
         .eq('id', localPayment.subscriptionId)
         .single();
 
@@ -956,6 +974,20 @@ export class AsaasWebhookController {
           .eq('id', localPayment.clientId);
 
         this.logger.log(`Dívida criada para cliente ${localPayment.clientId} — valor: ${localPayment.amount}`);
+
+        // Avisar o CLIENTE que ficou devendo (push + e-mail, fire-and-forget).
+        // Antes a dívida nascia em silêncio e ele só descobria no balcão.
+        await this.notificationsService
+          .notifySubscriptionOverdue({
+            clientId: localPayment.clientId,
+            subscriptionId: localPayment.subscriptionId,
+            planName,
+            amountCentavos: localPayment.amount,
+            cycleKey: String((sub as any)?.endDate ?? asaasPaymentId).substring(0, 10),
+          })
+          .catch((e) =>
+            this.logger.warn(`Falha ao notificar inadimplência de ${localPayment.clientId}: ${e}`),
+          );
       } else {
         this.logger.error(`Erro ao criar dívida: ${JSON.stringify(debtError)}`);
       }
