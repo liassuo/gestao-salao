@@ -24,6 +24,7 @@ import { SupabaseService } from '../supabase/supabase.service';
 import { AsaasService } from './asaas.service';
 import { AsaasWebhookController } from './asaas-webhook.controller';
 import { AsaasWebhookEvent, AsaasChargeStatus } from './asaas.types';
+import { NotificationsService } from '../notifications/notifications.service';
 
 // ============================================================
 // Stateful mock do Supabase (suficiente para o webhook)
@@ -223,6 +224,10 @@ async function buildController(initial: Tables, asaasOverrides: Record<string, a
       {
         provide: CashRegisterService,
         useValue: new CashRegisterService(sb as any),
+      },
+      {
+        provide: NotificationsService,
+        useValue: { notifySubscriptionOverdue: jest.fn().mockResolvedValue(undefined) },
       },
     ],
   }).compile();
@@ -995,6 +1000,10 @@ describe('AsaasWebhookController (e2e)', () => {
           {
             provide: CashRegisterService,
             useValue: new CashRegisterService(sb as any),
+          },
+          {
+            provide: NotificationsService,
+            useValue: { notifySubscriptionOverdue: jest.fn().mockResolvedValue(undefined) },
           },
         ],
       }).compile();

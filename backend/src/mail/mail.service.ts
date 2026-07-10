@@ -176,6 +176,32 @@ export class MailService {
   }
 
   /**
+   * Aviso de assinatura VENCIDA sem pagamento (dívida criada). Não lança exceção.
+   */
+  async sendSubscriptionOverdueEmail(
+    to: string,
+    name: string,
+    planName: string,
+    amountFormatted: string,
+    payUrl: string,
+  ): Promise<void> {
+    const html = this.renderTemplate({
+      heading: 'Sua assinatura venceu',
+      bodyHtml: `<p>Olá, <strong>${name}</strong>!</p>
+        <p>Sua assinatura <strong>${planName}</strong> venceu e há uma cobrança pendente de <strong>${amountFormatted}</strong>.</p>
+        <p>Para continuar usando seus cortes, é só pagar pelo app — leva menos de um minuto no PIX.</p>`,
+      ctaLabel: 'Pagar e reativar',
+      ctaUrl: payUrl,
+    });
+    try {
+      await this.transporter.sendMail({ from: this.fromAddress, to, subject: 'Sua assinatura venceu — Barbearia América', html });
+      this.logger.log(`Aviso de inadimplência enviado para ${to}`);
+    } catch (err) {
+      this.logger.error(`Falha ao enviar aviso de inadimplência para ${to}: ${err.message}`);
+    }
+  }
+
+  /**
    * Lembrete de horário agendado (enviado na manhã do dia). Não lança exceção.
    */
   async sendAppointmentReminderEmail(

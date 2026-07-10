@@ -261,6 +261,64 @@ export class NotificationsService implements OnModuleInit {
     if (sent > 0) this.logger.log(`[sub-expiry] ${sent} aviso(s) de vencimento enviados por e-mail`);
   }
 
+  /**
+   * Avisa o CLIENTE que a assinatura venceu sem pagamento e virou dívida
+   * (chamado na criação da dívida: webhook OVERDUE e suspend-expired-cron).
+   * Push + e-mail, com dedupe por ciclo via notification_log — reprocessamento
+   * do webhook/cron não manda o aviso duas vezes. Fire-and-forget: nunca lança.
+   */
+  async notifySubscriptionOverdue(input: {
+    clientId: string;
+    subscriptionId: string;
+    planName: string;
+    amountCentavos: number;
+    cycleKey: string;
+  }): Promise<void> {
+    try {
+      const valor = (input.amountCentavos / 100).toLocaleString('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+      });
+      const title = 'Assinatura vencida';
+      const body =
+        `Sua assinatura ${input.planName} venceu e há uma cobrança pendente de ${valor}. ` +
+        'Abra o app para pagar por PIX e reativar seu plano.';
+      const dedupeKey = `sub-overdue:${input.subscriptionId}:${input.cycleKey}`;
+
+      // O índice UNIQUE é no dedupeKey inteiro → um sufixo por canal, senão o
+      // claim do push bloquearia o do e-mail.
+      if (await this.claimNotification(`${dedupeKey}:push`, 'SUB_OVERDUE', input.clientId, 'PUSH')) {
+        await this.notifyClient(input.clientId, title, body).catch((e) =>
+          this.logger.warn(`[sub-overdue] push falhou para ${input.clientId}: ${e}`),
+        );
+      }
+
+      const { data: client } = await this.supabase
+        .from('clients')
+        .select('name, email')
+        .eq('id', input.clientId)
+        .maybeSingle();
+      const email = (client as any)?.email;
+      if (
+        email &&
+        (await this.claimNotification(`${dedupeKey}:email`, 'SUB_OVERDUE', input.clientId, 'EMAIL'))
+      ) {
+        const payUrl =
+          (this.config.get<string>('CLIENT_APP_URL') || 'https://barbeariaamerica.com.br').replace(/\/+$/, '') +
+          '/planos';
+        await this.mail.sendSubscriptionOverdueEmail(
+          email,
+          (client as any)?.name || 'cliente',
+          input.planName,
+          valor,
+          payUrl,
+        );
+      }
+    } catch (e) {
+      this.logger.error(`[sub-overdue] falha ao notificar ${input.clientId}: ${e}`);
+    }
+  }
+
   /** Envia notificação customizada para um cliente */
   async notifyClient(clientId: string, title: string, body: string) {
     const { data: subs } = await this.supabase
