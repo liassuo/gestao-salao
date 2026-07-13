@@ -90,7 +90,7 @@ export interface ServicePopularity {
 export interface BirthdayClient {
   id: string;
   name: string;
-  phone: string;
+  phone: string | null;
   birthDate: string;
   day: number;
 }

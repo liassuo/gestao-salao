@@ -59,8 +59,9 @@ export function BirthdayClientsCard({ clients = [] }: BirthdayClientsCardProps) 
                   <p className="text-xs text-[var(--text-muted)]">{formatPhone(client.phone)}</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                  {client.phone && (
                   <a
-                    href={`https://wa.me/55${client.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Ol\u00e1 ${client.name.split(' ')[0]}! \u{1F382} A equipe da Barbearia Am\u00e9tica deseja a voc\u00ea um Feliz Anivers\u00e1rio! Que seu dia seja incr\u00edvel! \u{1F389}`)}`}
+                    href={`https://wa.me/55${client.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Ol\u00e1 ${client.name.split(' ')[0]}! \u{1F382} A equipe da Barbearia Am\u00e9rica deseja a voc\u00ea um Feliz Anivers\u00e1rio! Que seu dia seja incr\u00edvel! \u{1F389}`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="rounded-lg p-1.5 text-green-500 hover:bg-green-500/10"
@@ -68,6 +69,7 @@ export function BirthdayClientsCard({ clients = [] }: BirthdayClientsCardProps) 
                   >
                     <MessageCircle className="h-4 w-4" />
                   </a>
+                  )}
                   {isToday && (
                     <span className="rounded-full bg-pink-500/20 px-2 py-0.5 text-xs font-medium text-pink-400">
                       Hoje!
