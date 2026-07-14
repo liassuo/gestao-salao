@@ -347,9 +347,12 @@ export class CashRegisterService {
     //   (b) LEGADO: businessDate nulo e paidAt no dia (histórico, conta como antes).
     // Cobranças Asaas pendentes têm paidAt e businessDate nulos → não entram em
     // nenhuma das duas (só contam quando o webhook confirma e preenche os campos).
+    // A perna (a) exige paidAt preenchido: businessDate sem paidAt é cobrança NÃO
+    // paga (ex.: espelho de recorrência vencida) — não é dinheiro que entrou.
     const { data: byBusiness, error: bErr } = await this.supabase
       .from('payments')
       .select('amount, method, asaasStatus, subscriptionId')
+      .not('paidAt', 'is', null)
       .gte('businessDate', startOfDay)
       .lt('businessDate', nextDayStart);
 
@@ -425,6 +428,7 @@ export class CashRegisterService {
     const { data: byBusiness, error: bErr } = await this.supabase
       .from('payments')
       .select(sel)
+      .not('paidAt', 'is', null)
       .gte('businessDate', startOfDay)
       .lt('businessDate', nextDayStart);
     const { data: byPaidLegacy, error: pErr } = await this.supabase

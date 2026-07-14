@@ -49,7 +49,7 @@ export interface CashRegisterTransactionItem {
 
 export interface CashRegisterTransaction {
   id: string;
-  paidAt: string;
+  paidAt: string | null;
   businessDate?: string | null;
   amount: number; // centavos
   method: string; // CASH | PIX | CARD | BOLETO
