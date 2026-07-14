@@ -1305,11 +1305,63 @@ export class SubscriptionsService {
       'Confirmação manual de pagamento',
     );
 
+    // O ciclo foi pago no balcão: quita a(s) dívida(s) de inadimplência desta
+    // assinatura e recalcula hasDebts. Sem isso o cliente pagava e continuava
+    // "Inadimplente" no painel + bloqueado no app (casos Kleudson 10/07 e
+    // Vandson 14/07/2026 — a confirmação manual não quitava a dívida).
+    await this.settleSubscriptionDelinquencyDebts(subscription).catch((e) =>
+      this.logger.warn(
+        `Confirmação manual ${subscription.id}: falha ao quitar dívidas (${e?.message}) — quitar pela tela de dívidas.`,
+      ),
+    );
+
+    // Cancela cobranças Asaas PENDENTES desta assinatura (ex.: link de renovação
+    // gerado momentos antes de o cliente pagar no balcão). Sem isso o link fica
+    // vivo e o cliente pode pagar o MESMO ciclo duas vezes.
+    await this.cancelPendingAsaasChargesForSubscription(subscription.id, nowLocal);
+
     this.logger.log(
       `Assinatura ${subscription.id} confirmada manualmente (admin, ${method || 'CASH'}) — status ACTIVE até ${cycle.endDate.toISOString()}` +
         (cycle.anchored ? ' (dia-âncora preservado)' : ''),
     );
     return updated;
+  }
+
+  /**
+   * Cancela no Asaas as cobranças PENDENTES de uma assinatura (e marca o espelho
+   * local como CANCELED). Usado quando o ciclo acabou de ser pago por outra via
+   * (balcão): a cobrança pendente vira risco de pagamento em dobro. Nunca lança —
+   * falha de cancelamento não pode desfazer a confirmação já efetivada.
+   */
+  private async cancelPendingAsaasChargesForSubscription(
+    subscriptionId: string,
+    nowLocal: string,
+  ): Promise<void> {
+    if (!this.asaasService.configured) return;
+    const { data: pending } = await this.supabase
+      .from('payments')
+      .select('id, asaasPaymentId')
+      .eq('subscriptionId', subscriptionId)
+      .eq('asaasStatus', 'PENDING')
+      .is('paidAt', null)
+      .not('asaasPaymentId', 'is', null);
+
+    for (const p of pending || []) {
+      try {
+        await this.asaasService.cancelCharge((p as any).asaasPaymentId);
+        await this.supabase
+          .from('payments')
+          .update({ asaasStatus: 'CANCELED', updatedAt: nowLocal })
+          .eq('id', (p as any).id);
+        this.logger.log(
+          `Cobrança pendente ${(p as any).asaasPaymentId} cancelada (ciclo pago no balcão, assinatura ${subscriptionId}).`,
+        );
+      } catch (e: any) {
+        this.logger.warn(
+          `Não foi possível cancelar cobrança pendente ${(p as any).asaasPaymentId} da assinatura ${subscriptionId}: ${e?.message} — cancelar manualmente no Asaas para evitar pagamento em dobro.`,
+        );
+      }
+    }
   }
 
   /**
@@ -1352,6 +1404,16 @@ export class SubscriptionsService {
       nowLocal,
       'Confirmação de pagamento do ciclo',
     );
+
+    // Mesma blindagem da confirmação manual: o ciclo acabou de ser pago no
+    // balcão — quita a dívida de inadimplência desta assinatura (se houver) e
+    // cancela cobrança Asaas pendente do ciclo, para não cobrar em dobro.
+    await this.settleSubscriptionDelinquencyDebts(subscription).catch((e) =>
+      this.logger.warn(
+        `Confirmação de ciclo ${subscription.id}: falha ao quitar dívidas (${e?.message}).`,
+      ),
+    );
+    await this.cancelPendingAsaasChargesForSubscription(subscription.id, nowLocal);
 
     this.logger.log(
       `Pagamento do ciclo da assinatura ${subscription.id} confirmado manualmente (admin, ${method || 'CASH'}) — sem alterar vencimento/cortes`,

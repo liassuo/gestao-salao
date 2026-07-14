@@ -137,12 +137,16 @@ function createStatefulSupabase(initial: Tables = {}) {
 
 async function buildService(initial: Tables, asaasConfigured = false) {
   const sb = createStatefulSupabase(initial);
+  const asaasMock = {
+    configured: asaasConfigured,
+    cancelCharge: jest.fn().mockResolvedValue({}),
+  };
   const moduleRef: TestingModule = await Test.createTestingModule({
     providers: [
       SubscriptionsService,
       { provide: SupabaseService, useValue: sb },
       { provide: ConfigService, useValue: { get: (_: string, d?: any) => d } },
-      { provide: AsaasService, useValue: { configured: asaasConfigured } },
+      { provide: AsaasService, useValue: asaasMock },
       { provide: CashRegisterService, useValue: new CashRegisterService(sb as any) },
       {
         provide: NotificationsService,
@@ -152,7 +156,7 @@ async function buildService(initial: Tables, asaasConfigured = false) {
   }).compile();
 
   const service = moduleRef.get(SubscriptionsService);
-  return { service, state: (sb as any)._state as Tables };
+  return { service, state: (sb as any)._state as Tables, asaas: asaasMock };
 }
 
 function baseTables(): Tables {
@@ -517,6 +521,106 @@ describe('SubscriptionsService — dia-âncora na confirmação manual de pagame
     const endMs = new Date(sub.endDate).getTime();
     expect(endMs).toBeGreaterThan(Date.now() + 27 * 86400000);
     expect(endMs).toBeLessThan(Date.now() + 32 * 86400000);
+  });
+});
+
+/**
+ * Confirmação manual QUITA a dívida de inadimplência e CANCELA cobrança Asaas
+ * pendente da assinatura — casos Kleudson (10/07) e Vandson (14/07/2026): cliente
+ * pagava no balcão, ficava ACTIVE mas seguia "Inadimplente" (dívida aberta +
+ * hasDebts) e com link de renovação vivo (risco de pagar o mesmo ciclo 2x).
+ */
+describe('SubscriptionsService — confirmação manual quita dívida e cancela link pendente', () => {
+  const daysAgoIso = (d: number) => new Date(Date.now() - d * 86400000).toISOString();
+
+  function tablesComDividaELink(): Tables {
+    const tables = baseTables();
+    tables.clients = [{ id: 'client-1', name: 'Vandson', hasDebts: true }];
+    tables.client_subscriptions = [
+      {
+        id: 'sub-1', clientId: 'client-1', planId: 'plan-1', status: 'PENDING_PAYMENT',
+        startDate: daysAgoIso(31), createdAt: daysAgoIso(61), endDate: daysAgoIso(1),
+        plan: { id: 'plan-1', name: 'Mensal', price: 7990 },
+      },
+    ];
+    tables.debts = [
+      {
+        id: 'debt-1', clientId: 'client-1', amount: 7990, amountPaid: 0,
+        remainingBalance: 7990, isSettled: false,
+        description: 'Cobrança não paga — Mensal (PIX) [sub:sub-1:cycle:2026-07-13]',
+      },
+      // dívida de OUTRA assinatura não pode ser quitada junto
+      {
+        id: 'debt-outra', clientId: 'client-1', amount: 5000, amountPaid: 0,
+        remainingBalance: 5000, isSettled: false,
+        description: 'Cobrança não paga — Outro plano [sub:sub-999:cycle:2026-07-01]',
+      },
+    ];
+    tables.payments = [
+      // ciclo anterior pago (é renovação)
+      { id: 'pay-old', subscriptionId: 'sub-1', clientId: 'client-1', method: 'PIX', paidAt: daysAgoIso(31), createdAt: daysAgoIso(31) },
+      // link de renovação pendente gerado momentos antes (órfão após pagar no balcão)
+      { id: 'pay-link', subscriptionId: 'sub-1', clientId: 'client-1', method: 'PIX', paidAt: null, asaasStatus: 'PENDING', asaasPaymentId: 'pay_link123', createdAt: daysAgoIso(0) },
+    ];
+    return tables;
+  }
+
+  it('quita a dívida DA assinatura, preserva a de outra e recalcula hasDebts', async () => {
+    const { service, state } = await buildService(tablesComDividaELink());
+
+    await service.confirmPaymentManually('sub-1', 'PIX');
+
+    const debt = state.debts.find((d) => d.id === 'debt-1')!;
+    expect(debt.isSettled).toBe(true);
+    expect(debt.remainingBalance).toBe(0);
+    // dívida de outra assinatura segue aberta → hasDebts continua true
+    expect(state.debts.find((d) => d.id === 'debt-outra')!.isSettled).toBe(false);
+    expect(state.clients[0].hasDebts).toBe(true);
+  });
+
+  it('hasDebts vira false quando a dívida quitada era a única', async () => {
+    const tables = tablesComDividaELink();
+    tables.debts = tables.debts.filter((d) => d.id === 'debt-1');
+    const { service, state } = await buildService(tables);
+
+    await service.confirmPaymentManually('sub-1', 'PIX');
+
+    expect(state.debts[0].isSettled).toBe(true);
+    expect(state.clients[0].hasDebts).toBe(false);
+  });
+
+  it('cancela no Asaas a cobrança PENDENTE da assinatura e marca o espelho CANCELED', async () => {
+    const { service, state, asaas } = await buildService(tablesComDividaELink(), true);
+
+    await service.confirmPaymentManually('sub-1', 'PIX');
+
+    expect(asaas.cancelCharge).toHaveBeenCalledWith('pay_link123');
+    expect(state.payments.find((p) => p.id === 'pay-link')!.asaasStatus).toBe('CANCELED');
+  });
+
+  it('sem Asaas configurado, não tenta cancelar (e a confirmação segue normal)', async () => {
+    const { service, state, asaas } = await buildService(tablesComDividaELink(), false);
+
+    await service.confirmPaymentManually('sub-1', 'PIX');
+
+    expect(asaas.cancelCharge).not.toHaveBeenCalled();
+    expect(state.client_subscriptions[0].status).toBe('ACTIVE');
+  });
+
+  it('confirmCyclePaymentManually (ACTIVE não paga) também quita a dívida da assinatura', async () => {
+    const tables = tablesComDividaELink();
+    tables.client_subscriptions[0].status = 'ACTIVE';
+    tables.client_subscriptions[0].endDate = new Date(Date.now() + 10 * 86400000).toISOString();
+    // sem pagamento no ciclo vigente (o pay-old é do ciclo anterior)
+    tables.client_subscriptions[0].startDate = daysAgoIso(20);
+    tables.payments = tables.payments.filter((p) => p.id !== 'pay-old');
+    tables.debts = tables.debts.filter((d) => d.id === 'debt-1');
+    const { service, state } = await buildService(tables);
+
+    await service.confirmCyclePaymentManually('sub-1', 'PIX');
+
+    expect(state.debts[0].isSettled).toBe(true);
+    expect(state.clients[0].hasDebts).toBe(false);
   });
 });
 
