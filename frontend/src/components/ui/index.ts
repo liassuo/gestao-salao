@@ -16,3 +16,4 @@ export { CreditCardModal } from './CreditCardModal';
 export { PeriodShortcuts } from './PeriodShortcuts';
 export { DateInput } from './DateInput';
 export { BrandWordmark } from './BrandWordmark';
+export { RouteErrorFallback } from './RouteErrorFallback';

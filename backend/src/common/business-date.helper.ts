@@ -53,16 +53,20 @@ export function isRevenuePayment(p: { asaasStatus?: string | null }): boolean {
  * @param supabase  client/serviço com `.from()` (SupabaseService ou SupabaseClient)
  * @param select    colunas a selecionar (ex.: 'amount, method')
  * @param startOfDay janela inicial inclusiva (YYYY-MM-DDT00:00:00)
- * @param endOfDay   janela final inclusiva (YYYY-MM-DDT23:59:59) — opcional; omita
- *                   para janela aberta (do start até o presente, ex.: receita do mês).
+ * @param endOfDay   janela final — inclusiva por padrão (YYYY-MM-DDT23:59:59);
+ *                   opcional; omita para janela aberta (do start até o presente).
  * @param opts.includeNonRevenue  não filtrar estornos (default: false → filtra).
+ * @param opts.endExclusive  trata endOfDay como limite EXCLUSIVO (passe o início
+ *                   do dia seguinte, ex.: 'YYYY-MM-DDT00:00:00'). Preferível para
+ *                   janelas de um dia: .lte('...T23:59:59') perde timestamp com
+ *                   milissegundos ('...T23:59:59.123' ordena depois lexicograficamente).
  */
 export async function fetchPaymentsByBusinessDate(
   supabase: { from: (t: string) => any },
   select: string,
   startOfDay: string,
   endOfDay?: string,
-  opts: { includeNonRevenue?: boolean } = {},
+  opts: { includeNonRevenue?: boolean; endExclusive?: boolean } = {},
 ): Promise<any[]> {
   // Garante asaasStatus no select para o filtro de receita funcionar, sem o
   // chamador precisar lembrar de pedir. Se select for '*', já vem incluso.
@@ -76,14 +80,22 @@ export async function fetchPaymentsByBusinessDate(
     .select(effectiveSelect)
     .not('paidAt', 'is', null)
     .gte('businessDate', startOfDay);
-  if (endOfDay) qBusiness = qBusiness.lte('businessDate', endOfDay);
+  if (endOfDay) {
+    qBusiness = opts.endExclusive
+      ? qBusiness.lt('businessDate', endOfDay)
+      : qBusiness.lte('businessDate', endOfDay);
+  }
 
   let qLegacy = supabase
     .from('payments')
     .select(effectiveSelect)
     .is('businessDate', null)
     .gte('paidAt', startOfDay);
-  if (endOfDay) qLegacy = qLegacy.lte('paidAt', endOfDay);
+  if (endOfDay) {
+    qLegacy = opts.endExclusive
+      ? qLegacy.lt('paidAt', endOfDay)
+      : qLegacy.lte('paidAt', endOfDay);
+  }
 
   const [{ data: byBusiness, error: bErr }, { data: byPaidLegacy, error: pErr }] =
     await Promise.all([qBusiness, qLegacy]);

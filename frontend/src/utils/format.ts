@@ -12,7 +12,7 @@ export function formatCurrency(cents: number): string {
 /**
  * Converte string de data para Date tratando timezone corretamente
  */
-function safeParseDate(date: string | Date): Date | null {
+function safeParseDate(date: string | Date | null | undefined): Date | null {
   if (date instanceof Date) {
     return isNaN(date.getTime()) ? null : date;
   }
@@ -32,7 +32,7 @@ function safeParseDate(date: string | Date): Date | null {
  * Formata data para exibição no formato brasileiro
  * @param date - Data como string ISO ou Date
  */
-export function formatDate(date: string | Date): string {
+export function formatDate(date: string | Date | null | undefined): string {
   const parsed = safeParseDate(date);
   if (!parsed) return 'Data inválida';
   return new Intl.DateTimeFormat('pt-BR', {
@@ -46,7 +46,7 @@ export function formatDate(date: string | Date): string {
  * Formata data e hora para exibição
  * @param date - Data como string ISO ou Date
  */
-export function formatDateTime(date: string | Date): string {
+export function formatDateTime(date: string | Date | null | undefined): string {
   const parsed = safeParseDate(date);
   if (!parsed) return 'Data inválida';
   return new Intl.DateTimeFormat('pt-BR', {
@@ -62,7 +62,7 @@ export function formatDateTime(date: string | Date): string {
  * Formata hora para exibição
  * @param date - Data como string ISO ou Date
  */
-export function formatTime(date: string | Date): string {
+export function formatTime(date: string | Date | null | undefined): string {
   const parsed = safeParseDate(date);
   if (!parsed) return '--:--';
   return new Intl.DateTimeFormat('pt-BR', {

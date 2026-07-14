@@ -29,7 +29,8 @@ function formatCurrency(cents: number): string {
   }).format(cents / 100);
 }
 
-function formatTime(dateStr: string): string {
+function formatTime(dateStr: string | null | undefined): string {
+  if (!dateStr) return '—';
   return new Date(dateStr).toLocaleTimeString('pt-BR', {
     hour: '2-digit',
     minute: '2-digit',

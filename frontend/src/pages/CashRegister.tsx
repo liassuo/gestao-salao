@@ -59,7 +59,8 @@ function parseLocalDate(dateStr: string): Date {
   return new Date(clean);
 }
 
-function formatTime(dateStr: string): string {
+function formatTime(dateStr: string | null | undefined): string {
+  if (!dateStr) return '—';
   return parseLocalDate(dateStr).toLocaleTimeString('pt-BR', {
     hour: '2-digit',
     minute: '2-digit',
@@ -71,7 +72,8 @@ function formatTime(dateStr: string): string {
  * "2026-06-02" é interpretada como UTC por new Date() e, em fuso negativo (Brasil),
  * volta um dia — exibindo 01/06 em vez de 02/06.
  */
-function formatDateShort(dateStr: string): string {
+function formatDateShort(dateStr: string | null | undefined): string {
+  if (!dateStr) return '—';
   return parseLocalDate(dateStr).toLocaleDateString('pt-BR');
 }
 

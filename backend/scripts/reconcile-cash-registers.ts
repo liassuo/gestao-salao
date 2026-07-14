@@ -22,6 +22,7 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { fetchPaymentsByBusinessDate } from '../src/common/business-date.helper';
 
 const APPLY = process.argv.includes('--apply');
 const sb = createClient(
@@ -33,36 +34,33 @@ function brl(cents: number) {
   return `R$ ${(cents / 100).toFixed(2)}`;
 }
 
+/** Dia seguinte (YYYY-MM-DD), aritmética puramente UTC — sem depender do fuso do host. */
+function nextDayStr(dayStr: string): string {
+  const dt = new Date(dayStr + 'T00:00:00Z');
+  dt.setUTCDate(dt.getUTCDate() + 1);
+  return dt.toISOString().slice(0, 10);
+}
+
 async function calculateTotalsForDate(dateStr: string) {
   const startOfDay = `${dateStr}T00:00:00`;
-  const endOfDay = `${dateStr}T23:59:59`;
+  const nextDayStart = `${nextDayStr(dateStr)}T00:00:00`;
 
-  // Contabiliza pelo DIA CONTÁBIL (businessDate), com fallback paidAt p/ legados —
-  // mesma regra do runtime (cash-register.service.calculateDailyTotals). Sem isso,
-  // rodar este script sobrescreveria os totais corretos pelo paidAt e reintroduziria
-  // o bug do "atendimento de um dia pago em outro".
-  const { data: byBusiness, error: bErr } = await sb
-    .from('payments')
-    .select('id, amount, method, asaasStatus, paidAt, businessDate')
-    .gte('businessDate', startOfDay)
-    .lte('businessDate', endOfDay);
-  const { data: byPaidLegacy, error: pErr } = await sb
-    .from('payments')
-    .select('id, amount, method, asaasStatus, paidAt, businessDate')
-    .is('businessDate', null)
-    .gte('paidAt', startOfDay)
-    .lte('paidAt', endOfDay);
+  // MESMA regra do runtime, pela MESMA função (fonte única em
+  // src/common/business-date.helper.ts): dia contábil coalesce(businessDate,
+  // paidAt), perna do businessDate exige paidAt preenchido (cobrança vencida/
+  // pendente não é receita) e estornos/cancelados são removidos. Rodar este
+  // script com uma cópia desatualizada da regra sobrescreveria totais corretos —
+  // foi o que quase aconteceu no incidente do caixa de 13-14/07/2026.
+  const payments = await fetchPaymentsByBusinessDate(
+    sb,
+    'id, amount, method, asaasStatus, paidAt, businessDate',
+    startOfDay,
+    nextDayStart,
+    { endExclusive: true },
+  );
 
-  const error = bErr || pErr;
-  if (error) throw new Error(`Erro ao buscar payments para ${dateStr}: ${error.message}`);
-  const payments = [...(byBusiness || []), ...(byPaidLegacy || [])];
-
-  const totals = { cash: 0, pix: 0, card: 0, total: 0, count: 0, ignored: 0 };
+  const totals = { cash: 0, pix: 0, card: 0, total: 0, count: 0 };
   for (const p of payments) {
-    if (p.asaasStatus && ['REFUNDED', 'DELETED', 'CANCELED'].includes(p.asaasStatus)) {
-      totals.ignored++;
-      continue;
-    }
     switch (p.method) {
       case 'CASH': totals.cash += p.amount; break;
       case 'PIX': totals.pix += p.amount; break;
@@ -109,7 +107,7 @@ async function reconcileCashRegisters() {
     console.log(`         card:    ${brl(reg.totalCard ?? 0)} → ${brl(totals.card)}`);
     console.log(`         total:   ${brl(reg.totalRevenue ?? 0)} → ${brl(totals.total)}`);
     console.log(`         disc:    ${brl(reg.discrepancy ?? 0)} → ${brl(newDiscrepancy)}`);
-    console.log(`         (${totals.count} pagamentos contabilizados, ${totals.ignored} ignorados por refund/cancel)`);
+    console.log(`         (${totals.count} pagamentos contabilizados; estornos/pendentes já filtrados pelo helper)`);
 
     if (APPLY) {
       const { error: upErr } = await sb

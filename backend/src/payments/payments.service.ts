@@ -176,10 +176,12 @@ export class PaymentsService {
   }
 
   async findAll() {
+    // nullsFirst: false — sem isso o Postgres põe NULL primeiro no DESC e as
+    // cobranças pendentes/vencidas (paidAt nulo) ficam fixadas no topo da lista.
     const { data: payments, error } = await this.supabase
       .from('payments')
       .select('*')
-      .order('paidAt', { ascending: false });
+      .order('paidAt', { ascending: false, nullsFirst: false });
 
     if (error) throw error;
     return payments || [];
@@ -190,7 +192,7 @@ export class PaymentsService {
       .from('payments')
       .select('*')
       .eq('clientId', clientId)
-      .order('paidAt', { ascending: false });
+      .order('paidAt', { ascending: false, nullsFirst: false });
 
     if (error) throw error;
     return payments || [];
@@ -213,7 +215,7 @@ export class PaymentsService {
       .from('payments')
       .select('*')
       .eq('method', method)
-      .order('paidAt', { ascending: false });
+      .order('paidAt', { ascending: false, nullsFirst: false });
 
     if (error) throw error;
     return payments || [];
