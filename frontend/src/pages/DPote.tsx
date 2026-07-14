@@ -15,7 +15,8 @@ function formatCurrency(cents: number): string {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100);
 }
 
-function formatDateBR(date: string): string {
+function formatDateBR(date: string | null | undefined): string {
+  if (!date) return '—';
   const clean = date.replace(/Z$/, '').replace(/[+-]\d{2}:\d{2}$/, '');
   const parsed = /^\d{4}-\d{2}-\d{2}$/.test(clean) ? new Date(clean + 'T12:00:00') : new Date(clean);
   return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(parsed);

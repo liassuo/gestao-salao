@@ -4,7 +4,8 @@ export interface Payment {
   id: string;
   amount: number; // centavos
   method: PaymentMethod;
-  paidAt: string;
+  /** Nulo enquanto a cobrança Asaas não foi paga (pendente/vencida). */
+  paidAt: string | null;
   notes?: string;
   client: {
     id: string;

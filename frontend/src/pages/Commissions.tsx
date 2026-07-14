@@ -17,7 +17,8 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { Commission, CommissionFilters as CommissionFiltersType } from '@/types';
 
-function formatDateBR(date: string): string {
+function formatDateBR(date: string | null | undefined): string {
+  if (!date) return '—';
   const clean = date.replace(/Z$/, '').replace(/[+-]\d{2}:\d{2}$/, '');
   const parsed = /^\d{4}-\d{2}-\d{2}$/.test(clean) ? new Date(clean + 'T12:00:00') : new Date(clean);
   return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(parsed);

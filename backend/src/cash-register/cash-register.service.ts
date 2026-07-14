@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service';
-import { isRevenuePayment } from '../common/business-date.helper';
+import { fetchPaymentsByBusinessDate } from '../common/business-date.helper';
 import { OpenCashRegisterDto, CloseCashRegisterDto } from './dto';
 
 /** Discrepância (em centavos) que dispara aviso WARN ao fechar caixa. */
@@ -339,47 +339,22 @@ export class CashRegisterService {
     // (ex.: '...T23:59:59.123' > '...T23:59:59' lexicograficamente sairia da janela).
     const nextDayStart = `${this.nextDayStr(dateStr)}T00:00:00`;
 
-    // O caixa contabiliza pelo DIA CONTÁBIL (businessDate): dia do atendimento
-    // quando há agendamento; senão dia do pagamento. Como o Postgres/Supabase não
-    // expõe coalesce direto no filtro, fazemos coalesce(businessDate, paidAt) em
-    // duas queries:
-    //   (a) pagamentos cujo businessDate cai no dia (regra nova);
-    //   (b) LEGADO: businessDate nulo e paidAt no dia (histórico, conta como antes).
-    // Cobranças Asaas pendentes têm paidAt e businessDate nulos → não entram em
-    // nenhuma das duas (só contam quando o webhook confirma e preenche os campos).
-    // A perna (a) exige paidAt preenchido: businessDate sem paidAt é cobrança NÃO
-    // paga (ex.: espelho de recorrência vencida) — não é dinheiro que entrou.
-    const { data: byBusiness, error: bErr } = await this.supabase
-      .from('payments')
-      .select('amount, method, asaasStatus, subscriptionId')
-      .not('paidAt', 'is', null)
-      .gte('businessDate', startOfDay)
-      .lt('businessDate', nextDayStart);
+    // O caixa contabiliza pelo DIA CONTÁBIL via helper compartilhado (fonte única
+    // da regra de receita: coalesce(businessDate, paidAt), exige paidAt preenchido
+    // na perna do businessDate e remove estornos/cancelados). endExclusive: limite
+    // superior no início do dia seguinte para não perder timestamp com milissegundos.
+    // O helper lança em erro de query — caixa zerado por falha silenciosa é bug crítico.
+    const payments = await fetchPaymentsByBusinessDate(
+      this.supabase,
+      'amount, method, asaasStatus, subscriptionId',
+      startOfDay,
+      nextDayStart,
+      { endExclusive: true },
+    );
 
-    const { data: byPaidLegacy, error: pErr } = await this.supabase
-      .from('payments')
-      .select('amount, method, asaasStatus, subscriptionId')
-      .is('businessDate', null)
-      .gte('paidAt', startOfDay)
-      .lt('paidAt', nextDayStart);
-
-    const paymentsError = bErr || pErr;
-    // Falha ruidosamente: caixa zerado por erro silencioso de query é bug crítico.
-    if (paymentsError) {
-      throw new Error(
-        `Falha ao calcular totais do caixa para ${dateStr}: ${paymentsError.message} (code=${paymentsError.code})`,
-      );
-    }
-
-    const payments = [...(byBusiness || []), ...(byPaidLegacy || [])];
     const totals = { cash: 0, pix: 0, card: 0, boleto: 0, total: 0, subscriptions: 0 };
 
     for (const payment of payments) {
-      // Ignorar pagamentos Asaas que saíram da receita (estorno/cancelamento/chargeback).
-      if (!isRevenuePayment(payment)) {
-        continue;
-      }
-
       switch (payment.method) {
         case 'CASH':
           totals.cash += payment.amount;
@@ -422,30 +397,17 @@ export class CashRegisterService {
     const startOfDay = `${dateStr}T00:00:00`;
     const nextDayStart = `${this.nextDayStr(dateStr)}T00:00:00`;
 
-    // Pagamentos do dia contábil (regra nova) + legado (businessDate nulo, por paidAt).
+    // Mesma fonte única de regra do calculateDailyTotals (helper compartilhado):
+    // dia contábil + exige paidAt + remove estornos. Garante que esta relação
+    // linha a linha SEMPRE soma o mesmo total que o caixa exibe.
     const sel =
       'id, amount, method, paidAt, businessDate, asaasStatus, subscriptionId, clientId, appointmentId';
-    const { data: byBusiness, error: bErr } = await this.supabase
-      .from('payments')
-      .select(sel)
-      .not('paidAt', 'is', null)
-      .gte('businessDate', startOfDay)
-      .lt('businessDate', nextDayStart);
-    const { data: byPaidLegacy, error: pErr } = await this.supabase
-      .from('payments')
-      .select(sel)
-      .is('businessDate', null)
-      .gte('paidAt', startOfDay)
-      .lt('paidAt', nextDayStart);
-
-    if (bErr || pErr) {
-      throw new Error(
-        `Falha ao listar atendimentos do caixa para ${dateStr}: ${(bErr || pErr)!.message}`,
-      );
-    }
-
-    const payments = [...(byBusiness || []), ...(byPaidLegacy || [])].filter(
-      isRevenuePayment,
+    const payments = await fetchPaymentsByBusinessDate(
+      this.supabase,
+      sel,
+      startOfDay,
+      nextDayStart,
+      { endExclusive: true },
     );
 
     // Enriquecimento: cliente, profissional (via order) e itens da comanda.

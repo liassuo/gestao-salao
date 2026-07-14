@@ -19,7 +19,10 @@ function formatCurrency(cents: number): string {
   }).format(cents / 100);
 }
 
-function formatDateTime(dateTime: string): string {
+function formatDateTime(dateTime: string | null | undefined): string {
+  // Cobrança pendente/vencida tem paidAt nulo — sem o guard, new Date(null)
+  // vira a época Unix e a tabela mostra "31/12/1969".
+  if (!dateTime) return '—';
   return new Date(dateTime).toLocaleString('pt-BR', {
     day: '2-digit',
     month: '2-digit',
@@ -29,7 +32,8 @@ function formatDateTime(dateTime: string): string {
   });
 }
 
-function formatDate(dateTime: string): string {
+function formatDate(dateTime: string | null | undefined): string {
+  if (!dateTime) return '—';
   return new Date(dateTime).toLocaleDateString('pt-BR');
 }
 

@@ -21,7 +21,10 @@ export function formatPrice(priceInCents: number): string {
  * Strings `YYYY-MM-DD` puras recebem `T12:00:00` para não cair no dia anterior
  * em fusos negativos.
  */
-export function safeParseDate(dateStr: string): Date {
+export function safeParseDate(dateStr: string | null | undefined): Date {
+  // Nulo/vazio → Date inválida (formatadores abaixo devolvem '—' antes de chegar
+  // aqui; este guard evita o crash "null is not an object" se algum caller esquecer).
+  if (!dateStr) return new Date(NaN);
   const clean = dateStr.replace(/Z$/, '').replace(/[+-]\d{2}:\d{2}$/, '');
   if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
     return new Date(clean + 'T12:00:00');
@@ -32,7 +35,8 @@ export function safeParseDate(dateStr: string): Date {
 /**
  * Formata data ISO para exibicao curta
  */
-export function formatDate(isoDate: string): string {
+export function formatDate(isoDate: string | null | undefined): string {
+  if (!isoDate) return '—';
   const date = safeParseDate(isoDate);
   return date.toLocaleDateString('pt-BR', {
     weekday: 'short',
@@ -44,7 +48,8 @@ export function formatDate(isoDate: string): string {
 /**
  * Formata data ISO para exibicao completa
  */
-export function formatDateLong(isoDate: string): string {
+export function formatDateLong(isoDate: string | null | undefined): string {
+  if (!isoDate) return '—';
   const date = safeParseDate(isoDate);
   return date.toLocaleDateString('pt-BR', {
     weekday: 'long',
@@ -57,7 +62,8 @@ export function formatDateLong(isoDate: string): string {
 /**
  * Formata hora de data ISO
  */
-export function formatTime(isoDate: string): string {
+export function formatTime(isoDate: string | null | undefined): string {
+  if (!isoDate) return '—';
   const date = safeParseDate(isoDate);
   return date.toLocaleTimeString('pt-BR', {
     hour: '2-digit',
