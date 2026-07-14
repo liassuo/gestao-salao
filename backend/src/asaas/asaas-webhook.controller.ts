@@ -886,8 +886,14 @@ export class AsaasWebhookController {
         notes: `Cobrança recorrente vencida (cobrança ${asaasPaymentId})`,
         asaasPaymentId,
         asaasStatus: AsaasChargeStatus.OVERDUE,
+        // NÃO pago: paidAt e businessDate ficam NULL, como toda cobrança pendente.
+        // businessDate preenchido aqui colocava a cobrança VENCIDA (dinheiro que
+        // NÃO entrou) dentro da janela do caixa/dashboard do dia — inflando a
+        // receita — e, com paidAt null, derrubava a tela do caixa no admin
+        // ("null is not an object (evaluating 'e.replace')"). O webhook de
+        // confirmação preenche os dois campos se/quando o cliente pagar.
         paidAt: null,
-        businessDate: resolveBusinessDate(null, now),
+        businessDate: null,
         createdAt: now,
         updatedAt: now,
       });

@@ -9,7 +9,9 @@ function formatCurrency(cents: number): string {
   }).format(cents / 100);
 }
 
-function formatTime(dateStr: string): string {
+function formatTime(dateStr: string | null | undefined): string {
+  // paidAt pode vir nulo (cobrança ainda não confirmada) — não pode derrubar a tela.
+  if (!dateStr) return '—';
   // Trata como horário local (remove sufixo de tz se houver).
   const clean = dateStr.replace(/Z$/, '').replace(/[+-]\d{2}:\d{2}$/, '');
   const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(clean) ? clean + 'T12:00:00' : clean);

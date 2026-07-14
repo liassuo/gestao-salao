@@ -41,6 +41,9 @@ export function isRevenuePayment(p: { asaasStatus?: string | null }): boolean {
  *
  * Cobranças pendentes (paidAt e businessDate nulos) não entram em nenhuma das duas
  * — só passam a contar quando o pagamento é confirmado e os campos preenchidos.
+ * A perna (a) ainda exige paidAt preenchido: um registro com businessDate mas SEM
+ * paidAt é cobrança NÃO paga (ex.: espelho de recorrência vencida) — dinheiro que
+ * não entrou não pode virar receita.
  *
  * Estornados/cancelados (asaasStatus em NON_REVENUE_ASAAS_STATUSES) são REMOVIDOS
  * por padrão — o `asaasStatus` é sempre incluído no select internamente, então o
@@ -71,6 +74,7 @@ export async function fetchPaymentsByBusinessDate(
   let qBusiness = supabase
     .from('payments')
     .select(effectiveSelect)
+    .not('paidAt', 'is', null)
     .gte('businessDate', startOfDay);
   if (endOfDay) qBusiness = qBusiness.lte('businessDate', endOfDay);
 
