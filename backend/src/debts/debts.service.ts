@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
@@ -12,6 +13,8 @@ import { AsaasBillingType } from '../asaas/asaas.types';
 
 @Injectable()
 export class DebtsService {
+  private readonly logger = new Logger(DebtsService.name);
+
   constructor(
     private readonly supabase: SupabaseService,
     private readonly asaasService: AsaasService,
@@ -421,19 +424,38 @@ export class DebtsService {
       externalReference: clientId,
     });
 
-    // 4. Registrar pagamento pendente para rastreamento
+    // 4. Registrar pagamento pendente para rastreamento. É este espelho (com
+    // notes='DEBT_PAYMENT') que o webhook usa para quitar as dívidas e reativar
+    // a assinatura quando o PIX confirma. registeredBy é NOT NULL na tabela —
+    // sem ele o insert falhava em SILÊNCIO desde 03/2026 (erro não checado) e
+    // nenhum pagamento de dívida baixava sozinho (caso Paulo Sergio 16/07/2026).
+    const { data: systemAdmin } = await this.supabase
+      .from('users')
+      .select('id')
+      .eq('role', 'ADMIN')
+      .limit(1)
+      .maybeSingle();
+
     const now = nowLocalIsoString();
-    await this.supabase.from('payments').insert({
+    const { error: mirrorError } = await this.supabase.from('payments').insert({
       id: randomUUID(),
       clientId,
       amount: totalAmount,
       method: 'PIX',
+      registeredBy: systemAdmin?.id ?? null,
       asaasPaymentId: asaasCharge.id,
       asaasStatus: asaasCharge.status,
       notes: 'DEBT_PAYMENT',
       createdAt: now,
       updatedAt: now,
     });
+    if (mirrorError) {
+      // Não aborta a cobrança (o cliente precisa do QR Code) — o fallback do
+      // webhook para externalReference=clientId recria o espelho na confirmação.
+      this.logger.error(
+        `createPixChargeForDebts: falha ao criar espelho DEBT_PAYMENT de ${asaasCharge.id}: ${mirrorError.message}`,
+      );
+    }
 
     // 5. Buscar QR Code PIX
     const pixData = await this.asaasService.getPixQrCode(asaasCharge.id);

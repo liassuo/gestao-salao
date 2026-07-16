@@ -12,6 +12,7 @@ import { nowLocalIsoString, resolveBusinessDate } from '../common/datetime.util'
 import { isCurrentCyclePaid, subscriptionCycleFloorMs } from '../common/pricing.helper';
 import { isRevenuePayment } from '../common/business-date.helper';
 import { computeRenewalCycle } from '../common/subscription-cycle.util';
+import { settleDebtPaymentAndReactivate } from '../common/debt-settlement.helper';
 import { AsaasService } from '../asaas/asaas.service';
 import { CashRegisterService } from '../cash-register/cash-register.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -3597,6 +3598,46 @@ export class SubscriptionsService {
         .update({ isPaid: true, paymentId, updatedAt: now })
         .eq('id', appointmentId);
       return { success: true, action: 'APPOINTMENT_MARKED_PAID', message: 'Agendamento marcado como pago.' };
+    }
+
+    // Cobrança que referencia só o CLIENTE = "Quitação de dívida" (único fluxo
+    // que usa externalReference = clientId). Antes este caminho parava em
+    // "Pagamento registrado (sem vínculo)": o dinheiro entrava no caixa mas a
+    // dívida ficava aberta e a assinatura suspensa (caso Paulo Sergio,
+    // 16/07/2026 — pagou o PIX, admin clicou "Confirmar pagamento" e o app
+    // continuou cobrando/bloqueando). Agora aplica a MESMA baixa do webhook
+    // (helper único): quita as dívidas cobertas e reativa a assinatura
+    // suspensa com dia-âncora.
+    if (clientId) {
+      const baixa = await settleDebtPaymentAndReactivate(
+        {
+          supabase: this.supabase,
+          logger: this.logger,
+          // Liquidação já validada no início deste método (getCharge ao vivo,
+          // status RECEIVED/CONFIRMED/RECEIVED_IN_CASH) — reconfirma por via
+          // das dúvidas, caindo no status já validado se a rede falhar.
+          isChargeSettled: async (id) => {
+            try {
+              const c = await this.asaasService.getCharge(id);
+              return ['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(c?.status);
+            } catch {
+              return true;
+            }
+          },
+        },
+        clientId,
+        amount,
+        asaasPaymentId,
+      );
+      if (baixa.settledCount > 0 || baixa.reactivated) {
+        return {
+          success: true,
+          action: baixa.reactivated ? 'DEBTS_SETTLED_SUBSCRIPTION_REACTIVATED' : 'DEBTS_SETTLED',
+          message: baixa.reactivated
+            ? `Pagamento registrado, ${baixa.settledCount} dívida(s) quitada(s) e assinatura reativada.`
+            : `Pagamento registrado e ${baixa.settledCount} dívida(s) quitada(s).`,
+        };
+      }
     }
 
     return { success: true, action: 'PAYMENT_REGISTERED', message: 'Pagamento registrado (sem vínculo).' };
