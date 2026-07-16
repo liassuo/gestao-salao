@@ -435,6 +435,141 @@ describe('AsaasWebhookController (e2e)', () => {
       expect(state.clients[0].hasDebts).toBe(true);
     });
 
+    // ============================================================
+    // Cobrança órfã de ciclo já superado (casos Murilo Correa / Gustavo /
+    // Emanuel, 07/2026): pagou no balcão → confirmação manual renovou o
+    // vencimento → a fatura daquele ciclo continuou aberta no Asaas e venceu →
+    // o webhook suspendia a assinatura PAGA e criava dívida-fantasma → o app
+    // cobrava de novo → cliente pagava 2x, todo mês.
+    // ============================================================
+    it('cobrança de ciclo JÁ SUPERADO (mensalidade paga no balcão): não suspende, não cria dívida e cancela a órfã', async () => {
+      const cancelCharge = jest.fn().mockResolvedValue({ deleted: true });
+      const { controller, state } = await buildController(
+        {
+          client_subscriptions: [
+            {
+              id: 'sub-1',
+              clientId: 'client-1',
+              status: 'ACTIVE',
+              // pagou no balcão em 15/07 → confirmação manual renovou até 15/08
+              endDate: '2026-08-15T20:20:27.018',
+              startDate: '2026-07-15T20:20:27.018',
+              plan: { name: 'Mensal' },
+            },
+          ],
+          payments: [
+            {
+              id: 'pay-local-1',
+              asaasPaymentId: 'asaas_pay_001',
+              clientId: 'client-1',
+              subscriptionId: 'sub-1',
+              amount: 7000,
+              asaasStatus: 'PENDING',
+            },
+          ],
+          clients: [{ id: 'client-1', hasDebts: false }],
+          debts: [],
+        },
+        { cancelCharge },
+      );
+
+      await controller.handleWebhook(
+        paymentEvent(
+          AsaasWebhookEvent.PAYMENT_OVERDUE,
+          // fatura do ciclo que venceu em 15/07 — anterior ao vencimento vigente
+          basePaymentData({ status: 'OVERDUE', dueDate: '2026-07-15', value: 70 }),
+        ),
+        'test-token',
+      );
+
+      // assinatura paga continua ATIVA e sem dívida-fantasma
+      expect(state.client_subscriptions[0].status).toBe('ACTIVE');
+      expect(state.debts).toHaveLength(0);
+      expect(state.clients[0].hasDebts).toBe(false);
+      // e a cobrança órfã é cancelada no gateway (senão o Asaas segue cobrando)
+      expect(cancelCharge).toHaveBeenCalledWith('asaas_pay_001');
+      expect(state.payments[0].asaasStatus).toBe('CANCELED');
+    });
+
+    it('vencimento no MESMO dia da fatura (não pagou): suspende normalmente — o guard não afrouxa a inadimplência real', async () => {
+      const { controller, state } = await buildController({
+        client_subscriptions: [
+          {
+            id: 'sub-1',
+            clientId: 'client-1',
+            status: 'ACTIVE',
+            // ciclo vigente vence justamente nesta fatura → inadimplência legítima
+            endDate: '2026-07-15T20:20:27.018',
+            startDate: '2026-06-15T20:20:27.018',
+            plan: { name: 'Mensal' },
+          },
+        ],
+        payments: [
+          {
+            id: 'pay-local-1',
+            asaasPaymentId: 'asaas_pay_001',
+            clientId: 'client-1',
+            subscriptionId: 'sub-1',
+            amount: 7000,
+            asaasStatus: 'PENDING',
+          },
+        ],
+        clients: [{ id: 'client-1', hasDebts: false }],
+        debts: [],
+      });
+
+      await controller.handleWebhook(
+        paymentEvent(
+          AsaasWebhookEvent.PAYMENT_OVERDUE,
+          basePaymentData({ status: 'OVERDUE', dueDate: '2026-07-15', value: 70 }),
+        ),
+        'test-token',
+      );
+
+      expect(state.client_subscriptions[0].status).toBe('SUSPENDED');
+      expect(state.debts).toHaveLength(1);
+      expect(state.clients[0].hasDebts).toBe(true);
+    });
+
+    it('PENDING_PAYMENT com endDate provisório futuro: suspende (endDate da criação não é prova de renovação)', async () => {
+      const { controller, state } = await buildController({
+        client_subscriptions: [
+          {
+            id: 'sub-1',
+            clientId: 'client-1',
+            status: 'PENDING_PAYMENT',
+            // endDate provisório da criação (nunca houve pagamento)
+            endDate: '2026-08-15T00:00:00',
+            startDate: '2026-07-15T00:00:00',
+            plan: { name: 'Mensal' },
+          },
+        ],
+        payments: [
+          {
+            id: 'pay-local-1',
+            asaasPaymentId: 'asaas_pay_001',
+            clientId: 'client-1',
+            subscriptionId: 'sub-1',
+            amount: 7000,
+            asaasStatus: 'PENDING',
+          },
+        ],
+        clients: [{ id: 'client-1', hasDebts: false }],
+        debts: [],
+      });
+
+      await controller.handleWebhook(
+        paymentEvent(
+          AsaasWebhookEvent.PAYMENT_OVERDUE,
+          basePaymentData({ status: 'OVERDUE', dueDate: '2026-07-15', value: 70 }),
+        ),
+        'test-token',
+      );
+
+      expect(state.client_subscriptions[0].status).toBe('SUSPENDED');
+      expect(state.debts).toHaveLength(1);
+    });
+
     it('idempotente: OVERDUE duas vezes para a mesma cobrança não duplica a dívida', async () => {
       const { controller, state } = await buildController({
         client_subscriptions: [

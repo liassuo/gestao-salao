@@ -881,6 +881,34 @@ export class AsaasWebhookController {
         .eq('id', localPayment.subscriptionId)
         .single();
 
+      // COBRANÇA ÓRFÃ DE CICLO JÁ SUPERADO (casos Murilo Correa / Gustavo /
+      // Emanuel, 07/2026): o cliente pagou a mensalidade POR FORA (balcão →
+      // confirmação manual, que renova o vencimento), mas a fatura daquele ciclo
+      // continuou aberta no Asaas e venceu. O webhook então suspendia a assinatura
+      // PAGA e criava dívida-fantasma → o app cobrava de novo → o cliente pagava 2x
+      // (R$140 em vez de R$70) → e no mês seguinte tudo se repetia. É o "problema de
+      // sempre" relatado pelo barbeiro.
+      //
+      // Régua: assinatura ATIVA cujo vencimento vigente é de um DIA POSTERIOR ao
+      // desta fatura só pode ter chegado lá por uma renovação — logo esta fatura é
+      // de um ciclo encerrado. No fluxo legítimo (não pagou), endDate e dueDate caem
+      // no MESMO dia e a suspensão segue normal. PENDING_PAYMENT fica de fora: seu
+      // endDate é provisório da criação (não é prova de renovação).
+      const chargeDueDate: string | undefined = paymentData.dueDate;
+      if (sub && (sub as any).status === 'ACTIVE' && chargeDueDate && (sub as any).endDate) {
+        const endMs = new Date((sub as any).endDate).getTime();
+        const dueEndOfDayMs = new Date(`${String(chargeDueDate).substring(0, 10)}T23:59:59`).getTime();
+        if (!Number.isNaN(endMs) && !Number.isNaN(dueEndOfDayMs) && endMs > dueEndOfDayMs) {
+          this.logger.warn(
+            `Webhook overdue ${asaasPaymentId}: cobrança de ciclo JÁ SUPERADO (venc. ${chargeDueDate}) ` +
+            `da assinatura ${(sub as any).id}, cujo ciclo vigente vai até ${(sub as any).endDate} — ` +
+            `mensalidade paga por fora. NÃO suspende nem cria dívida; cancelando a cobrança órfã.`,
+          );
+          await this.cancelOrphanCharge(asaasPaymentId, localPayment.id, now);
+          return;
+        }
+      }
+
       if (sub && ['ACTIVE', 'PENDING_PAYMENT'].includes(sub.status)) {
         await this.supabase
           .from('client_subscriptions')
@@ -954,6 +982,42 @@ export class AsaasWebhookController {
       } else {
         this.logger.error(`Erro ao criar dívida: ${JSON.stringify(debtError)}`);
       }
+    }
+  }
+
+  /**
+   * Cancela no Asaas uma cobrança que ficou órfã: o ciclo dela já foi pago por
+   * outro meio (balcão/manual), então mantê-la aberta faz o gateway seguir
+   * cobrando o cliente por e-mail — e ele pode pagar em dobro.
+   *
+   * Best-effort: se o cancelamento falhar, apenas loga (com instrução de cancelar
+   * à mão). O que importa — não suspender a assinatura paga — já foi decidido pelo
+   * chamador. O espelho local, quando existe, fica CANCELED para as telas pararem
+   * de mostrar a cobrança como pendente.
+   */
+  private async cancelOrphanCharge(
+    asaasPaymentId: string,
+    localPaymentId: string | null,
+    now: string,
+  ): Promise<void> {
+    try {
+      if (this.asaasService.configured) {
+        await this.asaasService.cancelCharge(asaasPaymentId);
+        this.logger.log(`Cobrança órfã ${asaasPaymentId} cancelada no Asaas (ciclo já pago por fora).`);
+      }
+    } catch (e: any) {
+      this.logger.warn(
+        `Não foi possível cancelar a cobrança órfã ${asaasPaymentId}: ${e?.message} — ` +
+        `cancelar manualmente no Asaas para o cliente parar de ser cobrado.`,
+      );
+      return; // não marca o espelho como cancelado se o gateway não confirmou
+    }
+
+    if (localPaymentId) {
+      await this.supabase
+        .from('payments')
+        .update({ asaasStatus: 'CANCELED', updatedAt: now })
+        .eq('id', localPaymentId);
     }
   }
 
