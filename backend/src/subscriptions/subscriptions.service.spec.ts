@@ -98,7 +98,10 @@ function createStatefulSupabase(initial: Tables = {}) {
         if (rows.length !== 1) {
           return { data: null, error: { code: 'PGRST116', message: 'No/many rows' } };
         }
-        return { data: rows[0], error: null };
+        // Cópia, como o PostgREST (resposta HTTP desserializada). Devolver a
+        // referência da linha faz um UPDATE posterior "editar" retroativamente o
+        // objeto já lido — escondendo bugs de leitura-após-escrita nos testes.
+        return { data: { ...rows[0] }, error: null };
       },
       maybeSingle: async () => {
         if (mode === 'insert' || mode === 'update') {
@@ -106,7 +109,7 @@ function createStatefulSupabase(initial: Tables = {}) {
           return { data: res.data, error: null };
         }
         const rows = applyFilters(tables[table], filters);
-        return { data: rows[0] ?? null, error: null };
+        return { data: rows[0] ? { ...rows[0] } : null, error: null };
       },
       then: (resolve: any) => Promise.resolve(runTerminal()).then(resolve),
     };
@@ -1586,6 +1589,77 @@ describe('SubscriptionsService — Cobrar no cartão salvo (chargeStoredCardForC
 
     // Vencimento NÃO foi empurrado (quitação do ciclo corrente, não renovação).
     expect(state.client_subscriptions[0].endDate).toBe('2099-01-01T00:00:00');
+  });
+});
+
+describe('SubscriptionsService — pagamento no balcão cancela a fatura da RECORRÊNCIA do ciclo pago', () => {
+  // Furo restante do "problema de sempre" (16/07/2026): faturas geradas pela
+  // recorrência Asaas não têm espelho local, então a varredura por `payments`
+  // PENDING não as via. O cliente pagava no balcão e o gateway seguia mandando
+  // e-mail de cobrança daquele mesmo ciclo até a fatura vencer.
+  function tables(status: string, endDate: string): Tables {
+    const t = baseTables();
+    t.client_subscriptions = [
+      {
+        id: 'sub-1',
+        clientId: 'client-1',
+        planId: 'plan-1',
+        status,
+        startDate: '2026-06-15T10:00:00',
+        createdAt: '2026-06-15T10:00:00',
+        endDate,
+        cutsUsedThisMonth: 2,
+        asaasSubscriptionId: 'sub_asaas_1',
+      },
+    ];
+    // Pagamento do ciclo ANTERIOR (antes do piso do ciclo vigente, que começa em
+    // 15/06): prova que houve ciclo pago — confirmPaymentManually trata como
+    // RENOVAÇÃO (dia-âncora) — sem fazer o ciclo VIGENTE constar pago, o que
+    // faria confirmCyclePaymentManually barrar por duplicidade (e com razão).
+    t.payments = [
+      { id: 'pay-antigo', subscriptionId: 'sub-1', clientId: 'client-1', amount: 8000, paidAt: '2026-05-15T10:00:00', asaasStatus: null },
+    ];
+    return t;
+  }
+
+  it('cancela a fatura do ciclo pago e PRESERVA a do próximo ciclo', async () => {
+    const { service, state, asaas } = await buildService(tables('PENDING_PAYMENT', '2026-07-15T10:00:00'), true);
+    (asaas as any).getSubscriptionPayments = jest.fn().mockResolvedValue([
+      // fatura do ciclo que ele acabou de pagar no balcão → cancelar
+      { id: 'pay_ciclo_pago', status: 'OVERDUE', dueDate: '2026-07-15', deleted: false, paymentDate: null },
+      // fatura do PRÓXIMO ciclo → legítima, tem que sobreviver
+      { id: 'pay_proximo', status: 'PENDING', dueDate: '2026-08-15', deleted: false, paymentDate: null },
+      // fatura já paga → nunca tocar
+      { id: 'pay_pago', status: 'RECEIVED', dueDate: '2026-06-15', deleted: false, paymentDate: '2026-06-15' },
+    ]);
+
+    await service.confirmPaymentManually('sub-1', 'CASH');
+
+    expect(asaas.cancelCharge).toHaveBeenCalledWith('pay_ciclo_pago');
+    expect(asaas.cancelCharge).not.toHaveBeenCalledWith('pay_proximo');
+    expect(asaas.cancelCharge).not.toHaveBeenCalledWith('pay_pago');
+    expect(state.client_subscriptions[0].status).toBe('ACTIVE');
+  });
+
+  it('confirmação do ciclo (ACTIVE, vencimento não muda): cancela a fatura que vence no próprio endDate', async () => {
+    const { service, asaas } = await buildService(tables('ACTIVE', '2026-07-15T10:00:00'), true);
+    (asaas as any).getSubscriptionPayments = jest.fn().mockResolvedValue([
+      { id: 'pay_ciclo_vigente', status: 'PENDING', dueDate: '2026-07-15', deleted: false, paymentDate: null },
+      { id: 'pay_proximo', status: 'PENDING', dueDate: '2026-08-15', deleted: false, paymentDate: null },
+    ]);
+
+    await service.confirmCyclePaymentManually('sub-1', 'CASH');
+
+    expect(asaas.cancelCharge).toHaveBeenCalledWith('pay_ciclo_vigente');
+    expect(asaas.cancelCharge).not.toHaveBeenCalledWith('pay_proximo');
+  });
+
+  it('falha ao listar as faturas no Asaas não desfaz a confirmação já efetivada', async () => {
+    const { service, state, asaas } = await buildService(tables('PENDING_PAYMENT', '2026-07-15T10:00:00'), true);
+    (asaas as any).getSubscriptionPayments = jest.fn().mockRejectedValue(new Error('asaas fora do ar'));
+
+    await expect(service.confirmPaymentManually('sub-1', 'CASH')).resolves.toBeTruthy();
+    expect(state.client_subscriptions[0].status).toBe('ACTIVE');
   });
 });
 
