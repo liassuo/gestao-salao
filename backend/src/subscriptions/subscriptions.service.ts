@@ -8,7 +8,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { randomUUID } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../supabase/supabase.service';
-import { nowLocalIsoString, resolveBusinessDate } from '../common/datetime.util';
+import { localDateString, nowLocalIsoString, resolveBusinessDate } from '../common/datetime.util';
 import { isCurrentCyclePaid, subscriptionCycleFloorMs } from '../common/pricing.helper';
 import { isRevenuePayment } from '../common/business-date.helper';
 import { computeRenewalCycle } from '../common/subscription-cycle.util';
@@ -1253,6 +1253,10 @@ export class SubscriptionsService {
     const now = new Date();
     const nowIso = now.toISOString();
     const nowLocal = nowLocalIsoString();
+    // Vencimento do ciclo que este pagamento quita — capturado ANTES da renovação
+    // sobrescrever o endDate. É o limite até o qual as cobranças em aberto do Asaas
+    // devem ser canceladas (a fatura do próximo ciclo vence depois e é legítima).
+    const prevEndDate: string | null = subscription.endDate ?? null;
 
     // PENDING_PAYMENT pode ser 1ª ativação OU renovação (link de renovação gerado
     // pelo admin/app — que agora PRESERVA o vencimento antigo como âncora). A régua
@@ -1316,10 +1320,16 @@ export class SubscriptionsService {
       ),
     );
 
-    // Cancela cobranças Asaas PENDENTES desta assinatura (ex.: link de renovação
-    // gerado momentos antes de o cliente pagar no balcão). Sem isso o link fica
-    // vivo e o cliente pode pagar o MESMO ciclo duas vezes.
-    await this.cancelPendingAsaasChargesForSubscription(subscription.id, nowLocal);
+    // Cancela as cobranças Asaas em aberto do ciclo recém-pago (link de renovação
+    // E fatura da recorrência). Sem isso o cliente segue sendo cobrado e pode pagar
+    // o MESMO ciclo duas vezes. Limite: renovação quitou o ciclo que vencia no
+    // endDate ANTERIOR; 1ª ativação quitou a cobrança de agora (o endDate
+    // provisório da criação é futuro e cancelaria fatura legítima).
+    await this.cancelPendingAsaasChargesForSubscription(
+      subscription.id,
+      nowLocal,
+      hadPriorPaidCycle ? prevEndDate : now,
+    );
 
     this.logger.log(
       `Assinatura ${subscription.id} confirmada manualmente (admin, ${method || 'CASH'}) — status ACTIVE até ${cycle.endDate.toISOString()}` +
@@ -1329,14 +1339,29 @@ export class SubscriptionsService {
   }
 
   /**
-   * Cancela no Asaas as cobranças PENDENTES de uma assinatura (e marca o espelho
-   * local como CANCELED). Usado quando o ciclo acabou de ser pago por outra via
-   * (balcão): a cobrança pendente vira risco de pagamento em dobro. Nunca lança —
-   * falha de cancelamento não pode desfazer a confirmação já efetivada.
+   * Cancela no Asaas as cobranças em aberto do ciclo que ACABOU de ser pago por
+   * outra via (balcão): mantê-las vivas faz o gateway seguir cobrando o cliente
+   * por e-mail — risco de pagar o mesmo ciclo duas vezes. Nunca lança: falha de
+   * cancelamento não pode desfazer a confirmação já efetivada.
+   *
+   * Duas origens, porque só a primeira tem espelho local:
+   *  1. LINKS gerados pelo nosso código (renovação/1ª cobrança) → viram linha em
+   *     `payments` com asaasStatus='PENDING' (casos Kleudson/Vandson).
+   *  2. FATURAS da RECORRÊNCIA Asaas (assinatura com asaasSubscriptionId) →
+   *     nascem SÓ no gateway, nunca têm espelho local. Eram o furo restante: o
+   *     cliente pagava no balcão e continuava recebendo e-mail de cobrança até a
+   *     fatura vencer (quando o guard do webhook OVERDUE finalmente a matava) —
+   *     e podia pagar de novo nesse meio-tempo.
+   *
+   * `paidCycleEndDate` = vencimento do ciclo que o pagamento quitou. Só cancela
+   * faturas cujo DIA de vencimento é <= esse dia: a fatura do PRÓXIMO ciclo
+   * (vencimento posterior) é legítima e tem que sobreviver. Sem esse limite,
+   * confirmar um pagamento mataria a cobrança futura do assinante.
    */
   private async cancelPendingAsaasChargesForSubscription(
     subscriptionId: string,
     nowLocal: string,
+    paidCycleEndDate?: string | Date | null,
   ): Promise<void> {
     if (!this.asaasService.configured) return;
     const { data: pending } = await this.supabase
@@ -1360,6 +1385,59 @@ export class SubscriptionsService {
       } catch (e: any) {
         this.logger.warn(
           `Não foi possível cancelar cobrança pendente ${(p as any).asaasPaymentId} da assinatura ${subscriptionId}: ${e?.message} — cancelar manualmente no Asaas para evitar pagamento em dobro.`,
+        );
+      }
+    }
+
+    // (2) Faturas da RECORRÊNCIA — invisíveis para a varredura acima (sem espelho local).
+    if (!paidCycleEndDate) return;
+    const { data: subRow } = await this.supabase
+      .from('client_subscriptions')
+      .select('asaasSubscriptionId')
+      .eq('id', subscriptionId)
+      .maybeSingle();
+    const asaasSubId = (subRow as any)?.asaasSubscriptionId;
+    if (!asaasSubId) return;
+
+    // Dia do vencimento do ciclo pago. Extraído por string quando já vem do banco
+    // (evita a conversão UTC do toISOString virar o dia em fusos negativos).
+    const limitDay =
+      typeof paidCycleEndDate === 'string'
+        ? paidCycleEndDate.substring(0, 10)
+        : localDateString(paidCycleEndDate);
+
+    let recurrenceCharges: any[] = [];
+    try {
+      recurrenceCharges = (await this.asaasService.getSubscriptionPayments(asaasSubId)) || [];
+    } catch (e: any) {
+      this.logger.warn(
+        `Assinatura ${subscriptionId}: falha ao listar faturas da recorrência ${asaasSubId} (${e?.message}) — ` +
+        `cobrança do ciclo pago pode seguir aberta no Asaas; conferir manualmente.`,
+      );
+      return;
+    }
+
+    const OPEN = ['PENDING', 'OVERDUE', 'AWAITING_RISK_ANALYSIS'];
+    for (const c of recurrenceCharges) {
+      // Nunca tocar em cobrança paga/estornada — só as que seguem cobrando.
+      if (!OPEN.includes(c?.status) || c?.deleted || c?.paymentDate) continue;
+      const dueDay = String(c?.dueDate || '').substring(0, 10);
+      if (!dueDay || dueDay > limitDay) continue; // fatura do próximo ciclo: preservar
+
+      try {
+        await this.asaasService.cancelCharge(c.id);
+        // Espelho, se existir (fatura já reconciliada antes), deixa de constar pendente.
+        await this.supabase
+          .from('payments')
+          .update({ asaasStatus: 'CANCELED', updatedAt: nowLocal })
+          .eq('asaasPaymentId', c.id);
+        this.logger.log(
+          `Fatura ${c.id} da recorrência ${asaasSubId} (venc. ${dueDay}) cancelada — ciclo pago no balcão (assinatura ${subscriptionId}).`,
+        );
+      } catch (e: any) {
+        this.logger.warn(
+          `Não foi possível cancelar a fatura ${c.id} da recorrência ${asaasSubId}: ${e?.message} — ` +
+          `cancelar manualmente no Asaas para o cliente parar de ser cobrado.`,
         );
       }
     }
@@ -1414,7 +1492,13 @@ export class SubscriptionsService {
         `Confirmação de ciclo ${subscription.id}: falha ao quitar dívidas (${e?.message}).`,
       ),
     );
-    await this.cancelPendingAsaasChargesForSubscription(subscription.id, nowLocal);
+    // Aqui o vencimento NÃO muda: o pagamento quita o ciclo VIGENTE, que vence no
+    // endDate atual — logo é até ele que as cobranças em aberto devem ser mortas.
+    await this.cancelPendingAsaasChargesForSubscription(
+      subscription.id,
+      nowLocal,
+      subscription.endDate,
+    );
 
     this.logger.log(
       `Pagamento do ciclo da assinatura ${subscription.id} confirmado manualmente (admin, ${method || 'CASH'}) — sem alterar vencimento/cortes`,
