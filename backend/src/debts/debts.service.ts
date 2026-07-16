@@ -10,6 +10,10 @@ import { nowLocalIsoString } from '../common/datetime.util';
 import { CreateDebtDto, UpdateDebtDto, PayDebtDto } from './dto';
 import { AsaasService } from '../asaas/asaas.service';
 import { AsaasBillingType } from '../asaas/asaas.types';
+import {
+  reactivateSubscriptionForSettledDebt,
+  resolveSubscriptionForDelinquencyDebt,
+} from '../common/debt-settlement.helper';
 
 @Injectable()
 export class DebtsService {
@@ -164,6 +168,16 @@ export class DebtsService {
 
     if (updateError) throw updateError;
 
+    // Dívida de MENSALIDADE quitada no balcão: o pagamento precisa ficar vinculado
+    // à assinatura, senão isCurrentCyclePaid não o enxerga e ela volta ACTIVE com
+    // "ciclo não pago" — o corte segue sendo cobrado do cliente (mesmo sintoma que
+    // a reativação pretende resolver).
+    const subscriptionId = await resolveSubscriptionForDelinquencyDebt(
+      this.supabase,
+      debt.clientId,
+      debt.description,
+    );
+
     // Registrar o valor restante como pagamento no caixa
     if (debt.remainingBalance > 0) {
       await this.createPaymentRecord(
@@ -173,12 +187,71 @@ export class DebtsService {
         undefined,
         `Quitação de dívida${debt.description ? ': ' + debt.description : ''}`,
         now,
+        subscriptionId,
       );
     }
 
     await this.updateClientHasDebtsFlag(debt.clientId);
 
+    // Reativa a assinatura suspensa cuja mensalidade acabou de ser paga. Sem isto,
+    // quitar pela tela de dívidas deixava o cliente "sem-dívida-e-encerrado" —
+    // estado irrecuperável por reconciliação (a dívida era a prova do débito).
+    if (subscriptionId) {
+      const reactivated = await reactivateSubscriptionForSettledDebt(
+        { supabase: this.supabase, logger: this.logger },
+        debt.clientId,
+        subscriptionId,
+      ).catch((e) => {
+        this.logger.error(`Falha ao reativar assinatura ${subscriptionId} pós-quitação: ${e}`);
+        return false;
+      });
+
+      // Ciclo pago no balcão → cancela o link Asaas em aberto do mesmo ciclo, senão
+      // o gateway segue cobrando o cliente e ele pode pagar em dobro (caso Renato
+      // dias, 16/07/2026). Mesmo tratamento do PR #44 na confirmação manual.
+      if (reactivated) {
+        await this.cancelPendingAsaasChargesForSubscription(subscriptionId, now);
+      }
+    }
+
     return updatedDebt;
+  }
+
+  /**
+   * Cancela no Asaas as cobranças ainda PENDENTES do ciclo desta assinatura, depois
+   * que ele foi pago por fora (balcão). Espelha subscriptions.service — best-effort:
+   * falha só loga, com instrução de cancelar manualmente.
+   */
+  private async cancelPendingAsaasChargesForSubscription(
+    subscriptionId: string,
+    nowLocal: string,
+  ): Promise<void> {
+    if (!this.asaasService.configured) return;
+
+    const { data: pending } = await this.supabase
+      .from('payments')
+      .select('id, asaasPaymentId')
+      .eq('subscriptionId', subscriptionId)
+      .eq('asaasStatus', 'PENDING')
+      .is('paidAt', null)
+      .not('asaasPaymentId', 'is', null);
+
+    for (const p of pending || []) {
+      try {
+        await this.asaasService.cancelCharge((p as any).asaasPaymentId);
+        await this.supabase
+          .from('payments')
+          .update({ asaasStatus: 'CANCELED', updatedAt: nowLocal })
+          .eq('id', (p as any).id);
+        this.logger.log(
+          `Cobrança pendente ${(p as any).asaasPaymentId} cancelada (mensalidade quitada no balcão, assinatura ${subscriptionId}).`,
+        );
+      } catch (e: any) {
+        this.logger.warn(
+          `Não foi possível cancelar cobrança pendente ${(p as any).asaasPaymentId} da assinatura ${subscriptionId}: ${e?.message} — cancelar manualmente no Asaas para evitar pagamento em dobro.`,
+        );
+      }
+    }
   }
 
   async findOne(id: string) {
@@ -308,6 +381,7 @@ export class DebtsService {
     registeredBy?: string,
     notes?: string,
     paidAt?: string,
+    subscriptionId?: string | null,
   ): Promise<void> {
     // Se não tem registeredBy, buscar primeiro admin
     let userId = registeredBy;
@@ -332,6 +406,10 @@ export class DebtsService {
       method,
       paidAt: now,
       registeredBy: userId,
+      // Mensalidade quitada no balcão: vincular à assinatura é o que faz o ciclo
+      // constar pago (isCurrentCyclePaid filtra por subscriptionId) e o cliente
+      // voltar a usar os cortes do plano.
+      ...(subscriptionId ? { subscriptionId } : {}),
       notes,
       createdAt: now,
       updatedAt: now,

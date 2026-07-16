@@ -42,6 +42,133 @@ export interface DebtSettlementResult {
   reactivated: boolean;
 }
 
+/** Rótulo exclusivo das dívidas de MENSALIDADE (criadas ao suspender por vencimento). */
+export function isSubscriptionDelinquencyDebt(description?: string | null): boolean {
+  return /^Cobrança não paga/i.test(description || '');
+}
+
+/**
+ * Extrai o id da assinatura da tag `[sub:<uuid>:cycle:<data>]` que acompanha a
+ * descrição da dívida de mensalidade (ver createSubscriptionDelinquencyDebt).
+ */
+export function parseSubscriptionIdFromDebtDescription(
+  description?: string | null,
+): string | null {
+  const m = /\[sub:([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/.exec(
+    description || '',
+  );
+  return m ? m[1] : null;
+}
+
+/**
+ * Assinatura à qual uma dívida de mensalidade se refere. Preferência pela tag
+ * `[sub:...]`; dívida LEGADO (sem tag) só resolve quando o cliente tem
+ * exatamente UMA assinatura suspensa — com duas, não dá para adivinhar qual o
+ * pagamento cobre, e reativar a errada daria mês grátis.
+ */
+export async function resolveSubscriptionForDelinquencyDebt(
+  supabase: { from: (t: string) => any },
+  clientId: string,
+  description?: string | null,
+): Promise<string | null> {
+  if (!isSubscriptionDelinquencyDebt(description)) return null;
+
+  const tagged = parseSubscriptionIdFromDebtDescription(description);
+  if (tagged) return tagged;
+
+  const { data: suspended } = await supabase
+    .from('client_subscriptions')
+    .select('id')
+    .eq('clientId', clientId)
+    .eq('status', 'SUSPENDED');
+  return (suspended || []).length === 1 ? (suspended as any[])[0].id : null;
+}
+
+/**
+ * Reativa a assinatura cuja mensalidade acabou de ser quitada NO BALCÃO (botão
+ * "quitar" da tela de dívidas — dinheiro/cartão na mão, sem cobrança Asaas).
+ *
+ * Por que existe: settleDebt quitava a dívida, lançava o caixa e limpava
+ * hasDebts, mas deixava a assinatura SUSPENDED — o cliente ficava
+ * "sem-dívida-e-encerrado", estado que nenhuma reconciliação recupera (a dívida,
+ * que era a prova, sumiu) e que volta a cobrar o corte dele.
+ *
+ * GUARDAS:
+ *  - só assinatura ainda SUSPENDED (filtro na escrita = idempotente);
+ *  - só se NÃO sobrar nenhuma outra mensalidade em aberto do cliente — quem deve
+ *    2 meses e paga 1 não volta a ficar em dia (anti-mês-grátis);
+ *  - dia-âncora: preserva o dia do vencimento (isRenewal=true — SUSPENDED implica
+ *    ciclo anterior existente).
+ *
+ * Chame DEPOIS de quitar a dívida (a régua de "outra em aberto" conta o estado já
+ * quitado) e DEPOIS de vincular o pagamento à assinatura (senão a assinatura volta
+ * ACTIVE porém com "ciclo não pago", e o corte segue sendo cobrado).
+ */
+export async function reactivateSubscriptionForSettledDebt(
+  deps: Pick<DebtSettlementDeps, 'supabase' | 'logger'>,
+  clientId: string,
+  subscriptionId: string,
+): Promise<boolean> {
+  const { supabase, logger } = deps;
+
+  const { data: openDelinquency } = await supabase
+    .from('debts')
+    .select('id')
+    .eq('clientId', clientId)
+    .eq('isSettled', false)
+    .ilike('description', 'Cobrança não paga%');
+
+  if ((openDelinquency || []).length > 0) {
+    logger.warn(
+      `Assinatura ${subscriptionId} NÃO reativada: cliente ${clientId} ainda tem ` +
+      `${(openDelinquency as any[]).length} mensalidade(s) em aberto (quitar todas para voltar a ficar em dia).`,
+    );
+    return false;
+  }
+
+  const { data: sub } = await supabase
+    .from('client_subscriptions')
+    .select('id, status, endDate')
+    .eq('id', subscriptionId)
+    .maybeSingle();
+
+  if (!sub || (sub as any).status !== 'SUSPENDED') return false;
+
+  const now = new Date();
+  const cycle = computeRenewalCycle({
+    prevEndDate: (sub as any).endDate,
+    refDate: now,
+    isRenewal: true,
+  });
+
+  const { error } = await supabase
+    .from('client_subscriptions')
+    .update({
+      status: 'ACTIVE',
+      cutsUsedThisMonth: 0,
+      lastResetDate: now.toISOString(),
+      ...(cycle.startDate ? { startDate: cycle.startDate.toISOString() } : {}),
+      endDate: cycle.endDate.toISOString(),
+      isComp: false, // houve pagamento real → não é cortesia
+      updatedAt: now.toISOString(),
+    })
+    .eq('id', subscriptionId)
+    .eq('status', 'SUSPENDED'); // idempotência
+
+  if (error) {
+    logger.error(
+      `Falha ao reativar assinatura ${subscriptionId} após quitação manual da dívida: ${error.message}. ` +
+      `Reative pela tela de assinaturas.`,
+    );
+    return false;
+  }
+
+  logger.log(
+    `Assinatura ${subscriptionId} REATIVADA até ${cycle.endDate.toISOString()} após quitação da mensalidade no balcão.`,
+  );
+  return true;
+}
+
 export async function settleDebtPaymentAndReactivate(
   deps: DebtSettlementDeps,
   clientId: string,
