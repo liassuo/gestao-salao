@@ -894,7 +894,22 @@ export class AsaasWebhookController {
       // de um ciclo encerrado. No fluxo legítimo (não pagou), endDate e dueDate caem
       // no MESMO dia e a suspensão segue normal. PENDING_PAYMENT fica de fora: seu
       // endDate é provisório da criação (não é prova de renovação).
-      const chargeDueDate: string | undefined = paymentData.dueDate;
+      // dueDate é o pino deste guard. O corpo do webhook normalmente traz (o
+      // objeto payment do Asaas tem dueDate), mas ele é `any` e um evento sem o
+      // campo faria o guard não disparar EM SILÊNCIO — voltando a suspender
+      // assinatura paga. Sem dueDate confiável, busca a cobrança no Asaas.
+      let chargeDueDate: string | undefined = paymentData.dueDate;
+      if (!chargeDueDate && this.asaasService.configured) {
+        try {
+          const charge = await this.asaasService.getCharge(asaasPaymentId);
+          chargeDueDate = charge?.dueDate;
+        } catch (e: any) {
+          this.logger.warn(
+            `Webhook overdue ${asaasPaymentId}: evento sem dueDate e getCharge falhou (${e?.message}) — ` +
+            `seguindo sem o guard de ciclo superado (pode suspender assinatura já paga; conferir no Asaas).`,
+          );
+        }
+      }
       if (sub && (sub as any).status === 'ACTIVE' && chargeDueDate && (sub as any).endDate) {
         const endMs = new Date((sub as any).endDate).getTime();
         const dueEndOfDayMs = new Date(`${String(chargeDueDate).substring(0, 10)}T23:59:59`).getTime();
