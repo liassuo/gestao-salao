@@ -491,6 +491,53 @@ describe('AsaasWebhookController (e2e)', () => {
       expect(state.payments[0].asaasStatus).toBe('CANCELED');
     });
 
+    it('evento OVERDUE SEM dueDate no corpo: busca no Asaas e ainda assim protege a assinatura paga', async () => {
+      // O guard depende de dueDate; o corpo do webhook é `any` e um evento sem o
+      // campo faria o guard não disparar em silêncio (voltando a suspender quem pagou).
+      const cancelCharge = jest.fn().mockResolvedValue({ deleted: true });
+      const getCharge = jest.fn().mockResolvedValue({ id: 'asaas_pay_001', status: 'OVERDUE', dueDate: '2026-07-15' });
+      const { controller, state } = await buildController(
+        {
+          client_subscriptions: [
+            {
+              id: 'sub-1',
+              clientId: 'client-1',
+              status: 'ACTIVE',
+              endDate: '2026-08-15T20:20:27.018',
+              startDate: '2026-07-15T20:20:27.018',
+              plan: { name: 'Mensal' },
+            },
+          ],
+          payments: [
+            {
+              id: 'pay-local-1',
+              asaasPaymentId: 'asaas_pay_001',
+              clientId: 'client-1',
+              subscriptionId: 'sub-1',
+              amount: 7000,
+              asaasStatus: 'PENDING',
+            },
+          ],
+          clients: [{ id: 'client-1', hasDebts: false }],
+          debts: [],
+        },
+        { cancelCharge, getCharge },
+      );
+
+      const semDueDate = basePaymentData({ status: 'OVERDUE', value: 70 });
+      delete (semDueDate as any).dueDate;
+
+      await controller.handleWebhook(
+        paymentEvent(AsaasWebhookEvent.PAYMENT_OVERDUE, semDueDate),
+        'test-token',
+      );
+
+      expect(getCharge).toHaveBeenCalledWith('asaas_pay_001');
+      expect(state.client_subscriptions[0].status).toBe('ACTIVE');
+      expect(state.debts).toHaveLength(0);
+      expect(cancelCharge).toHaveBeenCalledWith('asaas_pay_001');
+    });
+
     it('vencimento no MESMO dia da fatura (não pagou): suspende normalmente — o guard não afrouxa a inadimplência real', async () => {
       const { controller, state } = await buildController({
         client_subscriptions: [
