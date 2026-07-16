@@ -1015,4 +1015,172 @@ describe('AsaasWebhookController (e2e)', () => {
       expect(result).toEqual({ received: true });
     });
   });
+
+  // ============================================================
+  // Pagamento de dívida (Quitação de dívida via PIX do app)
+  // ============================================================
+  describe('PAYMENT_RECEIVED em pagamento de dívida (DEBT_PAYMENT)', () => {
+    function debtTables(overrides: Partial<Tables> = {}): Tables {
+      return {
+        users: [{ id: 'admin-1', role: 'ADMIN' }],
+        clients: [{ id: 'client-1', name: 'Paulo', hasDebts: true }],
+        client_subscriptions: [
+          {
+            id: 'sub-1',
+            clientId: 'client-1',
+            status: 'SUSPENDED',
+            // venceu ontem — pagamento hoje está na carência do dia-âncora
+            endDate: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+            startDate: '2026-05-13T13:31:32.756',
+            createdAt: '2026-05-13T13:31:32.756',
+            cutsUsedThisMonth: 8,
+          },
+        ],
+        debts: [
+          {
+            id: 'debt-1',
+            clientId: 'client-1',
+            amount: 14000,
+            remainingBalance: 14000,
+            isSettled: false,
+            description: 'Cobrança não paga — Plano Premium (PIX) [sub:sub-1:cycle:2026-07-15]',
+          },
+        ],
+        payments: [],
+        cash_registers: [],
+        ...overrides,
+      };
+    }
+
+    const settledCharge = {
+      id: 'asaas_pay_debt',
+      status: 'RECEIVED',
+      value: 140,
+      billingType: 'PIX',
+      externalReference: 'client-1',
+      paymentDate: '2026-07-16',
+    };
+
+    it('espelho DEBT_PAYMENT existente: confirma, quita a dívida e REATIVA a assinatura', async () => {
+      const { controller, state } = await buildController(
+        debtTables({
+          payments: [
+            {
+              id: 'pay-debt-1',
+              asaasPaymentId: 'asaas_pay_debt',
+              asaasStatus: 'PENDING',
+              appointmentId: null,
+              subscriptionId: null,
+              clientId: 'client-1',
+              amount: 14000,
+              paidAt: null,
+              notes: 'DEBT_PAYMENT',
+            },
+          ],
+        }),
+        { getCharge: jest.fn().mockResolvedValue(settledCharge) },
+      );
+
+      const result = await controller.handleWebhook(
+        paymentEvent(AsaasWebhookEvent.PAYMENT_RECEIVED, basePaymentData({
+          id: 'asaas_pay_debt',
+          value: 140,
+          externalReference: 'client-1',
+          paymentDate: '2026-07-16',
+        })),
+        'test-token',
+      );
+
+      expect(result).toEqual({ received: true });
+      expect(state.payments[0].paidAt).not.toBeNull();
+      expect(state.debts[0].isSettled).toBe(true);
+      expect(state.debts[0].remainingBalance).toBe(0);
+      expect(state.clients[0].hasDebts).toBe(false);
+      expect(state.client_subscriptions[0].status).toBe('ACTIVE');
+      expect(state.client_subscriptions[0].cutsUsedThisMonth).toBe(0);
+      expect(new Date(state.client_subscriptions[0].endDate).getTime()).toBeGreaterThan(Date.now());
+    });
+
+    it('SEM espelho local (insert falhou na geração do QR): fallback por externalReference=clientId recria DEBT_PAYMENT e baixa tudo (caso Paulo Sergio 16/07/2026)', async () => {
+      const { controller, state } = await buildController(
+        debtTables(), // payments vazio: o espelho nunca foi criado
+        { getCharge: jest.fn().mockResolvedValue(settledCharge) },
+      );
+
+      const result = await controller.handleWebhook(
+        paymentEvent(AsaasWebhookEvent.PAYMENT_RECEIVED, basePaymentData({
+          id: 'asaas_pay_debt',
+          value: 140,
+          externalReference: 'client-1',
+          paymentDate: '2026-07-16',
+        })),
+        'test-token',
+      );
+
+      expect(result).toEqual({ received: true });
+      // espelho recriado com o marcador DEBT_PAYMENT e registrante-sistema
+      expect(state.payments).toHaveLength(1);
+      expect(state.payments[0].notes).toBe('DEBT_PAYMENT');
+      expect(state.payments[0].registeredBy).toBe('admin-1');
+      expect(state.payments[0].clientId).toBe('client-1');
+      expect(state.payments[0].amount).toBe(14000);
+      expect(state.payments[0].paidAt).not.toBeNull();
+      expect(state.payments[0].businessDate).toBe('2026-07-16T00:00:00');
+      // e a baixa completa aconteceu
+      expect(state.debts[0].isSettled).toBe(true);
+      expect(state.clients[0].hasDebts).toBe(false);
+      expect(state.client_subscriptions[0].status).toBe('ACTIVE');
+    });
+
+    it('fallback de dívida NÃO grava nada se a cobrança não está liquidada no Asaas (evento forjado/mal-classificado)', async () => {
+      const { controller, state } = await buildController(
+        debtTables(),
+        { getCharge: jest.fn().mockResolvedValue({ ...settledCharge, status: 'PENDING' }) },
+      );
+
+      await controller.handleWebhook(
+        paymentEvent(AsaasWebhookEvent.PAYMENT_RECEIVED, basePaymentData({
+          id: 'asaas_pay_debt',
+          value: 140,
+          externalReference: 'client-1',
+        })),
+        'test-token',
+      );
+
+      expect(state.payments).toHaveLength(0);
+      expect(state.debts[0].isSettled).toBe(false);
+      expect(state.client_subscriptions[0].status).toBe('SUSPENDED');
+      expect(state.clients[0].hasDebts).toBe(true);
+    });
+
+    it('pagamento que NÃO cobre o total pendente não quita nem reativa', async () => {
+      const tables = debtTables();
+      tables.debts.push({
+        id: 'debt-2',
+        clientId: 'client-1',
+        amount: 5000,
+        remainingBalance: 5000,
+        isSettled: false,
+        description: 'Comanda em aberto',
+      });
+      const { controller, state } = await buildController(tables, {
+        getCharge: jest.fn().mockResolvedValue(settledCharge),
+      });
+
+      await controller.handleWebhook(
+        paymentEvent(AsaasWebhookEvent.PAYMENT_RECEIVED, basePaymentData({
+          id: 'asaas_pay_debt',
+          value: 140, // 14000 < 19000 pendentes
+          externalReference: 'client-1',
+          paymentDate: '2026-07-16',
+        })),
+        'test-token',
+      );
+
+      // o espelho é recriado (dinheiro real recebido), mas a baixa é abortada
+      expect(state.payments).toHaveLength(1);
+      expect(state.debts.every((d: any) => d.isSettled === false)).toBe(true);
+      expect(state.client_subscriptions[0].status).toBe('SUSPENDED');
+    });
+  });
 });

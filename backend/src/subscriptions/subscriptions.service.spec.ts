@@ -1588,3 +1588,113 @@ describe('SubscriptionsService — Cobrar no cartão salvo (chargeStoredCardForC
     expect(state.client_subscriptions[0].endDate).toBe('2099-01-01T00:00:00');
   });
 });
+
+describe('SubscriptionsService — reconciliação de cobrança "Quitação de dívida" quita e reativa (caso Paulo Sergio 16/07/2026)', () => {
+  // Cobrança com externalReference = clientId (único fluxo: createPixChargeForDebts).
+  // Antes, o "Confirmar pagamento" da central registrava o payment mas retornava
+  // "sem vínculo": dinheiro no caixa, dívida aberta, assinatura suspensa, cliente
+  // bloqueado no app. Agora aplica a mesma baixa do webhook (helper único).
+  function debtReconTables(): Tables {
+    return {
+      users: [{ id: 'admin-1', role: 'ADMIN' }],
+      clients: [{ id: 'client-1', name: 'Paulo', hasDebts: true }],
+      client_subscriptions: [
+        {
+          id: 'sub-1',
+          clientId: 'client-1',
+          status: 'SUSPENDED',
+          endDate: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+          startDate: '2026-05-13T13:31:32.756',
+          createdAt: '2026-05-13T13:31:32.756',
+          cutsUsedThisMonth: 8,
+        },
+      ],
+      debts: [
+        {
+          id: 'debt-1',
+          clientId: 'client-1',
+          amount: 14000,
+          remainingBalance: 14000,
+          isSettled: false,
+          description: 'Cobrança não paga — Plano Premium (PIX) [sub:sub-1:cycle:2026-07-15]',
+        },
+      ],
+      payments: [],
+      appointments: [],
+      cash_registers: [],
+      subscription_plans: [],
+      subscription_plan_services: [],
+    };
+  }
+
+  const debtCharge = {
+    id: 'asaas_pay_debt',
+    status: 'RECEIVED',
+    value: 140,
+    billingType: 'PIX',
+    externalReference: 'client-1',
+    paymentDate: '2026-07-16',
+    invoiceUrl: null,
+    bankSlipUrl: null,
+  };
+
+  it('registra o pagamento, quita a dívida, reativa a assinatura e limpa hasDebts', async () => {
+    const { service, state, asaas } = await buildService(debtReconTables(), true);
+    (asaas as any).getCharge = jest.fn().mockResolvedValue(debtCharge);
+
+    const result = await service.applyAsaasReconciliation('asaas_pay_debt');
+
+    expect(result.success).toBe(true);
+    expect(result.action).toBe('DEBTS_SETTLED_SUBSCRIPTION_REACTIVATED');
+    // payment registrado com o valor real e o registrante-sistema
+    expect(state.payments).toHaveLength(1);
+    expect(state.payments[0].clientId).toBe('client-1');
+    expect(state.payments[0].amount).toBe(14000);
+    expect(state.payments[0].registeredBy).toBe('admin-1');
+    // baixa completa
+    expect(state.debts[0].isSettled).toBe(true);
+    expect(state.debts[0].remainingBalance).toBe(0);
+    expect(state.clients[0].hasDebts).toBe(false);
+    expect(state.client_subscriptions[0].status).toBe('ACTIVE');
+    expect(state.client_subscriptions[0].cutsUsedThisMonth).toBe(0);
+    expect(new Date(state.client_subscriptions[0].endDate).getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('dívida avulsa (sem "Cobrança não paga"): quita a dívida mas NÃO reativa assinatura de graça', async () => {
+    const tables = debtReconTables();
+    tables.debts = [
+      {
+        id: 'debt-avulsa',
+        clientId: 'client-1',
+        amount: 14000,
+        remainingBalance: 14000,
+        isSettled: false,
+        description: 'Comanda em aberto — 10/07',
+      },
+    ];
+    const { service, state, asaas } = await buildService(tables, true);
+    (asaas as any).getCharge = jest.fn().mockResolvedValue(debtCharge);
+
+    const result = await service.applyAsaasReconciliation('asaas_pay_debt');
+
+    expect(result.success).toBe(true);
+    expect(result.action).toBe('DEBTS_SETTLED');
+    expect(state.debts[0].isSettled).toBe(true);
+    expect(state.clients[0].hasDebts).toBe(false);
+    // assinatura suspensa continua suspensa — pagar comanda não compra ciclo
+    expect(state.client_subscriptions[0].status).toBe('SUSPENDED');
+  });
+
+  it('idempotência: reconciliar de novo a mesma cobrança não duplica payment nem efeitos', async () => {
+    const { service, state, asaas } = await buildService(debtReconTables(), true);
+    (asaas as any).getCharge = jest.fn().mockResolvedValue(debtCharge);
+
+    await service.applyAsaasReconciliation('asaas_pay_debt');
+    const endDateAfterFirst = state.client_subscriptions[0].endDate;
+    const again = await service.applyAsaasReconciliation('asaas_pay_debt');
+
+    expect(again.success).toBe(true);
+    expect(state.payments).toHaveLength(1);
+    expect(state.client_subscriptions[0].endDate).toBe(endDateAfterFirst);
+  });
+});
