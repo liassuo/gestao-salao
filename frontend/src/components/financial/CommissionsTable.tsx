@@ -1,5 +1,5 @@
 import { Fragment, useState } from 'react';
-import { Percent, CheckCircle, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
+import { Percent, CheckCircle, Trash2, ChevronDown, ChevronRight, RotateCcw } from 'lucide-react';
 import { EmptyState } from '@/components/ui';
 import type { Commission } from '@/types';
 import { commissionStatusLabels, commissionStatusColors } from '@/types';
@@ -7,6 +7,7 @@ import { commissionStatusLabels, commissionStatusColors } from '@/types';
 interface CommissionsTableProps {
   commissions: Commission[];
   onMarkAsPaid: (commission: Commission) => void;
+  onUnmarkAsPaid: (commission: Commission) => void;
   onDelete: (commission: Commission) => void;
   isLoading?: boolean;
 }
@@ -107,7 +108,7 @@ function StatusBadge({ group }: { group: ProfessionalGroup }) {
   );
 }
 
-export function CommissionsTable({ commissions, onMarkAsPaid, onDelete, isLoading }: CommissionsTableProps) {
+export function CommissionsTable({ commissions, onMarkAsPaid, onUnmarkAsPaid, onDelete, isLoading }: CommissionsTableProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   if (commissions.length === 0) {
@@ -190,7 +191,7 @@ export function CommissionsTable({ commissions, onMarkAsPaid, onDelete, isLoadin
                     <td className="whitespace-nowrap px-4 py-3 text-right">
                       {!hasMultiple && (
                         <div className="flex items-center justify-end gap-2">
-                          {group.items[0].status !== 'PAID' && (
+                          {group.items[0].status !== 'PAID' ? (
                             <button
                               onClick={(e) => { e.stopPropagation(); onMarkAsPaid(group.items[0]); }}
                               disabled={isLoading}
@@ -198,6 +199,15 @@ export function CommissionsTable({ commissions, onMarkAsPaid, onDelete, isLoadin
                               title="Marcar como pago"
                             >
                               <CheckCircle className="h-4 w-4" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onUnmarkAsPaid(group.items[0]); }}
+                              disabled={isLoading}
+                              className="rounded-lg p-1.5 text-amber-500 hover:bg-amber-500/10 disabled:opacity-50"
+                              title="Desfazer pagamento"
+                            >
+                              <RotateCcw className="h-4 w-4" />
                             </button>
                           )}
                           <button
@@ -239,7 +249,7 @@ export function CommissionsTable({ commissions, onMarkAsPaid, onDelete, isLoadin
                       </td>
                       <td className="whitespace-nowrap px-4 py-2 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          {commission.status !== 'PAID' && (
+                          {commission.status !== 'PAID' ? (
                             <button
                               onClick={() => onMarkAsPaid(commission)}
                               disabled={isLoading}
@@ -247,6 +257,15 @@ export function CommissionsTable({ commissions, onMarkAsPaid, onDelete, isLoadin
                               title="Marcar como pago"
                             >
                               <CheckCircle className="h-4 w-4" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => onUnmarkAsPaid(commission)}
+                              disabled={isLoading}
+                              className="rounded-lg p-1.5 text-amber-500 hover:bg-amber-500/10 disabled:opacity-50"
+                              title="Desfazer pagamento"
+                            >
+                              <RotateCcw className="h-4 w-4" />
                             </button>
                           )}
                           <button

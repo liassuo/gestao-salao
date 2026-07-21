@@ -89,6 +89,16 @@ export class CommissionsController {
     return this.commissionsService.markAsPaid(id);
   }
 
+  /**
+   * Desfaz a marcação de pago (PAID → PENDING). Pré-requisito para excluir ou
+   * regerar um período que contenha comissão paga — excluir comissão paga é
+   * bloqueado no service.
+   */
+  @Patch(':id/unpay')
+  async unmarkAsPaid(@Param('id', ParseUUIDPipe) id: string) {
+    return this.commissionsService.unmarkAsPaid(id);
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param('id', ParseUUIDPipe) id: string) {

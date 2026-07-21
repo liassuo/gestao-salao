@@ -52,7 +52,7 @@ export class CommissionsService {
         throw new BadRequestException({
           code: 'COMMISSIONS_PAID_OVERLAP',
           message:
-            'Existem comissões pagas que se sobrepõem a este período. Exclua-as manualmente antes de regerar.',
+            'Existem comissões pagas que se sobrepõem a este período. Desfaça o pagamento delas (botão "Desfazer pagamento") antes de regerar.',
           paidOverlaps: paidOverlaps.map((c: any) => ({
             id: c.id,
             periodStart: c.periodStart,
@@ -599,16 +599,64 @@ export class CommissionsService {
     return updated;
   }
 
+  /**
+   * Desfaz a marcação de pago (PAID → PENDING). Necessário para regerar um
+   * período que contém comissão paga: o fluxo seguro é desfazer o pagamento e
+   * regerar (a regeração estorna e reaplica as deduções de débito) — nunca
+   * excluir a comissão paga.
+   */
+  async unmarkAsPaid(id: string) {
+    const { data: commission, error } = await this.supabase
+      .from('commissions')
+      .select('id, status')
+      .eq('id', id)
+      .single();
+
+    if (error || !commission) {
+      throw new NotFoundException('Comissão não encontrada');
+    }
+
+    if (commission.status !== 'PAID') {
+      throw new BadRequestException('Esta comissão não está marcada como paga');
+    }
+
+    const { data: updated, error: updateError } = await this.supabase
+      .from('commissions')
+      .update({ status: 'PENDING', paidAt: null })
+      .eq('id', id)
+      .select('*, professional:professionals(id, name, commissionRate)')
+      .single();
+
+    if (updateError) throw updateError;
+    return updated;
+  }
+
   async remove(id: string) {
     const { data: commission, error: findError } = await this.supabase
       .from('commissions')
-      .select('id')
+      .select('id, status')
       .eq('id', id)
       .single();
 
     if (findError || !commission) {
       throw new NotFoundException('Comissão não encontrada');
     }
+
+    // Comissão paga não pode simplesmente sumir: o dinheiro saiu e os débitos
+    // deduzidos por ela foram efetivamente cobrados. Excluir sem estorno
+    // deixava débitos DEDUCTED órfãos (a FK anula deductedFromCommissionId) e
+    // regerar o período pagava o profissional de novo. Fluxo correto: desfazer
+    // o pagamento primeiro (PATCH /commissions/:id/unpay), depois excluir/regerar.
+    if (commission.status === 'PAID') {
+      throw new BadRequestException(
+        'Comissão paga não pode ser excluída. Desfaça o pagamento primeiro.',
+      );
+    }
+
+    // Estorna as deduções de débito ANTES de apagar — senão os débitos ficam
+    // DEDUCTED para sempre (sem vínculo, impossíveis de estornar depois) e o
+    // profissional é cobrado de novo na próxima geração.
+    await this.professionalDebtsService.reverseDeductionsForCommissions([id]);
 
     const { error } = await this.supabase.from('commissions').delete().eq('id', id);
 

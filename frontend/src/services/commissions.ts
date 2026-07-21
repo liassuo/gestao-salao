@@ -39,6 +39,13 @@ export const commissionsService = {
     return response.data;
   },
 
+  // Desfaz a marcação de pago (PAID → PENDING). Necessário antes de excluir ou
+  // regerar um período que contenha comissão paga.
+  async unmarkAsPaid(id: string): Promise<Commission> {
+    const response = await api.patch<Commission>(`/commissions/${id}/unpay`);
+    return response.data;
+  },
+
   async delete(id: string): Promise<void> {
     await api.delete(`/commissions/${id}`);
   },
