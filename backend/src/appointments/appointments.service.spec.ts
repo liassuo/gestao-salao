@@ -609,6 +609,71 @@ describe('AppointmentsService', () => {
 
       await expect(service.cancel('appt-1')).rejects.toThrow(BadRequestException);
     });
+
+    it('tira do caixa o pré-pagamento JÁ PAGO ao cancelar (excludedFromCashAt) e recalcula o caixa do dia', async () => {
+      // Bug relatado (vídeo 18/07): agendamento pré-pago (PIX pelo app) entra no
+      // caixa do dia do agendamento na confirmação; cancelar não removia — "o
+      // dinheiro não sai do caixa". O payment NÃO é apagado (dinheiro real,
+      // conciliação Asaas), só sai da receita.
+      const chain = mockChain();
+      chains['appointments'] = chain;
+      chain.single
+        .mockResolvedValueOnce({ data: { id: 'appt-1', status: 'SCHEDULED' }, error: null })
+        .mockResolvedValueOnce({ data: { id: 'appt-1', status: 'CANCELED' }, error: null });
+
+      chains['payments'] = mockChain();
+      chains['payments'].not.mockResolvedValue({
+        data: [
+          {
+            id: 'pay-1',
+            amount: 7000,
+            businessDate: '2026-07-22T00:00:00',
+            paidAt: '2026-07-20T14:00:00',
+            notes: 'Pagamento PIX',
+            excludedFromCashAt: null,
+          },
+        ],
+        error: null,
+      });
+
+      await service.cancel('appt-1');
+
+      expect(chains['payments'].update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          excludedFromCashAt: expect.any(String),
+          notes: expect.stringContaining('agendamento cancelado'),
+        }),
+      );
+      expect(chains['payments'].update.mock.calls[0][0].notes).toContain('Pagamento PIX');
+      // recálculo do caixa do DIA CONTÁBIL do pagamento (fechado ⇒ totais persistidos)
+      const link = (service as any).cashRegisterService.linkPaymentToBusinessDateRegister;
+      expect(link).toHaveBeenCalledWith('pay-1', '2026-07-22T00:00:00');
+    });
+
+    it('não toca pagamento já excluído do caixa (idempotente) nem cobranças não pagas', async () => {
+      const chain = mockChain();
+      chains['appointments'] = chain;
+      chain.single
+        .mockResolvedValueOnce({ data: { id: 'appt-1', status: 'SCHEDULED' }, error: null })
+        .mockResolvedValueOnce({ data: { id: 'appt-1', status: 'CANCELED' }, error: null });
+
+      chains['payments'] = mockChain();
+      chains['payments'].not.mockResolvedValue({
+        data: [
+          {
+            id: 'pay-1',
+            amount: 7000,
+            paidAt: '2026-07-20T14:00:00',
+            excludedFromCashAt: '2026-07-21T09:00:00', // já excluído antes
+          },
+        ],
+        error: null,
+      });
+
+      await service.cancel('appt-1');
+
+      expect(chains['payments'].update).not.toHaveBeenCalled();
+    });
   });
 
   // -----------------------------------------------------------------------
@@ -688,6 +753,38 @@ describe('AppointmentsService', () => {
       });
 
       await expect(service.markAsNoShow('appt-1')).rejects.toThrow(BadRequestException);
+    });
+
+    it('tira do caixa o pré-pagamento JÁ PAGO no no-show (mesma regra do cancel)', async () => {
+      const chain = mockChain();
+      chains['appointments'] = chain;
+      chain.single
+        .mockResolvedValueOnce({ data: { id: 'appt-1', status: 'SCHEDULED' }, error: null })
+        .mockResolvedValueOnce({ data: { id: 'appt-1', status: 'NO_SHOW' }, error: null });
+
+      chains['payments'] = mockChain();
+      chains['payments'].not.mockResolvedValue({
+        data: [
+          {
+            id: 'pay-1',
+            amount: 7000,
+            businessDate: '2026-07-22T00:00:00',
+            paidAt: '2026-07-20T14:00:00',
+            notes: null,
+            excludedFromCashAt: null,
+          },
+        ],
+        error: null,
+      });
+
+      await service.markAsNoShow('appt-1');
+
+      expect(chains['payments'].update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          excludedFromCashAt: expect.any(String),
+          notes: expect.stringContaining('no-show'),
+        }),
+      );
     });
   });
 

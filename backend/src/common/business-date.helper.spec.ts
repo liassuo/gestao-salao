@@ -26,6 +26,16 @@ describe('isRevenuePayment', () => {
       expect(isRevenuePayment({ asaasStatus: s })).toBe(false);
     }
   });
+
+  it('excludedFromCashAt (pré-pago de agendamento cancelado/no-show) NÃO conta como receita', () => {
+    // Pagamento REAL (não estornado no Asaas) mas excluído localmente do caixa.
+    expect(
+      isRevenuePayment({ asaasStatus: 'RECEIVED', excludedFromCashAt: '2026-07-21T10:00:00' }),
+    ).toBe(false);
+    expect(isRevenuePayment({ excludedFromCashAt: '2026-07-21T10:00:00' })).toBe(false);
+    // Sem a marca, segue contando.
+    expect(isRevenuePayment({ asaasStatus: 'RECEIVED', excludedFromCashAt: null })).toBe(true);
+  });
 });
 
 describe('fetchPaymentsByBusinessDate (filtro de estorno)', () => {
@@ -117,5 +127,26 @@ describe('fetchPaymentsByBusinessDate (filtro de estorno)', () => {
     );
     const total = out.reduce((s, p) => s + p.amount, 0);
     expect(total).toBe(350); // inclui o estorno
+  });
+
+  it('pagamento excluído do caixa (excludedFromCashAt — cancelamento/no-show) fica fora da receita', async () => {
+    const withExcluded = [
+      ...rows,
+      {
+        amount: 70,
+        asaasStatus: 'RECEIVED',
+        businessDate: '2026-05-07T00:00:00',
+        paidAt: '2026-05-05T12:00:00',
+        excludedFromCashAt: '2026-05-06T09:00:00', // pré-pago, agendamento cancelado
+      },
+    ];
+    const out = await fetchPaymentsByBusinessDate(
+      mockSupabase(withExcluded) as any,
+      'amount',
+      '2026-05-07T00:00:00',
+      '2026-05-07T23:59:59',
+    );
+    expect(out.reduce((s, p) => s + p.amount, 0)).toBe(150); // os 70 excluídos não voltam
+    expect(out.some((p) => p.excludedFromCashAt)).toBe(false);
   });
 });

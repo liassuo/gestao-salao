@@ -21,8 +21,18 @@ export const NON_REVENUE_ASAAS_STATUSES = [
  * Fonte única de verdade — use em TODA leitura de receita (caixa, dashboard,
  * relatórios, comissões) para um pagamento estornado nunca virar "dinheiro
  * fantasma" em nenhuma tela.
+ *
+ * `excludedFromCashAt` é a exclusão LOCAL: pagamento real (dinheiro entrou,
+ * não estornado) que não deve contar como receita — ex.: pré-pago de
+ * agendamento cancelado/no-show. Não dá para usar asaasStatus para isso (é
+ * espelho do gateway; a reconciliação sobrescreveria) nem limpar businessDate
+ * (a perna legada do fetch recontaria pelo paidAt).
  */
-export function isRevenuePayment(p: { asaasStatus?: string | null }): boolean {
+export function isRevenuePayment(p: {
+  asaasStatus?: string | null;
+  excludedFromCashAt?: string | null;
+}): boolean {
+  if (p.excludedFromCashAt) return false;
   return !(
     p.asaasStatus &&
     (NON_REVENUE_ASAAS_STATUSES as readonly string[]).includes(p.asaasStatus)
@@ -68,12 +78,17 @@ export async function fetchPaymentsByBusinessDate(
   endOfDay?: string,
   opts: { includeNonRevenue?: boolean; endExclusive?: boolean } = {},
 ): Promise<any[]> {
-  // Garante asaasStatus no select para o filtro de receita funcionar, sem o
-  // chamador precisar lembrar de pedir. Se select for '*', já vem incluso.
-  const effectiveSelect =
-    select.trim() === '*' || /(^|[,\s])asaasStatus($|[,\s])/.test(select)
-      ? select
-      : `${select}, asaasStatus`;
+  // Garante as colunas do filtro de receita (asaasStatus, excludedFromCashAt)
+  // no select, sem o chamador precisar lembrar de pedir. Se for '*', já vem tudo.
+  let effectiveSelect = select;
+  if (select.trim() !== '*') {
+    if (!/(^|[,\s])asaasStatus($|[,\s])/.test(effectiveSelect)) {
+      effectiveSelect += ', asaasStatus';
+    }
+    if (!/(^|[,\s])excludedFromCashAt($|[,\s])/.test(effectiveSelect)) {
+      effectiveSelect += ', excludedFromCashAt';
+    }
+  }
 
   let qBusiness = supabase
     .from('payments')

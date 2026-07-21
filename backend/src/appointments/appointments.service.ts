@@ -647,7 +647,74 @@ export class AppointmentsService {
       .eq('appointmentId', id)
       .eq('status', 'PENDING');
 
+    // Pré-pagamento (PIX/cartão pelo app) já confirmado: tira do caixa.
+    // Cancelar só cuidava da cobrança PENDENTE — o payment pago ficava contando
+    // como receita do dia do agendamento para sempre ("o dinheiro não sai do caixa").
+    await this.excludePaidPaymentsFromCash(id, 'agendamento cancelado');
+
     return updated;
+  }
+
+  /**
+   * Tira do caixa os pagamentos JÁ PAGOS de um agendamento cancelado/no-show.
+   *
+   * O dinheiro é real (o PIX/cartão caiu na conta Asaas), então o payment NÃO é
+   * apagado — segue visível em Pagamentos e na conciliação; apenas deixa de
+   * contar como receita (caixa/dashboard/relatórios/comissões) via
+   * excludedFromCashAt, respeitado por isRevenuePayment. Estorno ao cliente,
+   * se o dono quiser fazer, é manual no painel do Asaas (e aí o webhook
+   * PAYMENT_REFUNDED marca o asaasStatus por cima, redundante e inofensivo).
+   *
+   * Idempotente: pagamento já excluído não é tocado de novo.
+   */
+  private async excludePaidPaymentsFromCash(
+    appointmentId: string,
+    reason: string,
+  ): Promise<void> {
+    const { data: paidPayments } = await this.supabase
+      .from('payments')
+      .select('id, amount, businessDate, paidAt, notes, excludedFromCashAt, asaasStatus')
+      .eq('appointmentId', appointmentId)
+      .not('paidAt', 'is', null);
+
+    const now = nowLocalIsoString();
+    for (const p of (paidPayments || []) as any[]) {
+      if (!p?.id || p.excludedFromCashAt) continue; // idempotente
+
+      const { error } = await this.supabase
+        .from('payments')
+        .update({
+          excludedFromCashAt: now,
+          notes: `${p.notes ? p.notes + ' | ' : ''}Fora do caixa: ${reason} em ${now.slice(0, 10)}`,
+          updatedAt: now,
+        })
+        .eq('id', p.id);
+      if (error) {
+        this.logger.error(
+          `Falha ao excluir pagamento ${p.id} do caixa (${reason}): ${error.message}`,
+        );
+        continue;
+      }
+
+      this.logger.log(
+        `Pagamento ${p.id} (R$${(p.amount / 100).toFixed(2)}) fora do caixa — ${reason} (agendamento ${appointmentId})`,
+      );
+
+      // Caixa ABERTO recompõe os totais em tempo real; o FECHADO tem totais
+      // persistidos — recalcula o do dia contábil para a receita não ficar
+      // "fantasma" (mesmo padrão do unlinkPayment/estorno Asaas).
+      const accountingDate = p.businessDate || p.paidAt;
+      if (accountingDate) {
+        try {
+          await this.cashRegisterService.linkPaymentToBusinessDateRegister(
+            p.id,
+            String(accountingDate),
+          );
+        } catch {
+          // Recálculo falhar não deve reverter a exclusão já aplicada.
+        }
+      }
+    }
   }
 
   /**
@@ -1059,6 +1126,10 @@ export class AppointmentsService {
       .update({ status: 'CANCELED', updatedAt: nowLocalIsoString() })
       .eq('appointmentId', id)
       .eq('status', 'PENDING');
+
+    // Pré-pagamento já confirmado: tira do caixa (mesma regra do cancel —
+    // cliente não veio, a receita não aconteceu).
+    await this.excludePaidPaymentsFromCash(id, 'no-show');
 
     return updated;
   }
