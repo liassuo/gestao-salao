@@ -131,7 +131,11 @@ export class ProfessionalDebtsService {
 
     const { data, error } = await qb.order('createdAt', { ascending: false });
     if (error) throw error;
-    return data || [];
+    // Registros-ledger de dedução são memória interna do estorno, não débitos —
+    // listá-los duplicava visualmente cada dedução parcial ("virou uma bagunça").
+    return (data || []).filter(
+      (d: any) => !ProfessionalDebtsService.isDeductionLedger(d),
+    );
   }
 
   async findOne(id: string) {
@@ -163,12 +167,16 @@ export class ProfessionalDebtsService {
   async getProfessionalSummary(professionalId: string) {
     const { data, error } = await this.supabase
       .from('professional_debts')
-      .select('amount, amountPaid, remainingBalance, status')
+      .select('amount, amountPaid, remainingBalance, status, parentDebtId, description')
       .eq('professionalId', professionalId);
 
     if (error) throw error;
 
-    const list = data || [];
+    // Ledgers fora das somas: o valor deles já está contido no amountPaid do
+    // débito-pai — contá-los dobrava o total descontado.
+    const list = (data || []).filter(
+      (d: any) => !ProfessionalDebtsService.isDeductionLedger(d),
+    );
     const pending = list.filter((d) => d.status === 'PENDING');
     return {
       professionalId,
@@ -238,13 +246,33 @@ export class ProfessionalDebtsService {
   }
 
   /**
+   * True para registros-ledger de dedução (não são débitos reais — só a memória
+   * de quanto uma comissão cobriu de um débito-pai). Reconhece o formato novo
+   * (parentDebtId) e o legado pré-migração (vínculo por prefixo na descrição).
+   */
+  static isDeductionLedger(d: {
+    parentDebtId?: string | null;
+    description?: string | null;
+  }): boolean {
+    return (
+      !!d.parentDebtId ||
+      (typeof d.description === 'string' &&
+        d.description.startsWith('Dedução parcial do débito '))
+    );
+  }
+
+  /**
    * Aplica dedução de débitos pendentes na comissão recém-gerada.
    * Estratégia:
    *   - Pega débitos PENDING do profissional, mais antigos primeiro.
    *   - Vai consumindo até esgotar a comissão (commissionAmount) ou os débitos.
    *   - Débito totalmente coberto -> DEDUCTED, vinculado à comissão.
-   *   - Débito parcialmente coberto -> permanece PENDING com remainingBalance reduzido,
-   *     e cria-se um SEGUNDO registro DEDUCTED com a parte coberta para auditoria.
+   *   - Débito parcialmente coberto -> permanece PENDING com remainingBalance reduzido.
+   *   - TODA dedução (total ou parcial) grava um registro-ledger com parentDebtId
+   *     e o valor EXATO coberto — é ele que permite estornar com precisão ao
+   *     regerar/excluir a comissão. Sem esse registro, o estorno da quitação
+   *     total restaurava o débito ao valor ORIGINAL, ressuscitando partes já
+   *     descontadas por outras comissões (o "bola de neve" de 07/2026).
    *
    * Retorna o total deduzido, que será gravado em commissions.amountDeductedDebts.
    * Comissão NUNCA fica negativa.
@@ -274,65 +302,49 @@ export class ProfessionalDebtsService {
       const newRemaining = debt.remainingBalance - cover;
       const fullyCovered = newRemaining === 0;
 
-      if (fullyCovered) {
-        // Quita o débito direto, vinculando à comissão.
-        const { error } = await this.supabase
-          .from('professional_debts')
-          .update({
-            amountPaid: newAmountPaid,
-            remainingBalance: 0,
-            status: 'DEDUCTED',
-            deductedFromCommissionId: commissionId,
-            settledAt: now,
-            updatedAt: now,
-          })
-          .eq('id', debt.id);
-        if (error) {
-          this.logger.error(`Erro ao deduzir débito ${debt.id}: ${error.message}`);
-          throw error;
-        }
-      } else {
-        // Cobertura parcial: mantém PENDING com saldo reduzido,
-        // e cria um registro DEDUCTED só com a parte coberta (auditoria).
-        const { error: partialError } = await this.supabase
-          .from('professional_debts')
-          .update({
-            amountPaid: newAmountPaid,
-            remainingBalance: newRemaining,
-            updatedAt: now,
-          })
-          .eq('id', debt.id);
-        if (partialError) {
-          this.logger.error(
-            `Erro ao deduzir parcialmente débito ${debt.id}: ${partialError.message}`,
-          );
-          throw partialError;
-        }
+      // Atualiza o débito-pai (mesma linha sempre; nunca recriada).
+      const { error } = await this.supabase
+        .from('professional_debts')
+        .update({
+          amountPaid: newAmountPaid,
+          remainingBalance: newRemaining,
+          status: fullyCovered ? 'DEDUCTED' : 'PENDING',
+          deductedFromCommissionId: fullyCovered ? commissionId : null,
+          settledAt: fullyCovered ? now : null,
+          updatedAt: now,
+        })
+        .eq('id', debt.id);
+      if (error) {
+        this.logger.error(`Erro ao deduzir débito ${debt.id}: ${error.message}`);
+        throw error;
+      }
 
-        const { error: ledgerError } = await this.supabase
-          .from('professional_debts')
-          .insert({
-            id: randomUUID(),
-            professionalId,
-            orderId: null,
-            amount: cover,
-            amountPaid: cover,
-            remainingBalance: 0,
-            description: `Dedução parcial do débito ${debt.id.slice(0, 8)}${
-              debt.description ? ' — ' + debt.description : ''
-            }`,
-            status: 'DEDUCTED',
-            deductedFromCommissionId: commissionId,
-            settledAt: now,
-            createdAt: now,
-            updatedAt: now,
-          });
-        if (ledgerError) {
-          this.logger.error(
-            `Erro ao criar registro de dedução parcial: ${ledgerError.message}`,
-          );
-          throw ledgerError;
-        }
+      // Ledger da dedução: registra o valor exato que ESTA comissão cobriu
+      // DESTE débito. Fonte única do estorno; excluído de listagens/somas.
+      const { error: ledgerError } = await this.supabase
+        .from('professional_debts')
+        .insert({
+          id: randomUUID(),
+          professionalId,
+          orderId: null,
+          parentDebtId: debt.id,
+          amount: cover,
+          amountPaid: cover,
+          remainingBalance: 0,
+          description: `Dedução parcial do débito ${debt.id.slice(0, 8)}${
+            debt.description ? ' — ' + debt.description : ''
+          }`,
+          status: 'DEDUCTED',
+          deductedFromCommissionId: commissionId,
+          settledAt: now,
+          createdAt: now,
+          updatedAt: now,
+        });
+      if (ledgerError) {
+        this.logger.error(
+          `Erro ao criar registro de dedução: ${ledgerError.message}`,
+        );
+        throw ledgerError;
       }
 
       budgetLeft -= cover;
@@ -346,74 +358,134 @@ export class ProfessionalDebtsService {
    * Estorna as deduções de débito feitas por um conjunto de comissões — usado
    * ANTES de apagar/regerar comissões PENDING, para a geração ser idempotente.
    *
-   * Sem isso, regerar comissão do mesmo período dava valores diferentes a cada
-   * clique (caindo): a comissão antiga era apagada mas os débitos que ela tinha
-   * deduzido permaneciam DEDUCTED, então a base mudava a cada geração.
+   * Caminho normal (formato novo): cada dedução tem um ledger com parentDebtId
+   * e o valor exato coberto → devolve exatamente esse valor ao débito-pai e
+   * apaga o ledger. Nada além do que ESTA comissão cobriu é restaurado.
    *
-   * Trata os dois formatos que applyDeductionToCommission cria:
-   *  (a) Quitação TOTAL: o próprio débito vira DEDUCTED com deductedFromCommissionId
-   *      → volta a PENDING com saldo integral.
-   *  (b) Cobertura PARCIAL: o débito-pai fica PENDING com saldo reduzido e há um
-   *      registro-ledger DEDUCTED separado (orderId null, deductedFromCommissionId)
-   *      → devolve o valor do ledger ao débito-pai e apaga o ledger.
+   * Caminhos legados (dados pré-migração parentDebtId):
+   *  (a) Ledger antigo sem parentDebtId → resolve o pai pelo prefixo de 8 chars
+   *      da descrição (comportamento antigo).
+   *  (b) Débito quitado integralmente SEM ledger (formato antigo da quitação
+   *      total) → restaura amount MENOS a soma dos ledgers de OUTRAS comissões
+   *      que apontam para ele. (Era aqui que o código antigo restaurava o valor
+   *      ORIGINAL inteiro e ressuscitava deduções alheias — o "bola de neve".)
    */
   async reverseDeductionsForCommissions(commissionIds: string[]): Promise<void> {
     if (!commissionIds || commissionIds.length === 0) return;
 
     const { data: deductions } = await this.supabase
       .from('professional_debts')
-      .select('id, professionalId, amount, amountPaid, description, orderId')
+      .select('id, professionalId, amount, amountPaid, description, orderId, parentDebtId')
       .eq('status', 'DEDUCTED')
       .in('deductedFromCommissionId', commissionIds);
 
     if (!deductions || deductions.length === 0) return;
     const now = nowLocalIsoString();
 
-    for (const d of deductions as any[]) {
-      const isPartialLedger =
-        typeof d.description === 'string' &&
-        d.description.startsWith('Dedução parcial do débito ');
+    // Separa ledgers de débitos-pai quitados no formato antigo. Processa os
+    // ledgers PRIMEIRO: se o pai também estiver na lista (quitado por uma das
+    // comissões estornadas), a devolução do ledger precisa acontecer antes do
+    // cálculo do caminho legado (b).
+    const ledgers = (deductions as any[]).filter((d) =>
+      ProfessionalDebtsService.isDeductionLedger(d),
+    );
+    const legacyFull = (deductions as any[]).filter(
+      (d) => !ProfessionalDebtsService.isDeductionLedger(d),
+    );
+    // Pais já restaurados via ledger nesta execução: no formato novo a quitação
+    // total marca o PAI com deductedFromCommissionId E cria o ledger — o pai
+    // também aparece na lista, mas o ledger já devolveu o valor exato; processá-lo
+    // de novo no caminho legado seria dupla restauração.
+    const handledParents = new Set<string>();
 
-      if (isPartialLedger) {
-        // (b) Devolve o valor coberto ao débito-pai (identificado pelos 8 chars
-        // do id no texto) e remove o registro-ledger.
+    for (const d of ledgers) {
+      let parent: any = null;
+      if (d.parentDebtId) {
+        const { data } = await this.supabase
+          .from('professional_debts')
+          .select('id, amountPaid, remainingBalance, status')
+          .eq('id', d.parentDebtId)
+          .maybeSingle();
+        parent = data;
+      } else {
+        // Ledger legado: vínculo só pelo prefixo na descrição.
         const match = /Dedução parcial do débito ([0-9a-f]{8})/.exec(d.description);
-        const parentPrefix = match?.[1];
-        if (parentPrefix) {
+        if (match) {
           const { data: parents } = await this.supabase
             .from('professional_debts')
-            .select('id, amountPaid, remainingBalance, status')
+            .select('id, amountPaid, remainingBalance, status, description')
             .eq('professionalId', d.professionalId)
-            .like('id', `${parentPrefix}%`);
-          const parent = (parents || [])[0] as any;
-          if (parent) {
-            await this.supabase
-              .from('professional_debts')
-              .update({
-                amountPaid: Math.max(0, (parent.amountPaid || 0) - d.amount),
-                remainingBalance: (parent.remainingBalance || 0) + d.amount,
-                status: 'PENDING',
-                settledAt: null,
-                updatedAt: now,
-              })
-              .eq('id', parent.id);
+            .like('id', `${match[1]}%`);
+          const candidates = (parents || []).filter(
+            (p: any) => !ProfessionalDebtsService.isDeductionLedger(p),
+          );
+          if (candidates.length === 1) parent = candidates[0];
+          else if (candidates.length > 1) {
+            this.logger.warn(
+              `Estorno: prefixo ${match[1]} ambíguo (${candidates.length} débitos); ledger ${d.id} mantido para análise manual`,
+            );
+            continue; // não devolve nem apaga — melhor manter rastro que corromper
           }
         }
-        await this.supabase.from('professional_debts').delete().eq('id', d.id);
-      } else {
-        // (a) Débito quitado integralmente por esta comissão → volta a PENDING.
+      }
+
+      if (parent && parent.status !== 'VOIDED') {
         await this.supabase
           .from('professional_debts')
           .update({
-            amountPaid: Math.max(0, (d.amountPaid || 0) - d.amount),
-            remainingBalance: d.amount,
+            amountPaid: Math.max(0, (parent.amountPaid || 0) - d.amount),
+            remainingBalance: (parent.remainingBalance || 0) + d.amount,
             status: 'PENDING',
             deductedFromCommissionId: null,
             settledAt: null,
             updatedAt: now,
           })
-          .eq('id', d.id);
+          .eq('id', parent.id);
+        handledParents.add(parent.id);
       }
+      await this.supabase.from('professional_debts').delete().eq('id', d.id);
+    }
+
+    for (const d of legacyFull) {
+      if (handledParents.has(d.id)) continue; // já restaurado via ledger acima
+      // Formato antigo sem ledger: o quanto ESTA comissão cobriu não foi
+      // registrado. Reconstrói por subtração: valor original MENOS o que os
+      // ledgers de OUTRAS comissões (novo formato ou legado por prefixo)
+      // registram como já coberto antes.
+      const { data: byParentId } = await this.supabase
+        .from('professional_debts')
+        .select('id, amount, deductedFromCommissionId')
+        .eq('parentDebtId', d.id)
+        .eq('status', 'DEDUCTED');
+      const { data: byPrefix } = await this.supabase
+        .from('professional_debts')
+        .select('id, amount, deductedFromCommissionId, description, parentDebtId')
+        .eq('professionalId', d.professionalId)
+        .eq('status', 'DEDUCTED')
+        .like('description', `Dedução parcial do débito ${d.id.slice(0, 8)}%`);
+
+      const otherLedgers = [
+        ...(byParentId || []),
+        ...(byPrefix || []).filter((l: any) => !l.parentDebtId), // evita contar 2x
+      ].filter((l: any) => !commissionIds.includes(l.deductedFromCommissionId));
+
+      const alreadyCoveredElsewhere = otherLedgers.reduce(
+        (s: number, l: any) => s + (l.amount || 0),
+        0,
+      );
+      const restore = Math.max(0, d.amount - alreadyCoveredElsewhere);
+
+      await this.supabase
+        .from('professional_debts')
+        .update({
+          amountPaid: Math.max(0, (d.amountPaid || 0) - restore),
+          remainingBalance: restore,
+          status: 'PENDING',
+          deductedFromCommissionId: null,
+          settledAt: null,
+          updatedAt: now,
+        })
+        .eq('id', d.id);
     }
   }
 

@@ -34,6 +34,14 @@ export class ProfessionalDebt {
   /** Comissão na qual foi descontado (quando status = DEDUCTED) */
   deductedFromCommissionId?: string | null;
 
+  /**
+   * Presente apenas nos registros-LEDGER de dedução: aponta o débito-pai e o
+   * amount do ledger é exatamente quanto a comissão cobriu dele. Ledgers não
+   * são débitos reais — ficam fora de listagens e somas e existem para o
+   * estorno devolver o valor exato ao regerar/excluir a comissão.
+   */
+  parentDebtId?: string | null;
+
   settledAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;

@@ -39,6 +39,16 @@ export function useMarkCommissionAsPaid() {
   });
 }
 
+export function useUnmarkCommissionAsPaid() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => commissionsService.unmarkAsPaid(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: COMMISSIONS_KEY });
+    },
+  });
+}
+
 export function usePoteReport(
   periodStart?: string,
   periodEnd?: string,

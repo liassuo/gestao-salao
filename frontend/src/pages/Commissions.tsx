@@ -5,6 +5,7 @@ import {
   useCommissions,
   useGenerateCommissions,
   useMarkCommissionAsPaid,
+  useUnmarkCommissionAsPaid,
   useDeleteCommission,
   getApiErrorMessage,
 } from '@/hooks';
@@ -164,11 +165,13 @@ function CommissionsContent() {
     endDate: todayIso(),
   }));
   const [payingCommission, setPayingCommission] = useState<Commission | null>(null);
+  const [unpayingCommission, setUnpayingCommission] = useState<Commission | null>(null);
   const [deletingCommission, setDeletingCommission] = useState<Commission | null>(null);
 
   const { data: commissions, isLoading: isLoadingCommissions } = useCommissions(filters);
   const generateCommissions = useGenerateCommissions();
   const markAsPaid = useMarkCommissionAsPaid();
+  const unmarkAsPaid = useUnmarkCommissionAsPaid();
   const deleteCommission = useDeleteCommission();
   const toast = useToast();
 
@@ -200,6 +203,17 @@ function CommissionsContent() {
       await markAsPaid.mutateAsync(payingCommission.id);
       setPayingCommission(null);
       toast.success('Comissão paga', 'A comissão foi marcada como paga.');
+    } catch (err) {
+      toast.error('Erro', getApiErrorMessage(err));
+    }
+  };
+
+  const handleUnmarkAsPaid = async () => {
+    if (!unpayingCommission) return;
+    try {
+      await unmarkAsPaid.mutateAsync(unpayingCommission.id);
+      setUnpayingCommission(null);
+      toast.success('Pagamento desfeito', 'A comissão voltou para pendente.');
     } catch (err) {
       toast.error('Erro', getApiErrorMessage(err));
     }
@@ -276,8 +290,9 @@ function CommissionsContent() {
         <CommissionsTable
           commissions={list}
           onMarkAsPaid={setPayingCommission}
+          onUnmarkAsPaid={setUnpayingCommission}
           onDelete={setDeletingCommission}
-          isLoading={markAsPaid.isPending || deleteCommission.isPending}
+          isLoading={markAsPaid.isPending || unmarkAsPaid.isPending || deleteCommission.isPending}
         />
       )}
 
@@ -292,11 +307,21 @@ function CommissionsContent() {
         isLoading={markAsPaid.isPending}
       />
       <ConfirmModal
+        isOpen={!!unpayingCommission}
+        onClose={() => setUnpayingCommission(null)}
+        onConfirm={handleUnmarkAsPaid}
+        title="Desfazer Pagamento"
+        message={`Deseja desfazer o pagamento da comissão de "${unpayingCommission?.professional?.name || 'Profissional'}"? Ela voltará para pendente.`}
+        confirmLabel="Desfazer"
+        variant="info"
+        isLoading={unmarkAsPaid.isPending}
+      />
+      <ConfirmModal
         isOpen={!!deletingCommission}
         onClose={() => setDeletingCommission(null)}
         onConfirm={handleDelete}
         title="Excluir Comissão"
-        message={`Tem certeza que deseja excluir a comissão de "${deletingCommission?.professional.name}"? Esta ação não pode ser desfeita.`}
+        message={`Tem certeza que deseja excluir a comissão de "${deletingCommission?.professional.name}"? Os débitos descontados nela voltarão a ficar em aberto.`}
         confirmLabel="Excluir"
         variant="danger"
         isLoading={deleteCommission.isPending}

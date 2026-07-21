@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { BadRequestException } from '@nestjs/common';
 import { CommissionsService } from './commissions.service';
 import { SupabaseService } from '../supabase/supabase.service';
 import { ProfessionalDebtsService } from '../professional-debts/professional-debts.service';
@@ -33,6 +34,7 @@ const mockSupabase = {
 
 describe('CommissionsService', () => {
   let service: CommissionsService;
+  let debtsService: { applyDeductionToCommission: jest.Mock; reverseDeductionsForCommissions: jest.Mock };
 
   beforeEach(async () => {
     chains = {};
@@ -42,21 +44,76 @@ describe('CommissionsService', () => {
       return chains[table];
     });
 
+    debtsService = {
+      applyDeductionToCommission: jest.fn().mockResolvedValue(0),
+      reverseDeductionsForCommissions: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CommissionsService,
         { provide: SupabaseService, useValue: mockSupabase },
-        {
-          provide: ProfessionalDebtsService,
-          useValue: {
-            applyDeductionToCommission: jest.fn().mockResolvedValue(0),
-            reverseDeductionsForCommissions: jest.fn(),
-          },
-        },
+        { provide: ProfessionalDebtsService, useValue: debtsService },
       ],
     }).compile();
 
     service = module.get<CommissionsService>(CommissionsService);
+  });
+
+  describe('remove', () => {
+    it('estorna as deduções de débito ANTES de apagar uma comissão PENDING', async () => {
+      chains['commissions'] = mockChain();
+      chains['commissions'].single.mockResolvedValue({
+        data: { id: 'com-1', status: 'PENDING' },
+        error: null,
+      });
+
+      await service.remove('com-1');
+
+      expect(debtsService.reverseDeductionsForCommissions).toHaveBeenCalledWith(['com-1']);
+      expect(chains['commissions'].delete).toHaveBeenCalled();
+      // ordem: estorno primeiro, delete depois (a FK anula o vínculo no delete)
+      const reverseOrder = debtsService.reverseDeductionsForCommissions.mock.invocationCallOrder[0];
+      const deleteOrder = chains['commissions'].delete.mock.invocationCallOrder[0];
+      expect(reverseOrder).toBeLessThan(deleteOrder);
+    });
+
+    it('bloqueia excluir comissão PAID (sem estornar nem apagar)', async () => {
+      chains['commissions'] = mockChain();
+      chains['commissions'].single.mockResolvedValue({
+        data: { id: 'com-1', status: 'PAID' },
+        error: null,
+      });
+
+      await expect(service.remove('com-1')).rejects.toThrow(BadRequestException);
+      expect(debtsService.reverseDeductionsForCommissions).not.toHaveBeenCalled();
+      expect(chains['commissions'].delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('unmarkAsPaid', () => {
+    it('volta uma comissão PAID para PENDING e limpa paidAt', async () => {
+      chains['commissions'] = mockChain();
+      chains['commissions'].single
+        .mockResolvedValueOnce({ data: { id: 'com-1', status: 'PAID' }, error: null })
+        .mockResolvedValueOnce({ data: { id: 'com-1', status: 'PENDING', paidAt: null }, error: null });
+
+      const result = await service.unmarkAsPaid('com-1');
+
+      expect(chains['commissions'].update).toHaveBeenCalledWith({ status: 'PENDING', paidAt: null });
+      expect(result.status).toBe('PENDING');
+    });
+
+    it('rejeita desfazer pagamento de comissão que não está PAID', async () => {
+      chains['commissions'] = mockChain();
+      chains['commissions'].single.mockResolvedValue({
+        data: { id: 'com-1', status: 'PENDING' },
+        error: null,
+      });
+
+      await expect(service.unmarkAsPaid('com-1')).rejects.toThrow(BadRequestException);
+      expect(chains['commissions'].update).not.toHaveBeenCalled();
+    });
   });
 
   describe('computeCommissionBreakdownForPeriod', () => {
