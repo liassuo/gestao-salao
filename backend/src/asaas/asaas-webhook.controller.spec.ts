@@ -1281,6 +1281,10 @@ describe('AsaasWebhookController (e2e)', () => {
       expect(state.client_subscriptions[0].status).toBe('ACTIVE');
       expect(state.client_subscriptions[0].cutsUsedThisMonth).toBe(0);
       expect(new Date(state.client_subscriptions[0].endDate).getTime()).toBeGreaterThan(Date.now());
+      // payment VINCULADO à assinatura reativada — sem isso isCurrentCyclePaid
+      // (que filtra por subscriptionId) seguia "ciclo não pago" e o admin
+      // confirmava manualmente de novo (payment duplicado — caso Roger 22/07).
+      expect(state.payments[0].subscriptionId).toBe('sub-1');
     });
 
     it('SEM espelho local (insert falhou na geração do QR): fallback por externalReference=clientId recria DEBT_PAYMENT e baixa tudo (caso Paulo Sergio 16/07/2026)', async () => {
@@ -1312,6 +1316,36 @@ describe('AsaasWebhookController (e2e)', () => {
       expect(state.debts[0].isSettled).toBe(true);
       expect(state.clients[0].hasDebts).toBe(false);
       expect(state.client_subscriptions[0].status).toBe('ACTIVE');
+      expect(state.payments[0].subscriptionId).toBe('sub-1');
+    });
+
+    it('assinatura JÁ ACTIVE (reentrega/webhook atrasado): quita a dívida e vincula o payment pela tag [sub:...]', async () => {
+      // Reativação já aconteceu por outra via, mas a dívida ficou aberta e o
+      // espelho sem vínculo — a baixa deve quitar e vincular mesmo sem reativar.
+      const subUuid = '11111111-2222-4333-8444-555555555555';
+      const tables = debtTables();
+      tables.client_subscriptions[0].id = subUuid;
+      tables.client_subscriptions[0].status = 'ACTIVE';
+      tables.client_subscriptions[0].endDate = new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString();
+      // a tag [sub:...] só carrega UUID de verdade (regex do parse é estrita)
+      tables.debts[0].description = `Cobrança não paga — Plano Premium (PIX) [sub:${subUuid}:cycle:2026-07-15]`;
+      const { controller, state } = await buildController(tables, {
+        getCharge: jest.fn().mockResolvedValue(settledCharge),
+      });
+
+      await controller.handleWebhook(
+        paymentEvent(AsaasWebhookEvent.PAYMENT_RECEIVED, basePaymentData({
+          id: 'asaas_pay_debt',
+          value: 140,
+          externalReference: 'client-1',
+          paymentDate: '2026-07-16',
+        })),
+        'test-token',
+      );
+
+      expect(state.debts[0].isSettled).toBe(true);
+      expect(state.clients[0].hasDebts).toBe(false);
+      expect(state.payments[0].subscriptionId).toBe(subUuid); // via tag da dívida
     });
 
     it('fallback de dívida NÃO grava nada se a cobrança não está liquidada no Asaas (evento forjado/mal-classificado)', async () => {

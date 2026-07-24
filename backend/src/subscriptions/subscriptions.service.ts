@@ -3608,10 +3608,21 @@ export class SubscriptionsService {
       .from('payments')
       .update({ businessDate: reconBusinessDate, updatedAt: now })
       .eq('id', paymentId);
-    await this.cashRegisterService.linkPaymentToBusinessDateRegister(
-      paymentId,
-      reconBusinessDate,
-    );
+    // Falha no vínculo/recalculo do caixa NÃO pode abortar a reconciliação:
+    // este método ainda vai quitar dívida e reativar assinatura logo abaixo —
+    // um throw aqui deixava o payment criado mas o cliente bloqueado com a
+    // dívida aberta (caso Lucas lima, 20/07/2026: espelho criado e baixa nunca
+    // executada). O caixa se acerta no próximo recálculo.
+    try {
+      await this.cashRegisterService.linkPaymentToBusinessDateRegister(
+        paymentId,
+        reconBusinessDate,
+      );
+    } catch (cashError) {
+      this.logger.error(
+        `Reconciliação ${asaasPaymentId}: falha ao vincular/recalcular caixa (${cashError instanceof Error ? cashError.message : cashError}). Seguindo com a baixa.`,
+      );
+    }
 
     if (subscriptionId) {
       const { data: sub } = await this.supabase

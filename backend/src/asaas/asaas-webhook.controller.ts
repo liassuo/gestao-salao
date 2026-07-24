@@ -410,6 +410,9 @@ export class AsaasWebhookController {
                 notes: 'DEBT_PAYMENT',
                 asaasPaymentId,
                 asaasStatus: status,
+                // Explícito: o settleDebtPaymentAndReactivate vincula depois via
+                // filtro .is('subscriptionId', null) — deixa a intenção visível.
+                subscriptionId: null,
                 paidAt: confirmedAt,
                 // Pagamento de dívida não tem agendamento → data contábil = dia real do pagamento.
                 businessDate: resolveBusinessDate(null, confirmedAt),
