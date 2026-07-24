@@ -178,6 +178,12 @@ export async function settleDebtPaymentAndReactivate(
   const { supabase, logger, isChargeSettled } = deps;
   const debtNow = nowLocalIsoString();
   const result: DebtSettlementResult = { settledCount: 0, reactivated: false };
+  // Assinatura que este pagamento cobre — para VINCULAR o payment espelho no
+  // final (isCurrentCyclePaid filtra por subscriptionId; sem o vínculo a tela
+  // de agendamento seguia dizendo "ciclo não pago" mesmo com a assinatura
+  // reativada, e o admin confirmava manualmente de novo → payment duplicado no
+  // caixa — caso Roger lima, 22/07/2026).
+  let linkedSubscriptionId: string | null = null;
 
   const { data: pendingDebts } = await supabase
     .from('debts')
@@ -270,6 +276,7 @@ export async function settleDebtPaymentAndReactivate(
       }
 
       result.reactivated = true;
+      if (!linkedSubscriptionId) linkedSubscriptionId = (susp as any).id;
       logger.log(
         `Assinatura ${susp.id} REATIVADA após quitação de dívida via PIX (cobrança ${asaasPaymentId}).`,
       );
@@ -307,6 +314,33 @@ export async function settleDebtPaymentAndReactivate(
     logger.log(
       `Dívidas do cliente ${clientId} quitadas via PIX (${pendingDebts!.length} dívida(s)).`,
     );
+  }
+
+  // Vincula o payment espelho desta cobrança à assinatura coberta. Sem sub
+  // reativada nesta chamada (ex.: já estava ACTIVE por reentrega/idempotência),
+  // resolve pela tag [sub:...] da dívida de mensalidade quitada.
+  if (!linkedSubscriptionId) {
+    for (const d of pendingDebts || []) {
+      if (!isSubscriptionDelinquencyDebt((d as any).description)) continue;
+      linkedSubscriptionId = parseSubscriptionIdFromDebtDescription((d as any).description);
+      if (linkedSubscriptionId) break;
+    }
+  }
+  if (linkedSubscriptionId && (result.settledCount > 0 || result.reactivated)) {
+    const { error: linkError } = await supabase
+      .from('payments')
+      .update({ subscriptionId: linkedSubscriptionId, updatedAt: debtNow })
+      .eq('asaasPaymentId', asaasPaymentId)
+      .is('subscriptionId', null);
+    if (linkError) {
+      logger.warn(
+        `Falha ao vincular payment da cobrança ${asaasPaymentId} à assinatura ${linkedSubscriptionId}: ${linkError.message}`,
+      );
+    } else {
+      logger.log(
+        `Payment da cobrança ${asaasPaymentId} vinculado à assinatura ${linkedSubscriptionId} (ciclo pago visível).`,
+      );
+    }
   }
 
   return result;
