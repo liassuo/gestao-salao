@@ -25,6 +25,7 @@ import { AsaasService } from './asaas.service';
 import { AsaasWebhookController } from './asaas-webhook.controller';
 import { AsaasWebhookEvent, AsaasChargeStatus } from './asaas.types';
 import { NotificationsService } from '../notifications/notifications.service';
+import { localDateString } from '../common/datetime.util';
 
 // ============================================================
 // Stateful mock do Supabase (suficiente para o webhook)
@@ -1397,6 +1398,144 @@ describe('AsaasWebhookController (e2e)', () => {
       expect(state.payments).toHaveLength(1);
       expect(state.debts.every((d: any) => d.isSettled === false)).toBe(true);
       expect(state.client_subscriptions[0].status).toBe('SUSPENDED');
+    });
+
+    it('reativação cancela a fatura OVERDUE da recorrência do ciclo quitado e PRESERVA a do próximo ciclo (caso Leandro Belo 30/07/2026)', async () => {
+      const tables = debtTables();
+      tables.client_subscriptions[0].asaasSubscriptionId = 'sub_rec1';
+      const paidCycleEndDay = String(tables.client_subscriptions[0].endDate).substring(0, 10);
+      tables.payments = [
+        {
+          id: 'pay-debt-1',
+          asaasPaymentId: 'asaas_pay_debt',
+          asaasStatus: 'PENDING',
+          appointmentId: null,
+          subscriptionId: null,
+          clientId: 'client-1',
+          amount: 14000,
+          paidAt: null,
+          notes: 'DEBT_PAYMENT',
+        },
+        // espelho local da fatura vencida (criado pelo webhook OVERDUE)
+        {
+          id: 'pay-mirror-1',
+          asaasPaymentId: 'ch_overdue',
+          asaasStatus: 'OVERDUE',
+          appointmentId: null,
+          subscriptionId: 'sub-1',
+          clientId: 'client-1',
+          amount: 14000,
+          paidAt: null,
+          notes: 'Cobrança recorrente vencida (cobrança ch_overdue)',
+        },
+      ];
+      const cancelCharge = jest.fn().mockResolvedValue({});
+      const updateSubscription = jest.fn().mockResolvedValue({});
+      const getSubscriptionPayments = jest.fn().mockResolvedValue([
+        // fatura do ciclo que a dívida cobrava — redundante, morre
+        { id: 'ch_overdue', status: 'OVERDUE', dueDate: paidCycleEndDay, deleted: false },
+        // fatura do próximo ciclo — legítima, sobrevive
+        { id: 'ch_next', status: 'PENDING', dueDate: '2099-01-01', deleted: false },
+        // fatura antiga já paga — nunca tocar
+        { id: 'ch_paid', status: 'RECEIVED', dueDate: paidCycleEndDay, paymentDate: paidCycleEndDay },
+      ]);
+      const { controller, state } = await buildController(tables, {
+        getCharge: jest.fn().mockResolvedValue(settledCharge),
+        cancelCharge,
+        updateSubscription,
+        getSubscriptionPayments,
+      });
+
+      await controller.handleWebhook(
+        paymentEvent(AsaasWebhookEvent.PAYMENT_RECEIVED, basePaymentData({
+          id: 'asaas_pay_debt',
+          value: 140,
+          externalReference: 'client-1',
+          paymentDate: '2026-07-16',
+        })),
+        'test-token',
+      );
+
+      // baixa completa continua valendo
+      expect(state.debts[0].isSettled).toBe(true);
+      expect(state.client_subscriptions[0].status).toBe('ACTIVE');
+      // só a fatura redundante foi cancelada; a do próximo ciclo sobreviveu
+      expect(cancelCharge).toHaveBeenCalledTimes(1);
+      expect(cancelCharge).toHaveBeenCalledWith('ch_overdue');
+      // espelho local deixa de constar pendente
+      const mirror = state.payments.find((p: any) => p.id === 'pay-mirror-1');
+      expect(mirror.asaasStatus).toBe('CANCELED');
+      // pagou na carência → dia-âncora preservado → recorrência já está alinhada
+      expect(updateSubscription).not.toHaveBeenCalled();
+    });
+
+    it('quitação além da carência (dia-âncora move): cancela a fatura deslocada do meio do ciclo e realinha o nextDueDate da recorrência (casos Gustavo Parreira / Gabriel Marra 30/07/2026)', async () => {
+      const tables = debtTables();
+      tables.client_subscriptions[0].asaasSubscriptionId = 'sub_rec1';
+      // venceu 15 dias atrás — além da carência de 7d → novo ciclo começa hoje
+      tables.client_subscriptions[0].endDate = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
+      const paidCycleEndDay = String(tables.client_subscriptions[0].endDate).substring(0, 10);
+      // a recorrência já gerou a fatura do mês seguinte NO DIA ANTIGO — que agora
+      // cai no meio do novo ciclo (hoje → hoje+1 mês) e cobraria o ciclo pago
+      const driftedDueDay = localDateString(new Date(Date.now() + 10 * 24 * 60 * 60 * 1000));
+      const cancelCharge = jest.fn().mockResolvedValue({});
+      const updateSubscription = jest.fn().mockResolvedValue({});
+      const getSubscriptionPayments = jest.fn().mockResolvedValue([
+        { id: 'ch_overdue', status: 'OVERDUE', dueDate: paidCycleEndDay, deleted: false },
+        { id: 'ch_drift', status: 'PENDING', dueDate: driftedDueDay, deleted: false },
+      ]);
+      const { controller, state } = await buildController(tables, {
+        getCharge: jest.fn().mockResolvedValue(settledCharge),
+        cancelCharge,
+        updateSubscription,
+        getSubscriptionPayments,
+      });
+
+      await controller.handleWebhook(
+        paymentEvent(AsaasWebhookEvent.PAYMENT_RECEIVED, basePaymentData({
+          id: 'asaas_pay_debt',
+          value: 140,
+          externalReference: 'client-1',
+          paymentDate: '2026-07-16',
+        })),
+        'test-token',
+      );
+
+      expect(state.client_subscriptions[0].status).toBe('ACTIVE');
+      expect(cancelCharge).toHaveBeenCalledWith('ch_overdue');
+      expect(cancelCharge).toHaveBeenCalledWith('ch_drift');
+      // recorrência realinhada ao fim do NOVO ciclo (senão a fatura renasce no
+      // dia antigo todo mês, no meio do ciclo pago)
+      const newCycleEndDay = localDateString(new Date(state.client_subscriptions[0].endDate));
+      expect(updateSubscription).toHaveBeenCalledTimes(1);
+      expect(updateSubscription).toHaveBeenCalledWith('sub_rec1', { nextDueDate: newCycleEndDay });
+    });
+
+    it('falha na limpeza de faturas NÃO desfaz a quitação nem a reativação', async () => {
+      const tables = debtTables();
+      tables.client_subscriptions[0].asaasSubscriptionId = 'sub_rec1';
+      const cancelCharge = jest.fn();
+      const { controller, state } = await buildController(tables, {
+        getCharge: jest.fn().mockResolvedValue(settledCharge),
+        cancelCharge,
+        updateSubscription: jest.fn(),
+        getSubscriptionPayments: jest.fn().mockRejectedValue(new Error('asaas fora do ar')),
+      });
+
+      await controller.handleWebhook(
+        paymentEvent(AsaasWebhookEvent.PAYMENT_RECEIVED, basePaymentData({
+          id: 'asaas_pay_debt',
+          value: 140,
+          externalReference: 'client-1',
+          paymentDate: '2026-07-16',
+        })),
+        'test-token',
+      );
+
+      expect(state.debts[0].isSettled).toBe(true);
+      expect(state.clients[0].hasDebts).toBe(false);
+      expect(state.client_subscriptions[0].status).toBe('ACTIVE');
+      expect(cancelCharge).not.toHaveBeenCalled();
     });
   });
 });

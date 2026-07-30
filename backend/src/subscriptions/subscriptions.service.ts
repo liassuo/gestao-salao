@@ -3719,6 +3719,12 @@ export class SubscriptionsService {
               return true;
             }
           },
+          asaas: {
+            configured: this.asaasService.configured,
+            cancelCharge: (id) => this.asaasService.cancelCharge(id),
+            getSubscriptionPayments: (id) => this.asaasService.getSubscriptionPayments(id),
+            updateSubscription: (id, payload) => this.asaasService.updateSubscription(id, payload),
+          },
         },
         clientId,
         amount,
