@@ -34,6 +34,12 @@ import {
   GrantCourtesyDto,
 } from './dto';
 
+/**
+ * Guarda anti-recriação: a assinatura Asaas antiga é uma recorrência de CARTÃO
+ * viva (ativa e cobrando). Recriar/cancelar destruiria o débito automático.
+ */
+export class LiveCardRecurrenceError extends BadRequestException {}
+
 @Injectable()
 export class SubscriptionsService {
   private readonly logger = new Logger(SubscriptionsService.name);
@@ -822,14 +828,24 @@ export class SubscriptionsService {
     let subscription: any =
       list.find((s) => s.status === 'ACTIVE') ?? list[0] ?? null;
 
-    // Auto-reconciliação: se está PENDING_PAYMENT e Asaas configurado, tenta sincronizar
-    // antes de devolver. Cobre o caso "cliente pagou PIX, Asaas confirmou, webhook falhou".
-    if (subscription && subscription.status === 'PENDING_PAYMENT' && this.asaasService.configured) {
-      try {
-        const synced = await this.syncWithAsaas(subscription.id);
-        if (synced && synced.id) subscription = synced;
-      } catch (e) {
-        this.logger.warn(`[auto-sync] Falha ao reconciliar assinatura ${subscription.id} com Asaas: ${e}`);
+    // Auto-reconciliação: PENDING_PAYMENT sempre; SUSPENDED também, dentro da
+    // janela de recência (mesma régua do reconcile-cron). Cobre "cliente pagou
+    // (PIX ou cartão recorrente), Asaas confirmou, webhook falhou" — antes, uma
+    // SUSPENDED só se curava pelo cron; se o cron não rodasse (instância dormindo),
+    // o cliente abria o app e ficava "inadimplente" para sempre.
+    if (subscription && this.asaasService.configured) {
+      const suspendedRecent =
+        subscription.status === 'SUSPENDED' &&
+        subscription.updatedAt &&
+        Date.now() - new Date(subscription.updatedAt).getTime() <=
+          SubscriptionsService.RECONCILE_SUSPENDED_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+      if (subscription.status === 'PENDING_PAYMENT' || suspendedRecent) {
+        try {
+          const synced = await this.syncWithAsaas(subscription.id);
+          if (synced && synced.id) subscription = synced;
+        } catch (e) {
+          this.logger.warn(`[auto-sync] Falha ao reconciliar assinatura ${subscription.id} com Asaas: ${e}`);
+        }
       }
     }
 
@@ -868,6 +884,23 @@ export class SubscriptionsService {
     if (subscription && subscription.status === 'ACTIVE') {
       const endDate = new Date(subscription.endDate);
       if (new Date() > endDate) {
+        // PERGUNTA AO ASAAS ANTES DE SUSPENDER (mesma régua do suspend-cron): a
+        // recorrência pode ter debitado o novo ciclo com o webhook perdido —
+        // syncWithAsaas renova a janela e evita marcar inadimplente quem pagou.
+        if (!subscription.isComp && this.asaasService.configured && subscription.asaasSubscriptionId) {
+          try {
+            const synced = await this.syncWithAsaas(subscription.id);
+            const endMs = synced?.endDate ? new Date(synced.endDate).getTime() : NaN;
+            if (synced?.status === 'ACTIVE' && !Number.isNaN(endMs) && endMs > Date.now()) {
+              synced.currentCyclePaid = await isCurrentCyclePaid(this.supabase, synced);
+              return synced;
+            }
+          } catch (e) {
+            this.logger.warn(
+              `[auto-suspend] falha ao consultar Asaas antes de suspender ${subscription.id} (seguindo com a suspensão): ${e}`,
+            );
+          }
+        }
         const now = nowLocalIsoString();
         // Cortesia vencida: EXPIRED sem inadimplência (mesma régua do cron).
         if (subscription.isComp) {
@@ -1583,8 +1616,23 @@ export class SubscriptionsService {
     // assinatura aparece "Ativo + Ciclo não pago". Antes o sync saía cedo p/ toda ACTIVE,
     // então esses casos nunca eram curados (nem pelo botão nem pelo cron). Se o ciclo já
     // consta pago, nada a fazer.
+    //
+    // EXCEÇÃO — ACTIVE já VENCIDA (endDate <= agora): o ciclo antigo constar pago não
+    // diz nada sobre a RENOVAÇÃO. É o caso da recorrência de cartão: o Asaas debitou o
+    // novo ciclo no vencimento, o webhook se perdeu e o suspend-cron ia marcar
+    // inadimplente um cliente com o cartão já cobrado. Aqui a gente procura a prova de
+    // renovação (pagamento >= endDate - 14d) e, se existir, RENOVA a janela.
     const wasActive = subscription.status === 'ACTIVE';
-    if (wasActive && (await isCurrentCyclePaid(this.supabase, subscription))) {
+    const subEndMs = subscription.endDate
+      ? new Date(subscription.endDate).getTime()
+      : NaN;
+    const activeExpired =
+      wasActive && !Number.isNaN(subEndMs) && subEndMs <= Date.now();
+    if (
+      wasActive &&
+      !activeExpired &&
+      (await isCurrentCyclePaid(this.supabase, subscription))
+    ) {
       return subscription;
     }
 
@@ -1623,6 +1671,7 @@ export class SubscriptionsService {
       if (
         !Number.isNaN(endMs) &&
         (subscription.status === 'SUSPENDED' ||
+          activeExpired ||
           (subscription.status === 'PENDING_PAYMENT' && endIsPast))
       ) {
         const EARLY_PAY_TOLERANCE_MS = 14 * 24 * 60 * 60 * 1000;
@@ -1663,10 +1712,12 @@ export class SubscriptionsService {
       this.logger.error(`[sync-asaas] falha ao quitar dívida da assinatura ${subscription.id}: ${e}`),
     );
 
-    // Já estava ACTIVE: o pagamento do ciclo só não constava (webhook perdido). Registrar
-    // o payment com a data real já cura o "Ciclo não pago". NÃO renova a janela (endDate)
-    // nem zera os cortes — não é uma renovação, é a correção do ciclo CORRENTE.
-    if (wasActive) {
+    // Já estava ACTIVE e AINDA NÃO vencida: o pagamento do ciclo só não constava
+    // (webhook perdido). Registrar o payment com a data real já cura o "Ciclo não
+    // pago". NÃO renova a janela (endDate) nem zera os cortes — não é uma renovação,
+    // é a correção do ciclo CORRENTE. ACTIVE VENCIDA cai no bloco de renovação
+    // abaixo: o pagamento encontrado é a prova do CICLO NOVO (recorrência de cartão).
+    if (wasActive && !activeExpired) {
       this.logger.log(
         `[sync-asaas] Assinatura ${subscription.id} (ACTIVE) — ciclo reconciliado com cobrança ${paid.id}.`,
       );
@@ -2141,6 +2192,32 @@ export class SubscriptionsService {
   }
 
   /**
+   * HEAL-FIRST: antes de recriar a recorrência no Asaas (renovar/reativar/gerar
+   * link), tenta CURAR o estado local pela reconciliação. Se o Asaas já mostra o
+   * ciclo pago (caso clássico: recorrência de cartão debitou, webhook se perdeu,
+   * app marcou inadimplente), syncWithAsaas reativa/renova e quita a dívida — e
+   * NADA precisa ser recriado (recriar cancelaria a recorrência de cartão viva).
+   * Retorna true quando a assinatura terminou ACTIVE com ciclo vigente pago.
+   */
+  private async tryHealFromAsaas(subscriptionId: string): Promise<boolean> {
+    if (!this.asaasService.configured) return false;
+    try {
+      const current = await this.findSubscription(subscriptionId);
+      if (!current?.asaasSubscriptionId) return false;
+      const synced = await this.syncWithAsaas(subscriptionId);
+      if (!synced || synced.status !== 'ACTIVE') return false;
+      const endMs = synced.endDate ? new Date(synced.endDate).getTime() : NaN;
+      if (Number.isNaN(endMs) || endMs <= Date.now()) return false;
+      return await isCurrentCyclePaid(this.supabase, synced);
+    } catch (e) {
+      this.logger.warn(
+        `[heal-asaas] falha ao tentar curar assinatura ${subscriptionId} antes de recriar: ${e}`,
+      );
+      return false;
+    }
+  }
+
+  /**
    * Cria uma ASSINATURA RECORRENTE no Asaas (cobra todo mês sozinho) e grava o
    * asaasSubscriptionId na assinatura local. Devolve a 1ª cobrança gerada pela
    * assinatura, para o caller registrar o payment local e o PIX/checkout.
@@ -2171,6 +2248,45 @@ export class SubscriptionsService {
       .maybeSingle();
     const prevAsaasSubId = (prev as any)?.asaasSubscriptionId;
     if (prevAsaasSubId) {
+      // GUARDA: nunca matar uma recorrência de CARTÃO viva. Se a assinatura Asaas
+      // antiga é CREDIT_CARD ATIVA com cobrança liquidada nos últimos 35 dias, ela
+      // está cobrando sozinha — cancelá-la aqui (para "renovar") destruía o débito
+      // automático e órfãva a cobrança já paga (causa raiz do "todo mês inadimplente").
+      // O caminho certo é a reconciliação (heal-first nos callers / sync-asaas).
+      try {
+        const prevSub = await this.asaasService.getSubscription(prevAsaasSubId);
+        if (
+          prevSub &&
+          (prevSub as any).status === 'ACTIVE' &&
+          (prevSub as any).billingType === 'CREDIT_CARD' &&
+          !(prevSub as any).deleted
+        ) {
+          const prevCharges = await this.asaasService
+            .getSubscriptionPayments(prevAsaasSubId)
+            .catch(() => [] as AsaasCharge[]);
+          const RECENT_SETTLED_MS = 35 * 24 * 60 * 60 * 1000;
+          const SETTLED = ['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'];
+          const hasRecentSettled = (prevCharges || []).some((c: any) => {
+            if (!SETTLED.includes(c.status)) return false;
+            const raw = c.paymentDate || c.confirmedDate || c.clientPaymentDate;
+            if (!raw) return false;
+            const t = new Date(`${String(raw).substring(0, 10)}T12:00:00`).getTime();
+            return !Number.isNaN(t) && Date.now() - t <= RECENT_SETTLED_MS;
+          });
+          if (hasRecentSettled) {
+            throw new LiveCardRecurrenceError(
+              'Este cliente tem débito automático no CARTÃO ativo e cobrando no Asaas. ' +
+                'Gerar nova cobrança cancelaria essa recorrência. Use "Reconciliar com Asaas" ' +
+                'para atualizar o estado local — o pagamento provavelmente já existe.',
+            );
+          }
+        }
+      } catch (e) {
+        if (e instanceof BadRequestException) throw e;
+        this.logger.warn(
+          `Falha ao inspecionar assinatura Asaas ${prevAsaasSubId} antes de recriar (seguindo com a recriação): ${e}`,
+        );
+      }
       await this.asaasService
         .cancelSubscription(prevAsaasSubId)
         .then(() => this.logger.log(`Assinatura Asaas antiga ${prevAsaasSubId} cancelada antes de recriar.`))
@@ -2228,6 +2344,30 @@ export class SubscriptionsService {
       parsed === AsaasBillingType.CREDIT_CARD
         ? AsaasBillingType.CREDIT_CARD
         : AsaasBillingType.PIX;
+
+    // HEAL-FIRST: cliente re-assinando com uma linha SUSPENDED/PENDING vinculada a
+    // uma recorrência Asaas — se o ciclo já está pago lá (cartão debitou, webhook
+    // se perdeu), reativa por reconciliação em vez de recriar (recriar cancelava a
+    // recorrência de cartão viva e cobrava o cliente de novo).
+    const { data: prevRow } = await this.supabase
+      .from('client_subscriptions')
+      .select('id, status, asaasSubscriptionId')
+      .eq('clientId', clientId)
+      .limit(1)
+      .maybeSingle();
+    const prevRowStatus: string | null = (prevRow as any)?.status ?? null;
+    if (
+      prevRow &&
+      ['SUSPENDED', 'EXPIRED', 'PENDING_PAYMENT'].includes((prevRow as any).status) &&
+      (prevRow as any).asaasSubscriptionId &&
+      (await this.tryHealFromAsaas((prevRow as any).id))
+    ) {
+      this.logger.log(
+        `[heal-asaas] Re-assinatura do cliente ${clientId} resolvida por reconciliação (ciclo já pago no Asaas).`,
+      );
+      const healed = await this.findClientSubscription(clientId);
+      return { subscription: healed, pixData: null, invoiceUrl: null, healed: true };
+    }
 
     const subscription = await this.subscribeClient({
       clientId,
@@ -2304,11 +2444,21 @@ export class SubscriptionsService {
 
         this.logger.log(`Cobrança inicial criada: ${charge.id} - invoiceUrl: ${invoiceUrl}`);
       } catch (e) {
-        // Falha crítica (customer/cobrança) — cancela assinatura para permitir retry limpo
+        // Falha crítica (customer/cobrança) — cancela assinatura para permitir retry
+        // limpo. EXCEÇÃO: se a guarda barrou por recorrência de CARTÃO viva no Asaas
+        // (linha reaproveitada de SUSPENDED/EXPIRED/PENDING), restaura o status
+        // anterior — marcar CANCELED deixaria uma recorrência viva cobrando um
+        // registro local cancelado (cobrança órfã).
         this.logger.error(`Falha ao criar cobrança Asaas: ${e}`);
+        const revertStatus =
+          e instanceof LiveCardRecurrenceError &&
+          prevRowStatus &&
+          ['SUSPENDED', 'EXPIRED', 'PENDING_PAYMENT'].includes(prevRowStatus)
+            ? prevRowStatus
+            : 'CANCELED';
         await this.supabase
           .from('client_subscriptions')
-          .update({ status: 'CANCELED', updatedAt: nowLocalIsoString() })
+          .update({ status: revertStatus, updatedAt: nowLocalIsoString() })
           .eq('id', freshSub.id);
         const detail = e instanceof Error ? e.message : String(e);
         throw new BadRequestException(`Erro ao gerar cobrança no gateway de pagamento. Tente novamente. (${detail})`);
@@ -2374,6 +2524,18 @@ export class SubscriptionsService {
     const subscription = results?.[0];
     if (!subscription) {
       throw new NotFoundException('Assinatura suspensa não encontrada');
+    }
+
+    // HEAL-FIRST: se o Asaas já mostra o ciclo pago (recorrência de cartão debitou
+    // e o webhook se perdeu), reativa pela reconciliação e NÃO recria a assinatura
+    // Asaas — recriar cancelaria a recorrência de cartão viva e o cliente pagaria
+    // duas vezes (cartão já debitado + novo PIX).
+    if (subscription.asaasSubscriptionId && (await this.tryHealFromAsaas(subscription.id))) {
+      const healed = await this.findSubscription(subscription.id);
+      this.logger.log(
+        `[heal-asaas] Reativação de ${subscription.id} resolvida por reconciliação (ciclo já pago no Asaas) — nada recriado.`,
+      );
+      return { subscription: healed, pixData: null, invoiceUrl: null, healed: true };
     }
 
     const now = new Date();
@@ -2509,6 +2671,26 @@ export class SubscriptionsService {
       );
     }
 
+    // HEAL-FIRST: se o Asaas já mostra o ciclo pago (recorrência de cartão), a
+    // reconciliação reativa e NÃO se gera link — gerar link recriava a assinatura
+    // Asaas e cancelava a recorrência de cartão viva.
+    if (subscription.asaasSubscriptionId && (await this.tryHealFromAsaas(subscription.id))) {
+      this.logger.log(
+        `[heal-asaas] Renovação por link de ${subscription.id} resolvida por reconciliação — link não gerado.`,
+      );
+      return {
+        invoiceUrl: null,
+        healed: true,
+        message:
+          'O pagamento do ciclo já constava no Asaas: assinatura reativada. Não é preciso enviar link.',
+        client: {
+          name: subscription.client?.name ?? null,
+          phone: subscription.client?.phone ?? null,
+        },
+        planName: subscription.plan?.name ?? null,
+      };
+    }
+
     const now = new Date();
     const prevStatus = subscription.status;
 
@@ -2608,6 +2790,24 @@ export class SubscriptionsService {
       throw new BadRequestException(
         `Apenas assinaturas ativas têm ciclo a cobrar. Status atual: ${subscription.status}.`,
       );
+    }
+
+    // HEAL-FIRST: "Ciclo não pago" pode ser só webhook perdido — se o Asaas mostra
+    // o pagamento, a reconciliação cura e não se cobra o cliente de novo.
+    if (subscription.asaasSubscriptionId && (await this.tryHealFromAsaas(subscription.id))) {
+      this.logger.log(
+        `[heal-asaas] Cobrança de ciclo de ${subscription.id} evitada — ciclo já pago no Asaas.`,
+      );
+      return {
+        invoiceUrl: null,
+        healed: true,
+        message: 'O ciclo já estava pago no Asaas: estado local reconciliado. Não cobre de novo.',
+        client: {
+          name: subscription.client?.name ?? null,
+          phone: subscription.client?.phone ?? null,
+        },
+        planName: subscription.plan?.name ?? null,
+      };
     }
 
     const now = new Date();
@@ -2884,7 +3084,7 @@ export class SubscriptionsService {
     const nowIso = new Date().toISOString();
     const { data: expired } = await this.supabase
       .from('client_subscriptions')
-      .select('id, clientId, endDate, isComp, plan:subscription_plans!planId(name, price)')
+      .select('id, clientId, endDate, isComp, asaasSubscriptionId, plan:subscription_plans!planId(name, price)')
       .eq('status', 'ACTIVE')
       .is('canceledAt', null) // canceladas vencidas viram CANCELED no outro cron
       .lt('endDate', nowIso)
@@ -2908,6 +3108,51 @@ export class SubscriptionsService {
         }
         this.logger.log(`[suspend-expired-cron] cortesia ${sub.id} expirada (sem dívida)`);
         continue;
+      }
+      // PERGUNTA AO ASAAS ANTES DE SUSPENDER: recorrência (cartão sobretudo) pode
+      // ter debitado o novo ciclo com o webhook perdido. syncWithAsaas renova a
+      // janela quando encontra a prova de pagamento (>= endDate - 14d); só se o
+      // Asaas também não mostrar pagamento é que suspende + registra inadimplência.
+      if (this.asaasService.configured && sub.asaasSubscriptionId) {
+        try {
+          const synced = await this.syncWithAsaas(sub.id);
+          const endMs = synced?.endDate ? new Date(synced.endDate).getTime() : NaN;
+          if (synced?.status === 'ACTIVE' && !Number.isNaN(endMs) && endMs > Date.now()) {
+            this.logger.log(
+              `[suspend-expired-cron] assinatura ${sub.id} renovada via reconciliação Asaas — suspensão evitada`,
+            );
+            continue;
+          }
+          // Fatura do CICLO CORRENTE ainda no prazo no Asaas (dueDate >= hoje)?
+          // Cartão liquida na manhã do vencimento e PIX o cliente paga até o fim do
+          // dia — suspender antes disso criava o falso "inadimplente" da manhã.
+          // Teto endDate + 2d: o Asaas pré-gera a fatura do ciclo SEGUINTE (~1 mês
+          // antes) e ela não pode adiar a suspensão para sempre.
+          const charges = await this.asaasService
+            .getSubscriptionPayments(sub.asaasSubscriptionId)
+            .catch(() => [] as AsaasCharge[]);
+          const todayStr = nowLocalIsoString().split('T')[0];
+          const cycleDueCeiling = new Date(
+            new Date(sub.endDate).getTime() + 2 * 24 * 60 * 60 * 1000,
+          )
+            .toISOString()
+            .substring(0, 10);
+          const hasOpenCurrentInvoice = (charges || []).some((c: any) => {
+            if (!['PENDING', 'AWAITING_RISK_ANALYSIS'].includes(c.status)) return false;
+            const due = String(c.dueDate ?? '').substring(0, 10);
+            return due >= todayStr && due <= cycleDueCeiling;
+          });
+          if (hasOpenCurrentInvoice) {
+            this.logger.log(
+              `[suspend-expired-cron] assinatura ${sub.id}: fatura do ciclo ainda no prazo no Asaas — suspensão adiada`,
+            );
+            continue;
+          }
+        } catch (e) {
+          this.logger.warn(
+            `[suspend-expired-cron] falha ao consultar Asaas antes de suspender ${sub.id} (seguindo com a suspensão): ${e}`,
+          );
+        }
       }
       const { error } = await this.supabase
         .from('client_subscriptions')
