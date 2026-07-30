@@ -1,5 +1,5 @@
 import { computeRenewalCycle } from './subscription-cycle.util';
-import { nowLocalIsoString } from './datetime.util';
+import { localDateString, nowLocalIsoString } from './datetime.util';
 
 /**
  * Baixa de pagamento de dívida (cobrança "Quitação de dívida" do
@@ -24,6 +24,17 @@ import { nowLocalIsoString } from './datetime.util';
  *  - reativa ANTES de quitar e ABORTA a quitação se a reativação falhar — assim nunca
  *    fica SEM-dívida-e-Encerrado (o bug original); no pior caso fica ATIVO-com-dívida.
  */
+/** Recorte do AsaasService que a limpeza pós-reativação usa. */
+export interface AsaasChargeCleanupApi {
+  configured: boolean;
+  cancelCharge: (asaasPaymentId: string) => Promise<unknown>;
+  getSubscriptionPayments: (asaasSubscriptionId: string) => Promise<any[]>;
+  updateSubscription: (
+    asaasSubscriptionId: string,
+    payload: { nextDueDate: string },
+  ) => Promise<unknown>;
+}
+
 export interface DebtSettlementDeps {
   supabase: { from: (table: string) => any };
   logger: {
@@ -33,6 +44,14 @@ export interface DebtSettlementDeps {
   };
   /** Confirma no Asaas (fonte da verdade) que a cobrança está liquidada. */
   isChargeSettled: (asaasPaymentId: string) => Promise<boolean>;
+  /**
+   * Quando presente, a quitação também cancela no Asaas as faturas da
+   * recorrência que ficaram redundantes com a reativação (mesma blindagem que o
+   * balcão ganhou no fluxo confirmPaymentManually) — sem isso o gateway segue
+   * cobrando o ciclo recém-pago (casos Leandro Belo / Gustavo Parreira /
+   * Gabriel Marra, 30/07/2026).
+   */
+  asaas?: AsaasChargeCleanupApi;
 }
 
 export interface DebtSettlementResult {
@@ -184,6 +203,14 @@ export async function settleDebtPaymentAndReactivate(
   // reativada, e o admin confirmava manualmente de novo → payment duplicado no
   // caixa — caso Roger lima, 22/07/2026).
   let linkedSubscriptionId: string | null = null;
+  // Ciclos reativados nesta chamada — no final, as faturas da recorrência que
+  // esta quitação tornou redundantes são canceladas no Asaas (nunca antes da
+  // baixa: falha de gateway não pode abortar quitação/reativação já decididas).
+  const reactivatedCycles: Array<{
+    subscriptionId: string;
+    paidCycleEndDay: string;
+    newCycleEndDay: string;
+  }> = [];
 
   const { data: pendingDebts } = await supabase
     .from('debts')
@@ -242,6 +269,8 @@ export async function settleDebtPaymentAndReactivate(
 
     for (const susp of suspendedSubs || []) {
       const reactNow = new Date();
+      // Capturado ANTES do update — é o vencimento do ciclo que a dívida cobrava.
+      const paidCycleEndDay = String((susp as any).endDate || '').substring(0, 10);
       // Dia-âncora: a dívida paga é a mensalidade do ciclo que venceu em endDate.
       // Pagou dentro da carência → o vencimento mantém o dia (isRenewal sempre
       // true aqui: SUSPENDED implica ciclo anterior existente).
@@ -277,6 +306,11 @@ export async function settleDebtPaymentAndReactivate(
 
       result.reactivated = true;
       if (!linkedSubscriptionId) linkedSubscriptionId = (susp as any).id;
+      reactivatedCycles.push({
+        subscriptionId: (susp as any).id,
+        paidCycleEndDay,
+        newCycleEndDay: localDateString(cycle.endDate),
+      });
       logger.log(
         `Assinatura ${susp.id} REATIVADA após quitação de dívida via PIX (cobrança ${asaasPaymentId}).`,
       );
@@ -343,5 +377,116 @@ export async function settleDebtPaymentAndReactivate(
     }
   }
 
+  // Por último — a quitação e a reativação já valem; a limpeza de faturas é
+  // melhor-esforço e nunca as desfaz.
+  if (deps.asaas) {
+    for (const cycleInfo of reactivatedCycles) {
+      await cancelRecurrenceChargesSupersededByReactivation(
+        { supabase, logger, asaas: deps.asaas },
+        cycleInfo,
+      );
+    }
+  }
+
   return result;
+}
+
+/**
+ * Cancela no Asaas as faturas da RECORRÊNCIA que a reativação por quitação de
+ * dívida tornou redundantes. Espelho do que o balcão faz via
+ * cancelPendingAsaasChargesForSubscription (PR #49) — sem isso a fatura OVERDUE
+ * do ciclo recém-pago fica aberta no gateway, cobrando o cliente por
+ * e-mail/lembrete de PIX até ele pagar o MESMO ciclo duas vezes (casos Leandro
+ * Belo / Gustavo Parreira / Gabriel Marra, 30/07/2026).
+ *
+ * Régua: o ciclo está pago até `newCycleEndDay` — toda fatura em aberto que
+ * vence ANTES dele é redundante e morre; a que vence NELE ou depois é a
+ * cobrança legítima do próximo ciclo e sobrevive.
+ *
+ * Dia-âncora: pagar além da carência MOVE o dia do ciclo (ex.: venceu dia 15,
+ * quitou dia 23 → novo ciclo 23→23), mas a recorrência Asaas continua gerando
+ * fatura no dia antigo — no MEIO do ciclo pago, todo mês (o guard do OVERDUE
+ * até cancela cada uma, mas só no vencimento, depois de dias cobrando o
+ * cliente). Quando uma fatura dessas (vencimento entre o ciclo antigo e o novo)
+ * é cancelada aqui, o nextDueDate da recorrência é realinhado ao fim do novo
+ * ciclo. Só nesse caso: antecipar o nextDueDate com a fatura legítima ainda
+ * viva geraria cobrança duplicada.
+ *
+ * NUNCA lança — falha vira warn com instrução de conferência manual.
+ */
+export async function cancelRecurrenceChargesSupersededByReactivation(
+  deps: Pick<DebtSettlementDeps, 'supabase' | 'logger'> & { asaas: AsaasChargeCleanupApi },
+  info: { subscriptionId: string; paidCycleEndDay: string; newCycleEndDay: string },
+): Promise<void> {
+  const { supabase, logger, asaas } = deps;
+  if (!asaas.configured) return;
+
+  try {
+    const { data: subRow } = await supabase
+      .from('client_subscriptions')
+      .select('asaasSubscriptionId')
+      .eq('id', info.subscriptionId)
+      .maybeSingle();
+    const asaasSubId = (subRow as any)?.asaasSubscriptionId;
+    if (!asaasSubId) return;
+
+    let charges: any[] = [];
+    try {
+      charges = (await asaas.getSubscriptionPayments(asaasSubId)) || [];
+    } catch (e: any) {
+      logger.warn(
+        `Assinatura ${info.subscriptionId}: falha ao listar faturas da recorrência ${asaasSubId} (${e?.message}) — ` +
+        `a fatura do ciclo recém-quitado pode seguir aberta no Asaas; conferir manualmente.`,
+      );
+      return;
+    }
+
+    const OPEN = ['PENDING', 'OVERDUE', 'AWAITING_RISK_ANALYSIS'];
+    let canceledDriftedInvoice = false;
+    for (const c of charges) {
+      // Nunca tocar em cobrança paga/estornada — só as que seguem cobrando.
+      if (!OPEN.includes(c?.status) || c?.deleted || c?.paymentDate) continue;
+      const dueDay = String(c?.dueDate || '').substring(0, 10);
+      if (!dueDay || dueDay >= info.newCycleEndDay) continue; // próximo ciclo: preservar
+
+      try {
+        await asaas.cancelCharge(c.id);
+        // Espelho, se existir (fatura já reconciliada antes), deixa de constar pendente.
+        await supabase
+          .from('payments')
+          .update({ asaasStatus: 'CANCELED', updatedAt: nowLocalIsoString() })
+          .eq('asaasPaymentId', c.id);
+        if (dueDay > info.paidCycleEndDay) canceledDriftedInvoice = true;
+        logger.log(
+          `Fatura ${c.id} da recorrência ${asaasSubId} (venc. ${dueDay}) cancelada — ` +
+          `ciclo quitado via pagamento de dívida (assinatura ${info.subscriptionId}).`,
+        );
+      } catch (e: any) {
+        logger.warn(
+          `Não foi possível cancelar a fatura ${c.id} da recorrência ${asaasSubId}: ${e?.message} — ` +
+          `cancelar manualmente no Asaas para o cliente parar de ser cobrado.`,
+        );
+      }
+    }
+
+    if (canceledDriftedInvoice) {
+      try {
+        await asaas.updateSubscription(asaasSubId, { nextDueDate: info.newCycleEndDay });
+        logger.log(
+          `Recorrência ${asaasSubId} realinhada: próxima fatura em ${info.newCycleEndDay} ` +
+          `(novo dia-âncora da assinatura ${info.subscriptionId}).`,
+        );
+      } catch (e: any) {
+        logger.warn(
+          `Não foi possível realinhar o vencimento da recorrência ${asaasSubId} para ${info.newCycleEndDay}: ` +
+          `${e?.message} — a próxima fatura virá no dia antigo, no meio do ciclo pago; ajustar no Asaas.`,
+        );
+      }
+    }
+  } catch (e: any) {
+    logger.warn(
+      `Limpeza de faturas pós-quitação falhou para a assinatura ${info.subscriptionId} (${e?.message}) — ` +
+      `quitação e reativação seguem valendo; conferir cobranças em aberto no Asaas.`,
+    );
+  }
 }

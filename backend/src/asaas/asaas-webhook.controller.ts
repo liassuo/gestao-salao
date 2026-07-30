@@ -756,6 +756,12 @@ export class AsaasWebhookController {
         supabase: this.supabase,
         logger: this.logger,
         isChargeSettled: (id) => this.isChargeSettled(id, eventStatus),
+        asaas: {
+          configured: this.asaasService.configured,
+          cancelCharge: (id) => this.asaasService.cancelCharge(id),
+          getSubscriptionPayments: (id) => this.asaasService.getSubscriptionPayments(id),
+          updateSubscription: (id, payload) => this.asaasService.updateSubscription(id, payload),
+        },
       },
       clientId,
       paidAmount,
