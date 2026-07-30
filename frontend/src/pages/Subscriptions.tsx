@@ -334,6 +334,14 @@ export function Subscriptions() {
   const handleRenewViaAsaas = async (sub: ClientSubscription) => {
     try {
       const result = await renewViaAsaas.mutateAsync(sub.id);
+      if (result.healed) {
+        toast.success(
+          'Assinatura reconciliada',
+          result.message ||
+            'O pagamento já constava no Asaas — assinatura reativada. Não é preciso enviar link.',
+        );
+        return;
+      }
       if (!result.invoiceUrl) {
         toast.error('Erro', 'Não foi possível gerar o link de pagamento. Tente novamente.');
         return;
@@ -355,6 +363,13 @@ export function Subscriptions() {
   const handleChargeCurrentCycle = async (sub: ClientSubscription) => {
     try {
       const result = await chargeCurrentCycle.mutateAsync(sub.id);
+      if (result.healed) {
+        toast.success(
+          'Ciclo reconciliado',
+          result.message || 'O ciclo já estava pago no Asaas — estado atualizado. Não cobre de novo.',
+        );
+        return;
+      }
       if (!result.invoiceUrl) {
         toast.error('Erro', 'Não foi possível gerar o link de pagamento. Tente novamente.');
         return;

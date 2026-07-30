@@ -141,8 +141,13 @@ export const subscriptionsService = {
   },
 
   // Gera o link de pagamento Asaas (invoiceUrl) para o cliente renovar.
+  // healed=true: o backend achou o pagamento já feito no Asaas (ex.: recorrência
+  // de cartão debitou e o webhook se perdeu), reativou por reconciliação e NÃO
+  // gerou link — nada a enviar ao cliente.
   async renewViaAsaas(id: string): Promise<{
     invoiceUrl: string | null;
+    healed?: boolean;
+    message?: string;
     client: { name: string | null; phone: string | null };
     planName: string | null;
   }> {
@@ -154,6 +159,8 @@ export const subscriptionsService = {
   // ativa com ciclo não pago — mesmo shape do renewViaAsaas, sem renovar o ciclo.
   async chargeCurrentCycle(id: string): Promise<{
     invoiceUrl: string | null;
+    healed?: boolean;
+    message?: string;
     client: { name: string | null; phone: string | null };
     planName: string | null;
   }> {

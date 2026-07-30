@@ -1210,6 +1210,19 @@ describe('SubscriptionsService — reconcile NÃO reativa SUSPENDED com cobranç
  * o cron curavam o "Ciclo não pago". Agora reconcilia ACTIVE quando o ciclo não consta pago:
  * corrige o paidAt local (sem renovar janela/zerar cortes nem mexer no caixa).
  */
+// Datas RELATIVAS a hoje. Datas fixas apodreciam: quando o endDate fixo ficava no
+// passado, a assinatura virava "ACTIVE VENCIDA" e caía na regra de RENOVAÇÃO da
+// reconciliação (prova de pagamento >= endDate - 14d) — mas o cenário deste bloco
+// é ACTIVE ainda VIGENTE com o pagamento do ciclo perdido (webhook).
+const CICLO_DAY_MS = 24 * 60 * 60 * 1000;
+const cicloIso = (deltaDays: number) => new Date(Date.now() + deltaDays * CICLO_DAY_MS).toISOString();
+const CICLO_START = cicloIso(-24); // ciclo corrente começou há 24 dias
+const CICLO_END = cicloIso(6); // vence daqui a 6 dias (NÃO vencida)
+const CICLO_CREATED = cicloIso(-55);
+const CICLO_PAGO_EM = cicloIso(-22).substring(0, 10); // pagamento real, dentro do ciclo
+const CICLO_ANTERIOR_PAIDAT = cicloIso(-55); // paidAt local preso num ciclo anterior
+const CICLO_DENTRO_PAIDAT = cicloIso(-20); // paidAt local já dentro do ciclo
+
 function activeCicloTables(localPaidAt: string): Tables {
   const t = baseTables();
   t.client_subscriptions = [
@@ -1218,9 +1231,9 @@ function activeCicloTables(localPaidAt: string): Tables {
       clientId: 'client-1',
       planId: 'plan-1',
       status: 'ACTIVE',
-      startDate: '2026-06-06T00:00:00', // piso do ciclo = 2026-06-05
-      createdAt: '2026-05-05T00:00:00',
-      endDate: '2026-07-06T00:00:00',
+      startDate: CICLO_START, // piso do ciclo = start - 1 dia
+      createdAt: CICLO_CREATED,
+      endDate: CICLO_END,
       cutsUsedThisMonth: 2,
     },
   ];
@@ -1236,7 +1249,7 @@ function activeCicloTables(localPaidAt: string): Tables {
       asaasStatus: 'CONFIRMED',
       paidAt: localPaidAt,
       businessDate: String(localPaidAt).substring(0, 10),
-      createdAt: '2026-05-05T00:00:00',
+      createdAt: CICLO_CREATED,
     },
   ];
   return t;
@@ -1248,7 +1261,7 @@ function asaasInCycleCharge() {
     status: 'RECEIVED',
     value: 70,
     externalReference: 'sub-a',
-    paymentDate: '2026-06-08', // dentro do ciclo (>= piso 06-05)
+    paymentDate: CICLO_PAGO_EM, // dentro do ciclo (>= piso)
     billingType: 'CREDIT_CARD',
   };
   return {
@@ -1262,28 +1275,28 @@ function asaasInCycleCharge() {
 
 describe('SubscriptionsService — reconcilia ACTIVE com "Ciclo não pago" (webhook perdido)', () => {
   it('corrige o paidAt do ciclo (data real do Asaas) mantendo ACTIVE, sem renovar janela', async () => {
-    // paidAt local 2026-05-05 (ciclo anterior) → isCurrentCyclePaid falso
-    const { service, state } = await buildServiceWithAsaas(activeCicloTables('2026-05-05T12:00:00'), asaasInCycleCharge());
+    // paidAt local no ciclo anterior → isCurrentCyclePaid falso
+    const { service, state } = await buildServiceWithAsaas(activeCicloTables(CICLO_ANTERIOR_PAIDAT), asaasInCycleCharge());
 
     const updated = await service.reconcileSubscription('sub-a');
 
     expect((updated as any).status).toBe('ACTIVE');
     // paidAt corrigido p/ a data real (dentro do ciclo) → some "Ciclo não pago"
-    expect(String(state.payments[0].paidAt).startsWith('2026-06-08')).toBe(true);
+    expect(String(state.payments[0].paidAt).startsWith(CICLO_PAGO_EM)).toBe(true);
     // NÃO renovou a janela nem zerou cortes (não é renovação)
-    expect(state.client_subscriptions[0].endDate).toBe('2026-07-06T00:00:00');
+    expect(state.client_subscriptions[0].endDate).toBe(CICLO_END);
     expect(state.client_subscriptions[0].cutsUsedThisMonth).toBe(2);
     // businessDate (caixa) preservado
-    expect(state.payments[0].businessDate).toBe('2026-05-05');
+    expect(state.payments[0].businessDate).toBe(CICLO_ANTERIOR_PAIDAT.substring(0, 10));
   });
 
   it('ciclo já pago (paidAt dentro do ciclo): no-op, não duplica pagamento', async () => {
-    const { service, state } = await buildServiceWithAsaas(activeCicloTables('2026-06-07T12:00:00'), asaasInCycleCharge());
+    const { service, state } = await buildServiceWithAsaas(activeCicloTables(CICLO_DENTRO_PAIDAT), asaasInCycleCharge());
 
     await service.reconcileSubscription('sub-a');
 
     expect(state.payments).toHaveLength(1); // não inseriu 2º payment
-    expect(state.payments[0].paidAt).toBe('2026-06-07T12:00:00'); // intacto
+    expect(state.payments[0].paidAt).toBe(CICLO_DENTRO_PAIDAT); // intacto
   });
 });
 

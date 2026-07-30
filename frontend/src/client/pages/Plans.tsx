@@ -185,10 +185,19 @@ export function ClientPlans() {
         subscription: ClientSubscription;
         pixData: PixData | null;
         invoiceUrl?: string | null;
+        healed?: boolean;
       }>('/subscriptions/me/subscribe', payload);
-      
+
       setMySubscription(res.data.subscription);
-      
+
+      // healed: o pagamento já constava no Asaas (ex.: cartão recorrente debitou e
+      // o webhook se perdeu) — assinatura reativada por reconciliação, nada a pagar.
+      if (res.data.healed) {
+        alert('Seu pagamento já constava no sistema — assinatura reativada!');
+        loadData();
+        return;
+      }
+
       if (res.data.pixData) {
         setPixModal(res.data.pixData);
       } else if (res.data.invoiceUrl) {
@@ -243,9 +252,17 @@ export function ClientPlans() {
         subscription: ClientSubscription;
         pixData: PixData | null;
         invoiceUrl?: string | null;
+        healed?: boolean;
       }>('/subscriptions/me/reactivate', payload);
-      
+
       setMySubscription(res.data.subscription);
+
+      // healed: pagamento já constava no Asaas — reativada por reconciliação.
+      if (res.data.healed) {
+        alert('Seu pagamento já constava no sistema — assinatura reativada!');
+        loadData();
+        return;
+      }
 
       if (res.data.pixData) {
         setPixModal(res.data.pixData);
